@@ -78,17 +78,23 @@ async fn spawn_pty(
 
     let session_id = Uuid::new_v4().to_string();
 
-    // Clone the reader before moving master into the session
+    // Clone the reader before taking writer
     let reader = pair
         .master
         .try_clone_reader()
         .map_err(|e| format!("Failed to clone reader: {}", e))?;
 
-    // Get the master before moving pair into session
+    // Take the writer BEFORE moving master (can only be called once)
+    let writer = pair
+        .master
+        .take_writer()
+        .map_err(|e| format!("Failed to take PTY writer: {}", e))?;
+
     let master = pair.master;
 
     let session = PtySession {
         master: Arc::new(tokio::sync::Mutex::new(master)),
+        writer: Arc::new(tokio::sync::Mutex::new(writer)),
         child: Arc::new(tokio::sync::Mutex::new(child)),
     };
 
@@ -96,7 +102,7 @@ async fn spawn_pty(
 
     // Spawn async task to read PTY output
     let session_id_clone = session_id.clone();
-    let state_clone = Arc::new(state.sessions.clone());
+    let state_clone = Arc::clone(&state.sessions);
 
     async_runtime::spawn(async move {
         let mut reader = reader;
@@ -144,11 +150,9 @@ async fn write_pty(
 ) -> Result<(), String> {
     if let Some(session) = state.sessions.get(&session_id) {
         let mut writer = session
-            .master
+            .writer
             .lock()
-            .await
-            .take_writer()
-            .map_err(|e| format!("Failed to get PTY writer: {}", e))?;
+            .await;
         writer
             .write_all(data.as_bytes())
             .map_err(|e| format!("Failed to write to PTY: {}", e))?;

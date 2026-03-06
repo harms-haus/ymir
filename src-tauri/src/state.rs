@@ -1,22 +1,23 @@
 use dashmap::DashMap;
 use portable_pty::{Child, MasterPty};
+use std::io::Write;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-#[derive(Clone)]
 pub struct PtySession {
     pub master: Arc<Mutex<Box<dyn MasterPty + Send>>>,
+    pub writer: Arc<Mutex<Box<dyn Write + Send>>>,
     pub child: Arc<Mutex<Box<dyn Child + Send + Sync>>>,
 }
 
 pub struct PtyState {
-    pub sessions: DashMap<String, PtySession>,
+    pub sessions: Arc<DashMap<String, PtySession>>,
 }
 
 impl PtyState {
     pub fn new() -> Self {
         Self {
-            sessions: DashMap::new(),
+            sessions: Arc::new(DashMap::new()),
         }
     }
 }
