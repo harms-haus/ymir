@@ -1,10 +1,10 @@
-import "./App.css";
+import { Terminal } from './components/Terminal';
+import './App.css';
 
 function App() {
   return (
-    <div className="container">
-      <h1>Hello Ymir</h1>
-      <p>Welcome to your Tauri + React terminal application.</p>
+    <div style={{ display: 'flex', height: '100vh', width: '100vw' }}>
+      <Terminal />
     </div>
   );
 }
