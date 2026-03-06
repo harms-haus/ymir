@@ -18,7 +18,7 @@ function TabItem({ tab, isActive, onClick, onClose }: TabItemProps) {
         padding: '8px 12px',
         cursor: 'pointer',
         backgroundColor: isActive ? '#37373d' : 'transparent',
-      borderLeft: tab.hasNotification ? '3px solid #4fc3f7' : isActive ? '2px solid #007acc' : '2px solid transparent',
+        borderLeft: tab.hasNotification ? '3px solid #4fc3f7' : isActive ? '2px solid #007acc' : '2px solid transparent',
         transition: 'background-color 0.15s ease',
         fontSize: '13px',
         color: isActive ? '#ffffff' : '#cccccc',
@@ -35,11 +35,27 @@ function TabItem({ tab, isActive, onClick, onClose }: TabItemProps) {
         }
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
-        <span style={{ fontSize: '12px' }}>$</span>
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {tab.title}
-        </span>
+      <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+          <span style={{ fontSize: '12px' }}>$</span>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {tab.title}
+          </span>
+        </div>
+        {/* Working Directory */}
+        <div
+          style={{
+            color: '#858585',
+            fontSize: '11px',
+            marginTop: '2px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+          }}
+        >
+          <span style={{ fontSize: '12px' }}>📁</span>
+          {tab.cwd}
+        </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
         {tab.hasNotification && tab.notificationCount > 0 && (

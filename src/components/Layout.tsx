@@ -5,7 +5,7 @@ import { NotificationPanel } from './NotificationPanel';
 import { useTabsStore } from '../state/tabs';
 
 export function Layout() {
-  const { tabs, activeTabId, addTab, markNotification, panelOpen, togglePanel } = useTabsStore();
+  const { tabs, activeTabId, addTab, closeTab, markNotification, panelOpen, togglePanel, setActiveTab } = useTabsStore();
 
   // Keyboard shortcut: Ctrl+I / Cmd+I to toggle panel
   useEffect(() => {
@@ -24,7 +24,47 @@ export function Layout() {
     if (tabs.length === 0) {
       addTab();
     }
-  }, []);
+}, []);
+
+  // Keyboard shortcuts: Ctrl+T (new tab), Ctrl+W (close tab), Ctrl+Shift+U (jump to unread)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+T - New tab
+      if (e.ctrlKey && !e.shiftKey && e.key === 't') {
+        e.preventDefault();
+        addTab();
+      }
+      // Ctrl+W - Close active tab
+      if (e.ctrlKey && !e.shiftKey && e.key === 'w' && activeTabId) {
+        e.preventDefault();
+        closeTab(activeTabId);
+      }
+      // Ctrl+Shift+U - Jump to latest unread
+      if (e.ctrlKey && e.shiftKey && e.key === 'U') {
+        e.preventDefault();
+        // Find first tab with notification
+        const notifiedTab = tabs.find(t => t.hasNotification);
+        if (notifiedTab) {
+          setActiveTab(notifiedTab.id);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTabId, addTab, closeTab, tabs, setActiveTab]);
+
+  // Update window title based on active tab
+  useEffect(() => {
+    if (activeTabId) {
+      const activeTab = tabs.find(t => t.id === activeTabId);
+      document.title = activeTab ? `${activeTab.title} - Ymir` : 'Ymir';
+    } else {
+      document.title = 'Ymir';
+    }
+    return () => {
+      document.title = 'Ymir';
+    };
+  }, [activeTabId, tabs]);
 
   return (
     <div
