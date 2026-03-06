@@ -18,7 +18,7 @@ function TabItem({ tab, isActive, onClick, onClose }: TabItemProps) {
         padding: '8px 12px',
         cursor: 'pointer',
         backgroundColor: isActive ? '#37373d' : 'transparent',
-        borderLeft: isActive ? '2px solid #007acc' : '2px solid transparent',
+      borderLeft: tab.hasNotification ? '3px solid #4fc3f7' : isActive ? '2px solid #007acc' : '2px solid transparent',
         transition: 'background-color 0.15s ease',
         fontSize: '13px',
         color: isActive ? '#ffffff' : '#cccccc',

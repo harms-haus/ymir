@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { invoke, Channel } from '@tauri-apps/api/core';
+import { sendNotification } from '@tauri-apps/plugin-notification';
 import '@xterm/xterm/css/xterm.css';
 
 interface TerminalProps {
@@ -66,6 +67,9 @@ export function Terminal({ sessionId: _initialSessionId, onNotification, hasNoti
           break;
         case 'notification':
           onNotification?.(message.data.message);
+          try {
+            sendNotification({ title: 'Ymir', body: message.data.message });
+          } catch {}
           break;
         case 'exit':
           term.write('\r\n[Process exited]\r\n');
