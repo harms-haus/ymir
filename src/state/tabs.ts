@@ -7,6 +7,7 @@ export interface Tab {
   gitBranch?: string;
   hasNotification: boolean;
   notificationCount: number;
+  notificationText?: string;
   cwd: string;
   sessionId: string;
 }
@@ -14,16 +15,20 @@ export interface Tab {
 interface TabsState {
   tabs: Tab[];
   activeTabId: string | null;
+  panelOpen: boolean;
   addTab: () => Promise<void>;
   closeTab: (id: string) => Promise<void>;
   setActiveTab: (id: string) => void;
   markNotification: (tabId: string, message: string) => void;
   clearNotification: (tabId: string) => void;
+  togglePanel: () => void;
+  clearAllNotifications: () => void;
 }
 
 export const useTabsStore = create<TabsState>((set, get) => ({
   tabs: [],
   activeTabId: null,
+  panelOpen: false,
 
   addTab: async () => {
     const sessionId = crypto.randomUUID();
@@ -63,7 +68,7 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     get().clearNotification(id);
   },
 
-  markNotification: (tabId: string, _message: string) => {
+  markNotification: (tabId: string, message: string) => {
     set((state) => ({
       tabs: state.tabs.map((tab) =>
         tab.id === tabId
@@ -71,6 +76,7 @@ export const useTabsStore = create<TabsState>((set, get) => ({
               ...tab,
               hasNotification: true,
               notificationCount: tab.notificationCount + 1,
+              notificationText: message,
             }
           : tab
       ),
@@ -85,9 +91,23 @@ export const useTabsStore = create<TabsState>((set, get) => ({
               ...tab,
               hasNotification: false,
               notificationCount: 0,
+              notificationText: undefined,
             }
           : tab
       ),
+    }));
+  },
+
+  togglePanel: () => set((state) => ({ panelOpen: !state.panelOpen })),
+
+  clearAllNotifications: () => {
+    set((state) => ({
+      tabs: state.tabs.map((tab) => ({
+        ...tab,
+        hasNotification: false,
+        notificationCount: 0,
+        notificationText: undefined,
+      })),
     }));
   },
 }));

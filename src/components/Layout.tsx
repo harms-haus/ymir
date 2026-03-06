@@ -1,10 +1,23 @@
 import { useEffect } from 'react';
 import { Sidebar } from './Sidebar';
 import { Terminal } from './Terminal';
+import { NotificationPanel } from './NotificationPanel';
 import { useTabsStore } from '../state/tabs';
 
 export function Layout() {
-  const { tabs, activeTabId, addTab, markNotification } = useTabsStore();
+  const { tabs, activeTabId, addTab, markNotification, panelOpen, togglePanel } = useTabsStore();
+
+  // Keyboard shortcut: Ctrl+I / Cmd+I to toggle panel
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'i') {
+        e.preventDefault();
+        togglePanel();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [togglePanel]);
 
   // Create initial tab if none exist
   useEffect(() => {
@@ -64,6 +77,7 @@ export function Layout() {
           </div>
         )}
       </div>
+      <NotificationPanel isOpen={panelOpen} onClose={() => togglePanel()} />
     </div>
   );
 }
