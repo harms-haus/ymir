@@ -1,12 +1,9 @@
-import { Terminal } from './components/Terminal';
+import { Layout } from './components/Layout';
 import './App.css';
 
 function App() {
-  return (
-    <div style={{ display: 'flex', height: '100vh', width: '100vw' }}>
-      <Terminal />
-    </div>
-  );
+  return <Layout />;
 }
 
 export default App;
+
