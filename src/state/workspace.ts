@@ -289,7 +289,7 @@ const useWorkspaceStore = create<WorkspaceState>()(
         closeWorkspace: (workspaceId: string) =>
           set((state) => {
             const index = state.workspaces.findIndex((ws) => ws.id === workspaceId);
-            if (index > 0) {
+            if (index >= 0 && state.workspaces.length > 1) {
               state.workspaces.splice(index, 1);
               if (state.activeWorkspaceId === workspaceId) {
                 state.activeWorkspaceId = state.workspaces[0].id;
@@ -410,7 +410,7 @@ const useWorkspaceStore = create<WorkspaceState>()(
         markNotification: (tabId: string, message: string) =>
           set((state) => {
             for (const workspace of state.workspaces) {
-              for (const pane of Object.keys(workspace.panes).map(key => workspace.panes[key])) {
+              for (const pane of Object.values(workspace.panes)) {
                 const tab = pane.tabs.find((t) => t.id === tabId);
                 if (tab) {
                   tab.hasNotification = true;
@@ -427,7 +427,7 @@ const useWorkspaceStore = create<WorkspaceState>()(
           set((state) => {
             for (const workspace of state.workspaces) {
               let workspaceHasNotification = false;
-              for (const pane of Object.keys(workspace.panes).map(key => workspace.panes[key])) {
+              for (const pane of Object.values(workspace.panes)) {
                 const tab = pane.tabs.find((t) => t.id === tabId);
                 if (tab) {
                   tab.hasNotification = false;
