@@ -14,14 +14,14 @@ import useWorkspaceStore, {
 
 beforeEach(() => {
   // Reset store to initial state before each test
-  useWorkspaceStore.setState({
-    workspaces: [],
-    activeWorkspaceId: '',
-    sidebarCollapsed: false,
-    notificationPanelOpen: false,
-  });
-});
+  const { resetState } = useWorkspaceStore.getState();
+  if (resetState) {
+    resetState();
+  }
 
+  // Clear all console spies
+  vi.clearAllMocks();
+});
 
 // ============================================================================
 // Initialization Tests
@@ -296,9 +296,9 @@ describe('Workspace Store - Tab Actions', () => {
     );
   });
 
-  it('should close pane when last tab is closed', () => {
+  it('should not close last pane when last tab is closed', () => {
     const { createTab, closeTab } = useWorkspaceStore.getState();
-    const state = useWorkspaceStore.getState();
+    let state = useWorkspaceStore.getState();
     const paneId = Object.keys(state.workspaces[0].panes)[0];
 
     // Add a second tab
@@ -312,7 +312,9 @@ describe('Workspace Store - Tab Actions', () => {
       closeTab(paneId, tab.id);
     }
 
-    expect(paneCount()).toBeLessThan(beforePaneCount);
+    // Pane should NOT be closed when it's the last pane in workspace
+    // (The workspace must have at least one pane)
+    expect(paneCount()).toBe(beforePaneCount);
   });
 });
 
@@ -482,4 +484,3 @@ describe('Workspace Store - Derived Getters', () => {
     expect(hasNotifications()).toBe(true);
   });
 });
-

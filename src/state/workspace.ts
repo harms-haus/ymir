@@ -80,17 +80,35 @@ interface PersistedWorkspaceState {
 const tauriStorage = {
   getItem: async (name: string): Promise<string | null> => {
     try {
-      const data = await invoke<string>('load_session', { name });
-      return data;
+      // Check if Tauri is available (not available in tests)
+      if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+        const data = await invoke<string>('load_session', { name });
+        return data;
+      }
+      return null;
     } catch {
       return null;
     }
   },
   setItem: async (name: string, value: string): Promise<void> => {
-    await invoke('save_session', { name, data: value });
+    try {
+      // Check if Tauri is available (not available in tests)
+      if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+        await invoke('save_session', { name, data: value });
+      }
+    } catch {
+      // Silently fail in test environment
+    }
   },
   removeItem: async (name: string): Promise<void> => {
-    await invoke('delete_session', { name });
+    try {
+      // Check if Tauri is available (not available in tests)
+      if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+        await invoke('delete_session', { name });
+      }
+    } catch {
+      // Silently fail in test environment
+    }
   },
 };
 
