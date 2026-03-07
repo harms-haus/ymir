@@ -9,7 +9,13 @@ interface WorkspaceItemProps {
   onClick: () => void;
 }
 
-function WorkspaceItem({ workspace, isActive, index, collapsed, onClick }: WorkspaceItemProps) {
+function WorkspaceItem({
+  workspace,
+  isActive,
+  index,
+  collapsed,
+  onClick,
+}: WorkspaceItemProps) {
   const shortcutNumber = index + 1;
 
   if (collapsed) {
@@ -107,7 +113,14 @@ function WorkspaceItem({ workspace, isActive, index, collapsed, onClick }: Works
         }
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          overflow: 'hidden',
+        }}
+      >
         <span
           style={{
             width: '24px',
@@ -170,9 +183,29 @@ export function WorkspaceSidebar() {
     toggleSidebar,
     setActiveWorkspace,
     createWorkspace,
+    toggleNotificationPanel,
+    notificationPanelOpen,
   } = useWorkspaceStore();
 
   const hasNotifs = hasNotifications();
+
+  // Calculate total notification count
+  const getTotalNotificationCount = () => {
+    let count = 0;
+    for (const ws of workspaces) {
+      for (const paneId of Object.keys(ws.panes)) {
+        const pane = ws.panes[paneId];
+        for (const tab of pane.tabs) {
+          if (tab.hasNotification) {
+            count += tab.notificationCount;
+          }
+        }
+      }
+    }
+    return count;
+  };
+
+  const totalNotificationCount = getTotalNotificationCount();
 
   const handleCreateWorkspace = () => {
     const nextNumber = workspaces.length + 1;
@@ -213,6 +246,7 @@ export function WorkspaceSidebar() {
       >
         {/* Notification Bell */}
         <div
+          onClick={() => toggleNotificationPanel()}
           style={{
             position: 'relative',
             cursor: 'pointer',
@@ -221,14 +255,17 @@ export function WorkspaceSidebar() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            backgroundColor: notificationPanelOpen ? '#3c3c3c' : 'transparent',
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.backgroundColor = '#3c3c3c';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.style.backgroundColor = notificationPanelOpen
+              ? '#3c3c3c'
+              : 'transparent';
           }}
-          title="Notifications"
+          title="Notifications (⌘I)"
         >
           <svg
             width="18"
@@ -243,18 +280,27 @@ export function WorkspaceSidebar() {
             <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
             <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
           </svg>
-          {hasNotifs && (
+          {hasNotifs && totalNotificationCount > 0 && (
             <span
               style={{
                 position: 'absolute',
                 top: '2px',
                 right: '2px',
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                backgroundColor: '#4fc3f7',
+                minWidth: '14px',
+                height: '14px',
+                borderRadius: '7px',
+                backgroundColor: '#007acc',
+                color: '#ffffff',
+                fontSize: '9px',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '0 3px',
               }}
-            />
+            >
+              {totalNotificationCount > 99 ? '99+' : totalNotificationCount}
+            </span>
           )}
         </div>
 
@@ -416,7 +462,8 @@ export function WorkspaceSidebar() {
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.style.color = workspaces.length >= 8 ? '#666666' : '#cccccc';
+            e.currentTarget.style.color =
+              workspaces.length >= 8 ? '#666666' : '#cccccc';
             e.currentTarget.style.borderColor = '#3c3c3c';
           }}
           title={workspaces.length >= 8 ? 'Maximum 8 workspaces' : 'New workspace'}
@@ -428,3 +475,5 @@ export function WorkspaceSidebar() {
     </div>
   );
 }
+
+export default WorkspaceSidebar;

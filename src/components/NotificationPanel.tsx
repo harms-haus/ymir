@@ -1,12 +1,19 @@
-import { useTabsStore, Tab } from '../state/tabs';
+import useWorkspaceStore from '../state/workspace';
+import { Tab } from '../state/types';
 
 interface NotificationItemProps {
   tab: Tab;
+  paneId: string;
+  workspaceId: string;
   onClick: () => void;
   onClear: (e: React.MouseEvent) => void;
 }
 
-function NotificationItem({ tab, onClick, onClear }: NotificationItemProps) {
+function NotificationItem({
+  tab,
+  onClick,
+  onClear,
+}: NotificationItemProps) {
   return (
     <div
       onClick={onClick}
@@ -110,13 +117,54 @@ interface NotificationPanelProps {
   onClose: () => void;
 }
 
+interface NotificationTabInfo {
+  tab: Tab;
+  paneId: string;
+  workspaceId: string;
+}
+
 export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
-  const { tabs, setActiveTab, clearNotification, clearAllNotifications } = useTabsStore();
+  const workspaces = useWorkspaceStore((state) => state.workspaces);
+  const activeWorkspaceId = useWorkspaceStore(
+    (state) => state.activeWorkspaceId
+  );
+  const { setActiveWorkspace, setActivePane, setActiveTab, clearNotification } =
+    useWorkspaceStore.getState();
 
-  const notificationTabs = tabs.filter((tab) => tab.hasNotification);
+  // Collect all tabs with notifications across all workspaces
+  const getNotificationTabs = (): NotificationTabInfo[] => {
+    const notificationTabs: NotificationTabInfo[] = [];
+    for (const ws of workspaces) {
+      for (const paneId of Object.keys(ws.panes)) {
+        const pane = ws.panes[paneId];
+        for (const tab of pane.tabs) {
+          if (tab.hasNotification) {
+            notificationTabs.push({
+              tab,
+              paneId,
+              workspaceId: ws.id,
+            });
+          }
+        }
+      }
+    }
+    return notificationTabs;
+  };
 
-  const handleItemClick = (tabId: string) => {
-    setActiveTab(tabId);
+  const notificationTabs = getNotificationTabs();
+
+  const handleItemClick = (
+    tabId: string,
+    paneId: string,
+    workspaceId: string
+  ) => {
+    // Switch to the workspace containing the notification
+    if (workspaceId !== activeWorkspaceId) {
+      setActiveWorkspace(workspaceId);
+    }
+    // Activate the pane and tab
+    setActivePane(paneId);
+    setActiveTab(paneId, tabId);
     onClose();
   };
 
@@ -126,7 +174,21 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
   };
 
   const handleClearAll = () => {
-    clearAllNotifications();
+    // Clear all notifications
+    for (const { tab } of notificationTabs) {
+      clearNotification(tab.id);
+    }
+  };
+
+  const handleJumpToFirstUnread = () => {
+    const firstUnread = notificationTabs[0];
+    if (firstUnread) {
+      handleItemClick(
+        firstUnread.tab.id,
+        firstUnread.paneId,
+        firstUnread.workspaceId
+      );
+    }
   };
 
   if (!isOpen) {
@@ -176,42 +238,82 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
             backgroundColor: '#2d2d30',
           }}
         >
-          <span
-            style={{
-              fontSize: '13px',
-              fontWeight: 600,
-              color: '#ffffff',
-            }}
-          >
-            Notifications
-          </span>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#cccccc',
-              cursor: 'pointer',
-              fontSize: '18px',
-              lineHeight: '1',
-              padding: '4px 8px',
-              borderRadius: '3px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#3c3c3c';
-              e.currentTarget.style.color = '#ffffff';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-              e.currentTarget.style.color = '#cccccc';
-            }}
-            title="Close panel"
-          >
-            ×
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span
+              style={{
+                fontSize: '13px',
+                fontWeight: 600,
+                color: '#ffffff',
+              }}
+            >
+              Notifications
+            </span>
+            {notificationTabs.length > 0 && (
+              <span
+                style={{
+                  fontSize: '11px',
+                  color: '#4fc3f7',
+                  backgroundColor: 'rgba(79, 195, 247, 0.1)',
+                  padding: '2px 8px',
+                  borderRadius: '10px',
+                }}
+              >
+                {notificationTabs.length}
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {notificationTabs.length > 0 && (
+              <button
+                onClick={handleJumpToFirstUnread}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#4fc3f7',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  padding: '4px 8px',
+                  borderRadius: '3px',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#3c3c3c';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }}
+                title="Jump to first unread (⌘⇧U)"
+              >
+                Jump to Unread
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#cccccc',
+                cursor: 'pointer',
+                fontSize: '18px',
+                lineHeight: '1',
+                padding: '4px 8px',
+                borderRadius: '3px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#3c3c3c';
+                e.currentTarget.style.color = '#ffffff';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.color = '#cccccc';
+              }}
+              title="Close panel (⌘I)"
+            >
+              ×
+            </button>
+          </div>
         </div>
 
         {/* Notification List */}
@@ -234,11 +336,13 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
               No notifications
             </div>
           ) : (
-            notificationTabs.map((tab) => (
+            notificationTabs.map(({ tab, paneId, workspaceId }) => (
               <NotificationItem
                 key={tab.id}
                 tab={tab}
-                onClick={() => handleItemClick(tab.id)}
+                paneId={paneId}
+                workspaceId={workspaceId}
+                onClick={() => handleItemClick(tab.id, paneId, workspaceId)}
                 onClear={(e) => handleClear(e, tab.id)}
               />
             ))
@@ -296,3 +400,5 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
     </>
   );
 }
+
+export default NotificationPanel;

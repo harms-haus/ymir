@@ -482,3 +482,4 @@ describe('Workspace Store - Derived Getters', () => {
     expect(hasNotifications()).toBe(true);
   });
 });
+
