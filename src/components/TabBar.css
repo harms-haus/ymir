@@ -1,0 +1,267 @@
+/* TabBar Component Styles - Dark Theme */
+
+.tab-bar {
+  display: flex;
+  align-items: center;
+  height: 35px;
+  background-color: #252526;
+  border-bottom: 1px solid #1e1e1e;
+  overflow: hidden;
+}
+
+/* Scrollable container for tabs */
+.tab-bar-scroll-container {
+  display: flex;
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.tab-bar-scroll-container::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+/* Individual tab item */
+.tab-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  height: 34px;
+  min-width: 120px;
+  max-width: 200px;
+  cursor: pointer;
+  background-color: transparent;
+  border-right: 1px solid #1e1e1e;
+  border-left: 2px solid transparent;
+  transition: background-color 0.15s ease;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.tab-item:hover {
+  background-color: #2a2d2e;
+}
+
+.tab-item.active {
+  background-color: #37373d;
+  border-left-color: #007acc;
+}
+
+.tab-item.has-notification {
+  border-left-color: #4fc3f7;
+}
+
+.tab-item.has-notification.active {
+  border-left-color: #007acc;
+}
+
+/* Tab icon */
+.tab-icon {
+  font-size: 11px;
+  color: #858585;
+  flex-shrink: 0;
+}
+
+.tab-item.active .tab-icon {
+  color: #cccccc;
+}
+
+/* Tab title */
+.tab-title {
+  flex: 1;
+  font-size: 12px;
+  color: #cccccc;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-item.active .tab-title {
+  color: #ffffff;
+}
+
+/* Notification badge */
+.tab-notification-badge {
+  background-color: #007acc;
+  color: #ffffff;
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 6px;
+  min-width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* Close button */
+.tab-close-button {
+  background: none;
+  border: none;
+  color: #cccccc;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.6;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.tab-close-button:hover {
+  background-color: #c75450;
+  color: #ffffff;
+  opacity: 1;
+}
+
+.tab-item:hover .tab-close-button {
+  opacity: 1;
+}
+
+/* Overflow section */
+.tab-bar-overflow {
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* Overflow button */
+.tab-bar-overflow-button {
+  background: none;
+  border: none;
+  border-left: 1px solid #1e1e1e;
+  color: #cccccc;
+  cursor: pointer;
+  font-size: 10px;
+  width: 28px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.tab-bar-overflow-button:hover {
+  background-color: #3c3c3c;
+  color: #ffffff;
+}
+
+.tab-bar-overflow-button.open {
+  background-color: #37373d;
+  color: #ffffff;
+}
+
+/* Overflow dropdown menu */
+.tab-bar-overflow-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  min-width: 200px;
+  max-width: 300px;
+  max-height: 400px;
+  overflow-y: auto;
+  background-color: #252526;
+  border: 1px solid #1e1e1e;
+  border-top: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+}
+
+/* Overflow menu item */
+.overflow-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: background-color 0.15s ease;
+}
+
+.overflow-menu-item:hover {
+  background-color: #2a2d2e;
+}
+
+.overflow-menu-item.active {
+  background-color: #37373d;
+  border-left-color: #007acc;
+}
+
+.overflow-menu-item.has-notification {
+  border-left-color: #4fc3f7;
+}
+
+.overflow-menu-item.has-notification.active {
+  border-left-color: #007acc;
+}
+
+.overflow-menu-icon {
+  font-size: 11px;
+  color: #858585;
+  flex-shrink: 0;
+}
+
+.overflow-menu-item.active .overflow-menu-icon {
+  color: #cccccc;
+}
+
+.overflow-menu-title {
+  flex: 1;
+  font-size: 12px;
+  color: #cccccc;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overflow-menu-item.active .overflow-menu-title {
+  color: #ffffff;
+}
+
+.overflow-menu-badge {
+  background-color: #007acc;
+  color: #ffffff;
+  font-size: 10px;
+  padding: 2px 5px;
+  border-radius: 8px;
+  min-width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* New tab button */
+.tab-bar-new-button {
+  background: none;
+  border: none;
+  border-left: 1px solid #1e1e1e;
+  color: #cccccc;
+  cursor: pointer;
+  font-size: 18px;
+  width: 32px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.tab-bar-new-button:hover {
+  background-color: #3c3c3c;
+  color: #ffffff;
+}
+
+/* Empty state */
+.tab-bar-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666666;
+  font-size: 12px;
+  height: 34px;
+}

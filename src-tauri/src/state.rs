@@ -8,6 +8,8 @@ pub struct PtySession {
     pub master: Arc<Mutex<Box<dyn MasterPty + Send>>>,
     pub writer: Arc<Mutex<Box<dyn Write + Send>>>,
     pub child: Arc<Mutex<Box<dyn Child + Send + Sync>>>,
+    pub workspace_id: Option<String>,
+    pub pane_id: Option<String>,
 }
 
 pub struct PtyState {
