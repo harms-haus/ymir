@@ -25,7 +25,7 @@ export function Terminal({ sessionId: _initialSessionId, onNotification, hasNoti
     const term = new XTerm({
       cursorBlink: true,
       fontSize: 14,
-      fontFamily: 'monospace',
+    fontFamily: '"JetBrains Mono", "NerdFontSymbols", "monospace"',
       theme: {
         background: '#1e1e1e',
         foreground: '#d4d4d4',
@@ -63,7 +63,7 @@ export function Terminal({ sessionId: _initialSessionId, onNotification, hasNoti
     channel.onmessage = (message) => {
       switch (message.event) {
         case 'output':
-          term.write(message.data);
+          term.write(message.data.data);
           break;
         case 'notification':
           onNotification?.(message.data.message);

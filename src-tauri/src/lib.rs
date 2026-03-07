@@ -195,12 +195,16 @@ async fn kill_pty(
     state: tauri::State<'_, PtyState>,
     session_id: String,
 ) -> Result<(), String> {
+    // Try to remove and kill the session
+    // If already removed (e.g., process exited naturally), that's fine
     if let Some((_, session)) = state.sessions.remove(&session_id) {
-        let _ = session.child.lock().await.kill();
-        Ok(())
-    } else {
-        Err("Session not found".to_string())
+        if let Err(e) = session.child.lock().await.kill() {
+            eprintln!("Failed to kill child process: {}", e);
+            // Continue anyway - we've removed from state
+        }
     }
+    // Always succeed - if session was already cleaned up, that's ok
+    Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
