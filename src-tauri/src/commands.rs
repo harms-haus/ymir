@@ -442,3 +442,78 @@ pub async fn kill_pty(
     // Always succeed - if session was already cleaned up, that's ok
     Ok(())
 }
+
+#[tauri::command]
+pub async fn is_pty_alive(
+    state: tauri::State<'_, PtyState>,
+    session_id: String,
+) -> Result<bool, String> {
+    Ok(state.sessions.contains_key(&session_id))
+}
+
+#[tauri::command]
+pub async fn attach_pty_channel(
+    state: tauri::State<'_, PtyState>,
+    session_id: String,
+    on_event: Channel<PtyEvent>,
+) -> Result<(), String> {
+    // Get the session and clone the Arc references while holding the lock
+    let (master, state_clone) = {
+        let session_ref = state
+            .sessions
+            .get(&session_id)
+            .ok_or_else(|| "Session not found".to_string())?;
+        
+        // Clone the Arc references (cheap - just increments ref count)
+        let master = Arc::clone(&session_ref.master);
+        let state_clone = Arc::clone(&state.sessions);
+        (master, state_clone)
+    };
+
+    // Clone a new reader from the master PTY
+    let reader = master
+        .lock()
+        .await
+        .try_clone_reader()
+        .map_err(|e| format!("Failed to clone reader: {}", e))?;
+
+    // Spawn a new async task to read PTY output
+    let session_id_clone = session_id;
+
+    async_runtime::spawn(async move {
+        let mut reader = reader;
+        let mut buffer = [0u8; 4096];
+
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) => {
+                    // EOF - process exited
+                    let _ = on_event.send(PtyEvent::Exit { code: None });
+                    state_clone.remove(&session_id_clone);
+                    break;
+                }
+                Ok(n) => {
+                    let data = String::from_utf8_lossy(&buffer[..n]);
+                    let data_str = data.to_string();
+
+                    // Check for notifications in output
+                    if let Some(message) = parse_notification(&data_str) {
+                        let _ = on_event.send(PtyEvent::Notification { message });
+                    }
+
+                    // Always send output
+                    if on_event.send(PtyEvent::Output { data: data_str }).is_err() {
+                        break;
+                    }
+                }
+                Err(_) => {
+                    let _ = on_event.send(PtyEvent::Exit { code: None });
+                    state_clone.remove(&session_id_clone);
+                    break;
+                }
+            }
+        }
+    });
+
+    Ok(())
+}

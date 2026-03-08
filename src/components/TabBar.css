@@ -265,3 +265,49 @@
   font-size: 12px;
   height: 34px;
 }
+
+/* Context Menu Styles */
+.context-menu-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+}
+
+
+.context-menu {
+  position: fixed;
+  min-width: 150px;
+  background-color: #252526;
+  border: 1px solid #1e1e1e;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  z-index: 1001;
+  padding: 4px 0;
+}
+
+.context-menu-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #cccccc;
+  transition: background-color 0.15s ease;
+}
+
+.context-menu-item:hover {
+  background-color: #3c3c3c;
+}
+
+.context-menu-item-danger:hover {
+  background-color: #c75450;
+  color: #ffffff;
+}
+
+.context-menu-separator {
+  height: 1px;
+  background-color: #3c3c3c;
+  margin: 4px 0;
+}
+

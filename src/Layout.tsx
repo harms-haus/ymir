@@ -1,6 +1,6 @@
 import { SplitPane } from './components/SplitPane';
 import { WorkspaceSidebar } from './components/WorkspaceSidebar';
-import { NotificationPanel } from './components/NotificationPanel';
+
 import useWorkspaceStore from './state/workspace';
 import './App.css';
 
@@ -28,8 +28,7 @@ function Layout() {
         <SplitPane node={activeWorkspace.root} workspaceId={activeWorkspace.id} />
       </div>
 
-      {/* Notification Panel - always present, manages its own visibility */}
-      <NotificationPanel />
+
     </div>
   );
 }

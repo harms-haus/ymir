@@ -39,7 +39,7 @@ export interface UseKeyboardShortcutsReturn {
  * - ⌘W: Close active tab in focused/active pane
  * - ⌘⇧W: Close focused/active pane
  * - ⌘B: Toggle sidebar
- * - ⌘I: Toggle notification panel
+ * - ⌘I: Switch to notifications tab
  * - ⌘⇧U: Jump to first unread notification
  *
  * @returns Focus state and setter for UI integration
@@ -58,7 +58,7 @@ export function useKeyboardShortcuts(): UseKeyboardShortcutsReturn {
     setActivePane,
     setActiveTab,
     toggleSidebar,
-    toggleNotificationPanel,
+    setActiveSidebarTab,
   } = useWorkspaceStore.getState();
 
   // Track focused pane for context-aware shortcuts
@@ -164,7 +164,7 @@ export function useKeyboardShortcuts(): UseKeyboardShortcutsReturn {
       // ⌘I: Toggle notification panel
       if (isCtrl && !isShift && e.key === 'i') {
         e.preventDefault();
-        toggleNotificationPanel();
+    setActiveSidebarTab('notifications');
         return;
       }
 
@@ -188,7 +188,7 @@ export function useKeyboardShortcuts(): UseKeyboardShortcutsReturn {
     closePane,
     splitPane,
     toggleSidebar,
-    toggleNotificationPanel,
+    setActiveSidebarTab,
     jumpToFirstUnread,
   ]);
 

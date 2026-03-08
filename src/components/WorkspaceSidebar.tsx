@@ -1,5 +1,14 @@
-import useWorkspaceStore, { hasNotifications } from '../state/workspace';
-import { Workspace } from '../state/types';
+import { useEffect, useMemo } from 'react';
+import useWorkspaceStore, {
+  getTotalNotificationCount,
+  getGitChangesCount,
+} from '../state/workspace';
+import { Workspace, PanelDefinition, SidebarTab } from '../state/types';
+import { TabHeaderPanel } from './TabHeaderPanel';
+
+// ============================================================================
+// Workspace Item Component (for Workspaces panel content)
+// ============================================================================
 
 interface WorkspaceItemProps {
   workspace: Workspace;
@@ -175,224 +184,34 @@ function WorkspaceItem({
   );
 }
 
-export function WorkspaceSidebar() {
-  const {
-    workspaces,
-    activeWorkspaceId,
-    sidebarCollapsed,
-    toggleSidebar,
-    setActiveWorkspace,
-    createWorkspace,
-    toggleNotificationPanel,
-    notificationPanelOpen,
-  } = useWorkspaceStore();
+// ============================================================================
+// Panel Content Components
+// ============================================================================
 
-  const hasNotifs = hasNotifications();
+interface WorkspaceListProps {
+  collapsed: boolean;
+}
 
-  // Calculate total notification count
-  const getTotalNotificationCount = () => {
-    let count = 0;
-    for (const ws of workspaces) {
-      for (const paneId of Object.keys(ws.panes)) {
-        const pane = ws.panes[paneId];
-        for (const tab of pane.tabs) {
-          if (tab.hasNotification) {
-            count += tab.notificationCount;
-          }
-        }
-      }
-    }
-    return count;
-  };
+function WorkspaceList({ collapsed }: WorkspaceListProps) {
+  const { workspaces, activeWorkspaceId, setActiveWorkspace, createWorkspace } =
+    useWorkspaceStore();
 
-  const totalNotificationCount = getTotalNotificationCount();
+  const visibleWorkspaces = workspaces.slice(0, 8);
 
   const handleCreateWorkspace = () => {
     const nextNumber = workspaces.length + 1;
     createWorkspace(`Workspace ${nextNumber}`);
   };
 
-  const handleWorkspaceClick = (workspaceId: string) => {
-    setActiveWorkspace(workspaceId);
-  };
-
-  // Limit to 8 workspaces
-  const visibleWorkspaces = workspaces.slice(0, 8);
-
   return (
     <div
       style={{
-        width: sidebarCollapsed ? '50px' : '250px',
-        minWidth: sidebarCollapsed ? '50px' : '250px',
-        height: '100%',
-        backgroundColor: '#1e1e1e',
-        borderRight: '1px solid #333',
         display: 'flex',
         flexDirection: 'column',
-        transition: 'width 0.2s ease, min-width 0.2s ease',
-        overflow: 'hidden',
+        height: '100%',
       }}
     >
-      {/* Top Section: Notification Bell + Toggle */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: sidebarCollapsed ? 'center' : 'space-between',
-          padding: sidebarCollapsed ? '12px 0' : '10px 12px',
-          borderBottom: '1px solid #333',
-          backgroundColor: '#252526',
-        }}
-      >
-        {/* Notification Bell */}
-        <div
-          onClick={() => toggleNotificationPanel()}
-          style={{
-            position: 'relative',
-            cursor: 'pointer',
-            padding: '6px',
-            borderRadius: '4px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: notificationPanelOpen ? '#3c3c3c' : 'transparent',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#3c3c3c';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = notificationPanelOpen
-              ? '#3c3c3c'
-              : 'transparent';
-          }}
-          title="Notifications (⌘I)"
-        >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke={hasNotifs ? '#4fc3f7' : '#cccccc'}
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-            <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-          </svg>
-          {hasNotifs && totalNotificationCount > 0 && (
-            <span
-              style={{
-                position: 'absolute',
-                top: '2px',
-                right: '2px',
-                minWidth: '14px',
-                height: '14px',
-                borderRadius: '7px',
-                backgroundColor: '#007acc',
-                color: '#ffffff',
-                fontSize: '9px',
-                fontWeight: 600,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '0 3px',
-              }}
-            >
-              {totalNotificationCount > 99 ? '99+' : totalNotificationCount}
-            </span>
-          )}
-        </div>
-
-        {/* Toggle Button (hidden when collapsed) */}
-        {!sidebarCollapsed && (
-          <button
-            onClick={toggleSidebar}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#cccccc',
-              cursor: 'pointer',
-              fontSize: '14px',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#3c3c3c';
-              e.currentTarget.style.color = '#ffffff';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-              e.currentTarget.style.color = '#cccccc';
-            }}
-            title="Collapse sidebar"
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="m11 17-5-5 5-5" />
-              <path d="m18 17-5-5 5-5" />
-            </svg>
-          </button>
-        )}
-      </div>
-
-      {/* Expand Button (only when collapsed) */}
-      {sidebarCollapsed && (
-        <button
-          onClick={toggleSidebar}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: '#cccccc',
-            cursor: 'pointer',
-            fontSize: '14px',
-            padding: '8px 0',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderBottom: '1px solid #333',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#3c3c3c';
-            e.currentTarget.style.color = '#ffffff';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.style.color = '#cccccc';
-          }}
-          title="Expand sidebar"
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="m13 17 5-5-5-5" />
-            <path d="m6 17 5-5-5-5" />
-          </svg>
-        </button>
-      )}
-
-      {/* Separator */}
-      <div style={{ borderBottom: '1px solid #333' }} />
-
-      {/* Middle Section: Workspace List */}
+      {/* Workspace List */}
       <div
         style={{
           flex: 1,
@@ -418,60 +237,400 @@ export function WorkspaceSidebar() {
               workspace={workspace}
               isActive={workspace.id === activeWorkspaceId}
               index={index}
-              collapsed={sidebarCollapsed}
-              onClick={() => handleWorkspaceClick(workspace.id)}
+              collapsed={collapsed}
+              onClick={() => setActiveWorkspace(workspace.id)}
             />
           ))
         )}
       </div>
 
-      {/* Separator */}
-      <div style={{ borderTop: '1px solid #333' }} />
-
-      {/* Bottom Section: New Workspace Button */}
-      <div
-        style={{
-          padding: sidebarCollapsed ? '12px 0' : '10px 12px',
-          backgroundColor: '#252526',
-        }}
-      >
-        <button
-          onClick={handleCreateWorkspace}
-          disabled={workspaces.length >= 8}
+      {/* New Workspace Button */}
+      {!collapsed && (
+        <div
           style={{
-            width: '100%',
-            background: 'none',
-            border: '1px solid #3c3c3c',
-            color: workspaces.length >= 8 ? '#666666' : '#cccccc',
-            cursor: workspaces.length >= 8 ? 'not-allowed' : 'pointer',
-            fontSize: '14px',
-            padding: sidebarCollapsed ? '8px 0' : '8px 12px',
-            borderRadius: '4px',
+            padding: '10px 12px',
+            backgroundColor: '#252526',
+            borderTop: '1px solid #333',
+          }}
+        >
+          <button
+            onClick={handleCreateWorkspace}
+            disabled={workspaces.length >= 8}
+            style={{
+              width: '100%',
+              background: 'none',
+              border: '1px solid #3c3c3c',
+              color: workspaces.length >= 8 ? '#666666' : '#cccccc',
+              cursor: workspaces.length >= 8 ? 'not-allowed' : 'pointer',
+              fontSize: '14px',
+              padding: '8px 12px',
+              borderRadius: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              if (workspaces.length < 8) {
+                e.currentTarget.style.backgroundColor = '#3c3c3c';
+                e.currentTarget.style.color = '#ffffff';
+                e.currentTarget.style.borderColor = '#007acc';
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color =
+                workspaces.length >= 8 ? '#666666' : '#cccccc';
+              e.currentTarget.style.borderColor = '#3c3c3c';
+            }}
+            title={workspaces.length >= 8 ? 'Maximum 8 workspaces' : 'New workspace'}
+          >
+            <span style={{ fontSize: '18px', lineHeight: '1' }}>+</span>
+            <span>New</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CollapsedWorkspaceList() {
+  const { workspaces, activeWorkspaceId, setActiveWorkspace } = useWorkspaceStore();
+  const visibleWorkspaces = workspaces.slice(0, 8);
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        padding: '4px 0',
+        gap: '4px',
+      }}
+    >
+      {visibleWorkspaces.map((workspace, index) => (
+        <div
+          key={workspace.id}
+          onClick={() => setActiveWorkspace(workspace.id)}
+          style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: '6px',
+            backgroundColor: workspace.id === activeWorkspaceId ? '#007acc' : '#3c3c3c',
+            color: '#ffffff',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '8px',
-            transition: 'all 0.15s ease',
+            fontSize: '12px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            position: 'relative',
+            transition: 'background-color 0.15s ease',
           }}
           onMouseEnter={(e) => {
-            if (workspaces.length < 8) {
-              e.currentTarget.style.backgroundColor = '#3c3c3c';
-              e.currentTarget.style.color = '#ffffff';
-              e.currentTarget.style.borderColor = '#007acc';
+            if (workspace.id !== activeWorkspaceId) {
+              e.currentTarget.style.backgroundColor = '#2a2d2e';
             }
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.style.color =
-              workspaces.length >= 8 ? '#666666' : '#cccccc';
-            e.currentTarget.style.borderColor = '#3c3c3c';
+            if (workspace.id !== activeWorkspaceId) {
+              e.currentTarget.style.backgroundColor = '#3c3c3c';
+            }
           }}
-          title={workspaces.length >= 8 ? 'Maximum 8 workspaces' : 'New workspace'}
+          title={`${workspace.name} (⌘${index + 1})`}
         >
-          <span style={{ fontSize: '18px', lineHeight: '1' }}>+</span>
-          {!sidebarCollapsed && <span>New</span>}
-        </button>
+          {index + 1}
+          {workspace.hasNotification && (
+            <span
+              style={{
+                position: 'absolute',
+                top: '2px',
+                right: '2px',
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                backgroundColor: '#4fc3f7',
+              }}
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function NotificationList() {
+  const notificationCount = getTotalNotificationCount();
+
+  return (
+    <div
+      style={{
+        padding: '16px',
+        color: '#cccccc',
+        fontSize: '13px',
+      }}
+    >
+      <div
+        style={{
+          marginBottom: '12px',
+          fontWeight: 600,
+          borderBottom: '1px solid #333',
+          paddingBottom: '8px',
+        }}
+      >
+        Notifications ({notificationCount})
       </div>
+      {notificationCount === 0 ? (
+        <div style={{ color: '#666666', textAlign: 'center', padding: '20px 0' }}>
+          No notifications
+        </div>
+      ) : (
+        <div style={{ color: '#858585' }}>
+          Notification items will be displayed here
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GitPanelContent() {
+  const changesCount = getGitChangesCount();
+
+  return (
+    <div
+      style={{
+        padding: '16px',
+        color: '#cccccc',
+        fontSize: '13px',
+      }}
+    >
+      <div
+        style={{
+          marginBottom: '12px',
+          fontWeight: 600,
+          borderBottom: '1px solid #333',
+          paddingBottom: '8px',
+        }}
+      >
+        Git ({changesCount} changes)
+      </div>
+      <div style={{ marginBottom: '12px' }}>
+        <div style={{ color: '#858585', marginBottom: '4px' }}>Branch</div>
+        <div style={{ color: '#4fc3f7' }}>main</div>
+      </div>
+      <div style={{ marginBottom: '12px' }}>
+        <div style={{ color: '#858585', marginBottom: '4px' }}>Staged</div>
+        <div>0 files</div>
+      </div>
+      <div>
+        <div style={{ color: '#858585', marginBottom: '4px' }}>Changes</div>
+        <div>{changesCount} files</div>
+      </div>
+    </div>
+  );
+}
+
+function ProjectTree() {
+  return (
+    <div
+      style={{
+        padding: '16px',
+        color: '#cccccc',
+        fontSize: '13px',
+      }}
+    >
+      <div
+        style={{
+          marginBottom: '12px',
+          fontWeight: 600,
+          borderBottom: '1px solid #333',
+          paddingBottom: '8px',
+        }}
+      >
+        Project
+      </div>
+      <div style={{ color: '#858585' }}>
+        <div style={{ marginBottom: '4px' }}>📁 src/</div>
+        <div style={{ marginLeft: '16px', marginBottom: '4px' }}>📁 components/</div>
+        <div style={{ marginLeft: '16px', marginBottom: '4px' }}>📁 state/</div>
+        <div style={{ marginBottom: '4px' }}>📄 package.json</div>
+        <div style={{ marginBottom: '4px' }}>📄 README.md</div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Icon Components
+// ============================================================================
+
+function WorkspacesIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="3" y="3" width="7" height="7" />
+      <rect x="14" y="3" width="7" height="7" />
+      <rect x="14" y="14" width="7" height="7" />
+      <rect x="3" y="14" width="7" height="7" />
+    </svg>
+  );
+}
+
+function BellIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+      <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+    </svg>
+  );
+}
+
+function GitBranchIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <line x1="6" y1="3" x2="6" y2="15" />
+      <circle cx="18" cy="6" r="3" />
+      <circle cx="6" cy="18" r="3" />
+      <path d="M18 9a9 9 0 0 1-9 9" />
+    </svg>
+  );
+}
+
+function FolderIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
+// ============================================================================
+// WorkspaceSidebar Component
+// ============================================================================
+
+export function WorkspaceSidebar() {
+  const {
+    sidebarCollapsed,
+    toggleSidebar,
+    activeTab,
+    setActiveSidebarTab,
+    registerPanel,
+  } = useWorkspaceStore();
+
+  // Create panel definitions with reactive badges
+  const panels: PanelDefinition[] = useMemo(
+    () => [
+      {
+        id: 'workspaces' as SidebarTab,
+        title: 'Workspaces',
+        icon: () => <WorkspacesIcon />,
+        badge: () => null,
+        fullRender: () => <WorkspaceList collapsed={false} />,
+        collapsedRender: () => <CollapsedWorkspaceList />,
+      },
+      {
+        id: 'notifications' as SidebarTab,
+        title: 'Notifications',
+        icon: () => <BellIcon />,
+        badge: () => {
+          const count = getTotalNotificationCount();
+          return count > 0 ? { count } : null;
+        },
+        fullRender: () => <NotificationList />,
+      },
+      {
+        id: 'git' as SidebarTab,
+        title: 'Git',
+        icon: () => <GitBranchIcon />,
+        badge: () => {
+          const count = getGitChangesCount();
+          return count > 0 ? { count } : null;
+        },
+        fullRender: () => <GitPanelContent />,
+      },
+      {
+        id: 'project' as SidebarTab,
+        title: 'Project',
+        icon: () => <FolderIcon />,
+        badge: () => null,
+        fullRender: () => <ProjectTree />,
+      },
+    ],
+    // Note: We intentionally don't include getTotalNotificationCount or getGitChangesCount
+    // in dependencies because they are selectors that read from store state on each call.
+    // The useMemo is mainly for panel definition stability.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  // Register panels on mount
+  useEffect(() => {
+    panels.forEach((panel) => {
+      registerPanel(panel);
+    });
+  }, [panels, registerPanel]);
+
+  const handleTabClick = (tab: SidebarTab) => {
+    setActiveSidebarTab(tab);
+  };
+
+  return (
+    <div
+      style={{
+        width: sidebarCollapsed ? '50px' : '250px',
+        minWidth: sidebarCollapsed ? '50px' : '250px',
+        height: '100%',
+        backgroundColor: '#1e1e1e',
+        borderRight: '1px solid #333',
+        display: 'flex',
+        flexDirection: 'column',
+        transition: 'width 0.2s ease, min-width 0.2s ease',
+        overflow: 'hidden',
+      }}
+    >
+      <TabHeaderPanel
+        panels={panels}
+        activeTab={activeTab}
+        isCollapsed={sidebarCollapsed}
+        onTabClick={handleTabClick}
+        onToggleSidebar={toggleSidebar}
+      />
     </div>
   );
 }

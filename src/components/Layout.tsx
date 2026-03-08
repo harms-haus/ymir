@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { WorkspaceSidebar } from './WorkspaceSidebar';
-import { NotificationPanel } from './NotificationPanel';
 import { SplitPane } from './SplitPane';
 import useWorkspaceStore, { activeWorkspace } from '../state/workspace';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -10,11 +9,6 @@ export function Layout() {
   const activeWorkspaceId = useWorkspaceStore(
     (state) => state.activeWorkspaceId
   );
-  const notificationPanelOpen = useWorkspaceStore(
-    (state) => state.notificationPanelOpen
-  );
-
-  const { toggleNotificationPanel } = useWorkspaceStore.getState();
 
   // Get the active workspace
   const currentWorkspace = activeWorkspace();
@@ -81,13 +75,10 @@ export function Layout() {
         )}
       </div>
 
-      {/* Notification Panel */}
-      <NotificationPanel
-        isOpen={notificationPanelOpen}
-        onClose={() => toggleNotificationPanel()}
-      />
     </div>
   );
+
+
 }
 
 export default Layout;

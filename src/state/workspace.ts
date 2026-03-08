@@ -18,6 +18,8 @@ import {
   SplitAxis,
   isBranch,
   isLeaf,
+  SidebarTab,
+  PanelDefinition,
 } from './types';
 import { MAX_PANES, MAX_SCROLLBACK_LINES } from './types';
 
@@ -38,6 +40,11 @@ interface WorkspaceState {
   activeWorkspaceId: string;
   sidebarCollapsed: boolean;
   notificationPanelOpen: boolean;
+  activeTab: SidebarTab;
+  panels: PanelDefinition[];
+  // Mock git state for badge reactivity
+  gitStagedCount: number;
+  gitChangesCount: number;
 
   createWorkspace: (name: string) => void;
   closeWorkspace: (workspaceId: string) => void;
@@ -52,10 +59,19 @@ interface WorkspaceState {
   setActiveTab: (paneId: string, tabId: string) => void;
   markNotification: (tabId: string, message: string) => void;
   clearNotification: (tabId: string) => void;
+  updateTabSessionId: (paneId: string, tabId: string, sessionId: string) => void;
+
 
   toggleSidebar: () => void;
   toggleNotificationPanel: () => void;
   resetState: () => void;
+
+  // Sidebar panel management
+  setActiveSidebarTab: (tab: SidebarTab) => void;
+  registerPanel: (definition: PanelDefinition) => void;
+
+  // Mock git actions for badge testing
+  updateGitChanges: (staged: number, changes: number) => void;
 }
 
 // ============================================================================
@@ -265,6 +281,11 @@ const useWorkspaceStore = create<WorkspaceState>()(
         activeWorkspaceId: 'workspace-1',
         sidebarCollapsed: false,
         notificationPanelOpen: false,
+        activeTab: 'workspaces',
+        panels: [],
+        // Initialize mock git state
+        gitStagedCount: 0,
+        gitChangesCount: 0,
 
         createWorkspace: (name: string) =>
           set((state) => {
@@ -444,6 +465,19 @@ const useWorkspaceStore = create<WorkspaceState>()(
             }
           }),
 
+        updateTabSessionId: (paneId: string, tabId: string, sessionId: string) =>
+          set((state) => {
+            for (const workspace of state.workspaces) {
+              const pane = workspace.panes[paneId];
+              if (pane) {
+                const tab = pane.tabs.find((t) => t.id === tabId);
+                if (tab) {
+                  tab.sessionId = sessionId;
+                }
+              }
+            }
+          }),
+
         toggleSidebar: () =>
           set((state) => {
             state.sidebarCollapsed = !state.sidebarCollapsed;
@@ -475,6 +509,34 @@ const useWorkspaceStore = create<WorkspaceState>()(
             state.activeWorkspaceId = ws.id;
             state.sidebarCollapsed = false;
             state.notificationPanelOpen = false;
+            state.activeTab = 'workspaces';
+            state.panels = [];
+            state.gitStagedCount = 0;
+            state.gitChangesCount = 0;
+          }),
+
+        setActiveSidebarTab: (tab: SidebarTab) =>
+          set((state) => {
+            state.activeTab = tab;
+          }),
+
+        registerPanel: (definition: PanelDefinition) =>
+          set((state) => {
+            // Check if panel with this ID already exists
+            const existingIndex = state.panels.findIndex((p) => p.id === definition.id);
+            if (existingIndex >= 0) {
+              // Replace existing panel
+              state.panels[existingIndex] = definition;
+            } else {
+              // Add new panel
+              state.panels.push(definition);
+            }
+          }),
+
+        updateGitChanges: (staged: number, changes: number) =>
+          set((state) => {
+            state.gitStagedCount = staged;
+            state.gitChangesCount = changes;
           }),
       })),
       {
@@ -506,6 +568,35 @@ export const paneCount = () => {
 export const hasNotifications = () => {
   const { workspaces } = useWorkspaceStore.getState();
   return workspaces.some((ws) => ws.hasNotification);
+};
+
+export const getActivePanel = () => {
+  const { activeTab, panels } = useWorkspaceStore.getState();
+  return panels.find((p) => p.id === activeTab) || null;
+};
+
+export const getPanel = (id: SidebarTab) => {
+  const { panels } = useWorkspaceStore.getState();
+  return panels.find((p) => p.id === id) || null;
+};
+
+// Badge selectors for reactive badge counts
+export const getTotalNotificationCount = () => {
+  const { workspaces } = useWorkspaceStore.getState();
+  let total = 0;
+  for (const ws of workspaces) {
+    for (const pane of Object.values(ws.panes)) {
+      for (const tab of pane.tabs) {
+        total += tab.notificationCount;
+      }
+    }
+  }
+  return total;
+};
+
+export const getGitChangesCount = () => {
+  const { gitStagedCount, gitChangesCount } = useWorkspaceStore.getState();
+  return gitStagedCount + gitChangesCount;
 };
 
 export default useWorkspaceStore;

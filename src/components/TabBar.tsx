@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Tab } from '../state/types';
+
 import './TabBar.css';
 
 interface TabBarProps {
@@ -9,6 +10,8 @@ interface TabBarProps {
   onCreateTab: (paneId: string) => void;
   onCloseTab: (paneId: string, tabId: string) => void;
   onSelectTab: (paneId: string, tabId: string) => void;
+  onSplitPane?: (paneId: string, direction: 'horizontal' | 'vertical') => void;
+  onCreateTabRight?: (paneId: string, tabId: string) => void;
 }
 
 export function TabBar({
@@ -18,11 +21,37 @@ export function TabBar({
   onCreateTab,
   onCloseTab,
   onSelectTab,
+  onSplitPane,
+  onCreateTabRight,
 }: TabBarProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [showOverflow, setShowOverflow] = useState(false);
   const [overflowMenuOpen, setOverflowMenuOpen] = useState(false);
   const overflowMenuRef = useRef<HTMLDivElement>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; anchorTabId: string; anchorPaneId: string } | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close context menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        contextMenu &&
+        !contextMenuRef.current?.contains(e.target as Node)
+      ) {
+        setContextMenu(null);
+      }
+    };
+
+    if (contextMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      if (contextMenu) {
+        document.removeEventListener('mousedown', handleClickOutside);
+      }
+    };
+  }, [contextMenu]);
 
   // Check for overflow on mount and when tabs change
   useEffect(() => {
@@ -44,26 +73,6 @@ export function TabBar({
 
     return () => resizeObserver.disconnect();
   }, [tabs]);
-
-  // Close overflow menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        overflowMenuRef.current &&
-        !overflowMenuRef.current.contains(event.target as Node)
-      ) {
-        setOverflowMenuOpen(false);
-      }
-    };
-
-    if (overflowMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [overflowMenuOpen]);
 
   // Scroll active tab into view
   useEffect(() => {
@@ -101,6 +110,46 @@ export function TabBar({
     [paneId, onSelectTab]
   );
 
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, tab: Tab) => {
+      e.preventDefault();
+      setContextMenu({ x: e.clientX, y: e.clientY, anchorTabId: tab.id, anchorPaneId: paneId });
+    },
+    [paneId]
+  );
+
+  const handleSplitHorizontal = useCallback(() => {
+    if (contextMenu && onSplitPane) {
+      onSplitPane(contextMenu.anchorPaneId, 'horizontal');
+      setContextMenu(null);
+    }
+  }, [contextMenu, onSplitPane]);
+
+  const handleSplitVertical = useCallback(() => {
+    if (contextMenu && onSplitPane) {
+      onSplitPane(contextMenu.anchorPaneId, 'vertical');
+      setContextMenu(null);
+    }
+  }, [contextMenu, onSplitPane]);
+
+  const handleCloseTabContext = useCallback(() => {
+    if (contextMenu) {
+      onCloseTab(contextMenu.anchorPaneId, contextMenu.anchorTabId);
+      setContextMenu(null);
+    }
+  }, [contextMenu, onCloseTab]);
+
+  const handleCreateTabRight = useCallback(() => {
+    if (contextMenu) {
+      if (onCreateTabRight) {
+        onCreateTabRight(contextMenu.anchorPaneId, contextMenu.anchorTabId);
+      } else {
+        onCreateTab(contextMenu.anchorPaneId);
+      }
+      setContextMenu(null);
+    }
+  }, [contextMenu, onCreateTab, onCreateTabRight]);
+
   const toggleOverflowMenu = () => {
     setOverflowMenuOpen(!overflowMenuOpen);
   };
@@ -122,6 +171,7 @@ export function TabBar({
               tab.hasNotification ? 'has-notification' : ''
             }`}
             onClick={() => handleSelectTab(tab.id)}
+            onContextMenu={(e) => handleContextMenu(e, tab)}
             title={tab.title}
           >
             {/* Tab icon */}
@@ -193,6 +243,47 @@ export function TabBar({
       >
         +
       </button>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <>
+          <div
+            className="context-menu-backdrop"
+            onClick={() => setContextMenu(null)}
+          />
+          <div
+            ref={contextMenuRef}
+            className="context-menu"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+          >
+            <div
+              className="context-menu-item"
+              onClick={handleSplitHorizontal}
+            >
+              Split Horizontal
+            </div>
+            <div
+              className="context-menu-item"
+              onClick={handleSplitVertical}
+            >
+              Split Vertical
+            </div>
+            <div className="context-menu-separator" />
+            <div
+              className="context-menu-item"
+              onClick={handleCreateTabRight}
+            >
+              New Tab Right
+            </div>
+            <div
+              className="context-menu-item context-menu-item-danger"
+              onClick={handleCloseTabContext}
+            >
+              Close Tab
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

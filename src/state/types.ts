@@ -128,6 +128,40 @@ export interface Workspace {
 }
 
 // ============================================================================
+// Sidebar Panel Types
+// ============================================================================
+
+/** Available sidebar tabs/panels */
+export type SidebarTab = 'workspaces' | 'notifications' | 'git' | 'project';
+
+/** Tab badge configuration */
+export interface TabBadge {
+  /** Number to display on badge (e.g., notification count) */
+  count?: number;
+  /** Icon to display on badge (optional) */
+  icon?: string;
+  /** Badge color (CSS color string) */
+  color?: string;
+}
+
+/** Panel definition with render handlers for reactivity */
+export interface PanelDefinition {
+  /** Unique identifier matching SidebarTab type */
+  id: SidebarTab;
+  /** Hover text shown on tab */
+  title: string;
+  /** Tab icon renderer (reactive) */
+  icon: () => React.ReactNode;
+  /** Tab badge renderer (optional, reactive) */
+  badge?: () => TabBadge | null;
+  /** Full panel content when sidebar expanded */
+  fullRender: () => React.ReactNode;
+  /** Content when sidebar collapsed (optional) */
+  collapsedRender?: () => React.ReactNode | null;
+}
+
+
+// ============================================================================
 // Helper Types
 // ============================================================================
 

@@ -48,6 +48,14 @@ export function Pane({ paneId, workspaceId }: PaneProps) {
     useWorkspaceStore.getState().setActiveTab(_paneId, tabId);
   };
 
+  // Convert UI direction to store direction
+  const handleSplitPane = (_paneId: string, direction: 'horizontal' | 'vertical') => {
+    // 'horizontal' split creates panes side by side -> 'right'
+    // 'vertical' split creates panes stacked -> 'down'
+    const storeDirection = direction === 'horizontal' ? 'right' : 'down';
+    useWorkspaceStore.getState().splitPane(_paneId, storeDirection);
+  };
+
   return (
     <div
       style={{
@@ -67,6 +75,7 @@ export function Pane({ paneId, workspaceId }: PaneProps) {
         onCreateTab={handleCreateTab}
         onCloseTab={handleCloseTab}
         onSelectTab={handleSelectTab}
+        onSplitPane={handleSplitPane}
       />
 
       {/* Terminal content area */}
@@ -82,6 +91,8 @@ export function Pane({ paneId, workspaceId }: PaneProps) {
         {activeTab ? (
           <Terminal
             sessionId={activeTab.sessionId}
+            tabId={activeTab.id}
+            paneId={paneId}
             onNotification={(message) => {
               // Notification handling is managed by the workspace store
               // This callback allows Terminal to trigger notifications

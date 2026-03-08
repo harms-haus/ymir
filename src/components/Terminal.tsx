@@ -4,14 +4,17 @@ import { FitAddon } from '@xterm/addon-fit';
 import { invoke, Channel } from '@tauri-apps/api/core';
 import { sendNotification } from '@tauri-apps/plugin-notification';
 import '@xterm/xterm/css/xterm.css';
+import useWorkspaceStore from '../state/workspace';
 
 interface TerminalProps {
   sessionId?: string;
+  tabId: string;
+  paneId: string;
   onNotification?: (message: string) => void;
   hasNotification?: boolean;
 }
 
-export function Terminal({ sessionId: _initialSessionId, onNotification, hasNotification }: TerminalProps) {
+export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotification }: TerminalProps) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -25,7 +28,7 @@ export function Terminal({ sessionId: _initialSessionId, onNotification, hasNoti
     const term = new XTerm({
       cursorBlink: true,
       fontSize: 14,
-    fontFamily: '"JetBrains Mono", "NerdFontSymbols", "monospace"',
+      fontFamily: '"JetBrains Mono", "NerdFontSymbols", "monospace"',
       theme: {
         background: '#1e1e1e',
         foreground: '#d4d4d4',
@@ -58,7 +61,7 @@ export function Terminal({ sessionId: _initialSessionId, onNotification, hasNoti
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
 
-    // Set up PTY communication
+    // Set up PTY communication channel
     const channel = new Channel<any>();
     channel.onmessage = (message) => {
       switch (message.event) {
@@ -77,21 +80,48 @@ export function Terminal({ sessionId: _initialSessionId, onNotification, hasNoti
       }
     };
 
-    // Spawn PTY and store session ID
-    invoke<string>('spawn_pty', { onEvent: channel })
-      .then((id) => {
-        sessionIdRef.current = id;
-        setIsReady(true);
+    // Setup keystroke handler
+    const setupDataHandler = (ptySessionId: string) => {
+      term.onData((data) => {
+        invoke('write_pty', { sessionId: ptySessionId, data }).catch(console.error);
+      });
+    };
 
-        // Send keystrokes to PTY
-        term.onData((data) => {
-          invoke('write_pty', { sessionId: id, data }).catch(console.error);
-        });
-      })
-      .catch((error) => {
+    // Initialize PTY session - either attach to existing or spawn new
+    const initPty = async () => {
+      // Check if we have an existing sessionId and if the PTY is still alive
+      if (sessionId) {
+        try {
+          const isAlive = await invoke<boolean>('is_pty_alive', { sessionId });
+          if (isAlive) {
+            // Attach to existing PTY session
+            await invoke('attach_pty_channel', { sessionId, onEvent: channel });
+            sessionIdRef.current = sessionId;
+            setIsReady(true);
+            setupDataHandler(sessionId);
+            return;
+          }
+        } catch (error) {
+          console.warn('Failed to check/attach to existing PTY, spawning new:', error);
+        }
+      }
+
+      // Spawn a new PTY session
+      try {
+        const newSessionId = await invoke<string>('spawn_pty', { onEvent: channel });
+        sessionIdRef.current = newSessionId;
+        setIsReady(true);
+        setupDataHandler(newSessionId);
+
+        // Update the store with the new session ID
+        useWorkspaceStore.getState().updateTabSessionId(paneId, tabId, newSessionId);
+      } catch (error) {
         console.error('Failed to spawn PTY:', error);
         term.write(`\r\n[Error: Failed to spawn PTY: ${error}]\r\n`);
-      });
+      }
+    };
+
+    initPty();
 
     // Handle resize
     const resizeObserver = new ResizeObserver(() => {
@@ -108,15 +138,13 @@ export function Terminal({ sessionId: _initialSessionId, onNotification, hasNoti
 
     resizeObserver.observe(terminalRef.current);
 
-    // Cleanup
+    // Cleanup - never kill PTY on unmount
+    // PTY persists for tab lifetime, only killed when user closes tab
     return () => {
       resizeObserver.disconnect();
       term.dispose();
-      if (sessionIdRef.current) {
-        invoke('kill_pty', { sessionId: sessionIdRef.current }).catch(console.error);
-      }
     };
-  }, [onNotification]);
+  }, [sessionId, tabId, paneId, onNotification]);
 
   return (
     <div
