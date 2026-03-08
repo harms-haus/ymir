@@ -171,7 +171,7 @@ function createDefaultTab(cwd: string = '~'): Tab {
     id: crypto.randomUUID(),
     title: 'bash',
     cwd,
-    sessionId: crypto.randomUUID(),
+    sessionId: '', // Empty until PTY is spawned
     scrollback: [],
     hasNotification: false,
     notificationCount: 0,
@@ -403,6 +403,15 @@ const useWorkspaceStore = create<WorkspaceState>()(
 
             const pane = workspace.panes[paneId];
             if (!pane) return;
+
+            // Find the tab being closed to get its sessionId
+            const tabToClose = pane.tabs.find((t) => t.id === tabId);
+            if (tabToClose?.sessionId) {
+              // Kill the PTY session asynchronously (fire and forget)
+              invoke('kill_pty', { sessionId: tabToClose.sessionId }).catch((error) => {
+                console.error('Failed to kill PTY session:', error);
+              });
+            }
 
             pane.tabs = pane.tabs.filter((t) => t.id !== tabId);
 

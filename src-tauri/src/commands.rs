@@ -49,6 +49,79 @@ fn parse_notification(line: &str) -> Option<String> {
     None
 }
 
+/// Helper to spawn a PTY reader task that broadcasts output
+fn spawn_pty_reader(
+    mut reader: Box<dyn Read + Send>,
+    output_tx: tokio::sync::broadcast::Sender<(String, String)>,
+    session_id: String,
+    sessions: Arc<dashmap::DashMap<String, PtySession>>,
+) {
+    async_runtime::spawn(async move {
+        let mut buffer = [0u8; 4096];
+
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) => {
+                    // EOF - process exited
+                    let _ = output_tx.send(("exit".to_string(), String::new()));
+                    sessions.remove(&session_id);
+                    break;
+                }
+                Ok(n) => {
+                    let data = String::from_utf8_lossy(&buffer[..n]);
+                    let data_str = data.to_string();
+
+                    // Check for notifications in output
+                    if let Some(message) = parse_notification(&data_str) {
+                        let _ = output_tx.send(("notification".to_string(), message));
+                    }
+
+                    // Broadcast output - ignore send errors (no subscribers)
+                    let _ = output_tx.send(("output".to_string(), data_str));
+                }
+                Err(_) => {
+                    let _ = output_tx.send(("exit".to_string(), String::new()));
+                    sessions.remove(&session_id);
+                    break;
+                }
+            }
+        }
+    });
+}
+
+/// Helper to forward broadcast events to a Tauri channel
+fn forward_broadcast_to_channel(
+    mut rx: tokio::sync::broadcast::Receiver<(String, String)>,
+    on_event: Channel<PtyEvent>,
+) {
+    async_runtime::spawn(async move {
+        loop {
+            match rx.recv().await {
+                Ok((event_type, data)) => {
+                    let event = match event_type.as_str() {
+                        "output" => PtyEvent::Output { data },
+                        "notification" => PtyEvent::Notification { message: data },
+                        "exit" => PtyEvent::Exit { code: None },
+                        _ => continue,
+                    };
+                    if on_event.send(event).is_err() {
+                        // Channel closed, stop forwarding
+                        break;
+                    }
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                    // Broadcast channel closed
+                    break;
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+                    // Missed some messages, continue
+                    continue;
+                }
+            }
+        }
+    });
+}
+
 #[tauri::command]
 pub async fn spawn_pty(
     state: tauri::State<'_, PtyState>,
@@ -66,7 +139,8 @@ pub async fn spawn_pty(
         .map_err(|e| format!("Failed to open PTY: {}", e))?;
 
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
-    let cmd = CommandBuilder::new(&shell);
+    let mut cmd = CommandBuilder::new(&shell);
+    cmd.arg("-i"); // Start as interactive shell to get a prompt
 
     let child = pair
         .slave
@@ -89,54 +163,31 @@ pub async fn spawn_pty(
 
     let master = pair.master;
 
+    // Create broadcast channel for this PTY (buffer size 256)
+    let (output_tx, _) = tokio::sync::broadcast::channel(256);
+
     let session = PtySession {
         master: Arc::new(tokio::sync::Mutex::new(master)),
         writer: Arc::new(tokio::sync::Mutex::new(writer)),
         child: Arc::new(tokio::sync::Mutex::new(child)),
         workspace_id: None,
         pane_id: None,
+        output_tx: output_tx.clone(),
     };
 
     state.sessions.insert(session_id.clone(), session);
 
-    // Spawn async task to read PTY output
-    let session_id_clone = session_id.clone();
-    let state_clone = Arc::clone(&state.sessions);
+    // Spawn the PTY reader task
+    spawn_pty_reader(
+        reader,
+        output_tx.clone(),
+        session_id.clone(),
+        Arc::clone(&state.sessions),
+    );
 
-    async_runtime::spawn(async move {
-        let mut reader = reader;
-        let mut buffer = [0u8; 4096];
-
-        loop {
-            match reader.read(&mut buffer) {
-                Ok(0) => {
-                    // EOF - process exited
-                    let _ = on_event.send(PtyEvent::Exit { code: None });
-                    state_clone.remove(&session_id_clone);
-                    break;
-                }
-                Ok(n) => {
-                    let data = String::from_utf8_lossy(&buffer[..n]);
-                    let data_str = data.to_string();
-
-                    // Check for notifications in output
-                    if let Some(message) = parse_notification(&data_str) {
-                        let _ = on_event.send(PtyEvent::Notification { message });
-                    }
-
-                    // Always send output
-                    if on_event.send(PtyEvent::Output { data: data_str }).is_err() {
-                        break;
-                    }
-                }
-                Err(_) => {
-                    let _ = on_event.send(PtyEvent::Exit { code: None });
-                    state_clone.remove(&session_id_clone);
-                    break;
-                }
-            }
-        }
-    });
+    // Subscribe and forward to the initial channel
+    let rx = output_tx.subscribe();
+    forward_broadcast_to_channel(rx, on_event);
 
     Ok(session_id)
 }
@@ -161,6 +212,7 @@ pub async fn create_pane_in_workspace(
 
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
     let mut cmd = CommandBuilder::new(&shell);
+    cmd.arg("-i"); // Start as interactive shell to get a prompt
 
     // Set environment variables for CLI
     cmd.env("CMUX_WORKSPACE", &workspace_id);
@@ -187,54 +239,31 @@ pub async fn create_pane_in_workspace(
 
     let master = pair.master;
 
+    // Create broadcast channel for this PTY (buffer size 256)
+    let (output_tx, _) = tokio::sync::broadcast::channel(256);
+
     let session = PtySession {
         master: Arc::new(tokio::sync::Mutex::new(master)),
         writer: Arc::new(tokio::sync::Mutex::new(writer)),
         child: Arc::new(tokio::sync::Mutex::new(child)),
         workspace_id: Some(workspace_id.clone()),
         pane_id: Some(pane_id.clone()),
+        output_tx: output_tx.clone(),
     };
 
     state.sessions.insert(session_id.clone(), session);
 
-    // Spawn async task to read PTY output
-    let session_id_clone = session_id.clone();
-    let state_clone = Arc::clone(&state.sessions);
+    // Spawn the PTY reader task
+    spawn_pty_reader(
+        reader,
+        output_tx.clone(),
+        session_id.clone(),
+        Arc::clone(&state.sessions),
+    );
 
-    async_runtime::spawn(async move {
-        let mut reader = reader;
-        let mut buffer = [0u8; 4096];
-
-        loop {
-            match reader.read(&mut buffer) {
-                Ok(0) => {
-                    // EOF - process exited
-                    let _ = on_event.send(PtyEvent::Exit { code: None });
-                    state_clone.remove(&session_id_clone);
-                    break;
-                }
-                Ok(n) => {
-                    let data = String::from_utf8_lossy(&buffer[..n]);
-                    let data_str = data.to_string();
-
-                    // Check for notifications in output
-                    if let Some(message) = parse_notification(&data_str) {
-                        let _ = on_event.send(PtyEvent::Notification { message });
-                    }
-
-                    // Always send output
-                    if on_event.send(PtyEvent::Output { data: data_str }).is_err() {
-                        break;
-                    }
-                }
-                Err(_) => {
-                    let _ = on_event.send(PtyEvent::Exit { code: None });
-                    state_clone.remove(&session_id_clone);
-                    break;
-                }
-            }
-        }
-    });
+    // Subscribe and forward to the initial channel
+    let rx = output_tx.subscribe();
+    forward_broadcast_to_channel(rx, on_event);
 
     Ok(session_id)
 }
@@ -361,16 +390,6 @@ pub async fn set_environment_context(
         }
     }
 
-
-
-
-
-
-
-
-
-
-
     if found {
         Ok(())
     } else {
@@ -385,10 +404,7 @@ pub async fn write_pty(
     data: String,
 ) -> Result<(), String> {
     if let Some(session) = state.sessions.get(&session_id) {
-        let mut writer = session
-            .writer
-            .lock()
-            .await;
+        let mut writer = session.writer.lock().await;
         writer
             .write_all(data.as_bytes())
             .map_err(|e| format!("Failed to write to PTY: {}", e))?;
@@ -457,63 +473,37 @@ pub async fn attach_pty_channel(
     session_id: String,
     on_event: Channel<PtyEvent>,
 ) -> Result<(), String> {
-    // Get the session and clone the Arc references while holding the lock
-    let (master, state_clone) = {
+    // Get the broadcast sender from the session
+    let output_tx = {
         let session_ref = state
             .sessions
             .get(&session_id)
             .ok_or_else(|| "Session not found".to_string())?;
-        
-        // Clone the Arc references (cheap - just increments ref count)
-        let master = Arc::clone(&session_ref.master);
-        let state_clone = Arc::clone(&state.sessions);
-        (master, state_clone)
+        session_ref.output_tx.clone()
     };
 
-    // Clone a new reader from the master PTY
-    let reader = master
-        .lock()
-        .await
-        .try_clone_reader()
-        .map_err(|e| format!("Failed to clone reader: {}", e))?;
+    // Subscribe to the broadcast and forward to Tauri channel
+    let rx = output_tx.subscribe();
+    forward_broadcast_to_channel(rx, on_event);
 
-    // Spawn a new async task to read PTY output
-    let session_id_clone = session_id;
+    Ok(())
+}
 
-    async_runtime::spawn(async move {
-        let mut reader = reader;
-        let mut buffer = [0u8; 4096];
+#[tauri::command]
+pub async fn kill_all_sessions(
+    state: tauri::State<'_, PtyState>,
+) -> Result<(), String> {
+    // Get all session IDs
+    let session_ids: Vec<String> = state.sessions.iter().map(|entry| entry.key().clone()).collect();
 
-        loop {
-            match reader.read(&mut buffer) {
-                Ok(0) => {
-                    // EOF - process exited
-                    let _ = on_event.send(PtyEvent::Exit { code: None });
-                    state_clone.remove(&session_id_clone);
-                    break;
-                }
-                Ok(n) => {
-                    let data = String::from_utf8_lossy(&buffer[..n]);
-                    let data_str = data.to_string();
-
-                    // Check for notifications in output
-                    if let Some(message) = parse_notification(&data_str) {
-                        let _ = on_event.send(PtyEvent::Notification { message });
-                    }
-
-                    // Always send output
-                    if on_event.send(PtyEvent::Output { data: data_str }).is_err() {
-                        break;
-                    }
-                }
-                Err(_) => {
-                    let _ = on_event.send(PtyEvent::Exit { code: None });
-                    state_clone.remove(&session_id_clone);
-                    break;
-                }
+    // Kill each session
+    for session_id in session_ids {
+        if let Some((_, session)) = state.sessions.remove(&session_id) {
+            if let Err(e) = session.child.lock().await.kill() {
+                eprintln!("Failed to kill child process {}: {}", session_id, e);
             }
         }
-    });
+    }
 
     Ok(())
 }

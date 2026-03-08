@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { invoke, Channel } from '@tauri-apps/api/core';
@@ -18,13 +18,16 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
-  const sessionIdRef = useRef<string | null>(null);
+  const currentSessionIdRef = useRef<string | null>(null);
+  const channelRef = useRef<Channel<any> | null>(null);
+  const dataDisposableRef = useRef<{ dispose: () => void } | null>(null);
+  const isConnectingRef = useRef(false);
   const [isReady, setIsReady] = useState(false);
 
+  // Initialize xterm once
   useEffect(() => {
-    if (!terminalRef.current) return;
+    if (!terminalRef.current || xtermRef.current) return;
 
-    // Initialize xterm.js
     const term = new XTerm({
       cursorBlink: true,
       fontSize: 14,
@@ -61,8 +64,44 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
 
-    // Set up PTY communication channel
+    // Set up keystroke handler once
+    dataDisposableRef.current = term.onData((data) => {
+      if (currentSessionIdRef.current) {
+        invoke('write_pty', { sessionId: currentSessionIdRef.current, data }).catch(console.error);
+      }
+    });
+
+    return () => {
+      dataDisposableRef.current?.dispose();
+      dataDisposableRef.current = null;
+      fitAddonRef.current = null;
+      xtermRef.current = null;
+      term.dispose();
+    };
+  }, []);
+
+  // Handle PTY connection (reattach or spawn)
+  const connectToPty = useCallback(async (sid: string | undefined) => {
+    if (!xtermRef.current) return;
+
+    // Prevent duplicate connection attempts (e.g., from React StrictMode double-mount)
+    if (isConnectingRef.current) {
+      return;
+    }
+
+    const term = xtermRef.current;
+
+    // If we're already connected to this session, do nothing
+    if (currentSessionIdRef.current === sid && channelRef.current) {
+      return;
+    }
+
+    isConnectingRef.current = true;
+
+    // Set up a new channel
     const channel = new Channel<any>();
+    channelRef.current = channel;
+
     channel.onmessage = (message) => {
       switch (message.event) {
         case 'output':
@@ -80,56 +119,54 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
       }
     };
 
-    // Setup keystroke handler
-    const setupDataHandler = (ptySessionId: string) => {
-      term.onData((data) => {
-        invoke('write_pty', { sessionId: ptySessionId, data }).catch(console.error);
-      });
-    };
-
-    // Initialize PTY session - either attach to existing or spawn new
-    const initPty = async () => {
-      // Check if we have an existing sessionId and if the PTY is still alive
-      if (sessionId) {
-        try {
-          const isAlive = await invoke<boolean>('is_pty_alive', { sessionId });
-          if (isAlive) {
-            // Attach to existing PTY session
-            await invoke('attach_pty_channel', { sessionId, onEvent: channel });
-            sessionIdRef.current = sessionId;
-            setIsReady(true);
-            setupDataHandler(sessionId);
-            return;
-          }
-        } catch (error) {
-          console.warn('Failed to check/attach to existing PTY, spawning new:', error);
-        }
-      }
-
-      // Spawn a new PTY session
+    // Check if we have an existing sessionId and if the PTY is still alive
+    if (sid) {
       try {
-        const newSessionId = await invoke<string>('spawn_pty', { onEvent: channel });
-        sessionIdRef.current = newSessionId;
-        setIsReady(true);
-        setupDataHandler(newSessionId);
-
-        // Update the store with the new session ID
-        useWorkspaceStore.getState().updateTabSessionId(paneId, tabId, newSessionId);
+        const isAlive = await invoke<boolean>('is_pty_alive', { sessionId: sid });
+        if (isAlive) {
+          // Attach to existing PTY session
+          await invoke('attach_pty_channel', { sessionId: sid, onEvent: channel });
+          currentSessionIdRef.current = sid;
+          setIsReady(true);
+          isConnectingRef.current = false;
+          return;
+        }
       } catch (error) {
-        console.error('Failed to spawn PTY:', error);
-        term.write(`\r\n[Error: Failed to spawn PTY: ${error}]\r\n`);
+        console.warn('Failed to check/attach to existing PTY, spawning new:', error);
       }
-    };
+    }
 
-    initPty();
+    // Spawn a new PTY session
+    try {
+      const newSessionId = await invoke<string>('spawn_pty', { onEvent: channel });
+      currentSessionIdRef.current = newSessionId;
+      setIsReady(true);
 
-    // Handle resize
+      // Update the store with the new session ID
+      useWorkspaceStore.getState().updateTabSessionId(paneId, tabId, newSessionId);
+    } catch (error) {
+      console.error('Failed to spawn PTY:', error);
+      term.write(`\r\n[Error: Failed to spawn PTY: ${error}]\r\n`);
+    } finally {
+      isConnectingRef.current = false;
+    }
+  }, [paneId, tabId, onNotification]);
+
+  // Connect to PTY when sessionId changes or on mount
+  useEffect(() => {
+    connectToPty(sessionId);
+  }, [sessionId, connectToPty]);
+
+  // Handle resize
+  useEffect(() => {
+    if (!terminalRef.current || !xtermRef.current || !fitAddonRef.current) return;
+
     const resizeObserver = new ResizeObserver(() => {
-      if (fitAddonRef.current && xtermRef.current && sessionIdRef.current) {
+      if (fitAddonRef.current && xtermRef.current && currentSessionIdRef.current) {
         fitAddonRef.current.fit();
         const { cols, rows } = xtermRef.current;
         invoke('resize_pty', {
-          sessionId: sessionIdRef.current,
+          sessionId: currentSessionIdRef.current,
           cols,
           rows,
         }).catch(console.error);
@@ -138,13 +175,10 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
 
     resizeObserver.observe(terminalRef.current);
 
-    // Cleanup - never kill PTY on unmount
-    // PTY persists for tab lifetime, only killed when user closes tab
     return () => {
       resizeObserver.disconnect();
-      term.dispose();
     };
-  }, [sessionId, tabId, paneId, onNotification]);
+  }, [isReady]);
 
   return (
     <div
