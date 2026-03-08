@@ -1,6 +1,7 @@
 import useWorkspaceStore from '../state/workspace';
 import { Terminal } from './Terminal';
 import { TabBar } from './TabBar';
+import { ErrorBoundary } from './ErrorBoundary';
 
 interface PaneProps {
   paneId: string;
@@ -57,66 +58,68 @@ export function Pane({ paneId, workspaceId }: PaneProps) {
   };
 
   return (
-    <div
-      style={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        backgroundColor: '#1e1e1e',
-        boxShadow: pane.hasNotification ? 'inset 0 0 0 2px #4fc3f7' : 'none',
-        transition: 'box-shadow 0.2s ease',
-      }}
-    >
-      {/* TabBar at top */}
-      <TabBar
-        paneId={paneId}
-        tabs={pane.tabs}
-        activeTabId={pane.activeTabId}
-        onCreateTab={handleCreateTab}
-        onCloseTab={handleCloseTab}
-        onSelectTab={handleSelectTab}
-        onSplitPane={handleSplitPane}
-      />
-
-      {/* Terminal content area */}
+    <ErrorBoundary>
       <div
         style={{
           flex: 1,
           display: 'flex',
           flexDirection: 'column',
-          overflow: 'hidden',
-          borderTop: '1px solid #333',
+          backgroundColor: '#1e1e1e',
+          boxShadow: pane.hasNotification ? 'inset 0 0 0 2px #4fc3f7' : 'none',
+          transition: 'box-shadow 0.2s ease',
         }}
       >
-        {activeTab ? (
-          <Terminal
-            sessionId={activeTab.sessionId}
-            tabId={activeTab.id}
-            paneId={paneId}
-            onNotification={(message) => {
-              // Notification handling is managed by the workspace store
-              // This callback allows Terminal to trigger notifications
-              const { markNotification } = useWorkspaceStore.getState();
-              markNotification(activeTab.id, message);
-            }}
-            hasNotification={activeTab.hasNotification}
-          />
-        ) : (
-          <div
-            style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: '#1e1e1e',
-              color: '#666666',
-              fontSize: '14px',
-            }}
-          >
-            No tabs
-          </div>
-        )}
+        {/* TabBar at top */}
+        <TabBar
+          paneId={paneId}
+          tabs={pane.tabs}
+          activeTabId={pane.activeTabId}
+          onCreateTab={handleCreateTab}
+          onCloseTab={handleCloseTab}
+          onSelectTab={handleSelectTab}
+          onSplitPane={handleSplitPane}
+        />
+
+        {/* Terminal content area */}
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            borderTop: '1px solid #333',
+          }}
+        >
+          {activeTab ? (
+            <Terminal
+              sessionId={activeTab.sessionId}
+              tabId={activeTab.id}
+              paneId={paneId}
+              onNotification={(message) => {
+                // Notification handling is managed by the workspace store
+                // This callback allows Terminal to trigger notifications
+                const { markNotification } = useWorkspaceStore.getState();
+                markNotification(activeTab.id, message);
+              }}
+              hasNotification={activeTab.hasNotification}
+            />
+          ) : (
+            <div
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: '#1e1e1e',
+                color: '#666666',
+                fontSize: '14px',
+              }}
+            >
+              No tabs
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </ErrorBoundary>
   );
 }

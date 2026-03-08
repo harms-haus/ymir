@@ -393,7 +393,6 @@ const GitPanelFull = (): React.ReactNode => {
   const [changedFiles, setChangedFiles] = useState<GitFile[]>(mockChangedFiles);
   
   const handleBranchSelect = (branch: string) => {
-    console.log(`Switch to branch: ${branch}`);
     setSelectedBranch(branch);
   };
   
@@ -407,8 +406,7 @@ const GitPanelFull = (): React.ReactNode => {
   };
   
   // Handle commit
-  const handleCommit = (message: string) => {
-    console.log('Commit:', message);
+  const handleCommit = (_message: string) => {
     // In a real implementation, this would call git commit
     // For now, just clear the staged files
     setStagedFiles([]);

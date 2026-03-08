@@ -33,13 +33,11 @@ export const CLI = {
 
     const workspace = state.workspaces.find((w) => w.id === activeWorkspaceId);
     if (!workspace) {
-      console.warn('[ymir] No active workspace found');
       return;
     }
 
     const { activePaneId } = workspace;
     if (!activePaneId) {
-      console.warn('[ymir] No active pane in workspace');
       return;
     }
 
@@ -54,9 +52,8 @@ export const CLI = {
    * @example
    * window.ymir.focus('right'); // Focus pane to the right
    */
-  focus: (direction: SplitDirection): void => {
+  focus: (_direction: SplitDirection): void => {
     // Phase 2 - use click-to-focus for now
-    console.log(`[ymir] Focus navigation (${direction}) deferred to Phase 2`);
   },
 
   /**
@@ -73,13 +70,11 @@ export const CLI = {
 
     const workspace = state.workspaces.find((w) => w.id === activeWorkspaceId);
     if (!workspace) {
-      console.warn('[ymir] No active workspace found');
       return;
     }
 
     const { activePaneId } = workspace;
     if (!activePaneId) {
-      console.warn('[ymir] No active pane in workspace');
       return;
     }
 
@@ -98,25 +93,21 @@ export const CLI = {
 
     const workspace = state.workspaces.find((w) => w.id === activeWorkspaceId);
     if (!workspace) {
-      console.warn('[ymir] No active workspace found');
       return;
     }
 
     const { activePaneId } = workspace;
     if (!activePaneId) {
-      console.warn('[ymir] No active pane in workspace');
       return;
     }
 
     const pane = workspace.panes[activePaneId];
     if (!pane) {
-      console.warn('[ymir] Active pane not found');
       return;
     }
 
     const { activeTabId } = pane;
     if (!activeTabId) {
-      console.warn('[ymir] No active tab to close');
       return;
     }
 
@@ -135,13 +126,11 @@ export const CLI = {
 
     const workspace = state.workspaces.find((w) => w.id === activeWorkspaceId);
     if (!workspace) {
-      console.warn('[ymir] No active workspace found');
       return;
     }
 
     const { activePaneId } = workspace;
     if (!activePaneId) {
-      console.warn('[ymir] No active pane in workspace');
       return;
     }
 
@@ -162,25 +151,21 @@ export const CLI = {
 
     const workspace = state.workspaces.find((w) => w.id === activeWorkspaceId);
     if (!workspace) {
-      console.warn('[ymir] No active workspace found');
       return;
     }
 
     const { activePaneId } = workspace;
     if (!activePaneId) {
-      console.warn('[ymir] No active pane in workspace');
       return;
     }
 
     const pane = workspace.panes[activePaneId];
     if (!pane) {
-      console.warn('[ymir] Active pane not found');
       return;
     }
 
     const { activeTabId } = pane;
     if (!activeTabId) {
-      console.warn('[ymir] No active tab to notify');
       return;
     }
 
@@ -199,7 +184,7 @@ export const CLI = {
  */
 export function initCLI(): void {
   if (typeof window !== 'undefined') {
-    (window as any).ymir = CLI;
+    (window as Window & { ymir?: YmirCLI }).ymir = CLI;
     console.log('[ymir] CLI initialized on window.ymir');
   }
 }

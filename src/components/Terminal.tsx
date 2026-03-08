@@ -5,6 +5,7 @@ import { invoke, Channel } from '@tauri-apps/api/core';
 import { sendNotification } from '@tauri-apps/plugin-notification';
 import '@xterm/xterm/css/xterm.css';
 import useWorkspaceStore from '../state/workspace';
+import { ErrorBoundary } from './ErrorBoundary';
 
 interface TerminalProps {
   sessionId?: string;
@@ -67,7 +68,7 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
     // Set up keystroke handler once
     dataDisposableRef.current = term.onData((data) => {
       if (currentSessionIdRef.current) {
-        invoke('write_pty', { sessionId: currentSessionIdRef.current, data }).catch(console.error);
+        invoke('write_pty', { sessionId: currentSessionIdRef.current, data });
       }
     });
 
@@ -131,8 +132,8 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
           isConnectingRef.current = false;
           return;
         }
-      } catch (error) {
-        console.warn('Failed to check/attach to existing PTY, spawning new:', error);
+      } catch {
+        // Failed to check/attach to existing PTY, spawning new
       }
     }
 
@@ -144,9 +145,8 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
 
       // Update the store with the new session ID
       useWorkspaceStore.getState().updateTabSessionId(paneId, tabId, newSessionId);
-    } catch (error) {
-      console.error('Failed to spawn PTY:', error);
-      term.write(`\r\n[Error: Failed to spawn PTY: ${error}]\r\n`);
+    } catch {
+      term.write('\r\n[Error: Failed to spawn PTY]\r\n');
     } finally {
       isConnectingRef.current = false;
     }
@@ -169,7 +169,7 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
           sessionId: currentSessionIdRef.current,
           cols,
           rows,
-        }).catch(console.error);
+        });
       }
     });
 
@@ -181,16 +181,18 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
   }, [isReady]);
 
   return (
-    <div
-      ref={terminalRef}
-      style={{
-        width: '100%',
-        height: '100%',
-        backgroundColor: '#1e1e1e',
-        boxShadow: hasNotification ? '0 0 0 2px #4fc3f7' : 'none',
-        transition: 'box-shadow 0.2s ease',
-        opacity: isReady ? 1 : 0.5,
-      }}
-    />
+    <ErrorBoundary>
+      <div
+        ref={terminalRef}
+        style={{
+          width: '100%',
+          height: '100%',
+          backgroundColor: '#1e1e1e',
+          boxShadow: hasNotification ? '0 0 0 2px #4fc3f7' : 'none',
+          transition: 'box-shadow 0.2s ease',
+          opacity: isReady ? 1 : 0.5,
+        }}
+      />
+    </ErrorBoundary>
   );
 }

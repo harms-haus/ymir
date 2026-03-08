@@ -94,7 +94,7 @@ interface PersistedWorkspaceState {
  * Persists session data to Tauri's native storage.
  */
 const tauriStorage = {
-  getItem: async (name: string): Promise<string | null> => {
+getItem: async (name: string): Promise<string | null> => {
     try {
       // Check if Tauri is available (not available in tests)
       if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
@@ -102,28 +102,35 @@ const tauriStorage = {
         return data;
       }
       return null;
-    } catch {
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('[Storage] getItem failed:', { key: name, error });
+      }
       return null;
     }
   },
-  setItem: async (name: string, value: string): Promise<void> => {
+setItem: async (name: string, value: string): Promise<void> => {
     try {
       // Check if Tauri is available (not available in tests)
       if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
         await invoke('save_session', { name, data: value });
       }
-    } catch {
-      // Silently fail in test environment
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('[Storage] setItem failed:', { key: name, error });
+      }
     }
   },
-  removeItem: async (name: string): Promise<void> => {
+removeItem: async (name: string): Promise<void> => {
     try {
       // Check if Tauri is available (not available in tests)
       if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
         await invoke('delete_session', { name });
       }
-    } catch {
-      // Silently fail in test environment
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('[Storage] removeItem failed:', { key: name, error });
+      }
     }
   },
 };
@@ -330,12 +337,7 @@ const useWorkspaceStore = create<WorkspaceState>()(
           set((state) => {
             const currentPaneCount = countPanes(state.workspaces);
             if (currentPaneCount >= MAX_PANES) {
-              console.warn(`Maximum ${MAX_PANES} panes reached`);
               return;
-            }
-
-            if (currentPaneCount >= 15) {
-              console.warn(`Warning: ${currentPaneCount} panes created (max: ${MAX_PANES})`);
             }
 
             const { axis, splitIndex } = getSplitAxisAndIndex(direction);
@@ -396,22 +398,36 @@ const useWorkspaceStore = create<WorkspaceState>()(
             pane.activeTabId = newTab.id;
           }),
 
-        closeTab: (paneId: string, tabId: string) =>
+        closeTab: async (paneId: string, tabId: string) => {
+          // First, find the tabToClose and sessionId from current state
+          const state = get();
+          const workspace = state.workspaces.find((ws) => ws.id === state.activeWorkspaceId);
+          if (!workspace) return;
+
+          const pane = workspace.panes[paneId];
+          if (!pane) return;
+
+          const tabToClose = pane.tabs.find((t) => t.id === tabId);
+
+          // Kill the PTY session with await and proper error handling
+          if (tabToClose?.sessionId) {
+            try {
+              await invoke('kill_pty', { sessionId: tabToClose.sessionId });
+            } catch (error) {
+              if (import.meta.env.DEV) {
+                console.error('[closeTab] Failed to kill PTY session:', { sessionId: tabToClose.sessionId, error });
+              }
+              // Preserve original error handling behavior
+            }
+          }
+
+          // Now update state after PTY is killed
           set((state) => {
             const workspace = state.workspaces.find((ws) => ws.id === state.activeWorkspaceId);
             if (!workspace) return;
 
             const pane = workspace.panes[paneId];
             if (!pane) return;
-
-            // Find the tab being closed to get its sessionId
-            const tabToClose = pane.tabs.find((t) => t.id === tabId);
-            if (tabToClose?.sessionId) {
-              // Kill the PTY session asynchronously (fire and forget)
-              invoke('kill_pty', { sessionId: tabToClose.sessionId }).catch((error) => {
-                console.error('Failed to kill PTY session:', error);
-              });
-            }
 
             pane.tabs = pane.tabs.filter((t) => t.id !== tabId);
 
@@ -423,7 +439,8 @@ const useWorkspaceStore = create<WorkspaceState>()(
             if (pane.tabs.length === 0) {
               get().closePane(paneId);
             }
-          }),
+          });
+        },
 
         setActiveTab: (paneId: string, tabId: string) =>
           set((state) => {

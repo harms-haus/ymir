@@ -13,10 +13,9 @@ async function setupWindowCleanup() {
     // Note: We don't preventDefault(), so the window will close after this handler completes
     try {
       await invoke('kill_all_sessions');
-    } catch (error) {
-      console.error('Failed to kill all sessions on window close:', error);
+    } catch {
+      // Failed to kill all sessions on window close
     }
-    // Window will close automatically - no need to call anything else
   });
 }
 

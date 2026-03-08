@@ -165,11 +165,9 @@ const FileTreeItem: React.FC<FileTreeItemProps> = ({ node, depth }) => {
   const handleClick = () => {
     if (node.type === 'folder') {
       setIsOpen(!isOpen);
-    } else {
-      // Mock file open - just log for now
-      console.log(`Opening file: ${node.name}`);
     }
   };
+
 
   const paddingLeft = 8 + depth * 12;
 
