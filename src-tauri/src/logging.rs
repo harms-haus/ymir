@@ -1,8 +1,8 @@
 //! Logging configuration and utilities
-//!
-//! Provides structured logging setup and redaction utilities for sensitive data.
 
-/// Fields that should be redacted in logs
+//!
+//!
+#[allow(dead_code)]
 pub const SENSITIVE_FIELDS: &[&str] = &[
     "password",
     "token",
@@ -16,8 +16,7 @@ pub const SENSITIVE_FIELDS: &[&str] = &[
     "sessionId",
 ];
 
-/// Redact sensitive values in a string
-/// Looks for patterns like "password": "value" and replaces the value with [REDACTED]
+#[allow(dead_code)]
 pub fn redact_sensitive(s: &str) -> String {
     let mut result = s.to_string();
 

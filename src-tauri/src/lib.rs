@@ -59,11 +59,8 @@ pub fn run() {
             ..
         } => {
             if label == "main" {
-                match window_event {
-                    WindowEvent::Destroyed => {
-                        tracing::info!("Main window destroyed");
-                    }
-                    _ => {}
+                if let WindowEvent::Destroyed = window_event {
+                    tracing::info!("Main window destroyed");
                 }
             }
         }
