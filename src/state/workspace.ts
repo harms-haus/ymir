@@ -1,11 +1,12 @@
 // Workspace state management using Zustand with Immer
 // Handles workspace/pane/tab hierarchy with direct mutations
-// Includes session persistence via Tauri storage
+// Includes session persistence via Tauri store plugin
 
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import { invoke } from '@tauri-apps/api/core';
+import { load, Store } from '@tauri-apps/plugin-store';
 import logger from '../lib/logger';
 
 import {
@@ -90,17 +91,25 @@ interface PersistedWorkspaceState {
 // Tauri Storage Adapter for Session Persistence
 // ============================================================================
 
-/**
- * Custom storage adapter using Tauri invoke commands.
- * Persists session data to Tauri's native storage.
- */
+let storeInstance: Store | null = null;
+
+const getStore = async (): Promise<Store | null> => {
+  if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+    if (!storeInstance) {
+      storeInstance = await load('workspace-storage.json', { defaults: {}, autoSave: true });
+    }
+    return storeInstance;
+  }
+  return null;
+};
+
 const tauriStorage = {
-getItem: async (name: string): Promise<string | null> => {
+  getItem: async (name: string): Promise<string | null> => {
     try {
-      // Check if Tauri is available (not available in tests)
-      if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
-        const data = await invoke<string>('load_session', { name });
-        return data;
+      const store = await getStore();
+      if (store) {
+        const value = await store.get<string>(name);
+        return value ?? null;
       }
       return null;
     } catch (error) {
@@ -110,11 +119,11 @@ getItem: async (name: string): Promise<string | null> => {
       return null;
     }
   },
-setItem: async (name: string, value: string): Promise<void> => {
+  setItem: async (name: string, value: string): Promise<void> => {
     try {
-      // Check if Tauri is available (not available in tests)
-      if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
-        await invoke('save_session', { name, data: value });
+      const store = await getStore();
+      if (store) {
+        await store.set(name, value);
       }
     } catch (error) {
       if (import.meta.env.DEV) {
@@ -122,11 +131,11 @@ setItem: async (name: string, value: string): Promise<void> => {
       }
     }
   },
-removeItem: async (name: string): Promise<void> => {
+  removeItem: async (name: string): Promise<void> => {
     try {
-      // Check if Tauri is available (not available in tests)
-      if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
-        await invoke('delete_session', { name });
+      const store = await getStore();
+      if (store) {
+        await store.delete(name);
       }
     } catch (error) {
       if (import.meta.env.DEV) {

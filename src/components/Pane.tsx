@@ -120,7 +120,12 @@ export function Pane({ paneId, workspaceId }: PaneProps) {
           {pane.tabs.map((tab) => (
             <div
               key={tab.id}
-              style={{ display: tab.id === pane.activeTabId ? 'flex' : 'none' }}
+              style={{
+                display: tab.id === pane.activeTabId ? 'flex' : 'none',
+                flex: 1,
+                width: '100%',
+                height: '100%',
+              }}
             >
               <Terminal
                 sessionId={tab.sessionId}
