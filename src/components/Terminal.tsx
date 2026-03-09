@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { invoke, Channel } from '@tauri-apps/api/core';
@@ -6,6 +6,8 @@ import { sendNotification } from '@tauri-apps/plugin-notification';
 import '@xterm/xterm/css/xterm.css';
 import useWorkspaceStore from '../state/workspace';
 import { ErrorBoundary } from './ErrorBoundary';
+import logger from '../lib/logger';
+import { terminalTheme } from '../theme/terminal';
 
 interface TerminalProps {
   sessionId?: string;
@@ -15,170 +17,190 @@ interface TerminalProps {
   hasNotification?: boolean;
 }
 
+// Cache xterm instances per tab - they persist across tab switches
+const xtermCache = new Map<string, { term: XTerm; fitAddon: FitAddon }>();
+
 export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotification }: TerminalProps) {
   const terminalRef = useRef<HTMLDivElement>(null);
-  const xtermRef = useRef<XTerm | null>(null);
-  const fitAddonRef = useRef<FitAddon | null>(null);
-  const currentSessionIdRef = useRef<string | null>(null);
-  const channelRef = useRef<Channel<any> | null>(null);
-  const dataDisposableRef = useRef<{ dispose: () => void } | null>(null);
-  const isConnectingRef = useRef(false);
   const [isReady, setIsReady] = useState(false);
 
-  // Initialize xterm once
+  const cacheKey = `${paneId}-${tabId}`;
+  const currentSessionIdRef = useRef<string | null>(null);
+  const channelRef = useRef<Channel<any> | null>(null);
+  const isConnectingRef = useRef(false);
+  const dataHandlerRef = useRef<{ dispose: () => void } | null>(null);
+  // Store onNotification in a ref to avoid effect re-runs when parent re-renders
+  const onNotificationRef = useRef<((message: string) => void) | undefined>(onNotification);
+
+  // Keep the ref updated with the latest callback
   useEffect(() => {
-    if (!terminalRef.current || xtermRef.current) return;
+    onNotificationRef.current = onNotification;
+  }, [onNotification]);
 
-    const term = new XTerm({
-      cursorBlink: true,
-      fontSize: 14,
-      fontFamily: '"JetBrains Mono", "NerdFontSymbols", "monospace"',
-      theme: {
-        background: '#1e1e1e',
-        foreground: '#d4d4d4',
-        cursor: '#d4d4d4',
-        selectionBackground: '#264f78',
-        black: '#000000',
-        red: '#cd3131',
-        green: '#0dbc79',
-        yellow: '#e5e510',
-        blue: '#2472c8',
-        magenta: '#bc3fbc',
-        cyan: '#11a8cd',
-        white: '#e5e5e5',
-        brightBlack: '#666666',
-        brightRed: '#f14c4c',
-        brightGreen: '#23d18b',
-        brightYellow: '#f5f543',
-        brightBlue: '#3b8eea',
-        brightMagenta: '#d670d6',
-        brightCyan: '#29b8db',
-        brightWhite: '#e5e5e5',
-      },
-    });
+  // Initialize xterm - once per tab, persists across switches
+  useEffect(() => {
+    if (!terminalRef.current) return;
 
-    const fitAddon = new FitAddon();
-    term.loadAddon(fitAddon);
-    term.open(terminalRef.current);
-    fitAddon.fit();
+    const cached = xtermCache.get(cacheKey);
+    let term: XTerm;
+    let fitAddon: FitAddon;
+    let resizeObserver: ResizeObserver;
 
-    xtermRef.current = term;
-    fitAddonRef.current = fitAddon;
+    if (cached) {
+      // Tab was switched away and back - restore from cache
+      term = cached.term;
+      fitAddon = cached.fitAddon;
 
-    // Set up keystroke handler once
-    dataDisposableRef.current = term.onData((data) => {
-      if (currentSessionIdRef.current) {
-        invoke('write_pty', { sessionId: currentSessionIdRef.current, data });
+      // xterm element exists but was removed from DOM by React
+      // We need to re-attach it
+      if (term.element && !term.element.parentElement) {
+        terminalRef.current.appendChild(term.element);
+        fitAddon.fit();
+        term.refresh(0, term.rows - 1);
       }
-    });
 
-    return () => {
-      dataDisposableRef.current?.dispose();
-      dataDisposableRef.current = null;
-      fitAddonRef.current = null;
-      xtermRef.current = null;
-      term.dispose();
-    };
-  }, []);
-
-  // Handle PTY connection (reattach or spawn)
-  const connectToPty = useCallback(async (sid: string | undefined) => {
-    if (!xtermRef.current) return;
-
-    // Prevent duplicate connection attempts (e.g., from React StrictMode double-mount)
-    if (isConnectingRef.current) {
-      return;
-    }
-
-    const term = xtermRef.current;
-
-    // If we're already connected to this session, do nothing
-    if (currentSessionIdRef.current === sid && channelRef.current) {
-      return;
-    }
-
-    isConnectingRef.current = true;
-
-    // Set up a new channel
-    const channel = new Channel<any>();
-    channelRef.current = channel;
-
-    channel.onmessage = (message) => {
-      switch (message.event) {
-        case 'output':
-          term.write(message.data.data);
-          break;
-        case 'notification':
-          onNotification?.(message.data.message);
-          try {
-            sendNotification({ title: 'Ymir', body: message.data.message });
-          } catch {}
-          break;
-        case 'exit':
-          term.write('\r\n[Process exited]\r\n');
-          break;
-      }
-    };
-
-    // Check if we have an existing sessionId and if the PTY is still alive
-    if (sid) {
-      try {
-        const isAlive = await invoke<boolean>('is_pty_alive', { sessionId: sid });
-        if (isAlive) {
-          // Attach to existing PTY session
-          await invoke('attach_pty_channel', { sessionId: sid, onEvent: channel });
-          currentSessionIdRef.current = sid;
-          setIsReady(true);
-          isConnectingRef.current = false;
-          return;
+      // Re-attach handlers
+      dataHandlerRef.current = term.onData((data) => {
+        if (currentSessionIdRef.current) {
+          invoke('write_pty', { sessionId: currentSessionIdRef.current, data });
         }
-      } catch {
-        // Failed to check/attach to existing PTY, spawning new
-      }
-    }
+      });
 
-    // Spawn a new PTY session
-    try {
-      const newSessionId = await invoke<string>('spawn_pty', { onEvent: channel });
-      currentSessionIdRef.current = newSessionId;
+      resizeObserver = new ResizeObserver(() => {
+        fitAddon.fit();
+      });
+      resizeObserver.observe(terminalRef.current);
+
       setIsReady(true);
+    } else {
+      // New tab - create fresh xterm
+      term = new XTerm({
+        cursorBlink: true,
+        fontSize: 14,
+        fontFamily: '"JetBrains Mono", "NerdFontSymbols", "monospace"',
+        theme: terminalTheme,
+      });
 
-      // Update the store with the new session ID
-      useWorkspaceStore.getState().updateTabSessionId(paneId, tabId, newSessionId);
-    } catch {
-      term.write('\r\n[Error: Failed to spawn PTY]\r\n');
-    } finally {
-      isConnectingRef.current = false;
+      fitAddon = new FitAddon();
+      term.loadAddon(fitAddon);
+      term.open(terminalRef.current);
+      fitAddon.fit();
+
+      // Cache it for tab switches
+      xtermCache.set(cacheKey, { term, fitAddon });
+
+      // Set up keystroke handler
+      dataHandlerRef.current = term.onData((data) => {
+        if (currentSessionIdRef.current) {
+          invoke('write_pty', { sessionId: currentSessionIdRef.current, data });
+        }
+      });
+
+      // Set up resize observer
+      resizeObserver = new ResizeObserver(() => {
+        fitAddon.fit();
+      });
+      resizeObserver.observe(terminalRef.current);
+
+      // Connect to PTY
+      connectToPty(sessionId, term);
     }
-  }, [paneId, tabId, onNotification]);
 
-  // Connect to PTY when sessionId changes or on mount
-  useEffect(() => {
-    connectToPty(sessionId);
-  }, [sessionId, connectToPty]);
-
-  // Handle resize
-  useEffect(() => {
-    if (!terminalRef.current || !xtermRef.current || !fitAddonRef.current) return;
-
-    const resizeObserver = new ResizeObserver(() => {
-      if (fitAddonRef.current && xtermRef.current && currentSessionIdRef.current) {
-        fitAddonRef.current.fit();
-        const { cols, rows } = xtermRef.current;
-        invoke('resize_pty', {
-          sessionId: currentSessionIdRef.current,
-          cols,
-          rows,
-        });
+    async function connectToPty(sid: string | undefined, term: XTerm) {
+      if (isConnectingRef.current) return;
+      if (currentSessionIdRef.current) {
+        setIsReady(true);
+        return;
       }
-    });
 
-    resizeObserver.observe(terminalRef.current);
+      isConnectingRef.current = true;
+      const correlationId = crypto.randomUUID();
+
+      const channel = new Channel<any>();
+      channelRef.current = channel;
+
+      channel.onmessage = (message) => {
+        if (!message || typeof message !== 'object') return;
+
+        switch (message.event) {
+          case 'output':
+            const outputData = message.data?.data ?? message.data;
+            if (outputData !== undefined && outputData !== null) {
+              const outputStr = typeof outputData === 'string' ? outputData : String(outputData);
+              term.write(outputStr);
+            }
+            break;
+          case 'notification':
+            const notifMessage = message.data?.message ?? message.data;
+            if (notifMessage !== undefined && notifMessage !== null) {
+              const messageStr = typeof notifMessage === 'string' ? notifMessage : String(notifMessage);
+              onNotificationRef.current?.(messageStr);
+              try {
+                sendNotification({ title: 'Ymir', body: messageStr });
+              } catch (error) {
+                logger.warn('Failed to send desktop notification', { error });
+              }
+            }
+            break;
+          case 'exit':
+            term.write('\r\n[Process exited]\r\n');
+            break;
+        }
+      };
+
+      if (sid) {
+        try {
+          const isAlive = await invoke<boolean>('is_pty_alive', { sessionId: sid, correlationId });
+          if (isAlive) {
+            await invoke('attach_pty_channel', { sessionId: sid, onEvent: channel, correlationId });
+            currentSessionIdRef.current = sid;
+            setIsReady(true);
+            isConnectingRef.current = false;
+            return;
+          }
+        } catch (error) {
+          logger.warn('Failed to attach, spawning new', { sessionId: sid, error });
+        }
+      }
+
+      try {
+        const newSessionId = await invoke<string>('spawn_pty', { onEvent: channel, correlationId });
+        currentSessionIdRef.current = newSessionId;
+        setIsReady(true);
+        useWorkspaceStore.getState().updateTabSessionId(paneId, tabId, newSessionId);
+      } catch (error) {
+        logger.error('Failed to spawn PTY', { error });
+        term.write('\r\n[Error: Failed to spawn PTY]\r\n');
+      } finally {
+        isConnectingRef.current = false;
+      }
+    }
 
     return () => {
-      resizeObserver.disconnect();
+      resizeObserver?.disconnect();
+      dataHandlerRef.current?.dispose();
+      dataHandlerRef.current = null;
+      // DON'T remove element or dispose - keep in cache for tab switch
     };
-  }, [isReady]);
+  }, [cacheKey, paneId, tabId, sessionId]); // Note: onNotification removed - handled via ref
+
+  // Handle PTY resize
+  useEffect(() => {
+    if (!isReady || !currentSessionIdRef.current) return;
+
+    const cached = xtermCache.get(cacheKey);
+    if (!cached) return;
+
+    const { cols, rows } = cached.term;
+    const correlationId = crypto.randomUUID();
+
+    invoke('resize_pty', {
+      sessionId: currentSessionIdRef.current,
+      cols,
+      rows,
+      correlationId,
+    });
+  }, [isReady, cacheKey]);
 
   return (
     <ErrorBoundary>
@@ -190,7 +212,7 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
           backgroundColor: '#1e1e1e',
           boxShadow: hasNotification ? '0 0 0 2px #4fc3f7' : 'none',
           transition: 'box-shadow 0.2s ease',
-          opacity: isReady ? 1 : 0.5,
+          opacity: isReady ? 1 : 0.7,
         }}
       />
     </ErrorBoundary>
