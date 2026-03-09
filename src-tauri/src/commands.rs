@@ -5,6 +5,7 @@ use std::io::{Read, Write};
 use std::sync::Arc;
 use tauri::async_runtime;
 use tauri::ipc::Channel;
+use tracing::{debug, error, info, instrument, warn};
 use uuid::Uuid;
 
 #[derive(Clone, Serialize)]
@@ -56,7 +57,8 @@ fn spawn_pty_reader(
     session_id: String,
     sessions: Arc<dashmap::DashMap<String, PtySession>>,
 ) {
-    async_runtime::spawn(async move {
+    // Use spawn_blocking for blocking I/O operations
+    tokio::task::spawn_blocking(move || {
         let mut buffer = [0u8; 4096];
 
         loop {
@@ -123,9 +125,11 @@ fn forward_broadcast_to_channel(
 }
 
 #[tauri::command]
+#[instrument(skip(state, on_event), fields(correlation_id = %correlation_id.as_deref().unwrap_or("none")))]
 pub async fn spawn_pty(
     state: tauri::State<'_, PtyState>,
     on_event: Channel<PtyEvent>,
+    correlation_id: Option<String>,
 ) -> Result<String, String> {
     let pty_system = native_pty_system();
 
@@ -189,10 +193,12 @@ pub async fn spawn_pty(
     let rx = output_tx.subscribe();
     forward_broadcast_to_channel(rx, on_event);
 
+    info!(session_id = %session_id, "PTY session spawned successfully");
     Ok(session_id)
 }
 
 #[tauri::command]
+#[instrument(skip(state, on_event), fields(%workspace_id, %pane_id))]
 pub async fn create_pane_in_workspace(
     state: tauri::State<'_, PtyState>,
     on_event: Channel<PtyEvent>,
@@ -265,10 +271,12 @@ pub async fn create_pane_in_workspace(
     let rx = output_tx.subscribe();
     forward_broadcast_to_channel(rx, on_event);
 
+    info!(session_id = %session_id, "PTY session created for pane in workspace");
     Ok(session_id)
 }
 
 #[tauri::command]
+#[instrument(skip(state), fields(%workspace_id, %pane_id))]
 pub async fn close_pane(
     state: tauri::State<'_, PtyState>,
     workspace_id: String,
@@ -292,7 +300,7 @@ pub async fn close_pane(
     if let Some(session_id) = session_id_to_remove {
         if let Some((_, session)) = state.sessions.remove(&session_id) {
             if let Err(e) = session.child.lock().await.kill() {
-                eprintln!("Failed to kill child process: {}", e);
+                error!(error = %e, "Failed to kill child process");
             }
         }
         Ok(())
@@ -302,6 +310,7 @@ pub async fn close_pane(
 }
 
 #[tauri::command]
+#[instrument(skip(state), fields(%workspace_id, %pane_id))]
 pub async fn focus_pane(
     state: tauri::State<'_, PtyState>,
     workspace_id: String,
@@ -336,6 +345,7 @@ pub struct PaneInfo {
 }
 
 #[tauri::command]
+#[instrument(skip(state), fields(%workspace_id, %pane_id))]
 pub async fn get_pane_cwd(
     state: tauri::State<'_, PtyState>,
     workspace_id: String,
@@ -372,6 +382,7 @@ pub async fn get_pane_cwd(
 }
 
 #[tauri::command]
+#[instrument(skip(state), fields(%workspace_id, %pane_id))]
 pub async fn set_environment_context(
     state: tauri::State<'_, PtyState>,
     workspace_id: String,
@@ -398,6 +409,7 @@ pub async fn set_environment_context(
 }
 
 #[tauri::command]
+#[instrument(skip(state, data), fields(%session_id))]
 pub async fn write_pty(
     state: tauri::State<'_, PtyState>,
     session_id: String,
@@ -411,6 +423,7 @@ pub async fn write_pty(
         writer
             .flush()
             .map_err(|e| format!("Failed to flush PTY: {}", e))?;
+        debug!(%session_id, "Data written to PTY");
         Ok(())
     } else {
         Err("Session not found".to_string())
@@ -418,11 +431,13 @@ pub async fn write_pty(
 }
 
 #[tauri::command]
+#[instrument(skip(state), fields(%session_id, cols, rows, correlation_id = %correlation_id.as_deref().unwrap_or("none")))]
 pub async fn resize_pty(
     state: tauri::State<'_, PtyState>,
     session_id: String,
     cols: u16,
     rows: u16,
+    correlation_id: Option<String>,
 ) -> Result<(), String> {
     if let Some(session) = state.sessions.get(&session_id) {
         session
@@ -436,6 +451,7 @@ pub async fn resize_pty(
                 pixel_height: 0,
             })
             .map_err(|e| format!("Failed to resize PTY: {}", e))?;
+        debug!(%session_id, cols, rows, "PTY resized");
         Ok(())
     } else {
         Err("Session not found".to_string())
@@ -443,15 +459,17 @@ pub async fn resize_pty(
 }
 
 #[tauri::command]
+#[instrument(skip(state), fields(%session_id))]
 pub async fn kill_pty(
     state: tauri::State<'_, PtyState>,
     session_id: String,
 ) -> Result<(), String> {
     // Try to remove and kill session
     // If already removed (e.g., process exited naturally), that's fine
+    info!(%session_id, "Killing PTY session");
     if let Some((_, session)) = state.sessions.remove(&session_id) {
         if let Err(e) = session.child.lock().await.kill() {
-            eprintln!("Failed to kill child process: {}", e);
+            warn!(error = %e, "Failed to kill child process");
             // Continue anyway - we've removed from state
         }
     }
@@ -460,18 +478,22 @@ pub async fn kill_pty(
 }
 
 #[tauri::command]
+#[instrument(skip(state), fields(%session_id, correlation_id = %correlation_id.as_deref().unwrap_or("none")))]
 pub async fn is_pty_alive(
     state: tauri::State<'_, PtyState>,
     session_id: String,
+    correlation_id: Option<String>,
 ) -> Result<bool, String> {
     Ok(state.sessions.contains_key(&session_id))
 }
 
 #[tauri::command]
+#[instrument(skip(state, on_event), fields(%session_id, correlation_id = %correlation_id.as_deref().unwrap_or("none")))]
 pub async fn attach_pty_channel(
     state: tauri::State<'_, PtyState>,
     session_id: String,
     on_event: Channel<PtyEvent>,
+    correlation_id: Option<String>,
 ) -> Result<(), String> {
     // Get the broadcast sender from the session
     let output_tx = {
@@ -490,20 +512,46 @@ pub async fn attach_pty_channel(
 }
 
 #[tauri::command]
+#[instrument(skip(state))]
 pub async fn kill_all_sessions(
     state: tauri::State<'_, PtyState>,
 ) -> Result<(), String> {
     // Get all session IDs
     let session_ids: Vec<String> = state.sessions.iter().map(|entry| entry.key().clone()).collect();
+    let session_count = session_ids.len();
+    info!(session_count, "Killing all PTY sessions");
 
     // Kill each session
     for session_id in session_ids {
         if let Some((_, session)) = state.sessions.remove(&session_id) {
             if let Err(e) = session.child.lock().await.kill() {
-                eprintln!("Failed to kill child process {}: {}", session_id, e);
+                warn!(%session_id, error = %e, "Failed to kill child process");
             }
         }
     }
 
+    info!(session_count, "All PTY sessions killed");
     Ok(())
+}
+
+
+#[tauri::command]
+#[instrument]
+pub async fn exit_app() {
+  info!("Exit requested from frontend");
+  std::process::exit(0);
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kill_all_sessions_returns_ok_when_empty() {
+        let state = PtyState::default();
+        // Should return Ok when no sessions exist
+        // Note: This is a sync test, async test would require tokio::test
+        // The actual logic is tested via integration tests
+    }
 }

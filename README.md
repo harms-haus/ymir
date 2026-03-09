@@ -108,6 +108,86 @@ declare global {
 }
 ```
 
+## Logging
+
+Ymir uses structured logging with automatic redaction of sensitive data.
+
+### Configuration
+
+Set log levels via environment variables:
+
+- **Frontend**: `VITE_LOG_LEVEL` (default: `WARN`)
+- **Backend**: `RUST_LOG` (default: `warn`)
+
+```bash
+# Development - enable debug logging
+VITE_LOG_LEVEL=DEBUG npm run dev
+
+# Production - enable temporary debug logging
+VITE_LOG_LEVEL=DEBUG npm run build
+```
+
+### Log Levels
+
+Use these levels appropriately:
+
+- **DEBUG**: Detailed diagnostic information for development
+- **INFO**: General informational messages about normal operation
+- **WARN**: Unexpected but recoverable situations
+- **ERROR**: Error events that might still allow the application to continue
+
+### Usage Examples
+
+```typescript
+import logger from './lib/logger';
+import { createLogContext } from './lib/logger-config';
+
+// Info logging with context
+logger.info('Operation completed', {
+  workspaceId: 'ws-123',
+  paneId: 'pane-456',
+  action: 'split'
+});
+
+// Error logging with details
+try {
+  await spawnPTY(config);
+} catch (e) {
+  logger.error('Failed to spawn PTY', {
+    error: e.message,
+    ...createLogContext('Terminal', { paneId })
+  });
+}
+
+// Debug logging for development
+logger.debug('State updated', {
+  component: 'WorkspaceStore',
+  action: 'splitPane',
+  direction
+});
+```
+
+### Security
+
+Sensitive data is automatically redacted from logs. The following field patterns trigger redaction:
+
+- `password`, `token`, `secret`
+- `apiKey`, `api_key`, `authorization`
+- `credential`, `privateKey`, `private_key`
+- `sessionId`
+
+These values are replaced with `[REDACTED]` in all log output.
+
+### Production Debugging
+
+To enable debug logging in production:
+
+1. Set `VITE_LOG_LEVEL=DEBUG` before building
+2. Build the application
+3. Logs will appear in the browser console
+
+Remember to rebuild with `VITE_LOG_LEVEL=WARN` or `ERROR` for production deployments.
+
 ## Architecture
 
 ### Component Hierarchy

@@ -6,6 +6,7 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import { invoke } from '@tauri-apps/api/core';
+import logger from '../lib/logger';
 
 import {
   Workspace,
@@ -104,7 +105,7 @@ getItem: async (name: string): Promise<string | null> => {
       return null;
     } catch (error) {
       if (import.meta.env.DEV) {
-        console.error('[Storage] getItem failed:', { key: name, error });
+        logger.error('[Storage] getItem failed', { key: name, error });
       }
       return null;
     }
@@ -117,7 +118,7 @@ setItem: async (name: string, value: string): Promise<void> => {
       }
     } catch (error) {
       if (import.meta.env.DEV) {
-        console.error('[Storage] setItem failed:', { key: name, error });
+        logger.error('[Storage] setItem failed', { key: name, error });
       }
     }
   },
@@ -129,7 +130,7 @@ removeItem: async (name: string): Promise<void> => {
       }
     } catch (error) {
       if (import.meta.env.DEV) {
-        console.error('[Storage] removeItem failed:', { key: name, error });
+        logger.error('[Storage] removeItem failed', { key: name, error });
       }
     }
   },
@@ -312,6 +313,7 @@ const useWorkspaceStore = create<WorkspaceState>()(
               },
             };
             state.workspaces.push(newWorkspace);
+            logger.info('[Workspace] Created workspace', { workspaceId: newWorkspace.id, name });
           }),
 
         closeWorkspace: (workspaceId: string) =>
@@ -322,6 +324,7 @@ const useWorkspaceStore = create<WorkspaceState>()(
               if (state.activeWorkspaceId === workspaceId) {
                 state.activeWorkspaceId = state.workspaces[0].id;
               }
+              logger.info('[Workspace] Closed workspace', { workspaceId });
             }
           }),
 
@@ -330,6 +333,7 @@ const useWorkspaceStore = create<WorkspaceState>()(
             const exists = state.workspaces.find((ws) => ws.id === workspaceId);
             if (exists) {
               state.activeWorkspaceId = workspaceId;
+              logger.info('[Workspace] Set active workspace', { workspaceId });
             }
           }),
 
@@ -356,6 +360,7 @@ const useWorkspaceStore = create<WorkspaceState>()(
             workspace.panes[newPane.id] = newPane;
 
             workspace.root = splitNodeRecursive(workspace.root, paneId, newLeaf, axis, splitIndex);
+            logger.info('[Pane] Split pane', { paneId, direction, newPaneId: newPane.id });
           }),
 
         closePane: (paneId: string) =>
@@ -374,6 +379,7 @@ const useWorkspaceStore = create<WorkspaceState>()(
               if (workspace.activePaneId === paneId) {
                 workspace.activePaneId = findFirstPaneInTree(newRoot);
               }
+              logger.info('[Pane] Closed pane', { paneId });
             }
           }),
 
@@ -382,6 +388,7 @@ const useWorkspaceStore = create<WorkspaceState>()(
             const workspace = state.workspaces.find((ws) => ws.id === state.activeWorkspaceId);
             if (workspace && workspace.panes[paneId]) {
               workspace.activePaneId = paneId;
+              logger.debug('[Pane] Set active pane', { paneId });
             }
           }),
 
@@ -396,6 +403,7 @@ const useWorkspaceStore = create<WorkspaceState>()(
             const newTab = createDefaultTab(cwd);
             pane.tabs.push(newTab);
             pane.activeTabId = newTab.id;
+            logger.info('[Tab] Created tab', { paneId, tabId: newTab.id });
           }),
 
         closeTab: async (paneId: string, tabId: string) => {
@@ -414,10 +422,7 @@ const useWorkspaceStore = create<WorkspaceState>()(
             try {
               await invoke('kill_pty', { sessionId: tabToClose.sessionId });
             } catch (error) {
-              if (import.meta.env.DEV) {
-                console.error('[closeTab] Failed to kill PTY session:', { sessionId: tabToClose.sessionId, error });
-              }
-              // Preserve original error handling behavior
+
             }
           }
 
@@ -440,6 +445,7 @@ const useWorkspaceStore = create<WorkspaceState>()(
               get().closePane(paneId);
             }
           });
+          logger.info('[Tab] Closed tab', { paneId, tabId });
         },
 
         setActiveTab: (paneId: string, tabId: string) =>
@@ -451,6 +457,7 @@ const useWorkspaceStore = create<WorkspaceState>()(
             if (pane && pane.tabs.some((t) => t.id === tabId)) {
               pane.activeTabId = tabId;
               get().clearNotification(tabId);
+              logger.debug('[Tab] Set active tab', { paneId, tabId });
             }
           }),
 
