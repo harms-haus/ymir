@@ -555,4 +555,198 @@ mod tests {
         // Note: This is a sync test, async test would require tokio::test
         // The actual logic is tested via integration tests
     }
+
+    // Tests for parse_notification function
+    #[test]
+    fn test_parse_notification_osc9() {
+        // OSC 9: \x1b]9;message\x07
+        let input = "\x1b]9;Hello World\x07";
+        let result = parse_notification(input);
+        assert_eq!(result, Some("Hello World".to_string()));
+    }
+
+    #[test]
+    fn test_parse_notification_osc99() {
+        // OSC 99: \x1b]99;message\x07
+        let input = "\x1b]99;Build complete\x07";
+        let result = parse_notification(input);
+        assert_eq!(result, Some("Build complete".to_string()));
+    }
+
+    #[test]
+    fn test_parse_notification_osc777() {
+        // OSC 777: \x1b]777;notify;message\x07
+        let input = "\x1b]777;notify;Deployment successful\x07";
+        let result = parse_notification(input);
+        assert_eq!(result, Some("Deployment successful".to_string()));
+    }
+
+    #[test]
+    fn test_parse_notification_osc9_with_prefix() {
+        // OSC 9 with text before the sequence
+        let input = "Some output here\x1b]9;Notification message\x07more text";
+        let result = parse_notification(input);
+        assert_eq!(result, Some("Notification message".to_string()));
+    }
+
+    #[test]
+    fn test_parse_notification_osc99_with_prefix() {
+        // OSC 99 with text before the sequence
+        let input = "Prefix text\x1b]99;Test notification\x07suffix";
+        let result = parse_notification(input);
+        assert_eq!(result, Some("Test notification".to_string()));
+    }
+
+    #[test]
+    fn test_parse_notification_osc777_with_prefix() {
+        // OSC 777 with text before the sequence
+        let input = "Before\x1b]777;notify;Alert!\x07after";
+        let result = parse_notification(input);
+        assert_eq!(result, Some("Alert!".to_string()));
+    }
+
+    #[test]
+    fn test_parse_notification_malformed_no_bel() {
+        // Missing BEL character
+        let input = "\x1b]9;No closing bell";
+        let result = parse_notification(input);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_parse_notification_malformed_no_osc_prefix() {
+        // Missing OSC prefix
+        let input = "9;message\x07";
+        let result = parse_notification(input);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_parse_notification_malformed_wrong_osc_type() {
+        // Wrong OSC type (not 9, 99, or 777)
+        let input = "\x1b]8;message\x07";
+        let result = parse_notification(input);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_parse_notification_malformed_osc777_missing_notify() {
+        // OSC 777 without "notify" keyword
+        let input = "\x1b]777;message\x07";
+        let result = parse_notification(input);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_parse_notification_empty_message_osc9() {
+        // Empty message in OSC 9
+        let input = "\x1b]9;\x07";
+        let result = parse_notification(input);
+        assert_eq!(result, Some("".to_string()));
+    }
+
+    #[test]
+    fn test_parse_notification_empty_message_osc99() {
+        // Empty message in OSC 99
+        let input = "\x1b]99;\x07";
+        let result = parse_notification(input);
+        assert_eq!(result, Some("".to_string()));
+    }
+
+    #[test]
+    fn test_parse_notification_empty_message_osc777() {
+        // Empty message in OSC 777
+        let input = "\x1b]777;notify;\x07";
+        let result = parse_notification(input);
+        assert_eq!(result, Some("".to_string()));
+    }
+
+    #[test]
+    fn test_parse_notification_special_characters() {
+        // Message with special characters
+        let input = "\x1b]9;Hello! @#$%^&*()_+-=[]{}|;':\",./<>?\x07";
+        let result = parse_notification(input);
+        assert_eq!(result, Some("Hello! @#$%^&*()_+-=[]{}|;':\",./<>?".to_string()));
+    }
+
+    #[test]
+    fn test_parse_notification_unicode() {
+        // Message with unicode characters
+        let input = "\x1b]9;Hello 世界 🌍\x07";
+        let result = parse_notification(input);
+        assert_eq!(result, Some("Hello 世界 🌍".to_string()));
+    }
+
+    #[test]
+    fn test_parse_notification_multiple_osc_sequences() {
+        // Multiple OSC sequences - should return first match
+        let input = "\x1b]9;First\x07\x1b]99;Second\x07";
+        let result = parse_notification(input);
+        assert_eq!(result, Some("First".to_string()));
+    }
+
+    #[test]
+    fn test_parse_notification_osc9_preferred_over_osc99() {
+        // OSC 9 appears before OSC 99
+        let input = "\x1b]9;OSC9 message\x07\x1b]99;OSC99 message\x07";
+        let result = parse_notification(input);
+        assert_eq!(result, Some("OSC9 message".to_string()));
+    }
+
+    #[test]
+    fn test_parse_notification_no_notification() {
+        // Plain text without any OSC sequence
+        let input = "Just some regular terminal output";
+        let result = parse_notification(input);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_parse_notification_only_bel() {
+        // Only BEL character
+        let input = "\x07";
+        let result = parse_notification(input);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_parse_notification_only_esc() {
+        // Only ESC character
+        let input = "\x1b";
+        let result = parse_notification(input);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_parse_notification_osc9_with_newlines() {
+        // OSC 9 with newlines in message (should stop at BEL)
+        let input = "\x1b]9;Line1\nLine2\x07";
+        let result = parse_notification(input);
+        assert_eq!(result, Some("Line1\nLine2".to_string()));
+    }
+
+    #[test]
+    fn test_parse_notification_osc777_with_extra_semicolons() {
+        // OSC 777 with extra semicolons in message
+        let input = "\x1b]777;notify;msg;with;semicolons\x07";
+        let result = parse_notification(input);
+        assert_eq!(result, Some("msg;with;semicolons".to_string()));
+    }
+
+    #[test]
+    fn test_parse_notification_very_long_message() {
+        // Very long message
+        let long_message = "a".repeat(1000);
+        let input = format!("\x1b]9;{}\x07", long_message);
+        let result = parse_notification(&input);
+        assert_eq!(result, Some(long_message));
+    }
+
+    #[test]
+    fn test_parse_notification_whitespace_message() {
+        // Message with only whitespace
+        let input = "\x1b]9;   \x07";
+        let result = parse_notification(input);
+        assert_eq!(result, Some("   ".to_string()));
+    }
 }

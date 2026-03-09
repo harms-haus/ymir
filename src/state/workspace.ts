@@ -425,6 +425,9 @@ const useWorkspaceStore = create<WorkspaceState>()(
             workspace.panes[newPane.id] = newPane;
 
             workspace.root = splitNodeRecursive(workspace.root, paneId, newLeaf, axis, splitIndex);
+            if (countPanes(state.workspaces) >= MAX_PANES) {
+              console.warn('Maximum 20 panes reached. Cannot create more panes.');
+            }
             logger.info('[Pane] Split pane', { paneId, direction, newPaneId: newPane.id });
           }),
 

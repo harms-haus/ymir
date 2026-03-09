@@ -354,3 +354,4 @@ export const notificationsPanelDefinition: PanelDefinition = {
 };
 
 export default notificationsPanelDefinition;
+export { NotificationsPanelContent };

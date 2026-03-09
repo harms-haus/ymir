@@ -484,3 +484,824 @@ describe('Workspace Store - Derived Getters', () => {
     expect(hasNotifications()).toBe(true);
   });
 });
+
+// ============================================================================
+// Edge Case Tests - Concurrent Operations
+// ============================================================================
+
+describe('Workspace Store - Edge Cases: Concurrent Operations', () => {
+  it('should handle multiple rapid splits without corruption', () => {
+    const { splitPane } = useWorkspaceStore.getState();
+    const state = useWorkspaceStore.getState();
+    const initialPaneId = Object.keys(state.workspaces[0].panes)[0];
+
+    // Rapidly split the same pane multiple times
+    for (let i = 0; i < 5; i++) {
+      splitPane(initialPaneId, 'right');
+    }
+
+    const finalState = useWorkspaceStore.getState();
+    const paneIds = Object.keys(finalState.workspaces[0].panes);
+
+    // Should have created panes (up to limit)
+    expect(paneIds.length).toBeGreaterThan(1);
+    expect(paneIds.length).toBeLessThanOrEqual(20);
+
+    // All pane IDs should be unique
+    expect(new Set(paneIds).size).toBe(paneIds.length);
+  });
+
+  it('should handle rapid pane creation and closure', () => {
+    const { splitPane, closePane } = useWorkspaceStore.getState();
+    const state = useWorkspaceStore.getState();
+    const initialPaneId = Object.keys(state.workspaces[0].panes)[0];
+
+    // Create several panes
+    for (let i = 0; i < 5; i++) {
+      splitPane(initialPaneId, 'right');
+    }
+
+    const afterCreation = useWorkspaceStore.getState();
+    const paneIds = Object.keys(afterCreation.workspaces[0].panes);
+    const createdCount = paneIds.length;
+
+    // Close all but one pane
+    for (const paneId of paneIds) {
+      if (paneId !== initialPaneId) {
+        closePane(paneId);
+      }
+    }
+
+    const afterClose = useWorkspaceStore.getState();
+    expect(Object.keys(afterClose.workspaces[0].panes).length).toBe(1);
+    expect(afterClose.workspaces[0].activePaneId).toBeTruthy();
+  });
+
+  it('should handle rapid workspace creation and closure', () => {
+    const { createWorkspace, closeWorkspace } = useWorkspaceStore.getState();
+
+    // Create multiple workspaces rapidly
+    const createdIds: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      createWorkspace(`Workspace ${i + 2}`);
+      createdIds.push(useWorkspaceStore.getState().workspaces[useWorkspaceStore.getState().workspaces.length - 1].id);
+    }
+
+    expect(useWorkspaceStore.getState().workspaces.length).toBe(6);
+
+    // Close them rapidly
+    for (const id of createdIds) {
+      closeWorkspace(id);
+    }
+
+    expect(useWorkspaceStore.getState().workspaces.length).toBe(1);
+  });
+
+  it('should handle concurrent tab operations in multiple panes', () => {
+    const { splitPane, createTab, closeTab } = useWorkspaceStore.getState();
+    const state = useWorkspaceStore.getState();
+    const initialPaneId = Object.keys(state.workspaces[0].panes)[0];
+
+    // Create multiple panes
+    splitPane(initialPaneId, 'right');
+    splitPane(initialPaneId, 'down');
+
+    const newState = useWorkspaceStore.getState();
+    const paneIds = Object.keys(newState.workspaces[0].panes);
+
+    // Create tabs in each pane
+    for (const paneId of paneIds) {
+      createTab(paneId);
+      createTab(paneId);
+    }
+
+    const afterTabs = useWorkspaceStore.getState();
+    for (const paneId of paneIds) {
+      expect(afterTabs.workspaces[0].panes[paneId].tabs.length).toBeGreaterThanOrEqual(2);
+    }
+
+    // Close tabs rapidly
+    for (const paneId of paneIds) {
+      const tabs = afterTabs.workspaces[0].panes[paneId].tabs;
+      for (const tab of tabs.slice(1)) {
+        closeTab(paneId, tab.id);
+      }
+    }
+
+    const finalState = useWorkspaceStore.getState();
+    for (const paneId of paneIds) {
+      expect(finalState.workspaces[0].panes[paneId].tabs.length).toBe(1);
+    }
+  });
+});
+
+// ============================================================================
+// Edge Case Tests - Deep Tree Structures
+// ============================================================================
+
+describe('Workspace Store - Edge Cases: Deep Tree Structures', () => {
+  it('should create 3+ levels of nested splits', () => {
+    const { splitPane } = useWorkspaceStore.getState();
+    const state = useWorkspaceStore.getState();
+    let currentPaneId = Object.keys(state.workspaces[0].panes)[0];
+
+    // Create deep nesting: split right, then split down the new pane, then split right again
+    splitPane(currentPaneId, 'right');
+    const afterFirst = useWorkspaceStore.getState();
+    const paneIds1 = Object.keys(afterFirst.workspaces[0].panes);
+    const secondPaneId = paneIds1.find(id => id !== currentPaneId)!;
+
+    splitPane(secondPaneId, 'down');
+    const afterSecond = useWorkspaceStore.getState();
+    const paneIds2 = Object.keys(afterSecond.workspaces[0].panes);
+    const thirdPaneId = paneIds2.find(id => id !== currentPaneId && id !== secondPaneId)!;
+
+    splitPane(thirdPaneId, 'right');
+    const afterThird = useWorkspaceStore.getState();
+
+    // Should have 4 panes total
+    expect(Object.keys(afterThird.workspaces[0].panes).length).toBe(4);
+
+    // Verify the tree structure is valid by checking root
+    const root = afterThird.workspaces[0].root;
+    expect(root.type).toBe('branch');
+  });
+
+  it('should handle closing panes in deeply nested structures', () => {
+    const { splitPane, closePane } = useWorkspaceStore.getState();
+    const state = useWorkspaceStore.getState();
+    const initialPaneId = Object.keys(state.workspaces[0].panes)[0];
+
+    // Create a complex tree structure
+    splitPane(initialPaneId, 'right');
+    const afterFirst = useWorkspaceStore.getState();
+    const paneIds1 = Object.keys(afterFirst.workspaces[0].panes);
+    const secondPaneId = paneIds1.find(id => id !== initialPaneId)!;
+
+    splitPane(secondPaneId, 'down');
+    const afterSecond = useWorkspaceStore.getState();
+    const paneIds2 = Object.keys(afterSecond.workspaces[0].panes);
+    const thirdPaneId = paneIds2.find(id => id !== initialPaneId && id !== secondPaneId)!;
+
+    splitPane(thirdPaneId, 'left');
+    const afterThird = useWorkspaceStore.getState();
+    const paneIds3 = Object.keys(afterThird.workspaces[0].panes);
+    const fourthPaneId = paneIds3.find(id => !paneIds2.includes(id))!;
+
+    // Close a middle pane
+    closePane(secondPaneId);
+
+    const afterClose = useWorkspaceStore.getState();
+    const remainingPanes = Object.keys(afterClose.workspaces[0].panes);
+
+    // Should have 3 panes remaining
+    expect(remainingPanes.length).toBe(3);
+    expect(remainingPanes).not.toContain(secondPaneId);
+
+    // Tree should still be valid
+    expect(afterClose.workspaces[0].root.type).toBe('branch');
+  });
+
+  it('should maintain tree integrity with asymmetric splits', () => {
+    const { splitPane, createTab } = useWorkspaceStore.getState();
+    const state = useWorkspaceStore.getState();
+    const initialPaneId = Object.keys(state.workspaces[0].panes)[0];
+
+    // Create asymmetric tree: split one side multiple times
+    splitPane(initialPaneId, 'right');
+    const afterFirst = useWorkspaceStore.getState();
+    const paneIds1 = Object.keys(afterFirst.workspaces[0].panes);
+    const rightPaneId = paneIds1.find(id => id !== initialPaneId)!;
+
+    // Split the right pane again
+    splitPane(rightPaneId, 'right');
+    const afterSecond = useWorkspaceStore.getState();
+    const paneIds2 = Object.keys(afterSecond.workspaces[0].panes);
+    const farRightPaneId = paneIds2.find(id => id !== initialPaneId && id !== rightPaneId)!;
+
+    // Split the far right pane vertically
+    splitPane(farRightPaneId, 'down');
+    const afterThird = useWorkspaceStore.getState();
+
+    // Verify tree structure
+    expect(Object.keys(afterThird.workspaces[0].panes).length).toBe(4);
+    expect(afterThird.workspaces[0].root.type).toBe('branch');
+
+    // All panes should be functional
+    for (const paneId of Object.keys(afterThird.workspaces[0].panes)) {
+      createTab(paneId);
+      const currentState = useWorkspaceStore.getState();
+      expect(currentState.workspaces[0].panes[paneId].tabs.length).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('should handle active pane updates in deep trees', () => {
+    const { splitPane, setActivePane } = useWorkspaceStore.getState();
+    const state = useWorkspaceStore.getState();
+    const initialPaneId = Object.keys(state.workspaces[0].panes)[0];
+
+    // Create deep structure
+    splitPane(initialPaneId, 'right');
+    const afterFirst = useWorkspaceStore.getState();
+    const paneIds1 = Object.keys(afterFirst.workspaces[0].panes);
+    const secondPaneId = paneIds1.find(id => id !== initialPaneId)!;
+
+    splitPane(secondPaneId, 'down');
+    const afterSecond = useWorkspaceStore.getState();
+    const paneIds2 = Object.keys(afterSecond.workspaces[0].panes);
+    const thirdPaneId = paneIds2.find(id => id !== initialPaneId && id !== secondPaneId)!;
+
+    // Set each pane as active
+    for (const paneId of paneIds2) {
+      setActivePane(paneId);
+      expect(useWorkspaceStore.getState().workspaces[0].activePaneId).toBe(paneId);
+    }
+  });
+});
+
+// ============================================================================
+// Edge Case Tests - Session Persistence
+// ============================================================================
+
+describe('Workspace Store - Edge Cases: Session Persistence', () => {
+  it('should handle empty scrollback arrays', () => {
+    const { createTab } = useWorkspaceStore.getState();
+    const state = useWorkspaceStore.getState();
+    const paneId = Object.keys(state.workspaces[0].panes)[0];
+
+    createTab(paneId);
+    const newState = useWorkspaceStore.getState();
+    const tabs = newState.workspaces[0].panes[paneId].tabs;
+    const newTab = tabs[tabs.length - 1];
+
+    // Scrollback should be empty array by default
+    expect(newTab.scrollback).toEqual([]);
+    expect(Array.isArray(newTab.scrollback)).toBe(true);
+  });
+
+  it('should handle tabs with empty session IDs', () => {
+    const { createTab } = useWorkspaceStore.getState();
+    const state = useWorkspaceStore.getState();
+    const paneId = Object.keys(state.workspaces[0].panes)[0];
+
+    createTab(paneId);
+    const newState = useWorkspaceStore.getState();
+    const tabs = newState.workspaces[0].panes[paneId].tabs;
+    const newTab = tabs[tabs.length - 1];
+
+    // Session ID should be empty string for new tabs
+    expect(newTab.sessionId).toBe('');
+  });
+
+  it('should handle workspace with multiple panes and tabs', () => {
+    const { splitPane, createTab, markNotification } = useWorkspaceStore.getState();
+    const state = useWorkspaceStore.getState();
+    const initialPaneId = Object.keys(state.workspaces[0].panes)[0];
+
+    // Create complex workspace state
+    splitPane(initialPaneId, 'right');
+    const afterSplit = useWorkspaceStore.getState();
+    const paneIds = Object.keys(afterSplit.workspaces[0].panes);
+
+    for (const paneId of paneIds) {
+      createTab(paneId, `/path/${paneId}`);
+      const currentState = useWorkspaceStore.getState();
+      const tabs = currentState.workspaces[0].panes[paneId].tabs;
+      const newTab = tabs[tabs.length - 1];
+      markNotification(newTab.id, `Notification for ${paneId}`);
+    }
+
+    const finalState = useWorkspaceStore.getState();
+    expect(finalState.workspaces[0].hasNotification).toBe(true);
+    expect(Object.keys(finalState.workspaces[0].panes).length).toBe(2);
+
+    // Verify each pane has correct state
+    for (const paneId of Object.keys(finalState.workspaces[0].panes)) {
+      const pane = finalState.workspaces[0].panes[paneId];
+      expect(pane.tabs.length).toBeGreaterThanOrEqual(2);
+      expect(pane.hasNotification).toBe(true);
+    }
+  });
+
+  it('should handle notification state serialization', () => {
+    const { markNotification, clearNotification } = useWorkspaceStore.getState();
+    const state = useWorkspaceStore.getState();
+    const paneId = Object.keys(state.workspaces[0].panes)[0];
+    const tabId = state.workspaces[0].panes[paneId].tabs[0].id;
+
+    // Mark notification
+    markNotification(tabId, 'Test message');
+    const withNotification = useWorkspaceStore.getState();
+    const tab = withNotification.workspaces[0].panes[paneId].tabs[0];
+
+    expect(tab.hasNotification).toBe(true);
+    expect(tab.notificationCount).toBe(1);
+    expect(tab.notificationText).toBe('Test message');
+
+    // Clear notification
+    clearNotification(tabId);
+    const cleared = useWorkspaceStore.getState();
+    const clearedTab = cleared.workspaces[0].panes[paneId].tabs[0];
+
+    expect(clearedTab.hasNotification).toBe(false);
+    expect(clearedTab.notificationCount).toBe(0);
+    expect(clearedTab.notificationText).toBeUndefined();
+  });
+
+  it('should handle multiple workspaces with different states', () => {
+    const { createWorkspace, setActiveWorkspace, splitPane, markNotification } = useWorkspaceStore.getState();
+    const state = useWorkspaceStore.getState();
+
+    // Create multiple workspaces with different configurations
+    createWorkspace('Workspace 2');
+    const ws2Id = useWorkspaceStore.getState().workspaces[1].id;
+
+    createWorkspace('Workspace 3');
+    const ws3Id = useWorkspaceStore.getState().workspaces[2].id;
+
+    // Configure workspace 2 with splits
+    setActiveWorkspace(ws2Id);
+    const ws2PaneId = Object.keys(useWorkspaceStore.getState().workspaces[1].panes)[0];
+    splitPane(ws2PaneId, 'right');
+
+    // Configure workspace 3 with notifications
+    setActiveWorkspace(ws3Id);
+    const ws3PaneId = Object.keys(useWorkspaceStore.getState().workspaces[2].panes)[0];
+    const ws3TabId = useWorkspaceStore.getState().workspaces[2].panes[ws3PaneId].tabs[0].id;
+    markNotification(ws3TabId, 'WS3 notification');
+
+    const finalState = useWorkspaceStore.getState();
+
+    // Verify workspace states
+    expect(finalState.workspaces[0].name).toBe('Workspace 1');
+    expect(finalState.workspaces[1].name).toBe('Workspace 2');
+    expect(Object.keys(finalState.workspaces[1].panes).length).toBe(2);
+    expect(finalState.workspaces[2].name).toBe('Workspace 3');
+    expect(finalState.workspaces[2].hasNotification).toBe(true);
+  });
+});
+
+// ============================================================================
+// Edge Case Tests - Notification Propagation
+// ============================================================================
+
+describe('Workspace Store - Edge Cases: Notification Propagation', () => {
+  it('should propagate notifications across multiple panes in same workspace', () => {
+    const { splitPane, createTab, markNotification } = useWorkspaceStore.getState();
+    const state = useWorkspaceStore.getState();
+    const initialPaneId = Object.keys(state.workspaces[0].panes)[0];
+
+    // Create multiple panes
+    splitPane(initialPaneId, 'right');
+    splitPane(initialPaneId, 'down');
+
+    const afterSplits = useWorkspaceStore.getState();
+    const paneIds = Object.keys(afterSplits.workspaces[0].panes);
+
+    // Create tabs in each pane and mark notifications
+    for (let i = 0; i < paneIds.length; i++) {
+      createTab(paneIds[i]);
+      const currentState = useWorkspaceStore.getState();
+      const tabs = currentState.workspaces[0].panes[paneIds[i]].tabs;
+      markNotification(tabs[tabs.length - 1].id, `Notification ${i}`);
+    }
+
+    const finalState = useWorkspaceStore.getState();
+
+    // Workspace should have notification flag
+    expect(finalState.workspaces[0].hasNotification).toBe(true);
+
+    // Each pane with notifications should be marked
+    let panesWithNotifications = 0;
+    for (const paneId of paneIds) {
+      if (finalState.workspaces[0].panes[paneId].hasNotification) {
+        panesWithNotifications++;
+      }
+    }
+    expect(panesWithNotifications).toBeGreaterThan(0);
+  });
+
+  it('should handle notification count accumulation', () => {
+    const { markNotification } = useWorkspaceStore.getState();
+    const state = useWorkspaceStore.getState();
+    const paneId = Object.keys(state.workspaces[0].panes)[0];
+    const tabId = state.workspaces[0].panes[paneId].tabs[0].id;
+
+    // Mark multiple notifications
+    for (let i = 0; i < 10; i++) {
+      markNotification(tabId, `Message ${i}`);
+    }
+
+    const finalState = useWorkspaceStore.getState();
+    const tab = finalState.workspaces[0].panes[paneId].tabs[0];
+
+    expect(tab.notificationCount).toBe(10);
+    expect(tab.notificationText).toBe('Message 9'); // Last message
+  });
+
+  it('should clear notifications only on target tab', () => {
+    const { splitPane, createTab, markNotification, clearNotification } = useWorkspaceStore.getState();
+    const state = useWorkspaceStore.getState();
+    const initialPaneId = Object.keys(state.workspaces[0].panes)[0];
+
+    // Create multiple panes with tabs
+    splitPane(initialPaneId, 'right');
+    const afterSplit = useWorkspaceStore.getState();
+    const paneIds = Object.keys(afterSplit.workspaces[0].panes);
+
+    const tabIds: string[] = [];
+    for (const paneId of paneIds) {
+      createTab(paneId);
+      const currentState = useWorkspaceStore.getState();
+      const tabs = currentState.workspaces[0].panes[paneId].tabs;
+      const newTabId = tabs[tabs.length - 1].id;
+      tabIds.push(newTabId);
+      markNotification(newTabId, `Notification for ${paneId}`);
+    }
+
+    // Clear only the first tab's notification
+    clearNotification(tabIds[0]);
+
+    const finalState = useWorkspaceStore.getState();
+
+    // First tab should be cleared
+    const firstPaneId = paneIds[0];
+    const firstTab = finalState.workspaces[0].panes[firstPaneId].tabs.find(t => t.id === tabIds[0])!;
+    expect(firstTab.hasNotification).toBe(false);
+
+    // Other tabs should still have notifications
+    for (let i = 1; i < paneIds.length; i++) {
+      const tab = finalState.workspaces[0].panes[paneIds[i]].tabs.find(t => t.id === tabIds[i])!;
+      expect(tab.hasNotification).toBe(true);
+    }
+  });
+
+  it('should update workspace notification flag when all notifications cleared', () => {
+    const { markNotification, clearNotification } = useWorkspaceStore.getState();
+    const state = useWorkspaceStore.getState();
+    const paneId = Object.keys(state.workspaces[0].panes)[0];
+    const tabId = state.workspaces[0].panes[paneId].tabs[0].id;
+
+    markNotification(tabId, 'Test');
+    expect(useWorkspaceStore.getState().workspaces[0].hasNotification).toBe(true);
+
+    clearNotification(tabId);
+    expect(useWorkspaceStore.getState().workspaces[0].hasNotification).toBe(false);
+  });
+
+  it('should handle notifications across multiple workspaces', () => {
+    const { createWorkspace, setActiveWorkspace, markNotification } = useWorkspaceStore.getState();
+
+    // Create multiple workspaces
+    createWorkspace('Workspace 2');
+    const ws2Id = useWorkspaceStore.getState().workspaces[1].id;
+
+    // Mark notification in first workspace
+    const ws1PaneId = Object.keys(useWorkspaceStore.getState().workspaces[0].panes)[0];
+    const ws1TabId = useWorkspaceStore.getState().workspaces[0].panes[ws1PaneId].tabs[0].id;
+    markNotification(ws1TabId, 'WS1 notification');
+
+    // Mark notification in second workspace
+    setActiveWorkspace(ws2Id);
+    const ws2PaneId = Object.keys(useWorkspaceStore.getState().workspaces[1].panes)[0];
+    const ws2TabId = useWorkspaceStore.getState().workspaces[1].panes[ws2PaneId].tabs[0].id;
+    markNotification(ws2TabId, 'WS2 notification');
+
+    const finalState = useWorkspaceStore.getState();
+
+    // Both workspaces should have notifications
+    expect(finalState.workspaces[0].hasNotification).toBe(true);
+    expect(finalState.workspaces[1].hasNotification).toBe(true);
+    expect(hasNotifications()).toBe(true);
+  });
+});
+
+// ============================================================================
+// Edge Case Tests - Pane Limit Enforcement
+// ============================================================================
+
+describe('Workspace Store - Edge Cases: Pane Limit Enforcement', () => {
+  it('should enforce limit when creating panes across multiple workspaces', () => {
+    const { createWorkspace, setActiveWorkspace, splitPane } = useWorkspaceStore.getState();
+    const consoleSpy = vi.spyOn(console, 'warn');
+
+    // Create multiple workspaces
+    for (let i = 0; i < 3; i++) {
+      createWorkspace(`Workspace ${i + 2}`);
+    }
+
+    const state = useWorkspaceStore.getState();
+    const workspaceIds = state.workspaces.map(ws => ws.id);
+
+    // Try to create panes in each workspace
+    let totalSplits = 0;
+    for (const wsId of workspaceIds) {
+      setActiveWorkspace(wsId);
+      const currentState = useWorkspaceStore.getState();
+      const paneId = Object.keys(currentState.workspaces.find(ws => ws.id === wsId)!.panes)[0];
+
+      // Try to create many panes in this workspace
+      for (let i = 0; i < 10; i++) {
+        splitPane(paneId, 'right');
+        totalSplits++;
+      }
+    }
+
+    // Total pane count should not exceed 20
+    expect(paneCount()).toBeLessThanOrEqual(20);
+    // Should have logged warnings about approaching and reaching limit
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Maximum 20 panes reached'));
+  });
+
+  it('should warn at 15 panes across all workspaces', () => {
+    const { createWorkspace, setActiveWorkspace, splitPane } = useWorkspaceStore.getState();
+    const consoleSpy = vi.spyOn(console, 'warn');
+
+    // Create multiple workspaces
+    createWorkspace('Workspace 2');
+
+    const state = useWorkspaceStore.getState();
+    const workspaceIds = state.workspaces.map(ws => ws.id);
+
+    // Create panes until we hit the warning threshold
+    for (const wsId of workspaceIds) {
+      setActiveWorkspace(wsId);
+
+      while (paneCount() < 16) {
+        const currentState = useWorkspaceStore.getState();
+        const ws = currentState.workspaces.find(w => w.id === wsId)!;
+        const paneId = Object.keys(ws.panes)[0];
+        splitPane(paneId, 'right');
+
+        if (paneCount() >= 16) break;
+      }
+    }
+
+    // Should have triggered warning at 15 panes
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Warning:'));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('15'));
+  });
+
+  it('should allow operations after closing panes near limit', () => {
+    const { splitPane, closePane } = useWorkspaceStore.getState();
+    const state = useWorkspaceStore.getState();
+    const initialPaneId = Object.keys(state.workspaces[0].panes)[0];
+
+    // Create many panes
+    const createdPaneIds: string[] = [];
+    for (let i = 0; i < 15; i++) {
+      const beforeState = useWorkspaceStore.getState();
+      const paneId = Object.keys(beforeState.workspaces[0].panes)[0];
+      splitPane(paneId, 'right');
+
+      const afterState = useWorkspaceStore.getState();
+      const newPaneIds = Object.keys(afterState.workspaces[0].panes).filter(
+        id => !createdPaneIds.includes(id) && id !== initialPaneId
+      );
+      if (newPaneIds.length > 0) {
+        createdPaneIds.push(...newPaneIds);
+      }
+    }
+
+    const atLimit = useWorkspaceStore.getState();
+    const countAtLimit = Object.keys(atLimit.workspaces[0].panes).length;
+
+    // Close several panes
+    for (let i = 0; i < 5 && i < createdPaneIds.length; i++) {
+      closePane(createdPaneIds[i]);
+    }
+
+    const afterClose = useWorkspaceStore.getState();
+    const countAfterClose = Object.keys(afterClose.workspaces[0].panes).length;
+
+    expect(countAfterClose).toBe(countAtLimit - 5);
+
+    // Should be able to create new panes again
+    const remainingPaneId = Object.keys(afterClose.workspaces[0].panes)[0];
+    splitPane(remainingPaneId, 'right');
+
+    const finalState = useWorkspaceStore.getState();
+    expect(Object.keys(finalState.workspaces[0].panes).length).toBe(countAfterClose + 1);
+  });
+
+  it('should handle edge case of exactly 20 panes', () => {
+    const { splitPane } = useWorkspaceStore.getState();
+    const consoleSpy = vi.spyOn(console, 'warn');
+    const state = useWorkspaceStore.getState();
+    const initialPaneId = Object.keys(state.workspaces[0].panes)[0];
+
+    // Create exactly 19 more panes (to reach 20 total)
+    for (let i = 0; i < 19; i++) {
+      const currentState = useWorkspaceStore.getState();
+      const paneId = Object.keys(currentState.workspaces[0].panes)[0];
+      splitPane(paneId, 'right');
+    }
+
+    expect(paneCount()).toBe(20);
+
+    // Try to create one more - should be blocked
+    const beforeAttempt = paneCount();
+    splitPane(initialPaneId, 'right');
+    expect(paneCount()).toBe(beforeAttempt);
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Maximum 20 panes reached'));
+  });
+
+  it('should handle rapid split/close cycles near limit', () => {
+    const { splitPane, closePane } = useWorkspaceStore.getState();
+    const state = useWorkspaceStore.getState();
+    const initialPaneId = Object.keys(state.workspaces[0].panes)[0];
+
+    // Create panes near limit
+    for (let i = 0; i < 18; i++) {
+      const currentState = useWorkspaceStore.getState();
+      const paneId = Object.keys(currentState.workspaces[0].panes)[0];
+      splitPane(paneId, 'right');
+    }
+
+    expect(paneCount()).toBe(19);
+
+    // Rapidly create and close panes
+    for (let cycle = 0; cycle < 5; cycle++) {
+      const currentState = useWorkspaceStore.getState();
+      const paneIds = Object.keys(currentState.workspaces[0].panes);
+      const lastPaneId = paneIds[paneIds.length - 1];
+
+      // Close last pane
+      closePane(lastPaneId);
+      expect(paneCount()).toBe(18);
+
+      // Create new pane
+      const remainingPaneId = Object.keys(useWorkspaceStore.getState().workspaces[0].panes)[0];
+      splitPane(remainingPaneId, 'right');
+      expect(paneCount()).toBe(19);
+    }
+
+    // Final state should be consistent
+    const finalState = useWorkspaceStore.getState();
+    expect(Object.keys(finalState.workspaces[0].panes).length).toBe(19);
+  });
+});
+
+describe('Workspace Store - Edge Cases: Additional Concurrent Sequences', () => {
+  it('should keep state consistent across interleaved split and close operations', () => {
+    const { splitPane, closePane } = useWorkspaceStore.getState();
+    const initialPaneId = Object.keys(useWorkspaceStore.getState().workspaces[0].panes)[0];
+
+    splitPane(initialPaneId, 'right');
+    splitPane(initialPaneId, 'down');
+
+    const afterSplit = useWorkspaceStore.getState();
+    const paneIds = Object.keys(afterSplit.workspaces[0].panes).filter((id) => id !== initialPaneId);
+
+    closePane(paneIds[0]);
+    splitPane(initialPaneId, 'left');
+    closePane(paneIds[1]);
+
+    const finalState = useWorkspaceStore.getState();
+    const finalPaneIds = Object.keys(finalState.workspaces[0].panes);
+
+    expect(finalPaneIds.length).toBe(2);
+    expect(new Set(finalPaneIds).size).toBe(2);
+    expect(finalState.workspaces[0].activePaneId).toBeTruthy();
+  });
+});
+
+describe('Workspace Store - Edge Cases: Deep Tree Manipulation', () => {
+  it('should preserve a valid tree after 4-level nesting and selective closes', () => {
+    const { splitPane, closePane } = useWorkspaceStore.getState();
+    const rootPaneId = Object.keys(useWorkspaceStore.getState().workspaces[0].panes)[0];
+
+    splitPane(rootPaneId, 'right');
+    let paneIds = Object.keys(useWorkspaceStore.getState().workspaces[0].panes);
+    const level1PaneId = paneIds.find((id) => id !== rootPaneId)!;
+
+    splitPane(level1PaneId, 'down');
+    paneIds = Object.keys(useWorkspaceStore.getState().workspaces[0].panes);
+    const level2PaneId = paneIds.find((id) => id !== rootPaneId && id !== level1PaneId)!;
+
+    splitPane(level2PaneId, 'left');
+    paneIds = Object.keys(useWorkspaceStore.getState().workspaces[0].panes);
+    const level3PaneId = paneIds.find(
+      (id) => id !== rootPaneId && id !== level1PaneId && id !== level2PaneId,
+    )!;
+
+    splitPane(level3PaneId, 'up');
+
+    const beforeClose = useWorkspaceStore.getState();
+    expect(Object.keys(beforeClose.workspaces[0].panes)).toHaveLength(5);
+
+    closePane(level2PaneId);
+    closePane(level3PaneId);
+
+    const afterClose = useWorkspaceStore.getState();
+    const workspace = afterClose.workspaces[0];
+
+    const countLeafNodes = (node: { type: 'leaf'; paneId: string } | { type: 'branch'; children: [any, any] }): number => {
+      if (node.type === 'leaf') {
+        return 1;
+      }
+      return countLeafNodes(node.children[0]) + countLeafNodes(node.children[1]);
+    };
+
+    expect(workspace.root.type).toBe('branch');
+    expect(countLeafNodes(workspace.root as any)).toBe(Object.keys(workspace.panes).length);
+  });
+});
+
+describe('Workspace Store - Edge Cases: Persistence Partialization', () => {
+  it('should sanitize session ids and truncate scrollback during persistence serialization', () => {
+    const { createTab, updateTabSessionId } = useWorkspaceStore.getState();
+    const paneId = Object.keys(useWorkspaceStore.getState().workspaces[0].panes)[0];
+
+    createTab(paneId, '/persist/check');
+
+    const withTabState = useWorkspaceStore.getState();
+    const tab = withTabState.workspaces[0].panes[paneId].tabs[withTabState.workspaces[0].panes[paneId].tabs.length - 1];
+
+    updateTabSessionId(paneId, tab.id, 'session-123');
+
+    useWorkspaceStore.setState((state) => {
+      const targetTab = state.workspaces[0].panes[paneId].tabs.find((t) => t.id === tab.id)!;
+      targetTab.scrollback = Array.from({ length: 1100 }, (_, i) => ({ text: `line-${i}` }));
+    });
+
+    const partialize = (
+      useWorkspaceStore as unknown as {
+        persist: {
+          getOptions: () => {
+            partialize: (state: ReturnType<typeof useWorkspaceStore.getState>) => {
+              workspaces: Array<{ panes: Record<string, { tabs: Array<{ id: string; cwd: string; sessionId: string; scrollback: Array<{ text: string }> }> }> }>;
+            };
+          };
+        };
+      }
+    ).persist.getOptions().partialize;
+
+    const persisted = partialize(useWorkspaceStore.getState());
+    const persistedTab = persisted.workspaces[0].panes[paneId].tabs.find((t) => t.id === tab.id)!;
+
+    expect(persistedTab.cwd).toBe('/persist/check');
+    expect(persistedTab.sessionId).toBe('');
+    expect(persistedTab.scrollback).toHaveLength(1000);
+    expect(persistedTab.scrollback[0].text).toBe('line-100');
+    expect(persistedTab.scrollback[999].text).toBe('line-1099');
+  });
+});
+
+describe('Workspace Store - Edge Cases: Notification Propagation Across Panes', () => {
+  it('should retain workspace notification flag until notifications are cleared in all panes', () => {
+    const { splitPane, markNotification, clearNotification } = useWorkspaceStore.getState();
+    const firstPaneId = Object.keys(useWorkspaceStore.getState().workspaces[0].panes)[0];
+
+    splitPane(firstPaneId, 'right');
+
+    const stateAfterSplit = useWorkspaceStore.getState();
+    const paneIds = Object.keys(stateAfterSplit.workspaces[0].panes);
+    const firstTabId = stateAfterSplit.workspaces[0].panes[paneIds[0]].tabs[0].id;
+    const secondTabId = stateAfterSplit.workspaces[0].panes[paneIds[1]].tabs[0].id;
+
+    markNotification(firstTabId, 'pane-1-message');
+    markNotification(secondTabId, 'pane-2-message');
+    clearNotification(firstTabId);
+
+    expect(useWorkspaceStore.getState().workspaces[0].hasNotification).toBe(true);
+
+    clearNotification(secondTabId);
+
+    const finalState = useWorkspaceStore.getState();
+    expect(finalState.workspaces[0].hasNotification).toBe(false);
+    expect(finalState.workspaces[0].panes[paneIds[0]].hasNotification).toBe(false);
+    expect(finalState.workspaces[0].panes[paneIds[1]].hasNotification).toBe(false);
+  });
+});
+
+describe('Workspace Store - Edge Cases: Pane Limits at Various States', () => {
+  it('should allow new splits after reducing pane count from max limit', () => {
+    const consoleSpy = vi.spyOn(console, 'warn');
+    const { splitPane, closePane } = useWorkspaceStore.getState();
+    const initialPaneId = Object.keys(useWorkspaceStore.getState().workspaces[0].panes)[0];
+
+    for (let i = 0; i < 19; i++) {
+      const firstPane = Object.keys(useWorkspaceStore.getState().workspaces[0].panes)[0];
+      splitPane(firstPane, 'right');
+    }
+
+    expect(paneCount()).toBe(20);
+
+    const blockedAttemptCount = paneCount();
+    splitPane(initialPaneId, 'right');
+    expect(paneCount()).toBe(blockedAttemptCount);
+
+    const paneIds = Object.keys(useWorkspaceStore.getState().workspaces[0].panes);
+    closePane(paneIds[paneIds.length - 1]);
+    closePane(paneIds[paneIds.length - 2]);
+
+    expect(paneCount()).toBe(18);
+
+    splitPane(initialPaneId, 'down');
+    splitPane(initialPaneId, 'left');
+
+    expect(paneCount()).toBe(20);
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Maximum 20 panes reached'));
+  });
+});
