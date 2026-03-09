@@ -359,7 +359,11 @@ pub async fn get_pane_cwd(
             if session.workspace_id.as_deref() == Some(&workspace_id)
                 && session.pane_id.as_deref() == Some(&pane_id)
             {
-                found = Some((id.clone(), session.workspace_id.clone(), session.pane_id.clone()));
+                found = Some((
+                    id.clone(),
+                    session.workspace_id.clone(),
+                    session.pane_id.clone(),
+                ));
                 break;
             }
         }
@@ -460,10 +464,7 @@ pub async fn resize_pty(
 
 #[tauri::command]
 #[instrument(skip(state), fields(%session_id))]
-pub async fn kill_pty(
-    state: tauri::State<'_, PtyState>,
-    session_id: String,
-) -> Result<(), String> {
+pub async fn kill_pty(state: tauri::State<'_, PtyState>, session_id: String) -> Result<(), String> {
     // Try to remove and kill session
     // If already removed (e.g., process exited naturally), that's fine
     info!(%session_id, "Killing PTY session");
@@ -513,11 +514,13 @@ pub async fn attach_pty_channel(
 
 #[tauri::command]
 #[instrument(skip(state))]
-pub async fn kill_all_sessions(
-    state: tauri::State<'_, PtyState>,
-) -> Result<(), String> {
+pub async fn kill_all_sessions(state: tauri::State<'_, PtyState>) -> Result<(), String> {
     // Get all session IDs
-    let session_ids: Vec<String> = state.sessions.iter().map(|entry| entry.key().clone()).collect();
+    let session_ids: Vec<String> = state
+        .sessions
+        .iter()
+        .map(|entry| entry.key().clone())
+        .collect();
     let session_count = session_ids.len();
     info!(session_count, "Killing all PTY sessions");
 
@@ -534,14 +537,12 @@ pub async fn kill_all_sessions(
     Ok(())
 }
 
-
 #[tauri::command]
 #[instrument]
 pub async fn exit_app() {
-  info!("Exit requested from frontend");
-  std::process::exit(0);
+    info!("Exit requested from frontend");
+    std::process::exit(0);
 }
-
 
 #[cfg(test)]
 mod tests {
