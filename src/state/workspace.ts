@@ -23,7 +23,7 @@ import {
   SidebarTab,
   PanelDefinition,
 } from './types';
-import { MAX_PANES, MAX_SCROLLBACK_LINES } from './types';
+import { MAX_PANES, MAX_SCROLLBACK_LINES, MIN_FONT_SIZE, MAX_FONT_SIZE } from './types';
 
 // ============================================================================
 // Extended Workspace with Pane Map
@@ -47,10 +47,15 @@ interface WorkspaceState {
   // Mock git state for badge reactivity
   gitStagedCount: number;
   gitChangesCount: number;
+  // Terminal font size
+  fontSize: number;
 
   createWorkspace: (name: string) => void;
   closeWorkspace: (workspaceId: string) => void;
   setActiveWorkspace: (workspaceId: string) => void;
+  createWorkspaceAfter: (workspaceId: string, name: string) => void;
+  moveWorkspaceUp: (workspaceId: string) => void;
+  moveWorkspaceDown: (workspaceId: string) => void;
 
   splitPane: (paneId: string, direction: SplitDirection) => void;
   closePane: (paneId: string) => void;
@@ -74,6 +79,11 @@ interface WorkspaceState {
 
   // Mock git actions for badge testing
   updateGitChanges: (staged: number, changes: number) => void;
+
+  // Terminal zoom actions
+  zoomIn: () => void;
+  zoomOut: () => void;
+  resetZoom: () => void;
 }
 
 // ============================================================================
@@ -303,6 +313,7 @@ const useWorkspaceStore = create<WorkspaceState>()(
         // Initialize mock git state
         gitStagedCount: 0,
         gitChangesCount: 0,
+        fontSize: 14,
 
         createWorkspace: (name: string) =>
           set((state) => {
@@ -344,6 +355,46 @@ const useWorkspaceStore = create<WorkspaceState>()(
               state.activeWorkspaceId = workspaceId;
               logger.info('[Workspace] Set active workspace', { workspaceId });
             }
+          }),
+
+        createWorkspaceAfter: (workspaceId: string, name: string) =>
+          set((state) => {
+            if (state.workspaces.length >= 8) return;
+            const index = state.workspaces.findIndex((ws) => ws.id === workspaceId);
+            if (index < 0) return;
+
+            const pane = createDefaultPane();
+            const leaf: LeafNode = { type: 'leaf', paneId: pane.id };
+            const newWorkspace: WorkspaceWithPanes = {
+              id: crypto.randomUUID(),
+              name,
+              root: leaf,
+              activePaneId: pane.id,
+              hasNotification: false,
+              panes: { [pane.id]: pane },
+            };
+            state.workspaces.splice(index + 1, 0, newWorkspace);
+            logger.info('[Workspace] Created workspace after', { afterId: workspaceId, newId: newWorkspace.id });
+          }),
+
+        moveWorkspaceUp: (workspaceId: string) =>
+          set((state) => {
+            const index = state.workspaces.findIndex((ws) => ws.id === workspaceId);
+            if (index <= 0) return;
+            [state.workspaces[index - 1], state.workspaces[index]] = [
+              state.workspaces[index],
+              state.workspaces[index - 1],
+            ];
+          }),
+
+        moveWorkspaceDown: (workspaceId: string) =>
+          set((state) => {
+            const index = state.workspaces.findIndex((ws) => ws.id === workspaceId);
+            if (index < 0 || index >= state.workspaces.length - 1) return;
+            [state.workspaces[index], state.workspaces[index + 1]] = [
+              state.workspaces[index + 1],
+              state.workspaces[index],
+            ];
           }),
 
         splitPane: (paneId: string, direction: SplitDirection) =>
@@ -455,8 +506,21 @@ const useWorkspaceStore = create<WorkspaceState>()(
               pane.activeTabId = lastTab ? lastTab.id : null;
             }
 
+            // If no tabs left, close the pane (unless it's the only pane)
             if (pane.tabs.length === 0) {
-              get().closePane(paneId);
+              // Only close if there's more than one pane in the workspace
+              if (Object.keys(workspace.panes).length > 1) {
+                delete workspace.panes[paneId];
+
+                const newRoot = closePaneInTreeRecursive(workspace.root, paneId);
+                if (newRoot) {
+                  workspace.root = newRoot;
+
+                  if (workspace.activePaneId === paneId) {
+                    workspace.activePaneId = findFirstPaneInTree(newRoot);
+                  }
+                }
+              }
             }
           });
           logger.info('[Tab] Closed tab', { paneId, tabId });
@@ -584,6 +648,21 @@ const useWorkspaceStore = create<WorkspaceState>()(
           set((state) => {
             state.gitStagedCount = staged;
             state.gitChangesCount = changes;
+          }),
+
+        zoomIn: () =>
+          set((state) => {
+            state.fontSize = Math.min(state.fontSize + 1, MAX_FONT_SIZE);
+          }),
+
+        zoomOut: () =>
+          set((state) => {
+            state.fontSize = Math.max(state.fontSize - 1, MIN_FONT_SIZE);
+          }),
+
+        resetZoom: () =>
+          set((state) => {
+            state.fontSize = 14;
           }),
       })),
       {

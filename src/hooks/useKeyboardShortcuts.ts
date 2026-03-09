@@ -59,6 +59,9 @@ export function useKeyboardShortcuts(): UseKeyboardShortcutsReturn {
     setActiveTab,
     toggleSidebar,
     setActiveSidebarTab,
+    zoomIn,
+    zoomOut,
+    resetZoom,
   } = useWorkspaceStore.getState();
 
   // Track focused pane for context-aware shortcuts
@@ -174,6 +177,27 @@ export function useKeyboardShortcuts(): UseKeyboardShortcutsReturn {
         jumpToFirstUnread();
         return;
       }
+
+      // ⌘= or ⌘⇧= (⌘+): Zoom in
+      if (isCtrl && (e.key === '=' || e.key === '+')) {
+        e.preventDefault();
+        zoomIn();
+        return;
+      }
+
+      // ⌘-: Zoom out
+      if (isCtrl && e.key === '-') {
+        e.preventDefault();
+        zoomOut();
+        return;
+      }
+
+      // ⌘0: Reset zoom
+      if (isCtrl && !isShift && e.key === '0') {
+        e.preventDefault();
+        resetZoom();
+        return;
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -190,6 +214,9 @@ export function useKeyboardShortcuts(): UseKeyboardShortcutsReturn {
     toggleSidebar,
     setActiveSidebarTab,
     jumpToFirstUnread,
+    zoomIn,
+    zoomOut,
+    resetZoom,
   ]);
 
   return { focusedPaneId, setFocusedPaneId };

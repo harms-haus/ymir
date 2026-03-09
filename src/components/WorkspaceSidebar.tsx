@@ -1,10 +1,12 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import useWorkspaceStore, {
   getTotalNotificationCount,
   getGitChangesCount,
 } from '../state/workspace';
 import { Workspace, PanelDefinition, SidebarTab } from '../state/types';
 import { TabHeaderPanel } from './TabHeaderPanel';
+
+import './TabBar.css';
 
 // ============================================================================
 // Workspace Item Component (for Workspaces panel content)
@@ -16,6 +18,7 @@ interface WorkspaceItemProps {
   index: number;
   collapsed: boolean;
   onClick: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
 }
 
 function WorkspaceItem({
@@ -24,6 +27,7 @@ function WorkspaceItem({
   index,
   collapsed,
   onClick,
+  onContextMenu,
 }: WorkspaceItemProps) {
   const shortcutNumber = index + 1;
 
@@ -31,7 +35,8 @@ function WorkspaceItem({
     return (
       <div
         onClick={onClick}
-        style={{
+        onContextMenu={onContextMenu}
+        style={{ 
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -94,6 +99,7 @@ function WorkspaceItem({
   return (
     <div
       onClick={onClick}
+      onContextMenu={onContextMenu}
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -104,8 +110,8 @@ function WorkspaceItem({
         borderLeft: workspace.hasNotification
           ? '3px solid #4fc3f7'
           : isActive
-            ? '2px solid #007acc'
-            : '2px solid transparent',
+          ? '2px solid #007acc'
+          : '2px solid transparent',
         transition: 'background-color 0.15s ease',
         fontSize: '13px',
         color: isActive ? '#ffffff' : '#cccccc',
@@ -193,15 +199,91 @@ interface WorkspaceListProps {
 }
 
 function WorkspaceList({ collapsed }: WorkspaceListProps) {
-  const { workspaces, activeWorkspaceId, setActiveWorkspace, createWorkspace } =
-    useWorkspaceStore();
+  const {
+    workspaces,
+    activeWorkspaceId,
+    setActiveWorkspace,
+    createWorkspace,
+    createWorkspaceAfter,
+    moveWorkspaceUp,
+    moveWorkspaceDown,
+    closeWorkspace,
+  } = useWorkspaceStore();
 
   const visibleWorkspaces = workspaces.slice(0, 8);
+
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    workspaceId: string;
+    index: number;
+  } | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close context menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        contextMenu &&
+        !contextMenuRef.current?.contains(e.target as Node)
+      ) {
+        setContextMenu(null);
+      }
+    };
+
+    if (contextMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      if (contextMenu) {
+        document.removeEventListener('mousedown', handleClickOutside);
+      }
+    };
+  }, [contextMenu]);
 
   const handleCreateWorkspace = () => {
     const nextNumber = workspaces.length + 1;
     createWorkspace(`Workspace ${nextNumber}`);
   };
+
+  const handleContextMenu = (e: React.MouseEvent, workspaceId: string, index: number) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, workspaceId, index });
+  };
+
+  const handleNewWorkspaceBelow = () => {
+    if (contextMenu) {
+      const nextNumber = workspaces.length + 1;
+      createWorkspaceAfter(contextMenu.workspaceId, `Workspace ${nextNumber}`);
+      setContextMenu(null);
+    }
+  };
+
+  const handleMoveUp = () => {
+    if (contextMenu && contextMenu.index > 0) {
+      moveWorkspaceUp(contextMenu.workspaceId);
+      setContextMenu(null);
+    }
+  };
+
+  const handleMoveDown = () => {
+    if (contextMenu && contextMenu.index < workspaces.length - 1) {
+      moveWorkspaceDown(contextMenu.workspaceId);
+      setContextMenu(null);
+    }
+  };
+
+  const handleCloseWorkspace = () => {
+    if (contextMenu && workspaces.length > 1) {
+      closeWorkspace(contextMenu.workspaceId);
+      setContextMenu(null);
+    }
+  };
+
+  const isFirst = contextMenu ? contextMenu.index === 0 : false;
+  const isLast = contextMenu ? contextMenu.index === workspaces.length - 1 : false;
+  const isOnly = workspaces.length === 1;
 
   return (
     <div
@@ -239,6 +321,7 @@ function WorkspaceList({ collapsed }: WorkspaceListProps) {
               index={index}
               collapsed={collapsed}
               onClick={() => setActiveWorkspace(workspace.id)}
+              onContextMenu={(e) => handleContextMenu(e, workspace.id, index)}
             />
           ))
         )}
@@ -254,6 +337,7 @@ function WorkspaceList({ collapsed }: WorkspaceListProps) {
           }}
         >
           <button
+            type="button"
             onClick={handleCreateWorkspace}
             disabled={workspaces.length >= 8}
             style={{
@@ -290,6 +374,50 @@ function WorkspaceList({ collapsed }: WorkspaceListProps) {
             <span>New</span>
           </button>
         </div>
+      )}
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <>
+          <div
+            className="context-menu-backdrop"
+            onClick={() => setContextMenu(null)}
+          />
+          <div
+            ref={contextMenuRef}
+            className="context-menu"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+          >
+            <div
+              className="context-menu-item"
+              onClick={handleNewWorkspaceBelow}
+            >
+              New Workspace Below
+            </div>
+            <div
+              className={`context-menu-item ${isFirst ? 'disabled' : ''}`}
+              onClick={handleMoveUp}
+              style={{ opacity: isFirst ? 0.4 : 1, cursor: isFirst ? 'not-allowed' : 'pointer' }}
+            >
+              Move Up
+            </div>
+            <div
+              className={`context-menu-item ${isLast ? 'disabled' : ''}`}
+              onClick={handleMoveDown}
+              style={{ opacity: isLast ? 0.4 : 1, cursor: isLast ? 'not-allowed' : 'pointer' }}
+            >
+              Move Down
+            </div>
+            <div className="context-menu-separator" />
+            <div
+              className={`context-menu-item context-menu-item-danger ${isOnly ? 'disabled' : ''}`}
+              onClick={handleCloseWorkspace}
+              style={{ opacity: isOnly ? 0.4 : 1, cursor: isOnly ? 'not-allowed' : 'pointer' }}
+            >
+              Close Workspace
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

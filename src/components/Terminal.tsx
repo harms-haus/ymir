@@ -21,6 +21,8 @@ interface TerminalProps {
 export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotification }: TerminalProps) {
   const [isReady, setIsReady] = useState(false);
 
+  const fontSize = useWorkspaceStore((state) => state.fontSize);
+
   const currentSessionIdRef = useRef<string | null>(null);
   const channelRef = useRef<Channel<{ event: string; data?: unknown }> | null>(null);
   const isConnectingRef = useRef(false);
@@ -38,9 +40,9 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
   const options = useMemo(() => ({
     ...terminalTheme,
     cursorBlink: true,
-    fontSize: 14,
+    fontSize,
     fontFamily: '"JetBrains Mono", "NerdFontSymbols", "monospace"',
-  }), []);
+  }), [fontSize]);
 
   // Memoize addons array to prevent infinite re-renders
   const addons = useMemo(() => [
@@ -173,6 +175,25 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
       correlationId,
     });
   }, [isReady, instance]);
+
+  // Handle ctrl+scroll zoom
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const { zoomIn, zoomOut } = useWorkspaceStore.getState();
+        if (e.deltaY < 0) {
+          zoomIn();
+        } else if (e.deltaY > 0) {
+          zoomOut();
+        }
+      }
+    };
+
+    const terminalElement = ref.current;
+    terminalElement?.addEventListener('wheel', handleWheel, { passive: false });
+    return () => terminalElement?.removeEventListener('wheel', handleWheel);
+  }, [ref]);
 
   return (
     <ErrorBoundary>

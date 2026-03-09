@@ -8,6 +8,12 @@
 /** Maximum number of panes allowed across all workspaces */
 export const MAX_PANES = 20;
 
+/** Minimum font size for terminal */
+export const MIN_FONT_SIZE = 8;
+
+/** Maximum font size for terminal */
+export const MAX_FONT_SIZE = 32;
+
 /** Maximum scrollback lines per tab (for persistence) */
 export const MAX_SCROLLBACK_LINES = 1000;
 
