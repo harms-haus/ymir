@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useXTerm } from 'react-xtermjs';
 import { FitAddon } from '@xterm/addon-fit';
+import { WebLinksAddon } from '@xterm/addon-web-links';
+import { SearchAddon } from '@xterm/addon-search';
 import { invoke, Channel } from '@tauri-apps/api/core';
 import { sendNotification } from '@tauri-apps/plugin-notification';
 import useWorkspaceStore from '../state/workspace';
@@ -37,7 +39,7 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
       fontSize: 14,
       fontFamily: '"JetBrains Mono", "NerdFontSymbols", "monospace"',
     },
-    addons: [fitAddon],
+    addons: [fitAddon, new WebLinksAddon(), new SearchAddon()],
     listeners: {
       onData: (data) => {
         if (currentSessionIdRef.current) {
