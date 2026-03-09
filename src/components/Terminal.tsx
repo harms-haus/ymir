@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useXTerm } from 'react-xtermjs';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -34,21 +34,37 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
   const webLinksAddon = useMemo(() => new WebLinksAddon(), []);
   const searchAddon = useMemo(() => new SearchAddon(), []);
 
+  // Memoize options to prevent infinite re-renders
+  const options = useMemo(() => ({
+    ...terminalTheme,
+    cursorBlink: true,
+    fontSize: 14,
+    fontFamily: '"JetBrains Mono", "NerdFontSymbols", "monospace"',
+  }), []);
+
+  // Memoize addons array to prevent infinite re-renders
+  const addons = useMemo(() => [
+    fitAddon,
+    webLinksAddon,
+    searchAddon
+  ], [fitAddon, webLinksAddon, searchAddon]);
+
+  // Memoize onData callback to prevent infinite re-renders
+  const onData = useCallback((data: string) => {
+    if (currentSessionIdRef.current) {
+      invoke('write_pty', { sessionId: currentSessionIdRef.current, data });
+    }
+  }, []);
+
+  // Memoize listeners object to prevent infinite re-renders
+  const listeners = useMemo(() => ({
+    onData,
+  }), [onData]);
+
   const { ref, instance } = useXTerm({
-    options: {
-      ...terminalTheme,
-      cursorBlink: true,
-      fontSize: 14,
-      fontFamily: '"JetBrains Mono", "NerdFontSymbols", "monospace"',
-    },
-    addons: [fitAddon, webLinksAddon, searchAddon],
-    listeners: {
-      onData: (data) => {
-        if (currentSessionIdRef.current) {
-          invoke('write_pty', { sessionId: currentSessionIdRef.current, data });
-        }
-      },
-    },
+    options,
+    addons,
+    listeners,
   });
 
   useEffect(() => {
