@@ -38,7 +38,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust
-        uses: dtolnay/rust-tool@stable
+        uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
 
@@ -73,7 +73,7 @@ jobs:
           cache: 'npm'
 
       - name: Install Rust
-        uses: dtolnay/rust-tool@stable
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Install system dependencies
         run: |
