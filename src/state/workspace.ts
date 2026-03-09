@@ -350,7 +350,12 @@ const useWorkspaceStore = create<WorkspaceState>()(
           set((state) => {
             const currentPaneCount = countPanes(state.workspaces);
             if (currentPaneCount >= MAX_PANES) {
+              console.warn('Maximum 20 panes reached. Cannot create more panes.');
               return;
+            }
+
+            if (currentPaneCount >= 15) {
+              console.warn(`Warning: ${currentPaneCount} panes in use. Approaching maximum of 20 panes.`);
             }
 
             const { axis, splitIndex } = getSplitAxisAndIndex(direction);
