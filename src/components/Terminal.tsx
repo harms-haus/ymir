@@ -31,6 +31,8 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
   }, [onNotification]);
 
   const fitAddon = useMemo(() => new FitAddon(), []);
+  const webLinksAddon = useMemo(() => new WebLinksAddon(), []);
+  const searchAddon = useMemo(() => new SearchAddon(), []);
 
   const { ref, instance } = useXTerm({
     options: {
@@ -39,7 +41,7 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
       fontSize: 14,
       fontFamily: '"JetBrains Mono", "NerdFontSymbols", "monospace"',
     },
-    addons: [fitAddon, new WebLinksAddon(), new SearchAddon()],
+    addons: [fitAddon, webLinksAddon, searchAddon],
     listeners: {
       onData: (data) => {
         if (currentSessionIdRef.current) {
