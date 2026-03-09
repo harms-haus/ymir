@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "test:close": "vitest run src/tests/window-close.test.ts",
     "tauri": "./scripts/tauri-dev.sh",
     "tauri:dev": "./scripts/tauri-dev.sh dev",
@@ -43,6 +44,7 @@
     "jsdom": "^28.1.0",
     "typescript": "^5.0.0",
     "vite": "^5.0.0",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "@vitest/coverage-v8": "^4.0.18"
   }
 }

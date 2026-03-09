@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { WorkspaceSidebar } from './WorkspaceSidebar';
+import { ResizableSidebar } from './ResizableSidebar';
 import { SplitPane } from './SplitPane';
 import useWorkspaceStore, { activeWorkspace } from '../state/workspace';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -41,7 +41,7 @@ export function Layout() {
       }}
     >
       {/* Workspace Sidebar */}
-      <WorkspaceSidebar />
+      <ResizableSidebar />
 
       {/* Main Content Area */}
       <div

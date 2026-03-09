@@ -741,14 +741,11 @@ export function WorkspaceSidebar() {
   return (
     <div
       style={{
-        width: sidebarCollapsed ? '50px' : '250px',
-        minWidth: sidebarCollapsed ? '50px' : '250px',
+        width: sidebarCollapsed ? '50px' : '100%',
         height: '100%',
         backgroundColor: '#1e1e1e',
-        borderRight: '1px solid #333',
         display: 'flex',
         flexDirection: 'column',
-        transition: 'width 0.2s ease, min-width 0.2s ease',
         overflow: 'hidden',
       }}
     >

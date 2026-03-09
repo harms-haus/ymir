@@ -38,5 +38,25 @@ export default defineConfig(async () => ({
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/components/__tests__/setup.ts',
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      thresholds: {
+        lines: 80,
+        functions: 80,
+        branches: 75,
+        statements: 80,
+      },
+      perFile: false,
+      exclude: [
+        'node_modules/**',
+        'src/**/*.d.ts',
+        'src/**/*.config.ts',
+        'src-tauri/**',
+        'src/**/__tests__/**',
+        'src/**/*.test.ts',
+        'src/**/*.test.tsx',
+      ],
+    },
   },
 }));
