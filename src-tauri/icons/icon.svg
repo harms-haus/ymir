@@ -2,14 +2,14 @@
 <!-- Created with Inkscape (http://www.inkscape.org/) -->
 
 <svg
-   width="210mm"
-   height="297mm"
-   viewBox="0 0 210 297"
+   width="264.80392mm"
+   height="264.80399mm"
+   viewBox="0 0 264.80392 264.80399"
    version="1.1"
    id="svg1"
    xml:space="preserve"
    inkscape:version="1.4.3 (0d15f75042, 2025-12-25)"
-   sodipodi:docname="ymir_icon.svg"
+   sodipodi:docname="icon.svg"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns="http://www.w3.org/2000/svg"
@@ -24,8 +24,8 @@
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="mm"
      inkscape:zoom="0.73638604"
-     inkscape:cx="276.34962"
-     inkscape:cy="633.49924"
+     inkscape:cx="374.12442"
+     inkscape:cy="564.24209"
      inkscape:window-width="2560"
      inkscape:window-height="1378"
      inkscape:window-x="0"
@@ -35,7 +35,8 @@
      id="defs1" /><g
      inkscape:label="Layer 1"
      inkscape:groupmode="layer"
-     id="layer1"><rect
+     id="layer1"
+     transform="translate(25.869583,-18.231258)"><rect
        style="fill:#000000;fill-opacity:1;stroke:none;stroke-width:5.53055;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1"
        id="rect21"
        width="264.80392"
