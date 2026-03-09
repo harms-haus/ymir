@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
-import { Terminal as XTerm } from '@xterm/xterm';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useXTerm } from 'react-xtermjs';
 import { FitAddon } from '@xterm/addon-fit';
 import { invoke, Channel } from '@tauri-apps/api/core';
 import { sendNotification } from '@tauri-apps/plugin-notification';
-import '@xterm/xterm/css/xterm.css';
 import useWorkspaceStore from '../state/workspace';
 import { ErrorBoundary } from './ErrorBoundary';
 import logger from '../lib/logger';
@@ -17,96 +16,41 @@ interface TerminalProps {
   hasNotification?: boolean;
 }
 
-// Cache xterm instances per tab - they persist across tab switches
-const xtermCache = new Map<string, { term: XTerm; fitAddon: FitAddon }>();
-
 export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotification }: TerminalProps) {
-  const terminalRef = useRef<HTMLDivElement>(null);
   const [isReady, setIsReady] = useState(false);
 
-  const cacheKey = `${paneId}-${tabId}`;
   const currentSessionIdRef = useRef<string | null>(null);
-  const channelRef = useRef<Channel<any> | null>(null);
+  const channelRef = useRef<Channel<{ event: string; data?: unknown }> | null>(null);
   const isConnectingRef = useRef(false);
-  const dataHandlerRef = useRef<{ dispose: () => void } | null>(null);
-  // Store onNotification in a ref to avoid effect re-runs when parent re-renders
   const onNotificationRef = useRef<((message: string) => void) | undefined>(onNotification);
 
-  // Keep the ref updated with the latest callback
   useEffect(() => {
     onNotificationRef.current = onNotification;
   }, [onNotification]);
 
-  // Initialize xterm - once per tab, persists across switches
+  const fitAddon = useMemo(() => new FitAddon(), []);
+
+  const { ref, instance } = useXTerm({
+    options: {
+      ...terminalTheme,
+      cursorBlink: true,
+      fontSize: 14,
+      fontFamily: '"JetBrains Mono", "NerdFontSymbols", "monospace"',
+    },
+    addons: [fitAddon],
+    listeners: {
+      onData: (data) => {
+        if (currentSessionIdRef.current) {
+          invoke('write_pty', { sessionId: currentSessionIdRef.current, data });
+        }
+      },
+    },
+  });
+
   useEffect(() => {
-    if (!terminalRef.current) return;
+    if (!instance) return;
 
-    const cached = xtermCache.get(cacheKey);
-    let term: XTerm;
-    let fitAddon: FitAddon;
-    let resizeObserver: ResizeObserver;
-
-    if (cached) {
-      // Tab was switched away and back - restore from cache
-      term = cached.term;
-      fitAddon = cached.fitAddon;
-
-      // xterm element exists but was removed from DOM by React
-      // We need to re-attach it
-      if (term.element && !term.element.parentElement) {
-        terminalRef.current.appendChild(term.element);
-        fitAddon.fit();
-        term.refresh(0, term.rows - 1);
-      }
-
-      // Re-attach handlers
-      dataHandlerRef.current = term.onData((data) => {
-        if (currentSessionIdRef.current) {
-          invoke('write_pty', { sessionId: currentSessionIdRef.current, data });
-        }
-      });
-
-      resizeObserver = new ResizeObserver(() => {
-        fitAddon.fit();
-      });
-      resizeObserver.observe(terminalRef.current);
-
-      setIsReady(true);
-    } else {
-      // New tab - create fresh xterm
-      term = new XTerm({
-        cursorBlink: true,
-        fontSize: 14,
-        fontFamily: '"JetBrains Mono", "NerdFontSymbols", "monospace"',
-        theme: terminalTheme,
-      });
-
-      fitAddon = new FitAddon();
-      term.loadAddon(fitAddon);
-      term.open(terminalRef.current);
-      fitAddon.fit();
-
-      // Cache it for tab switches
-      xtermCache.set(cacheKey, { term, fitAddon });
-
-      // Set up keystroke handler
-      dataHandlerRef.current = term.onData((data) => {
-        if (currentSessionIdRef.current) {
-          invoke('write_pty', { sessionId: currentSessionIdRef.current, data });
-        }
-      });
-
-      // Set up resize observer
-      resizeObserver = new ResizeObserver(() => {
-        fitAddon.fit();
-      });
-      resizeObserver.observe(terminalRef.current);
-
-      // Connect to PTY
-      connectToPty(sessionId, term);
-    }
-
-    async function connectToPty(sid: string | undefined, term: XTerm) {
+    async function connectToPty(sid: string | undefined, term: NonNullable<typeof instance>) {
       if (isConnectingRef.current) return;
       if (currentSessionIdRef.current) {
         setIsReady(true);
@@ -116,22 +60,23 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
       isConnectingRef.current = true;
       const correlationId = crypto.randomUUID();
 
-      const channel = new Channel<any>();
+      const channel = new Channel<{ event: string; data?: unknown }>();
       channelRef.current = channel;
 
       channel.onmessage = (message) => {
         if (!message || typeof message !== 'object') return;
 
         switch (message.event) {
-          case 'output':
-            const outputData = message.data?.data ?? message.data;
+          case 'output': {
+            const outputData = (message.data as { data?: string })?.data ?? message.data;
             if (outputData !== undefined && outputData !== null) {
               const outputStr = typeof outputData === 'string' ? outputData : String(outputData);
               term.write(outputStr);
             }
             break;
-          case 'notification':
-            const notifMessage = message.data?.message ?? message.data;
+          }
+          case 'notification': {
+            const notifMessage = (message.data as { message?: string })?.message ?? message.data;
             if (notifMessage !== undefined && notifMessage !== null) {
               const messageStr = typeof notifMessage === 'string' ? notifMessage : String(notifMessage);
               onNotificationRef.current?.(messageStr);
@@ -142,6 +87,7 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
               }
             }
             break;
+          }
           case 'exit':
             term.write('\r\n[Process exited]\r\n');
             break;
@@ -176,22 +122,28 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
       }
     }
 
+    connectToPty(sessionId, instance);
+  }, [instance, paneId, tabId, sessionId]);
+
+  // Handle resize with ResizeObserver
+  useEffect(() => {
+    if (!ref.current || !fitAddon) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      fitAddon.fit();
+    });
+    resizeObserver.observe(ref.current);
+
     return () => {
-      resizeObserver?.disconnect();
-      dataHandlerRef.current?.dispose();
-      dataHandlerRef.current = null;
-      // DON'T remove element or dispose - keep in cache for tab switch
+      resizeObserver.disconnect();
     };
-  }, [cacheKey, paneId, tabId, sessionId]); // Note: onNotification removed - handled via ref
+  }, [fitAddon, ref]);
 
   // Handle PTY resize
   useEffect(() => {
-    if (!isReady || !currentSessionIdRef.current) return;
+    if (!isReady || !currentSessionIdRef.current || !instance) return;
 
-    const cached = xtermCache.get(cacheKey);
-    if (!cached) return;
-
-    const { cols, rows } = cached.term;
+    const { cols, rows } = instance;
     const correlationId = crypto.randomUUID();
 
     invoke('resize_pty', {
@@ -200,12 +152,12 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
       rows,
       correlationId,
     });
-  }, [isReady, cacheKey]);
+  }, [isReady, instance]);
 
   return (
     <ErrorBoundary>
       <div
-        ref={terminalRef}
+        ref={ref as React.RefObject<HTMLDivElement>}
         style={{
           width: '100%',
           height: '100%',
