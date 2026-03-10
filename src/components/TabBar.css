@@ -255,6 +255,27 @@
   color: #ffffff;
 }
 
+/* Browser tab button */
+.tab-bar-browser-button {
+  background: none;
+  border: none;
+  border-left: 1px solid #1e1e1e;
+  color: #cccccc;
+  cursor: pointer;
+  width: 32px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.tab-bar-browser-button:hover {
+  background-color: #3c3c3c;
+  color: #ffffff;
+}
+
 /* Empty state */
 .tab-bar-empty {
   flex: 1;

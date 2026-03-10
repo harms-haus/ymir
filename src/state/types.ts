@@ -48,10 +48,13 @@ export interface ScrollbackLine {
 // Tab Types
 // ============================================================================
 
-/** Terminal tab with scrollback and notification state */
+export type TabType = 'terminal' | 'browser';
+
 export interface Tab {
   /** Unique identifier for this tab */
   id: string;
+  /** Tab type discriminator */
+  type: TabType;
   /** Display title (usually shell name or cwd basename) */
   title: string;
   /** Current working directory */
@@ -68,6 +71,12 @@ export interface Tab {
   notificationText?: string;
   /** Terminal scrollback history (circular buffer) */
   scrollback: ScrollbackLine[];
+  /** Browser URL (only for browser tabs) */
+  url?: string;
+  /** Navigation history (only for browser tabs) */
+  history?: string[];
+  /** Current position in history (only for browser tabs) */
+  historyIndex?: number;
 }
 
 // ============================================================================
