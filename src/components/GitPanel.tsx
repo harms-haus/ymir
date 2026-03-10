@@ -143,15 +143,23 @@ const StatusBadge: React.FC<{ status: GitFile['status'] }> = ({ status }) => {
 };
 
 // File item with checkbox for staging/unstaging
-const FileItem: React.FC<{ 
-  file: GitFile; 
+const FileItem: React.FC<{
+  file: GitFile;
   showCheckbox?: boolean;
   expanded?: boolean;
   onToggleExpand?: () => void;
   onCheckboxChange?: () => void;
-}> = ({ file, showCheckbox = true, expanded = false, onToggleExpand, onCheckboxChange }) => {
+  onDiscard?: () => void;
+}> = ({ file, showCheckbox = true, expanded = false, onToggleExpand, onCheckboxChange, onDiscard }) => {
   const fileName = file.path.split('/').pop() || file.path;
   const dirPath = file.path.includes('/') ? file.path.substring(0, file.path.lastIndexOf('/')) : '';
+
+  const handleDiscard = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (window.confirm(`Discard changes to ${fileName}?`)) {
+      onDiscard?.();
+    }
+  };
 
   return (
     <div className="git-item-wrapper">
@@ -175,14 +183,35 @@ const FileItem: React.FC<{
           {dirPath && <span className="git-file-path">{dirPath}</span>}
         </div>
         <StatusBadge status={file.status} />
+        {!file.staged && onDiscard && (
+          <button
+            className="git-discard-button"
+            onClick={handleDiscard}
+            title="Discard changes"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+          </button>
+        )}
         {onToggleExpand && (
-          <svg 
-            className={`git-expand-icon ${expanded ? 'expanded' : ''}`} 
-            width="12" 
-            height="12" 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            stroke="currentColor" 
+          <svg
+            className={`git-expand-icon ${expanded ? 'expanded' : ''}`}
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
             strokeWidth="2"
           >
             <path d="M9 18l6-6-6-6" />
@@ -267,7 +296,8 @@ const StagedFilesSection: React.FC<{
 const ChangesFilesSection: React.FC<{
   files: GitFile[];
   onStage: (path: string) => Promise<void>;
-}> = ({ files, onStage }) => {
+  onDiscard?: (path: string) => Promise<void>;
+}> = ({ files, onStage, onDiscard }) => {
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -311,6 +341,7 @@ const ChangesFilesSection: React.FC<{
                   expanded={expandedFiles.has(file.path)}
                   onToggleExpand={() => toggleExpand(file.path)}
                   onCheckboxChange={() => onStage(file.path)}
+                  onDiscard={onDiscard ? () => onDiscard(file.path) : undefined}
                 />
               ))}
             </div>
@@ -475,11 +506,22 @@ const GitPanelFull = (): React.ReactNode => {
 
     try {
       await gitService.commit(activeRepo.path, message);
-      // Refresh git status after commit
       const updatedRepo = await gitService.getGitStatus(activeRepo.path);
       useWorkspaceStore.getState().setGitRepo(activeRepo.path, updatedRepo);
     } catch (error) {
       console.error('Commit failed:', error);
+    }
+  };
+
+  const handleDiscard = async (path: string) => {
+    if (!activeRepo) return;
+
+    try {
+      await gitService.discardChanges(activeRepo.path, path);
+      const updatedRepo = await gitService.getGitStatus(activeRepo.path);
+      useWorkspaceStore.getState().setGitRepo(activeRepo.path, updatedRepo);
+    } catch (error) {
+      console.error('Discard failed:', error);
     }
   };
 
@@ -506,7 +548,7 @@ const GitPanelFull = (): React.ReactNode => {
       <StagedFilesSection files={activeRepo?.staged || []} onUnstage={handleUnstage} />
 
       {/* Changes files */}
-      <ChangesFilesSection files={activeRepo?.unstaged || []} onStage={handleStage} />
+      <ChangesFilesSection files={activeRepo?.unstaged || []} onStage={handleStage} onDiscard={handleDiscard} />
     </div>
   );
 };

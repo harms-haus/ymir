@@ -533,8 +533,41 @@
 
 /* File item wrapper for expand/collapse */
 .git-item-wrapper {
+  position: relative;
   display: flex;
   flex-direction: column;
+}
+
+.git-discard-button {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background-color: #3c3c3c;
+  border: none;
+  border-radius: 4px;
+  color: #cccccc;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease, background-color 0.15s ease;
+}
+
+.git-item-wrapper:hover .git-discard-button {
+  opacity: 1;
+}
+
+.git-discard-button:hover {
+  background-color: #4caf50;
+}
+
+.git-discard-button svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* File details (expanded view) */
