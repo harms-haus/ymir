@@ -5,6 +5,9 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "core:webview:default",
+    "core:webview:allow-webview-close",
+    "core:webview:allow-create-webview",
     "shell:allow-execute",
     "shell:allow-spawn",
     "notification:default",

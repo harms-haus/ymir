@@ -56,16 +56,26 @@ export function Browser({ tabId, url, paneId }: BrowserProps) {
     setTimeout(() => setIsLoading(false), 500);
   }, [tabId, paneId, currentUrl]);
 
+  const normalizeUrl = useCallback((url: string): string => {
+    if (!url) return 'about:blank';
+    if (url === 'about:blank') return url;
+    if (!/^https?:\/\//i.test(url)) {
+      return `https://${url}`;
+    }
+    return url;
+  }, []);
+
   const handleNavigate = useCallback((url: string) => {
-    if (url && url !== currentUrl) {
-      setHistory([...history, url]);
+    const normalizedUrl = normalizeUrl(url);
+    if (normalizedUrl && normalizedUrl !== currentUrl) {
+      setHistory([...history, normalizedUrl]);
       setHistoryIndex(history.length);
-      setCurrentUrl(url);
+      setCurrentUrl(normalizedUrl);
       setCanGoBack(true);
       setCanGoForward(false);
-      logger.debug('Browser navigation', { tabId, paneId, url });
+      logger.debug('Browser navigation', { tabId, paneId, url: normalizedUrl });
     }
-  }, [tabId, paneId, currentUrl, history]);
+  }, [tabId, paneId, currentUrl, history, normalizeUrl]);
 
   const handleOpenDevTools = useCallback(() => {
     logger.debug('DevTools requested', { tabId });
@@ -77,13 +87,13 @@ export function Browser({ tabId, url, paneId }: BrowserProps) {
     
     let mounted = true;
 
-    async function createWebview() {
+    async function createWebview(webviewUrl: string) {
       try {
         const appWindow = getCurrentWindow();
         const webviewLabel = `browser-${tabId}`;
         
         const webview = new Webview(appWindow, webviewLabel, {
-          url: url || 'about:blank',
+          url: webviewUrl,
           x: 0,
           y: 0,
           width: containerRef.current?.clientWidth || 800,
@@ -92,7 +102,7 @@ export function Browser({ tabId, url, paneId }: BrowserProps) {
 
         if (!mounted) {
           webview.close();
-          return;
+          return null;
         }
 
         webviewRef.current = webview;
@@ -137,17 +147,18 @@ export function Browser({ tabId, url, paneId }: BrowserProps) {
         });
         unlistenersRef.current.push(unlistenLoadEnd);
 
+        return webview;
       } catch (error) {
         logger.error('Failed to create webview', { tabId, error });
+        return null;
       }
     }
 
-    createWebview();
+    createWebview(url);
+
     return () => {
       mounted = false;
       logger.debug('Browser component unmounting, cleaning up webview', { tabId, paneId });
-      
-      unlistenersRef.current = [];
       
       unlistenersRef.current.forEach(unlisten => {
         try {
@@ -156,17 +167,8 @@ export function Browser({ tabId, url, paneId }: BrowserProps) {
           logger.warn('Error during event listener cleanup', { tabId, error });
         }
       });
-      
-      if (webviewRef.current) {
-        try {
-          webviewRef.current.close();
-          webviewRef.current = null;
-        } catch (error) {
-          logger.warn('Error closing webview', { tabId, error });
-        }
-      }
       unlistenersRef.current = [];
-
+      
       if (webviewRef.current) {
         try {
           webviewRef.current.close();
@@ -178,40 +180,109 @@ export function Browser({ tabId, url, paneId }: BrowserProps) {
     };
   }, [tabId, paneId, url]);
 
+  useEffect(() => {
+    if (!webviewRef.current || !currentUrl || currentUrl === url) {
+      return;
+    }
+    
+    let cancelled = false;
+
+    async function navigate() {
+      const existingWebview = webviewRef.current;
+      if (!existingWebview) return;
+
+      try {
+        unlistenersRef.current.forEach(unlisten => {
+          try {
+            unlisten();
+          } catch {}
+        });
+        unlistenersRef.current = [];
+
+        existingWebview.close();
+        if (cancelled) return;
+        webviewRef.current = null;
+
+        const appWindow = getCurrentWindow();
+        const webviewLabel = `browser-${tabId}`;
+
+        const newWebview = new Webview(appWindow, webviewLabel, {
+          url: currentUrl,
+          x: 0,
+          y: 0,
+          width: containerRef.current?.clientWidth || 800,
+          height: containerRef.current?.clientHeight || 600,
+        });
+
+        if (cancelled) {
+          newWebview.close();
+          return;
+        }
+
+        webviewRef.current = newWebview;
+
+        newWebview.once('tauri://created', () => {
+          logger.debug('Webview recreated for navigation', { tabId, url: currentUrl });
+        });
+
+        const unlistenLoadStart = await newWebview.listen('tauri://load-start', () => {
+          setIsLoading(true);
+        });
+        unlistenersRef.current.push(unlistenLoadStart);
+
+        const unlistenLoadEnd = await newWebview.listen('tauri://load-end', () => {
+          setIsLoading(false);
+        });
+        unlistenersRef.current.push(unlistenLoadEnd);
+      } catch (error) {
+        logger.error('Failed to recreate webview for navigation', { tabId, error });
+      }
+    }
+
+    navigate();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUrl, tabId, url]);
+
   return (
     <ErrorBoundary>
         <div ref={containerRef} className="browser-container">
         <div className="browser-nav-bar">
           <button
+            type="button"
             className="browser-nav-button"
             onClick={() => handleBack()}
             disabled={!canGoBack}
             title="Back"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M15 19l-9-5 5 5" />
+              <polyline points="15 18 9 12 15 6" />
             </svg>
           </button>
           
           <button
+            type="button"
             className="browser-nav-button"
             onClick={() => handleForward()}
             disabled={!canGoForward}
             title="Forward"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 5l14 5 5" />
+              <polyline points="9 18 15 12 9 6" />
             </svg>
           </button>
           
           <button
+            type="button"
             className="browser-nav-button"
             onClick={handleReload}
             disabled={isLoading}
             title={isLoading ? "Stop" : "Refresh"}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d={isLoading ? "M6 19L12 12" : "M4 4v19 12"} />
+              <path d="M21 12a9 9 0 11-2.636-6.364" />
+              <path d="M21 3v6h-6" />
             </svg>
           </button>
           
@@ -225,13 +296,14 @@ export function Browser({ tabId, url, paneId }: BrowserProps) {
           />
           
           <button
+            type="button"
             className="browser-nav-button"
             onClick={handleOpenDevTools}
             title="Open DevTools"
-            type="button"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 6a2 2v2 4" />
+              <polyline points="16 18 22 12 16 6" />
+              <polyline points="8 6 2 12 8 18" />
             </svg>
           </button>
         </div>
