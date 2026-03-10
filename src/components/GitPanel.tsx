@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PanelDefinition, GitFile } from '../state/types';
-import useWorkspaceStore, { getActiveRepo, getGitChangesCount } from '../state/workspace';
+import useWorkspaceStore, { getActiveRepo, getGitChangesCount, getGitError } from '../state/workspace';
 import gitService from '../lib/git-service';
 import './GitPanel.css';
 
@@ -14,7 +14,7 @@ const mockGitData = {
 };
 
 // Git branch SVG icon
-const GitBranchIcon: React.FC = () => (
+const GitBranchIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg
     width="16"
     height="16"
@@ -24,6 +24,7 @@ const GitBranchIcon: React.FC = () => (
     strokeWidth="2"
     strokeLinecap="round"
     strokeLinejoin="round"
+    className={className}
   >
     <line x1="6" y1="3" x2="6" y2="15" />
     <circle cx="18" cy="6" r="3" />
@@ -31,6 +32,33 @@ const GitBranchIcon: React.FC = () => (
     <path d="M18 9a9 9 0 0 1-9 9" />
   </svg>
 );
+
+// Not a git repository empty state component
+const NotAGitRepo: React.FC = () => {
+  const handleInitialize = () => {
+    // Placeholder for v1 - no functionality yet
+    console.log('Initialize Repository clicked - not implemented in v1');
+  };
+
+  return (
+    <div className="git-empty-state-container">
+      <div className="git-empty-state-icon-wrapper">
+        <GitBranchIcon className="git-empty-state-branch-icon" />
+        <div className="git-empty-state-slash" />
+      </div>
+      <div className="git-empty-state-message">
+        This workspace is not a git repository
+      </div>
+      <button
+        className="git-empty-state-button"
+        onClick={handleInitialize}
+        title="Initialize Repository (coming soon)"
+      >
+        Initialize Repository
+      </button>
+    </div>
+  );
+};
 
 
 
@@ -579,6 +607,7 @@ const GitPanelBadge = (): import('../state/types').TabBadge | null => {
 // Full panel renderer
 const GitPanelFull = (): React.ReactNode => {
   const activeRepo = getActiveRepo();
+  const gitError = getGitError();
   const { discoverAndRegisterRepos, updateGitFile } = useWorkspaceStore();
 
   const [createBranch, setCreateBranch] = useState(false);
@@ -588,6 +617,16 @@ const GitPanelFull = (): React.ReactNode => {
   useEffect(() => {
     discoverAndRegisterRepos('/home/blake/Documents/software/ymir');
   }, [discoverAndRegisterRepos]);
+
+  // Show empty state when no active repo or git error exists
+  if (!activeRepo || gitError) {
+    return (
+      <div className="git-panel">
+        <GitPanelHeader />
+        <NotAGitRepo />
+      </div>
+    );
+  }
 
   // Handle staging a file
   const handleStage = async (path: string) => {
