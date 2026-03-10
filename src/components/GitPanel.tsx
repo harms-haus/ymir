@@ -368,6 +368,46 @@ const CommitSection: React.FC<{
     </div>
   );
 };
+const GitPanelHeader: React.FC = () => {
+  const handleRefresh = () => {
+    console.log('Refresh git status');
+  };
+
+  const handleMoreActions = () => {
+    console.log('Open more actions menu');
+  };
+
+  return (
+    <div className="git-panel-header">
+      <span className="git-panel-header-title">SOURCE CONTROL</span>
+      <div className="git-panel-header-actions">
+        <button
+          type="button"
+          className="git-header-action-button"
+          onClick={handleRefresh}
+          title="Refresh"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          className="git-header-action-button"
+          onClick={handleMoreActions}
+          title="More Actions"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="5" r="1" fill="currentColor" />
+            <circle cx="12" cy="12" r="1" fill="currentColor" />
+            <circle cx="12" cy="19" r="1" fill="currentColor" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // Icon renderer - git branch icon
 const GitPanelIcon = (): React.ReactNode => (
   <div className="git-panel-icon">
@@ -414,6 +454,7 @@ const GitPanelFull = (): React.ReactNode => {
 
   return (
     <div className="git-panel">
+      <GitPanelHeader />
       {/* Branch section */}
       <div className="git-section branch-section">
         <BranchSelector

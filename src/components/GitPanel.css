@@ -14,9 +14,43 @@
   justify-content: space-between;
   height: 35px;
   background-color: #252526;
-  border-bottom: 1px solid #1e1e1e;
+  border-bottom: 1px solid #333;
   padding: 0 12px;
   flex-shrink: 0;
+}
+
+.git-panel-header-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #858585;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.git-panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.git-header-action-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: #858585;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.git-header-action-button:hover {
+  background-color: #3c3c3c;
+  color: #cccccc;
 }
 
 .git-panel-title {
