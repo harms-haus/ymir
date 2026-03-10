@@ -41,7 +41,7 @@ fn parse_notification(line: &str) -> Option<String> {
 
     // OSC 777: ESC ]777;notify;message BEL
     if let Some(start) = line.find("\x1b]777;notify;") {
-            let content = &line[start + 13..];
+        let content = &line[start + 13..];
         if let Some(end) = content.find('\x07') {
             return Some(content[..end].to_string());
         }
