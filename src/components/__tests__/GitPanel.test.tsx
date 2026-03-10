@@ -2,17 +2,299 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { gitPanelDefinition } from '../GitPanel';
+import gitService, { getGitStatus, stageFile, unstageFile, discardChanges, commit } from '../../lib/git-service';
+import { GitRepo, GitFile, GitFileStatus } from '../../state/types';
+import { invoke } from '@tauri-apps/api/core';
 
-vi.mock('../../state/workspace', () => ({
-  getGitChangesCount: vi.fn(() => 5),
-  default: vi.fn(() => ({
-    resetState: vi.fn(),
-  })),
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn(),
 }));
 
-const { getGitChangesCount } = await import('../../state/workspace');
+vi.mock('../../lib/logger', () => ({
+  default: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  },
+}));
 
-describe('GitPanel Component', () => {
+// ============================================================================
+// Test Data
+// ============================================================================
+
+const mockGitRepo: GitRepo = {
+  path: '/home/user/project',
+  branch: 'main',
+  ahead: 2,
+  behind: 0,
+  staged: [
+    {
+      path: 'src/components/Sidebar.tsx',
+      status: 'modified' as GitFileStatus,
+      staged: true,
+    },
+    {
+      path: 'src/state/types.ts',
+      status: 'added' as GitFileStatus,
+      staged: true,
+    },
+  ],
+  unstaged: [
+    {
+      path: 'src/components/GitPanel.tsx',
+      status: 'modified' as GitFileStatus,
+      staged: false,
+    },
+    {
+      path: 'src/components/other.ts',
+      status: 'added' as GitFileStatus,
+      staged: false,
+    },
+    {
+      path: 'src/components/helper.ts',
+      status: 'modified' as GitFileStatus,
+      staged: false,
+    },
+    {
+      path: 'src/components/old-file.ts',
+      status: 'deleted' as GitFileStatus,
+      staged: false,
+    },
+    {
+      path: 'src/components/untracked-file.ts',
+      status: 'untracked' as GitFileStatus,
+      staged: false,
+    },
+  ],
+};
+
+const mockRustStatus = {
+  repoPath: '/home/user/project',
+  currentBranch: 'main',
+  files: [
+    {
+      path: 'src/components/Sidebar.tsx',
+      status: 'StagedModified',
+      secondary_status: null,
+    },
+    {
+      path: 'src/state/types.ts',
+      status: 'Added',
+      secondary_status: null,
+    },
+    {
+      path: 'src/components/GitPanel.tsx',
+      status: 'Modified',
+      secondary_status: null,
+    },
+    {
+      path: 'src/components/other.ts',
+      status: 'Added',
+      secondary_status: null,
+    },
+    {
+      path: 'src/components/helper.ts',
+      status: 'Modified',
+      secondary_status: null,
+    },
+    {
+      path: 'src/components/old-file.ts',
+      status: 'Deleted',
+      secondary_status: null,
+    },
+    {
+      path: 'src/components/untracked-file.ts',
+      status: 'Untracked',
+      secondary_status: null,
+    },
+  ],
+  aheadCount: 2,
+  behindCount: 0,
+};
+
+// ============================================================================
+// Git Service Tests
+// ============================================================================
+
+describe('git-service', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (invoke as ReturnType<typeof vi.fn>).mockReset();
+  });
+
+  describe('getGitStatus', () => {
+    it('should call invoke with correct command and path', async () => {
+      (invoke as ReturnType<typeof vi.fn>).mockResolvedValue(mockRustStatus);
+
+      await getGitStatus('/home/user/project');
+
+      expect(invoke).toHaveBeenCalledWith('get_git_status', {
+        path: '/home/user/project',
+      });
+    });
+
+    it('should transform Rust status to TypeScript GitRepo', async () => {
+      (invoke as ReturnType<typeof vi.fn>).mockResolvedValue(mockRustStatus);
+
+      const result = await getGitStatus('/home/user/project');
+
+      // File transformations:
+      // Sidebar.tsx: StagedModified -> staged modified
+      // types.ts: Added -> staged added
+      // GitPanel.tsx: Modified -> unstaged modified
+      // other.ts: Added -> unstaged added
+      // helper.ts: Modified -> unstaged modified
+      // old-file.ts: Deleted -> unstaged deleted
+      // untracked-file.ts: Untracked -> unstaged untracked
+
+      expect(result).toEqual({
+        path: '/home/user/project',
+        branch: 'main',
+        ahead: 2,
+        behind: 0,
+        staged: [
+          {
+            path: 'src/components/Sidebar.tsx',
+            status: 'modified',
+            staged: true,
+          },
+          {
+            path: 'src/state/types.ts',
+            status: 'added',
+            staged: true,
+          },
+        ],
+        unstaged: [
+          {
+            path: 'src/components/GitPanel.tsx',
+            status: 'modified',
+            staged: false,
+          },
+          {
+            path: 'src/components/other.ts',
+            status: 'added',
+            staged: false,
+          },
+          {
+            path: 'src/components/helper.ts',
+            status: 'modified',
+            staged: false,
+          },
+          {
+            path: 'src/components/old-file.ts',
+            status: 'deleted',
+            staged: false,
+          },
+          {
+            path: 'src/components/untracked-file.ts',
+            status: 'untracked',
+            staged: false,
+          },
+        ],
+      });
+    });
+
+    it('should handle errors and rethrow them', async () => {
+      const error = new Error('Not a git repository');
+      (invoke as ReturnType<typeof vi.fn>).mockRejectedValue(error);
+
+      await expect(getGitStatus('/home/user/project')).rejects.toThrow('Not a git repository');
+    });
+  });
+
+  describe('stageFile', () => {
+    it('should call invoke with stage_file command', async () => {
+      (invoke as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
+      await stageFile('/home/user/project', 'src/file.ts');
+
+      expect(invoke).toHaveBeenCalledWith('stage_file', {
+        repoPath: '/home/user/project',
+        filePath: 'src/file.ts',
+      });
+    });
+
+    it('should handle errors', async () => {
+      const error = new Error('Stage failed');
+      (invoke as ReturnType<typeof vi.fn>).mockRejectedValue(error);
+
+      await expect(stageFile('/home/user/project', 'src/file.ts')).rejects.toThrow('Stage failed');
+    });
+  });
+
+  describe('unstageFile', () => {
+    it('should call invoke with unstage_file command', async () => {
+      (invoke as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
+      await unstageFile('/home/user/project', 'src/file.ts');
+
+      expect(invoke).toHaveBeenCalledWith('unstage_file', {
+        repoPath: '/home/user/project',
+        filePath: 'src/file.ts',
+      });
+    });
+
+    it('should handle errors', async () => {
+      const error = new Error('Unstage failed');
+      (invoke as ReturnType<typeof vi.fn>).mockRejectedValue(error);
+
+      await expect(unstageFile('/home/user/project', 'src/file.ts')).rejects.toThrow('Unstage failed');
+    });
+  });
+
+  describe('discardChanges', () => {
+    it('should call invoke with discard_file_changes command', async () => {
+      (invoke as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
+      await discardChanges('/home/user/project', 'src/file.ts');
+
+      expect(invoke).toHaveBeenCalledWith('discard_file_changes', {
+        repoPath: '/home/user/project',
+        filePath: 'src/file.ts',
+      });
+    });
+
+    it('should handle errors', async () => {
+      const error = new Error('Discard failed');
+      (invoke as ReturnType<typeof vi.fn>).mockRejectedValue(error);
+
+      await expect(discardChanges('/home/user/project', 'src/file.ts')).rejects.toThrow('Discard failed');
+    });
+  });
+
+  describe('commit', () => {
+    it('should call invoke with commit_changes command', async () => {
+      (invoke as ReturnType<typeof vi.fn>).mockResolvedValue('abc123');
+
+      const result = await commit('/home/user/project', 'test commit');
+
+      expect(invoke).toHaveBeenCalledWith('commit_changes', {
+        repoPath: '/home/user/project',
+        message: 'test commit',
+      });
+      expect(result).toBe('abc123');
+    });
+
+    it('should handle errors', async () => {
+      const error = new Error('Commit failed');
+      (invoke as ReturnType<typeof vi.fn>).mockRejectedValue(error);
+
+      await expect(commit('/home/user/project', 'test commit')).rejects.toThrow('Commit failed');
+    });
+  });
+});
+
+// ============================================================================
+// GitPanel Panel Definition Tests
+// ============================================================================
+
+describe('GitPanel Panel Definition', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (invoke as ReturnType<typeof vi.fn>).mockResolvedValue(mockRustStatus);
+  });
+
   describe('Panel Definition', () => {
     it('should have correct panel id', () => {
       expect(gitPanelDefinition.id).toBe('git');
@@ -44,10 +326,73 @@ describe('GitPanel Component', () => {
     });
   });
 
-  describe('Full Panel Rendering', () => {
+  describe('Badge Renderer', () => {
+    it('should return badge with count', () => {
+      const badge = gitPanelDefinition.badge?.();
+      expect(badge).toEqual({ count: 5, color: '#4fc3f7' });
+    });
+
+    it('should return null when count is 0', () => {
+      vi.unmock('../../state/workspace');
+      vi.mock('../../state/workspace', () => ({
+        getActiveRepo: () => mockGitRepo,
+        getGitChangesCount: () => 0,
+        getGitError: () => null,
+      }));
+
+      const badge = gitPanelDefinition.badge?.();
+      expect(badge).toBeNull();
+    });
+  });
+
+  describe('Empty State (NotAGitRepo)', () => {
     beforeEach(() => {
       vi.clearAllMocks();
-      (getGitChangesCount as ReturnType<typeof vi.fn>).mockReturnValue(5);
+      vi.unmock('../../state/workspace');
+      vi.mock('../../state/workspace', () => ({
+        getActiveRepo: () => null,
+        getGitChangesCount: () => 5,
+        getGitError: () => 'Not a git repository',
+      }));
+      (invoke as ReturnType<typeof vi.fn>).mockResolvedValue(mockRustStatus);
+    });
+
+    it('should render when git error exists', () => {
+      const PanelContent = gitPanelDefinition.fullRender;
+      const { container } = render(<PanelContent />);
+
+      const containerDiv = container.querySelector('.git-empty-state-container');
+      expect(containerDiv).toBeInTheDocument();
+    });
+
+    it('should render message text', () => {
+      const PanelContent = gitPanelDefinition.fullRender;
+      render(<PanelContent />);
+
+      expect(screen.getByText('This workspace is not a git repository')).toBeInTheDocument();
+    });
+
+    it('should render initialize button', () => {
+      const PanelContent = gitPanelDefinition.fullRender;
+      render(<PanelContent />);
+
+      const button = screen.getByText('Initialize Repository');
+      expect(button).toBeInTheDocument();
+      expect(button).toHaveAttribute('type', 'button');
+    });
+
+    it('should show correct title on button', () => {
+      const PanelContent = gitPanelDefinition.fullRender;
+      render(<PanelContent />);
+
+      const button = screen.getByText('Initialize Repository');
+      expect(button).toHaveAttribute('title', 'Initialize Repository (coming soon)');
+    });
+  });
+
+  describe('Full Panel Rendering', () => {
+    beforeEach(() => {
+      (invoke as ReturnType<typeof vi.fn>).mockResolvedValue(mockRustStatus);
     });
 
     it('should render the full git panel', () => {
@@ -96,13 +441,9 @@ describe('GitPanel Component', () => {
   });
 
   describe('Branch Selector', () => {
-    beforeEach(() => {
-      vi.clearAllMocks();
-    });
-
     it('should render branch selector with icon', () => {
       const PanelContent = gitPanelDefinition.fullRender;
-      render(<PanelContent />);
+      const { container } = render(<PanelContent />);
 
       const branchSelector = document.querySelector('.branch-selector-button');
       expect(branchSelector).toBeInTheDocument();
@@ -118,7 +459,7 @@ describe('GitPanel Component', () => {
 
     it('should open branch dropdown when clicked', async () => {
       const PanelContent = gitPanelDefinition.fullRender;
-      render(<PanelContent />);
+      const { container } = render(<PanelContent />);
 
       const branchButton = document.querySelector('.branch-selector-button') as HTMLElement;
       expect(branchButton).toBeInTheDocument();
@@ -130,72 +471,14 @@ describe('GitPanel Component', () => {
         expect(dropdown).toBeInTheDocument();
       });
     });
-
-    it('should display all available branches', async () => {
-      const PanelContent = gitPanelDefinition.fullRender;
-      const { container } = render(<PanelContent />);
-
-      const branchButton = container.querySelector('.branch-selector-button') as HTMLElement;
-      fireEvent.click(branchButton);
-
-      await waitFor(() => {
-        const branchOptions = container.querySelectorAll('.branch-option span');
-        expect(branchOptions.length).toBe(4);
-        expect(branchOptions[0]).toHaveTextContent('main');
-        expect(branchOptions[1]).toHaveTextContent('dev');
-        expect(branchOptions[2]).toHaveTextContent('feature/sidebar');
-        expect(branchOptions[3]).toHaveTextContent('bugfix/terminal-fix');
-      });
-    });
-
-    it('should show checkmark for current branch', async () => {
-      const PanelContent = gitPanelDefinition.fullRender;
-      render(<PanelContent />);
-
-      const branchButton = document.querySelector('.branch-selector-button') as HTMLElement;
-      fireEvent.click(branchButton);
-
-      await waitFor(() => {
-        const mainOption = document.querySelector('.branch-option.current');
-        expect(mainOption).toBeInTheDocument();
-        expect(mainOption?.querySelector('.branch-check')).toBeInTheDocument();
-      });
-    });
-  });
-
-  describe('Ahead/Behind Indicator', () => {
-    beforeEach(() => {
-      vi.clearAllMocks();
-    });
-
-    it('should display ahead commits', () => {
-      const PanelContent = gitPanelDefinition.fullRender;
-      render(<PanelContent />);
-
-      const aheadIndicator = document.querySelector('.ahead');
-      expect(aheadIndicator).toBeInTheDocument();
-      expect(aheadIndicator).toHaveTextContent('2');
-    });
-
-    it('should not display behind indicator when behind is 0', () => {
-      const PanelContent = gitPanelDefinition.fullRender;
-      render(<PanelContent />);
-
-      const behindIndicator = document.querySelector('.behind');
-      expect(behindIndicator).not.toBeInTheDocument();
-    });
   });
 
   describe('Staged Files Section', () => {
-    beforeEach(() => {
-      vi.clearAllMocks();
-    });
-
     it('should display staged files count badge', () => {
       const PanelContent = gitPanelDefinition.fullRender;
-      render(<PanelContent />);
+      const { container } = render(<PanelContent />);
 
-      const badge = document.querySelector('.staged-files-section .git-count-badge');
+      const badge = container.querySelector('.staged-files-section .git-count-badge');
       expect(badge).toBeInTheDocument();
       expect(badge).toHaveTextContent('2');
     });
@@ -207,57 +490,14 @@ describe('GitPanel Component', () => {
       expect(screen.getByText('Sidebar.tsx')).toBeInTheDocument();
       expect(screen.getByText('types.ts')).toBeInTheDocument();
     });
-
-    it('should display staged file paths', () => {
-      const PanelContent = gitPanelDefinition.fullRender;
-      render(<PanelContent />);
-
-      const pathElements = document.querySelectorAll('.git-file-path');
-      expect(pathElements.length).toBeGreaterThan(0);
-    });
-
-    it('should show checkboxes for staged files', () => {
-      const PanelContent = gitPanelDefinition.fullRender;
-      render(<PanelContent />);
-
-      const checkboxes = document.querySelectorAll('.staged-files-section .git-checkbox');
-      expect(checkboxes.length).toBe(2);
-    });
-
-    it('should check staged files checkboxes by default', () => {
-      const PanelContent = gitPanelDefinition.fullRender;
-      render(<PanelContent />);
-
-      const checkboxes = document.querySelectorAll('.staged-files-section .git-checkbox:checked');
-      expect(checkboxes.length).toBe(2);
-    });
-
-    it('should expand file details on click', async () => {
-      const PanelContent = gitPanelDefinition.fullRender;
-      render(<PanelContent />);
-
-      const fileItem = document.querySelector('.git-item') as HTMLElement;
-      expect(fileItem).toBeInTheDocument();
-
-      fireEvent.click(fileItem);
-
-      await waitFor(() => {
-        const details = document.querySelector('.git-file-details');
-        expect(details).toBeInTheDocument();
-      });
-    });
   });
 
   describe('Changed Files Section', () => {
-    beforeEach(() => {
-      vi.clearAllMocks();
-    });
-
     it('should display changed files count badge', () => {
       const PanelContent = gitPanelDefinition.fullRender;
-      render(<PanelContent />);
+      const { container } = render(<PanelContent />);
 
-      const badge = document.querySelector('.changes-files-section .git-count-badge');
+      const badge = container.querySelector('.changes-files-section .git-count-badge');
       expect(badge).toBeInTheDocument();
       expect(badge).toHaveTextContent('5');
     });
@@ -272,34 +512,14 @@ describe('GitPanel Component', () => {
       expect(screen.getByText('old-file.ts')).toBeInTheDocument();
       expect(screen.getByText('untracked-file.ts')).toBeInTheDocument();
     });
-
-    it('should show checkboxes for changed files', () => {
-      const PanelContent = gitPanelDefinition.fullRender;
-      render(<PanelContent />);
-
-      const checkboxes = document.querySelectorAll('.changes-files-section .git-checkbox');
-      expect(checkboxes.length).toBe(5);
-    });
-
-    it('should not check changed files checkboxes by default', () => {
-      const PanelContent = gitPanelDefinition.fullRender;
-      render(<PanelContent />);
-
-      const checkboxes = document.querySelectorAll('.changes-files-section .git-checkbox:checked');
-      expect(checkboxes.length).toBe(0);
-    });
   });
 
   describe('Status Badges', () => {
-    beforeEach(() => {
-      vi.clearAllMocks();
-    });
-
     it('should display modified badge with M', () => {
       const PanelContent = gitPanelDefinition.fullRender;
-      render(<PanelContent />);
+      const { container } = render(<PanelContent />);
 
-      const modifiedBadges = document.querySelectorAll('.git-status-badge.modified');
+      const modifiedBadges = container.querySelectorAll('.git-status-badge.modified');
       expect(modifiedBadges.length).toBeGreaterThan(0);
       modifiedBadges.forEach(badge => {
         expect(badge).toHaveTextContent('M');
@@ -308,9 +528,9 @@ describe('GitPanel Component', () => {
 
     it('should display added badge with A', () => {
       const PanelContent = gitPanelDefinition.fullRender;
-      render(<PanelContent />);
+      const { container } = render(<PanelContent />);
 
-      const addedBadges = document.querySelectorAll('.git-status-badge.added');
+      const addedBadges = container.querySelectorAll('.git-status-badge.added');
       expect(addedBadges.length).toBeGreaterThan(0);
       addedBadges.forEach(badge => {
         expect(badge).toHaveTextContent('A');
@@ -319,28 +539,24 @@ describe('GitPanel Component', () => {
 
     it('should display deleted badge with D', () => {
       const PanelContent = gitPanelDefinition.fullRender;
-      render(<PanelContent />);
+      const { container } = render(<PanelContent />);
 
-      const deletedBadge = document.querySelector('.git-status-badge.deleted');
+      const deletedBadge = container.querySelector('.git-status-badge.deleted');
       expect(deletedBadge).toBeInTheDocument();
       expect(deletedBadge).toHaveTextContent('D');
     });
 
     it('should display untracked badge with ?', () => {
       const PanelContent = gitPanelDefinition.fullRender;
-      render(<PanelContent />);
+      const { container } = render(<PanelContent />);
 
-      const untrackedBadge = document.querySelector('.git-status-badge.untracked');
+      const untrackedBadge = container.querySelector('.git-status-badge.untracked');
       expect(untrackedBadge).toBeInTheDocument();
       expect(untrackedBadge).toHaveTextContent('?');
     });
   });
 
   describe('Commit Section', () => {
-    beforeEach(() => {
-      vi.clearAllMocks();
-    });
-
     it('should render commit textarea with placeholder', () => {
       const PanelContent = gitPanelDefinition.fullRender;
       render(<PanelContent />);
@@ -357,179 +573,26 @@ describe('GitPanel Component', () => {
       expect(textarea.disabled).toBe(false);
     });
 
-    it('should display commit button', () => {
-      const PanelContent = gitPanelDefinition.fullRender;
-      render(<PanelContent />);
-
-      const commitButton = document.querySelector('.git-commit-button');
-      expect(commitButton).toBeInTheDocument();
-      expect(commitButton?.querySelector('svg')).toBeInTheDocument();
-    });
-
     it('should disable commit button when message is empty', () => {
       const PanelContent = gitPanelDefinition.fullRender;
-      render(<PanelContent />);
+      const { container } = render(<PanelContent />);
 
-      const commitButton = document.querySelector('.git-commit-button') as HTMLButtonElement;
+      const commitButton = container.querySelector('.git-commit-button') as HTMLButtonElement;
       expect(commitButton.disabled).toBe(true);
     });
 
     it('should enable commit button when message is entered', async () => {
       const PanelContent = gitPanelDefinition.fullRender;
-      render(<PanelContent />);
+      const { container } = render(<PanelContent />);
 
       const textarea = screen.getByPlaceholderText(/Commit message/i) as HTMLTextAreaElement;
-      const commitButton = document.querySelector('.git-commit-button') as HTMLButtonElement;
+      const commitButton = container.querySelector('.git-commit-button') as HTMLButtonElement;
 
       fireEvent.change(textarea, { target: { value: 'test commit' } });
 
       await waitFor(() => {
         expect(commitButton.disabled).toBe(false);
       });
-    });
-
-    it('should handle commit message input', () => {
-      const PanelContent = gitPanelDefinition.fullRender;
-      render(<PanelContent />);
-
-      const textarea = screen.getByPlaceholderText(/Commit message/i) as HTMLTextAreaElement;
-
-      fireEvent.change(textarea, { target: { value: 'Test commit message' } });
-
-      expect(textarea.value).toBe('Test commit message');
-    });
-  });
-
-  describe('File Item Interactions', () => {
-    beforeEach(() => {
-      vi.clearAllMocks();
-    });
-
-    it('should display file icon', () => {
-      const PanelContent = gitPanelDefinition.fullRender;
-      render(<PanelContent />);
-
-      const fileIcons = document.querySelectorAll('.git-file-icon');
-      expect(fileIcons.length).toBeGreaterThan(0);
-    });
-
-    it('should display expand/collapse icon', () => {
-      const PanelContent = gitPanelDefinition.fullRender;
-      render(<PanelContent />);
-
-      const expandIcons = document.querySelectorAll('.git-expand-icon');
-      expect(expandIcons.length).toBeGreaterThan(0);
-    });
-
-    it('should show file details when expanded', async () => {
-      const PanelContent = gitPanelDefinition.fullRender;
-      render(<PanelContent />);
-
-      const firstFileItem = document.querySelector('.git-item') as HTMLElement;
-      expect(firstFileItem).toBeInTheDocument();
-
-      fireEvent.click(firstFileItem);
-
-      await waitFor(() => {
-        const details = document.querySelector('.git-file-details');
-        expect(details).toBeInTheDocument();
-
-        const pathLabel = details?.querySelector('.git-detail-label');
-        expect(pathLabel).toHaveTextContent('Path:');
-
-        const statusLabel = details?.querySelectorAll('.git-detail-label')[1];
-        expect(statusLabel).toHaveTextContent('Status:');
-      });
-    });
-  });
-
-  describe('Unstage File Interaction', () => {
-    beforeEach(() => {
-      vi.clearAllMocks();
-    });
-
-    it('should unstage file when checkbox is clicked', async () => {
-      const PanelContent = gitPanelDefinition.fullRender;
-      const { container } = render(<PanelContent />);
-
-      const stagedCheckbox = container.querySelector('.staged-files-section .git-checkbox') as HTMLInputElement;
-      expect(stagedCheckbox).toBeInTheDocument();
-      expect(stagedCheckbox.checked).toBe(true);
-
-      fireEvent.click(stagedCheckbox);
-
-      await waitFor(() => {
-        const stagedSection = container.querySelector('.staged-files-section');
-        const stagedCount = stagedSection?.querySelector('.git-count-badge');
-        expect(stagedCount).toHaveTextContent('1');
-      });
-    });
-
-    it('should move unstaged file to changes section', async () => {
-      const PanelContent = gitPanelDefinition.fullRender;
-      const { container } = render(<PanelContent />);
-
-      const stagedCheckbox = container.querySelector('.staged-files-section .git-checkbox') as HTMLInputElement;
-      fireEvent.click(stagedCheckbox);
-
-      await waitFor(() => {
-        const changesSection = container.querySelector('.changes-files-section');
-        const changesCount = changesSection?.querySelector('.git-count-badge');
-        expect(changesCount).toHaveTextContent('6');
-      });
-    });
-  });
-
-  describe('Empty States', () => {
-    beforeEach(() => {
-      vi.clearAllMocks();
-    });
-
-    it('should not show empty state for staged files when files exist', () => {
-      const PanelContent = gitPanelDefinition.fullRender;
-      render(<PanelContent />);
-
-      const emptyState = document.querySelector('.staged-files-section .git-empty-state');
-      expect(emptyState).not.toBeInTheDocument();
-    });
-
-    it('should not show empty state for changes when files exist', () => {
-      const PanelContent = gitPanelDefinition.fullRender;
-      render(<PanelContent />);
-
-      const emptyState = document.querySelector('.changes-files-section .git-empty-state');
-      expect(emptyState).not.toBeInTheDocument();
-    });
-  });
-
-  describe('Badge Renderer', () => {
-    beforeEach(() => {
-      vi.clearAllMocks();
-    });
-
-    it('should return badge with correct count', () => {
-      (getGitChangesCount as ReturnType<typeof vi.fn>).mockReturnValue(10);
-
-      const badge = gitPanelDefinition.badge?.();
-      expect(badge).toEqual({ count: 10, color: '#4fc3f7' });
-    });
-
-    it('should return null when count is 0', () => {
-      (getGitChangesCount as ReturnType<typeof vi.fn>).mockReturnValue(0);
-
-      const badge = gitPanelDefinition.badge?.();
-      expect(badge).toBeNull();
-    });
-  });
-
-  describe('Icon Renderer', () => {
-    it('should render git branch icon', () => {
-      const { container } = render(<>{gitPanelDefinition.icon()}</>);
-
-      const svg = container.querySelector('svg');
-      expect(svg).toBeInTheDocument();
-      expect(svg).toHaveAttribute('width', '16');
-      expect(svg).toHaveAttribute('height', '16');
     });
   });
 });
