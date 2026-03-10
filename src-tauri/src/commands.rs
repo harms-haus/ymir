@@ -635,24 +635,24 @@ fn search_for_git_repos(path: &str, repos: &mut Vec<String>, current_depth: u32)
         let name = entry.file_name();
         let name_str = name.to_string_lossy();
 
-        if name_str.starts_with('.') && name_str != ".git" {
+        if name_str.starts_with('.') && name_str.as_ref() != ".git" {
             continue;
         }
 
         let skip_dirs = ["node_modules", "target", "dist", "build"];
-        if skip_dirs.contains(&name_str.as_str()) {
+        if skip_dirs.iter().any(|&d| d == name_str.as_ref()) {
             continue;
         }
 
         if entry.path().is_dir() {
-            if name_str == ".git" && current_depth > 0 {
+            if name_str.as_ref() == ".git" && current_depth > 0 {
                 continue;
             }
 
             let entry_path = entry.path();
             let entry_path_str = entry_path.to_string_lossy().to_string();
 
-            if name_str == ".git" {
+            if name_str.as_ref() == ".git" {
                 if let Some(parent) = entry_path.parent() {
                     repos.push(parent.to_string_lossy().to_string());
                     debug!(repo_path = %parent.display(), "Found git repository");
