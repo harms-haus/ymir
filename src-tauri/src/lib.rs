@@ -9,6 +9,7 @@ fn init_logging() {
 }
 
 mod commands;
+mod git;
 mod logging;
 mod state;
 
