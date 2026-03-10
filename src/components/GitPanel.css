@@ -457,16 +457,13 @@
   padding: 8px;
   background-color: #1e1e1e;
   border-radius: 4px;
-}
-
-.git-commit-input-wrapper {
   display: flex;
+  flex-direction: column;
   gap: 8px;
-  align-items: flex-start;
 }
 
 .git-commit-textarea {
-  flex: 1;
+  width: 100%;
   min-height: 60px;
   padding: 8px;
   background-color: #252526;
@@ -477,6 +474,7 @@
   font-family: inherit;
   resize: vertical;
   outline: none;
+  box-sizing: border-box;
 }
 
 .git-commit-textarea:focus {
@@ -496,16 +494,17 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 12px;
   background-color: #007acc;
   border: none;
   border-radius: 4px;
   color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
   transition: background-color 0.15s ease, opacity 0.15s ease;
-  flex-shrink: 0;
 }
 
 .git-commit-button:hover:not(:disabled) {
@@ -517,8 +516,16 @@
   cursor: not-allowed;
 }
 
+.git-commit-button svg {
+  flex-shrink: 0;
+}
+
+.git-commit-button span {
+  flex-shrink: 0;
+}
+
 .git-commit-hint {
-  margin-top: 4px;
+  margin-top: -4px;
   font-size: 10px;
   color: #666666;
   text-align: right;

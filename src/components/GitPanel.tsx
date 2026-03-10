@@ -323,43 +323,42 @@ const CommitSection: React.FC<{
   onCommit: (message: string) => void;
 }> = ({ stagedCount, onCommit }) => {
   const [message, setMessage] = useState('');
-  
+
   const handleCommit = () => {
     if (message.trim() && stagedCount > 0) {
       onCommit(message.trim());
       setMessage('');
     }
   };
-  
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       handleCommit();
     }
   };
-  
+
   return (
     <div className="git-commit-section">
-      <div className="git-commit-input-wrapper">
-        <textarea
-          className="git-commit-textarea"
-          placeholder={stagedCount > 0 ? 'Commit message (Ctrl+Enter to commit)...' : 'Stage files first...'}
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyDown={handleKeyDown}
-          rows={3}
-          disabled={stagedCount === 0}
-        />
-        <button
-          className="git-commit-button"
-          onClick={handleCommit}
-          disabled={!message.trim() || stagedCount === 0}
-          title="Commit staged changes"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <polyline points="20,6 9,17 4,12" />
-          </svg>
-        </button>
-      </div>
+      <textarea
+        className="git-commit-textarea"
+        placeholder="Commit message..."
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        onKeyDown={handleKeyDown}
+        rows={3}
+        disabled={stagedCount === 0}
+      />
+      <button
+        className="git-commit-button"
+        onClick={handleCommit}
+        disabled={!message.trim() || stagedCount === 0}
+        title="Commit staged changes"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polyline points="20,6 9,17 4,12" />
+        </svg>
+        <span>Commit</span>
+      </button>
       {stagedCount > 0 && (
         <div className="git-commit-hint">
           Press Ctrl+Enter to commit
@@ -455,6 +454,9 @@ const GitPanelFull = (): React.ReactNode => {
   return (
     <div className="git-panel">
       <GitPanelHeader />
+      {/* Commit section */}
+      <CommitSection stagedCount={stagedFiles.length} onCommit={handleCommit} />
+
       {/* Branch section */}
       <div className="git-section branch-section">
         <BranchSelector
@@ -467,9 +469,6 @@ const GitPanelFull = (): React.ReactNode => {
           behind={mockGitData.behind}
         />
       </div>
-
-      {/* Commit section */}
-      <CommitSection stagedCount={stagedFiles.length} onCommit={handleCommit} />
 
       {/* Staged files */}
       <StagedFilesSection files={stagedFiles} onUnstage={handleUnstage} />
