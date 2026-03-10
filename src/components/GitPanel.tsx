@@ -1,14 +1,8 @@
-import React, { useState } from 'react';
-import { PanelDefinition } from '../state/types';
-import { getGitChangesCount } from '../state/workspace';
+import React, { useState, useEffect } from 'react';
+import { PanelDefinition, GitFile } from '../state/types';
+import useWorkspaceStore, { getActiveRepo, getGitChangesCount } from '../state/workspace';
+import gitService from '../lib/git-service';
 import './GitPanel.css';
-
-// Mock git data for development (will be replaced with real data later)
-interface GitFile {
-  path: string;
-  status: 'modified' | 'added' | 'deleted' | 'untracked';
-  staged?: boolean;
-}
 
 const mockGitData = {
   currentBranch: 'main',
@@ -18,20 +12,6 @@ const mockGitData = {
   stagedCount: 2,
   changesCount: 5,
 };
-
-// Mock file lists
-const mockStagedFiles: GitFile[] = [
-  { path: 'src/components/Sidebar.tsx', status: 'modified', staged: true },
-  { path: 'src/state/types.ts', status: 'added', staged: true },
-];
-
-const mockChangedFiles: GitFile[] = [
-  { path: 'src/components/GitPanel.tsx', status: 'modified' },
-  { path: 'src/other.ts', status: 'modified' },
-  { path: 'src/utils/helper.ts', status: 'added' },
-  { path: 'old-file.ts', status: 'deleted' },
-  { path: 'untracked-file.ts', status: 'untracked' },
-];
 
 // Git branch SVG icon
 const GitBranchIcon: React.FC = () => (
@@ -150,11 +130,13 @@ const AheadBehindIndicator: React.FC<{
 
 // Status badge component - shows M, A, D, ? for file status
 const StatusBadge: React.FC<{ status: GitFile['status'] }> = ({ status }) => {
-  const statusMap = {
+  const statusMap: Record<GitFile['status'], { label: string; className: string }> = {
     modified: { label: 'M', className: 'modified' },
     added: { label: 'A', className: 'added' },
     deleted: { label: 'D', className: 'deleted' },
     untracked: { label: '?', className: 'untracked' },
+    renamed: { label: 'R', className: 'renamed' },
+    conflict: { label: 'C', className: 'conflict' },
   };
   const { label, className } = statusMap[status];
   return <span className={`git-status-badge ${className}`}>{label}</span>;
@@ -273,9 +255,12 @@ const StagedFilesSection: React.FC<{
 };
 
 // Changes files section with expandable tree
-const ChangesFilesSection: React.FC<{ files: GitFile[] }> = ({ files }) => {
+const ChangesFilesSection: React.FC<{
+  files: GitFile[];
+  onStage: (path: string) => Promise<void>;
+}> = ({ files, onStage }) => {
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
-  
+
   const toggleExpand = (path: string) => {
     setExpandedFiles(prev => {
       const next = new Set(prev);
@@ -287,7 +272,7 @@ const ChangesFilesSection: React.FC<{ files: GitFile[] }> = ({ files }) => {
       return next;
     });
   };
-  
+
   return (
     <div className="git-section changes-files-section">
       <div className="section-header">
@@ -303,12 +288,13 @@ const ChangesFilesSection: React.FC<{ files: GitFile[] }> = ({ files }) => {
       ) : (
         <div className="git-file-list">
           {files.map((file) => (
-            <FileItem 
-              key={file.path} 
-              file={file} 
+            <FileItem
+              key={file.path}
+              file={file}
               showCheckbox={true}
               expanded={expandedFiles.has(file.path)}
               onToggleExpand={() => toggleExpand(file.path)}
+              onCheckboxChange={() => onStage(file.path)}
             />
           ))}
         </div>
@@ -427,54 +413,82 @@ const GitPanelBadge = (): import('../state/types').TabBadge | null => {
 
 // Full panel renderer
 const GitPanelFull = (): React.ReactNode => {
-  const [selectedBranch, setSelectedBranch] = useState(mockGitData.currentBranch);
-  const [stagedFiles, setStagedFiles] = useState<GitFile[]>(mockStagedFiles);
-  const [changedFiles, setChangedFiles] = useState<GitFile[]>(mockChangedFiles);
-  
-  const handleBranchSelect = (branch: string) => {
-    setSelectedBranch(branch);
-  };
-  
-  // Handle unstaging a file
-  const handleUnstage = (path: string) => {
-    const file = stagedFiles.find(f => f.path === path);
-    if (file) {
-      setStagedFiles(files => files.filter(f => f.path !== path));
-      setChangedFiles(files => [...files, { ...file, staged: false }]);
+  const activeRepo = getActiveRepo();
+  const { discoverAndRegisterRepos, updateGitFile } = useWorkspaceStore();
+
+  // Discover git repos on mount
+  useEffect(() => {
+    discoverAndRegisterRepos('/home/blake/Documents/software/ymir');
+  }, [discoverAndRegisterRepos]);
+
+  // Handle staging a file
+  const handleStage = async (path: string) => {
+    if (!activeRepo) return;
+
+    // Optimistic UI update - move file from unstaged to staged
+    updateGitFile(activeRepo.path, path, true);
+
+    try {
+      await gitService.stageFile(activeRepo.path, path);
+    } catch (error) {
+      // Revert optimistic update on error
+      updateGitFile(activeRepo.path, path, false);
     }
   };
-  
+
+  // Handle unstaging a file
+  const handleUnstage = async (path: string) => {
+    if (!activeRepo) return;
+
+    // Optimistic UI update - move file from staged to unstaged
+    updateGitFile(activeRepo.path, path, false);
+
+    try {
+      await gitService.unstageFile(activeRepo.path, path);
+    } catch (error) {
+      // Revert optimistic update on error
+      updateGitFile(activeRepo.path, path, true);
+    }
+  };
+
   // Handle commit
-  const handleCommit = (_message: string) => {
-    // In a real implementation, this would call git commit
-    // For now, just clear the staged files
-    setStagedFiles([]);
+  const handleCommit = async (message: string) => {
+    if (!activeRepo) return;
+
+    try {
+      await gitService.commit(activeRepo.path, message);
+      // Refresh git status after commit
+      const updatedRepo = await gitService.getGitStatus(activeRepo.path);
+      useWorkspaceStore.getState().setGitRepo(activeRepo.path, updatedRepo);
+    } catch (error) {
+      console.error('Commit failed:', error);
+    }
   };
 
   return (
     <div className="git-panel">
       <GitPanelHeader />
       {/* Commit section */}
-      <CommitSection stagedCount={stagedFiles.length} onCommit={handleCommit} />
+      <CommitSection stagedCount={activeRepo?.staged.length || 0} onCommit={handleCommit} />
 
       {/* Branch section */}
       <div className="git-section branch-section">
         <BranchSelector
-          currentBranch={selectedBranch}
+          currentBranch={activeRepo?.branch || 'main'}
           branches={mockGitData.branches}
-          onSelect={handleBranchSelect}
+          onSelect={() => {}}
         />
         <AheadBehindIndicator
-          ahead={mockGitData.ahead}
-          behind={mockGitData.behind}
+          ahead={activeRepo?.ahead || 0}
+          behind={activeRepo?.behind || 0}
         />
       </div>
 
       {/* Staged files */}
-      <StagedFilesSection files={stagedFiles} onUnstage={handleUnstage} />
+      <StagedFilesSection files={activeRepo?.staged || []} onUnstage={handleUnstage} />
 
       {/* Changes files */}
-      <ChangesFilesSection files={changedFiles} />
+      <ChangesFilesSection files={activeRepo?.unstaged || []} onStage={handleStage} />
     </div>
   );
 };
