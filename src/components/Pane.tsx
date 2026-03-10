@@ -49,6 +49,10 @@ export function Pane({ paneId, workspaceId }: PaneProps) {
     useWorkspaceStore.getState().createTab(paneId);
   }, [paneId]);
 
+  const handleCreateBrowserTab = useCallback(() => {
+    useWorkspaceStore.getState().createTab(paneId, undefined, 'browser');
+  }, [paneId]);
+
   const handleCloseTab = useCallback(
     (_paneId: string, tabId: string) => {
       useWorkspaceStore.getState().closeTab(_paneId, tabId);
