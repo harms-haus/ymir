@@ -1,0 +1,136 @@
+.browser-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: #1e1e1e;
+  overflow: hidden;
+}
+
+.browser-nav-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background-color: #252526;
+  border-bottom: 1px solid #1e1e1e;
+  flex-shrink: 0;
+}
+
+.browser-nav-button {
+  background: none;
+  border: none;
+  color: #cccccc;
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.browser-nav-button:hover:not(:disabled) {
+  background-color: #3c3c3c;
+  color: #ffffff;
+}
+
+.browser-nav-button:active:not(:disabled) {
+  background-color: #4c4c4c;
+}
+
+.browser-nav-button:disabled {
+  color: #5a5a5a;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.browser-url-input {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 10px;
+  background-color: #3c3c3c;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: #cccccc;
+  font-size: 13px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.browser-url-input:hover {
+  background-color: #4c4c4c;
+}
+
+.browser-url-input:focus {
+  background-color: #1e1e1e;
+  border-color: #007acc;
+  color: #ffffff;
+}
+
+.browser-url-input::placeholder {
+  color: #858585;
+}
+
+.browser-webview-container {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  background-color: #ffffff;
+  overflow: hidden;
+}
+
+.browser-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: #cccccc;
+  font-size: 13px;
+}
+
+.browser-loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #3c3c3c;
+  border-top-color: #007acc;
+  border-radius: 50%;
+  animation: browser-spin 0.8s linear infinite;
+}
+
+@keyframes browser-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.browser-error {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: #f48771;
+  font-size: 13px;
+  text-align: center;
+  padding: 20px;
+}
+
+.browser-error-icon {
+  font-size: 48px;
+  color: #f48771;
+}

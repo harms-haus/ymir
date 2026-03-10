@@ -1,4 +1,4 @@
-import type { Workspace, Pane, Tab, SplitNode, LeafNode, BranchNode } from '../state/types';
+import type { Workspace, Pane, Tab, SplitNode, LeafNode, BranchNode, TabType } from '../state/types';
 
 let idCounter = 0;
 
@@ -24,12 +24,13 @@ export function createMockTab(overrides?: Partial<Tab>): Tab {
   const id = overrides?.id ?? generateId('tab');
   return {
     id,
-    title: `Tab ${id}`,
+    type: 'terminal' as TabType,
+    title: 'bash',
     cwd: '/home/user',
-    sessionId: `session-${id}`,
+    sessionId: crypto.randomUUID(),
+    scrollback: [],
     hasNotification: false,
     notificationCount: 0,
-    scrollback: [],
     ...overrides,
   };
 }

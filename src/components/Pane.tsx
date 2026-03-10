@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import useWorkspaceStore from '../state/workspace';
 import { Terminal } from './Terminal';
+import { Browser } from './Browser';
 import { TabBar } from './TabBar';
 import { ErrorBoundary } from './ErrorBoundary';
 
@@ -46,6 +47,10 @@ export function Pane({ paneId, workspaceId }: PaneProps) {
 
   const handleCreateTab = useCallback(() => {
     useWorkspaceStore.getState().createTab(paneId);
+  }, [paneId]);
+
+  const handleCreateBrowserTab = useCallback(() => {
+    useWorkspaceStore.getState().createTab(paneId, undefined, 'browser');
   }, [paneId]);
 
   const handleCloseTab = useCallback(
@@ -102,12 +107,13 @@ export function Pane({ paneId, workspaceId }: PaneProps) {
           tabs={pane.tabs}
           activeTabId={pane.activeTabId}
           onCreateTab={handleCreateTab}
+          onCreateBrowserTab={handleCreateBrowserTab}
           onCloseTab={handleCloseTab}
           onSelectTab={handleSelectTab}
           onSplitPane={handleSplitPane}
         />
 
-        {/* Terminal content area */}
+        {/* Tab content area */}
         <div
           style={{
             flex: 1,
@@ -127,13 +133,21 @@ export function Pane({ paneId, workspaceId }: PaneProps) {
                 height: '100%',
               }}
             >
-              <Terminal
-                sessionId={tab.sessionId}
-                tabId={tab.id}
-                paneId={paneId}
-                onNotification={tabNotificationHandlers[tab.id]}
-                hasNotification={tab.hasNotification}
-              />
+              {tab.type === 'browser' ? (
+                <Browser
+                  tabId={tab.id}
+                  url={tab.url || 'about:blank'}
+                  paneId={paneId}
+                />
+              ) : (
+                <Terminal
+                  sessionId={tab.sessionId}
+                  tabId={tab.id}
+                  paneId={paneId}
+                  onNotification={tabNotificationHandlers[tab.id]}
+                  hasNotification={tab.hasNotification}
+                />
+              )}
             </div>
           ))}
         </div>
