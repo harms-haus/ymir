@@ -107,6 +107,7 @@ export function Pane({ paneId, workspaceId }: PaneProps) {
           tabs={pane.tabs}
           activeTabId={pane.activeTabId}
           onCreateTab={handleCreateTab}
+          onCreateBrowserTab={handleCreateBrowserTab}
           onCloseTab={handleCloseTab}
           onSelectTab={handleSelectTab}
           onSplitPane={handleSplitPane}

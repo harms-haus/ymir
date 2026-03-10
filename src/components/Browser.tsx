@@ -237,7 +237,7 @@ export function Browser({ tabId, url, paneId }: BrowserProps) {
         </div>
         
         <div ref={webviewContainerRef}>
-          {/* Task 5: Webview */}
+          {webviewRef.current && <div className="webview-wrapper">Task 5: Webview created</div>}
         </div>
       </div>
       </ErrorBoundary>

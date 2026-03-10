@@ -62,7 +62,7 @@ interface WorkspaceState {
   closePane: (paneId: string) => void;
   setActivePane: (paneId: string) => void;
 
-  createTab: (paneId: string, cwd?: string) => void;
+  createTab: (paneId: string, cwd?: string, type?: TabType) => void;
   closeTab: (paneId: string, tabId: string) => void;
   setActiveTab: (paneId: string, tabId: string) => void;
   markNotification: (tabId: string, message: string) => void;
