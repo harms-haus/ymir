@@ -1,3 +1,4 @@
+use crate::git::{self, BranchInfo, GitStatus};
 use crate::state::{PtySession, PtyState};
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use serde::Serialize;
@@ -542,6 +543,60 @@ pub async fn kill_all_sessions(state: tauri::State<'_, PtyState>) -> Result<(), 
 pub async fn exit_app() {
     info!("Exit requested from frontend");
     std::process::exit(0);
+}
+
+#[tauri::command]
+#[instrument]
+pub fn get_git_status(path: String) -> Result<GitStatus, String> {
+    git::get_repo_status(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+#[instrument]
+pub fn stage_file(repo_path: String, file_path: String) -> Result<(), String> {
+    git::stage_file(&repo_path, &file_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+#[instrument]
+pub fn unstage_file(repo_path: String, file_path: String) -> Result<(), String> {
+    git::unstage_file(&repo_path, &file_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+#[instrument]
+pub fn discard_file_changes(repo_path: String, file_path: String) -> Result<(), String> {
+    git::discard_changes(&repo_path, &file_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+#[instrument]
+pub fn commit_changes(repo_path: String, message: String) -> Result<String, String> {
+    git::commit(&repo_path, &message).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+#[instrument]
+pub fn get_branches(repo_path: String) -> Result<Vec<BranchInfo>, String> {
+    git::get_branches(&repo_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+#[instrument]
+pub fn create_branch(repo_path: String, name: String) -> Result<(), String> {
+    git::create_branch(&repo_path, &name).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+#[instrument]
+pub fn delete_branch(repo_path: String, name: String) -> Result<(), String> {
+    git::delete_branch(&repo_path, &name).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+#[instrument]
+pub fn checkout_branch(repo_path: String, name: String) -> Result<(), String> {
+    git::checkout_branch(&repo_path, &name).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
