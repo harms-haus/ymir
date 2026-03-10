@@ -4,7 +4,7 @@ import useWorkspaceStore, {
 } from '../state/workspace';
 import { Workspace, PanelDefinition, SidebarTab } from '../state/types';
 import { TabHeaderPanel } from './TabHeaderPanel';
-import { gitPanelDefinition } from './GitPanel';
+import { gitPanelDefinition, createRepoPanelDefinition } from './GitPanel';
 
 import './TabBar.css';
 
@@ -622,11 +622,13 @@ export function WorkspaceSidebar() {
     activeTab,
     setActiveSidebarTab,
     registerPanel,
+    gitRepos,
   } = useWorkspaceStore();
 
-  // Create panel definitions with reactive badges
-  const panels: PanelDefinition[] = useMemo(
-    () => [
+  const repoPaths = useMemo(() => Object.keys(gitRepos), [gitRepos]);
+
+  const panels: PanelDefinition[] = useMemo(() => {
+    const staticPanels: PanelDefinition[] = [
       {
         id: 'workspaces' as SidebarTab,
         title: 'Workspaces',
@@ -645,7 +647,7 @@ export function WorkspaceSidebar() {
         },
         fullRender: () => <NotificationList />,
       },
-      gitPanelDefinition as PanelDefinition & { id: SidebarTab },
+      gitPanelDefinition as PanelDefinition,
       {
         id: 'project' as SidebarTab,
         title: 'Project',
@@ -653,22 +655,22 @@ export function WorkspaceSidebar() {
         badge: () => null,
         fullRender: () => <ProjectTree />,
       },
-    ],
-    // Note: We intentionally don't include getTotalNotificationCount or getGitChangesCount
-    // in dependencies because they are selectors that read from store state on each call.
-    // The useMemo is mainly for panel definition stability.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
-  );
+    ];
 
-  // Register panels on mount
+    const repoPanels = repoPaths.map((repoPath) =>
+      createRepoPanelDefinition(repoPath)
+    );
+
+    return [...staticPanels, ...repoPanels];
+  }, [repoPaths]);
+
   useEffect(() => {
     panels.forEach((panel) => {
       registerPanel(panel);
     });
   }, [panels, registerPanel]);
 
-  const handleTabClick = (tab: SidebarTab) => {
+  const handleTabClick = (tab: SidebarTab | string) => {
     setActiveSidebarTab(tab);
   };
 

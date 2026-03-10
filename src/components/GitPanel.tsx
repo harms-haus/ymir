@@ -306,6 +306,17 @@ const StagedFilesSection: React.FC<{
   return (
     <div className="git-section staged-files-section">
       <div className="section-header" onClick={toggleCollapsed}>
+        <svg
+          className={`section-chevron ${isCollapsed ? 'collapsed' : ''}`}
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+        >
+          <path d="M9 18l6-6-6-6" />
+        </svg>
         <span className="section-title">Staged Changes</span>
         {files.length > 0 && (
           <span className="git-count-badge">{files.length}</span>
@@ -365,6 +376,17 @@ const ChangesFilesSection: React.FC<{
   return (
     <div className="git-section changes-files-section">
       <div className="section-header" onClick={toggleCollapsed}>
+        <svg
+          className={`section-chevron ${isCollapsed ? 'collapsed' : ''}`}
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+        >
+          <path d="M9 18l6-6-6-6" />
+        </svg>
         <span className="section-title">Changes</span>
         {files.length > 0 && (
           <span className="git-count-badge">{files.length}</span>
@@ -746,3 +768,38 @@ export const gitPanelDefinition: PanelDefinition = {
   badge: GitPanelBadge,
   fullRender: GitPanelFull,
 };
+
+function getRepoFolderName(repoPath: string): string {
+  const normalizedPath = repoPath.replace(/\\/g, '/');
+  const parts = normalizedPath.split('/').filter(Boolean);
+  return parts[parts.length - 1] || 'repo';
+}
+
+function RepoPanelContent({ repoPath }: { repoPath: string }): React.ReactElement {
+  const { setActiveRepo } = useWorkspaceStore();
+
+  React.useEffect(() => {
+    setActiveRepo(repoPath);
+  }, [repoPath, setActiveRepo]);
+
+  return <GitPanelFull />;
+}
+
+export function createRepoPanelDefinition(repoPath: string): PanelDefinition {
+  const folderName = getRepoFolderName(repoPath);
+  const panelId = `git-${repoPath}`;
+
+  return {
+    id: panelId,
+    title: folderName,
+    icon: GitPanelIcon,
+    badge: () => {
+      const { gitRepos } = useWorkspaceStore.getState();
+      const repo = gitRepos[repoPath];
+      if (!repo) return null;
+      const count = repo.staged.length + repo.unstaged.length;
+      return count > 0 ? { count, color: '#4fc3f7' } : null;
+    },
+    fullRender: () => React.createElement(RepoPanelContent, { repoPath }),
+  };
+}

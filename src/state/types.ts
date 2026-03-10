@@ -138,7 +138,7 @@ export interface Workspace {
 // ============================================================================
 
 /** Available sidebar tabs/panels */
-export type SidebarTab = 'workspaces' | 'notifications' | 'git' | 'project';
+export type SidebarTab = 'workspaces' | 'notifications' | 'git' | 'project' | `git-${string}`;
 
 /** Tab badge configuration */
 export interface TabBadge {
@@ -152,8 +152,8 @@ export interface TabBadge {
 
 /** Panel definition with render handlers for reactivity */
 export interface PanelDefinition {
-  /** Unique identifier matching SidebarTab type */
-  id: SidebarTab;
+  /** Unique identifier - SidebarTab for static panels, string for dynamic panels */
+  id: SidebarTab | string;
   /** Hover text shown on tab */
   title: string;
   /** Tab icon renderer (reactive) */

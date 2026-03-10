@@ -51,7 +51,7 @@ interface WorkspaceState {
   activeWorkspaceId: string;
   sidebarCollapsed: boolean;
   notificationPanelOpen: boolean;
-  activeTab: SidebarTab;
+  activeTab: SidebarTab | string;
   panels: PanelDefinition[];
   // Mock git state for badge reactivity
   gitStagedCount: number;
@@ -90,7 +90,7 @@ interface WorkspaceState {
   resetState: () => void;
 
   // Sidebar panel management
-  setActiveSidebarTab: (tab: SidebarTab) => void;
+  setActiveSidebarTab: (tab: SidebarTab | string) => void;
   registerPanel: (definition: PanelDefinition) => void;
 
   // Mock git actions for badge testing
@@ -669,10 +669,10 @@ const useWorkspaceStore = create<WorkspaceState>()(
             state.isPolling = {};
           }),
 
-        setActiveSidebarTab: (tab: SidebarTab) =>
-          set((state) => {
-            state.activeTab = tab;
-          }),
+  setActiveSidebarTab: (tab: SidebarTab | string) =>
+    set((state) => {
+      state.activeTab = tab;
+    }),
 
         registerPanel: (definition: PanelDefinition) =>
           set((state) => {

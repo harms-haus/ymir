@@ -4,9 +4,9 @@ import { PanelDefinition, SidebarTab } from '../state/types';
 
 interface TabHeaderPanelProps {
   panels: PanelDefinition[];
-  activeTab: SidebarTab;
+  activeTab: SidebarTab | string;
   isCollapsed: boolean;
-  onTabClick: (tab: SidebarTab) => void;
+  onTabClick: (tab: SidebarTab | string) => void;
   onToggleSidebar: () => void;
 }
 
@@ -17,10 +17,9 @@ export const TabHeaderPanel: React.FC<TabHeaderPanelProps> = ({
   onTabClick,
   onToggleSidebar,
 }) => {
-  const handleTabClick = (tab: SidebarTab) => {
+  const handleTabClick = (tab: SidebarTab | string) => {
     const panel = panels.find((p) => p.id === tab);
 
-    // Auto-expand sidebar if clicking a tab with no collapsedRender while collapsed
     if (isCollapsed && panel && !panel.collapsedRender) {
       onToggleSidebar();
     }
