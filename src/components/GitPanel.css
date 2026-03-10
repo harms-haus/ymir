@@ -90,11 +90,11 @@
 }
 
 .git-item:hover {
-  background-color: #2a2d2e;
+  background-color: #2a2d2f;
 }
 
 .git-file-icon {
-  font-size: 14px;
+  font-size: 16px;
   color: #858585;
   flex-shrink: 0;
 }
@@ -102,6 +102,7 @@
 .git-file-name {
   flex: 1;
   font-size: 12px;
+  font-weight: bold;
   color: #cccccc;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -117,23 +118,33 @@
 }
 
 .git-status-badge.modified {
-  background-color: #e2c08d;
+  background-color: #ff9f00;
   color: #1e1e1e;
 }
 
 .git-status-badge.added {
-  background-color: #89d185;
+  background-color: #4caf50;
   color: #1e1e1e;
 }
 
 .git-status-badge.deleted {
-  background-color: #f14c4c;
+  background-color: #f44336;
   color: #ffffff;
 }
 
 .git-status-badge.untracked {
-  background-color: #73b991;
+  background-color: #73bf99;
   color: #1e1e1e;
+}
+
+.git-status-badge.renamed {
+  background-color: #e8c39b;
+  color: #1e1e1e;
+}
+
+.git-status-badge.conflict {
+  background-color: #c94a4c;
+  color: #ffffff;
 }
 
 .git-branch-info {
@@ -427,11 +438,12 @@
 
 /* Checkbox styling */
 .git-checkbox {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   cursor: pointer;
-  accent-color: #007acc;
+  accent-color: #4caf50;
   flex-shrink: 0;
+  background-color: white;
 }
 
 /* File info container */
