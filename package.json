@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:host": "vite --host 0.0.0.0",
+    "dev:host": "lsof -ti:5173 | xargs kill -9 2>/dev/null || true && vite --host 0.0.0.0",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",

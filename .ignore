@@ -1,0 +1,10 @@
+# OpenCode file watcher ignore patterns
+node_modules/
+dist/
+src-tauri/target/
+coverage/
+.sisyphus/
+*.lock
+bun.lock
+package-lock.json
+Cargo.lock

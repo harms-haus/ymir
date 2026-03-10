@@ -10,6 +10,17 @@ import { ErrorBoundary } from './ErrorBoundary';
 import logger from '../lib/logger';
 import { terminalTheme } from '../theme/terminal';
 
+function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 interface TerminalProps {
   sessionId?: string;
   tabId: string;
@@ -80,7 +91,7 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
       }
 
       isConnectingRef.current = true;
-      const correlationId = crypto.randomUUID();
+      const correlationId = generateUUID();
 
       const channel = new Channel<{ event: string; data?: unknown }>();
       channelRef.current = channel;
@@ -166,7 +177,7 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
     if (!isReady || !currentSessionIdRef.current || !instance) return;
 
     const { cols, rows } = instance;
-    const correlationId = crypto.randomUUID();
+    const correlationId = generateUUID();
 
     invoke('resize_pty', {
       sessionId: currentSessionIdRef.current,

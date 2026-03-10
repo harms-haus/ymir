@@ -13,6 +13,73 @@ const mockGitData = {
   changesCount: 5,
 };
 
+// Dummy staged files to showcase the staged section
+const dummyStagedFiles = [
+  {
+    path: 'src/components/Header.tsx',
+    status: 'modified' as const,
+    staged: true,
+  },
+  {
+    path: 'src/lib/utils.ts',
+    status: 'added' as const,
+    staged: true,
+  },
+  {
+    path: 'package.json',
+    status: 'modified' as const,
+    staged: true,
+  },
+];
+
+// Dummy unstaged files to showcase the unstaged section
+const dummyUnstagedFiles = [
+  {
+    path: 'src/components/GitPanel.tsx',
+    status: 'modified' as const,
+    staged: false,
+  },
+  {
+    path: 'src/App.tsx',
+    status: 'modified' as const,
+    staged: false,
+  },
+  {
+    path: 'src/state/workspace.ts',
+    status: 'modified' as const,
+    staged: false,
+  },
+  {
+    path: 'src/styles/theme.css',
+    status: 'added' as const,
+    staged: false,
+  },
+  {
+    path: 'README.md',
+    status: 'modified' as const,
+    staged: false,
+  },
+  {
+    path: 'src/components/OldComponent.tsx',
+    status: 'deleted' as const,
+    staged: false,
+  },
+  {
+    path: 'src/utils/helpers.ts',
+    status: 'renamed' as const,
+    staged: false,
+    originalPath: 'src/utils/old-helpers.ts',
+  },
+  {
+    path: 'src/config/local.json',
+    status: 'untracked' as const,
+    staged: false,
+  },
+];
+
+// Use dummy data for demonstration
+const USE_DUMMY_DATA = true;
+
 // Git branch SVG icon
 const GitBranchIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg
@@ -61,8 +128,7 @@ const NotAGitRepo: React.FC = () => {
 };
 
 
-
-// Branch selector dropdown component
+// Branch selector dropdown component - redesigned as plain text with left chevron
 const BranchSelector: React.FC<{
   currentBranch: string;
   branches: string[];
@@ -99,10 +165,8 @@ const BranchSelector: React.FC<{
         onClick={() => setIsOpen(!isOpen)}
         title="Switch branch"
       >
-        <GitBranchIcon />
-        <span className="branch-name">{currentBranch}</span>
         <svg
-          className={`branch-selector-arrow ${isOpen ? 'open' : ''}`}
+          className={`branch-selector-chevron ${isOpen ? 'open' : ''}`}
           width="12"
           height="12"
           viewBox="0 0 24 24"
@@ -112,6 +176,7 @@ const BranchSelector: React.FC<{
         >
           <path d="M6 9l6 6 6-6" />
         </svg>
+        <span className="branch-name">{currentBranch}</span>
       </button>
       {isOpen && (
         <div className="branch-dropdown">
@@ -447,7 +512,7 @@ const ChangesFilesSection: React.FC<{
   );
 };
 
-// Commit section with message textarea and commit button
+// Commit section with message textarea and floating commit button
 const CommitSection: React.FC<{
   stagedCount: number;
   onCommit: (message: string) => void;
@@ -469,26 +534,28 @@ const CommitSection: React.FC<{
 
   return (
     <div className="git-commit-section">
-      <textarea
-        className="git-commit-textarea"
-        placeholder="Commit message..."
-        value={message}
-        onChange={(e) => setMessage(e.target.value)}
-        onKeyDown={handleKeyDown}
-        rows={3}
-        disabled={stagedCount === 0}
-      />
-      <button
-        className="git-commit-button"
-        onClick={handleCommit}
-        disabled={!message.trim() || stagedCount === 0}
-        title="Commit staged changes"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <polyline points="20,6 9,17 4,12" />
-        </svg>
-        <span>Commit</span>
-      </button>
+      <div className="git-commit-textarea-wrapper">
+        <textarea
+          className="git-commit-textarea"
+          placeholder={stagedCount === 0 ? "No staged changes to commit" : "Commit message..."}
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          onKeyDown={handleKeyDown}
+          rows={3}
+          disabled={stagedCount === 0}
+        />
+        <button
+          className="git-commit-button"
+          onClick={handleCommit}
+          disabled={!message.trim() || stagedCount === 0}
+          title="Commit staged changes"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="20,6 9,17 4,12" />
+          </svg>
+          <span>Commit</span>
+        </button>
+      </div>
       {stagedCount > 0 && (
         <div className="git-commit-hint">
           Press Ctrl+Enter to commit
@@ -497,6 +564,7 @@ const CommitSection: React.FC<{
     </div>
   );
 };
+
 const GitPanelHeader: React.FC = () => {
   const handleRefresh = () => {
     console.log('Refresh git status');
@@ -537,51 +605,87 @@ const GitPanelHeader: React.FC = () => {
   );
 };
 
-const GitPanelToolbar: React.FC<{
+// New toolbar row component with branch selector and icon buttons
+const GitPanelToolbarRow: React.FC<{
+  currentBranch: string;
+  branches: string[];
+  onSelectBranch: (branch: string) => void;
+  onCreateBranch: (branchName: string) => Promise<void>;
+  onDeleteBranch: (branchName: string) => Promise<void>;
   onRefresh: () => Promise<void>;
   onStageAll: () => Promise<void>;
   onUnstageAll: () => Promise<void>;
   unstagedCount: number;
   stagedCount: number;
-}> = ({ onRefresh, onStageAll, onUnstageAll, unstagedCount, stagedCount }) => {
+  ahead: number;
+  behind: number;
+  isCreating?: boolean;
+  isDeleting?: boolean;
+}> = ({
+  currentBranch,
+  branches,
+  onSelectBranch,
+  onCreateBranch,
+  onDeleteBranch,
+  onRefresh,
+  onStageAll,
+  onUnstageAll,
+  unstagedCount,
+  stagedCount,
+  ahead,
+  behind,
+  isCreating,
+  isDeleting,
+}) => {
   return (
-    <div className="git-panel-toolbar">
-      <button
-        type="button"
-        className="git-toolbar-button"
-        onClick={onRefresh}
-        title="Refresh"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-        </svg>
-        <span>Refresh</span>
-      </button>
-      <button
-        type="button"
-        className="git-toolbar-button"
-        onClick={onStageAll}
-        disabled={unstagedCount === 0}
-        title="Stage all unstaged changes"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <polyline points="20,6 9,17 4,12" />
-        </svg>
-        <span>Stage All</span>
-      </button>
-      <button
-        type="button"
-        className="git-toolbar-button"
-        onClick={onUnstageAll}
-        disabled={stagedCount === 0}
-        title="Unstage all staged changes"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <line x1="18" y1="6" x2="6" y2="18" />
-          <line x1="6" y1="6" x2="18" y2="18" />
-        </svg>
-        <span>Unstage All</span>
-      </button>
+    <div className="git-panel-toolbar-row">
+      <div className="git-panel-toolbar-left">
+        <BranchSelector
+          currentBranch={currentBranch}
+          branches={branches}
+          onSelect={onSelectBranch}
+          onCreateBranch={onCreateBranch}
+          onDeleteBranch={onDeleteBranch}
+          isCreating={isCreating}
+          isDeleting={isDeleting}
+        />
+        <AheadBehindIndicator ahead={ahead} behind={behind} />
+      </div>
+      <div className="git-panel-toolbar-actions">
+        <button
+          type="button"
+          className="git-toolbar-icon-button"
+          onClick={onRefresh}
+          title="Refresh"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          className="git-toolbar-icon-button"
+          onClick={onStageAll}
+          disabled={unstagedCount === 0}
+          title="Stage all unstaged changes"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="20,6 9,17 4,12" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          className="git-toolbar-icon-button"
+          onClick={onUnstageAll}
+          disabled={stagedCount === 0}
+          title="Unstage all staged changes"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
     </div>
   );
 };
@@ -597,7 +701,7 @@ const GitPanelIcon = (): React.ReactNode => (
 const GitPanelBadge = (): import('../state/types').TabBadge | null => {
   const count = getGitChangesCount();
   if (count === 0) return null;
-  
+
   return {
     count,
     color: '#4fc3f7', // notification blue accent
@@ -618,8 +722,8 @@ const GitPanelFull = (): React.ReactNode => {
     discoverAndRegisterRepos('/home/blake/Documents/software/ymir');
   }, [discoverAndRegisterRepos]);
 
-  // Show empty state when no active repo or git error exists
-  if (!activeRepo || gitError) {
+  // Show empty state when no active repo or git error exists (unless using dummy data)
+  if (!USE_DUMMY_DATA && (!activeRepo || gitError)) {
     return (
       <div className="git-panel">
         <GitPanelHeader />
@@ -759,42 +863,39 @@ const GitPanelFull = (): React.ReactNode => {
     setDeleteBranch(false);
   };
 
+  const displayStaged = USE_DUMMY_DATA ? dummyStagedFiles : (activeRepo?.staged || []);
+  const displayUnstaged = USE_DUMMY_DATA ? dummyUnstagedFiles : (activeRepo?.unstaged || []);
+
   return (
     <div className="git-panel">
       <GitPanelHeader />
-      {/* Commit section */}
-      <CommitSection stagedCount={activeRepo?.staged.length || 0} onCommit={handleCommit} />
 
-      {/* Branch section */}
-      <div className="git-section branch-section">
-        <BranchSelector
-          currentBranch={activeRepo?.branch || 'main'}
-          branches={mockGitData.branches}
-          onSelect={() => {}}
-          onCreateBranch={onCreateBranch}
-          onDeleteBranch={onDeleteBranch}
-          isCreating={createBranch}
-          isDeleting={deleteBranch}
-        />
-        <AheadBehindIndicator
-          ahead={activeRepo?.ahead || 0}
-          behind={activeRepo?.behind || 0}
-        />
-      </div>
-
-      <GitPanelToolbar
+      {/* Branch selector + toolbar row - now ABOVE commit section */}
+      <GitPanelToolbarRow
+        currentBranch={activeRepo?.branch || 'main'}
+        branches={mockGitData.branches}
+        onSelectBranch={() => {}}
+        onCreateBranch={onCreateBranch}
+        onDeleteBranch={onDeleteBranch}
         onRefresh={handleRefresh}
         onStageAll={handleStageAll}
         onUnstageAll={handleUnstageAll}
-        unstagedCount={activeRepo?.unstaged.length || 0}
-        stagedCount={activeRepo?.staged.length || 0}
+        unstagedCount={displayUnstaged.length}
+        stagedCount={displayStaged.length}
+        ahead={activeRepo?.ahead || 0}
+        behind={activeRepo?.behind || 0}
+        isCreating={createBranch}
+        isDeleting={deleteBranch}
       />
 
+      {/* Commit section - now BELOW branch selector */}
+      <CommitSection stagedCount={displayStaged.length} onCommit={handleCommit} />
+
       {/* Staged files */}
-      <StagedFilesSection files={activeRepo?.staged || []} onUnstage={handleUnstage} />
+      <StagedFilesSection files={displayStaged} onUnstage={handleUnstage} />
 
       {/* Changes files */}
-      <ChangesFilesSection files={activeRepo?.unstaged || []} onStage={handleStage} onDiscard={handleDiscard} />
+      <ChangesFilesSection files={displayUnstaged} onStage={handleStage} onDiscard={handleDiscard} />
     </div>
   );
 };

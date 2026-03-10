@@ -221,9 +221,22 @@ function countPanes(workspaces: WorkspaceWithPanes[]): number {
   return count;
 }
 
+// UUID generator that works in both secure and non-secure contexts
+function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback for non-secure contexts (HTTP)
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 function createDefaultTab(cwd: string = '~'): Tab {
   return {
-    id: crypto.randomUUID(),
+    id: generateUUID(),
     title: 'bash',
     cwd,
     sessionId: '', // Empty until PTY is spawned
@@ -236,7 +249,7 @@ function createDefaultTab(cwd: string = '~'): Tab {
 function createDefaultPane(): Pane {
   const tab = createDefaultTab();
   return {
-    id: crypto.randomUUID(),
+    id: generateUUID(),
     flexRatio: 1.0,
     tabs: [tab],
     activeTabId: tab.id,
@@ -267,7 +280,7 @@ function splitNodeRecursive(
   if (isLeaf(node) && node.paneId === targetPaneId) {
     const branch: BranchNode = {
       type: 'branch',
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       axis,
       children: splitIndex === 0 ? [newLeaf, node] : [node, newLeaf],
     };
@@ -358,7 +371,7 @@ const useWorkspaceStore = create<WorkspaceState>()(
               paneId: pane.id,
             };
             const newWorkspace: WorkspaceWithPanes = {
-              id: crypto.randomUUID(),
+              id: generateUUID(),
               name,
               root: leaf,
               activePaneId: pane.id,
@@ -401,7 +414,7 @@ const useWorkspaceStore = create<WorkspaceState>()(
             const pane = createDefaultPane();
             const leaf: LeafNode = { type: 'leaf', paneId: pane.id };
             const newWorkspace: WorkspaceWithPanes = {
-              id: crypto.randomUUID(),
+              id: generateUUID(),
               name,
               root: leaf,
               activePaneId: pane.id,

@@ -1,8 +1,8 @@
-import { invoke } from '@tauri-apps/api/core';
 import logger from './logger';
 
 export async function discoverGitRepos(rootPath: string): Promise<string[]> {
   try {
+    const { invoke } = await import('@tauri-apps/api/core');
     logger.info('Starting git repository discovery', { rootPath });
     const repos = await invoke<string[]>('discover_git_repos', { rootPath });
     logger.info('Git repository discovery completed', {
@@ -12,7 +12,7 @@ export async function discoverGitRepos(rootPath: string): Promise<string[]> {
     return repos;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error('Git repository discovery failed', { rootPath, error: message });
+    logger.debug('Git repository discovery failed', { rootPath, error: message });
     return [];
   }
 }
