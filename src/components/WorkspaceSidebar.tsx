@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import useWorkspaceStore, {
   getTotalNotificationCount,
-  getGitChangesCount,
 } from '../state/workspace';
 import { Workspace, PanelDefinition, SidebarTab } from '../state/types';
 import { TabHeaderPanel } from './TabHeaderPanel';
+import { gitPanelDefinition } from './GitPanel';
 
 import './TabBar.css';
 
@@ -522,43 +522,6 @@ function NotificationList() {
   );
 }
 
-function GitPanelContent() {
-  const changesCount = getGitChangesCount();
-
-  return (
-    <div
-      style={{
-        padding: '16px',
-        color: '#cccccc',
-        fontSize: '13px',
-      }}
-    >
-      <div
-        style={{
-          marginBottom: '12px',
-          fontWeight: 600,
-          borderBottom: '1px solid #333',
-          paddingBottom: '8px',
-        }}
-      >
-        Git ({changesCount} changes)
-      </div>
-      <div style={{ marginBottom: '12px' }}>
-        <div style={{ color: '#858585', marginBottom: '4px' }}>Branch</div>
-        <div style={{ color: '#4fc3f7' }}>main</div>
-      </div>
-      <div style={{ marginBottom: '12px' }}>
-        <div style={{ color: '#858585', marginBottom: '4px' }}>Staged</div>
-        <div>0 files</div>
-      </div>
-      <div>
-        <div style={{ color: '#858585', marginBottom: '4px' }}>Changes</div>
-        <div>{changesCount} files</div>
-      </div>
-    </div>
-  );
-}
-
 function ProjectTree() {
   return (
     <div
@@ -631,26 +594,6 @@ function BellIcon() {
   );
 }
 
-function GitBranchIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <line x1="6" y1="3" x2="6" y2="15" />
-      <circle cx="18" cy="6" r="3" />
-      <circle cx="6" cy="18" r="3" />
-      <path d="M18 9a9 9 0 0 1-9 9" />
-    </svg>
-  );
-}
-
 function FolderIcon() {
   return (
     <svg
@@ -702,16 +645,7 @@ export function WorkspaceSidebar() {
         },
         fullRender: () => <NotificationList />,
       },
-      {
-        id: 'git' as SidebarTab,
-        title: 'Git',
-        icon: () => <GitBranchIcon />,
-        badge: () => {
-          const count = getGitChangesCount();
-          return count > 0 ? { count } : null;
-        },
-        fullRender: () => <GitPanelContent />,
-      },
+      gitPanelDefinition as PanelDefinition & { id: SidebarTab },
       {
         id: 'project' as SidebarTab,
         title: 'Project',
