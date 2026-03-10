@@ -39,11 +39,28 @@ const BranchSelector: React.FC<{
   currentBranch: string;
   branches: string[];
   onSelect: (branch: string) => void;
-}> = ({ currentBranch, branches, onSelect }) => {
+  onCreateBranch: (branchName: string) => Promise<void>;
+  onDeleteBranch: (branchName: string) => Promise<void>;
+  isCreating?: boolean;
+  isDeleting?: boolean;
+}> = ({ currentBranch, branches, onSelect, onCreateBranch, onDeleteBranch, isCreating, isDeleting }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   const handleSelect = (branch: string) => {
     onSelect(branch);
+    setIsOpen(false);
+  };
+
+  const handleCreateBranch = () => {
+    const branchName = window.prompt('Enter new branch name:');
+    if (branchName && branchName.trim()) {
+      onCreateBranch(branchName.trim());
+    }
+    setIsOpen(false);
+  };
+
+  const handleDeleteBranch = (branchName: string) => {
+    onDeleteBranch(branchName);
     setIsOpen(false);
   };
 
@@ -70,6 +87,18 @@ const BranchSelector: React.FC<{
       </button>
       {isOpen && (
         <div className="branch-dropdown">
+          <button
+            className="branch-create-button"
+            onClick={handleCreateBranch}
+            title="Create new branch"
+            disabled={isCreating}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            <span>Create New Branch</span>
+          </button>
           {branches.map((branch) => (
             <button
               key={branch}
@@ -90,6 +119,22 @@ const BranchSelector: React.FC<{
                 >
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
+              )}
+              {branch !== currentBranch && (
+                <button
+                  className="branch-delete-button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteBranch(branch);
+                  }}
+                  title={`Delete branch '${branch}'`}
+                  disabled={isDeleting}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
               )}
             </button>
           ))}
@@ -514,6 +559,9 @@ const GitPanelFull = (): React.ReactNode => {
   const activeRepo = getActiveRepo();
   const { discoverAndRegisterRepos, updateGitFile } = useWorkspaceStore();
 
+  const [createBranch, setCreateBranch] = useState(false);
+  const [deleteBranch, setDeleteBranch] = useState(false);
+
   // Discover git repos on mount
   useEffect(() => {
     discoverAndRegisterRepos('/home/blake/Documents/software/ymir');
@@ -614,6 +662,42 @@ const GitPanelFull = (): React.ReactNode => {
     await handleRefresh();
   };
 
+  const onCreateBranch = async (branchName: string) => {
+    if (!activeRepo) return;
+
+    setCreateBranch(true);
+
+    if (window.confirm(`Create branch '${branchName}'?`)) {
+      try {
+        await gitService.createBranch(activeRepo.path, branchName);
+        const updatedRepo = await gitService.getGitStatus(activeRepo.path);
+        useWorkspaceStore.getState().setGitRepo(activeRepo.path, updatedRepo);
+      } catch (error) {
+        console.error('Failed to create branch:', error);
+      }
+    }
+
+    setCreateBranch(false);
+  };
+
+  const onDeleteBranch = async (branchName: string) => {
+    if (!activeRepo) return;
+
+    setDeleteBranch(true);
+
+    if (window.confirm(`Delete branch '${branchName}'?`)) {
+      try {
+        await gitService.deleteBranch(activeRepo.path, branchName);
+        const updatedRepo = await gitService.getGitStatus(activeRepo.path);
+        useWorkspaceStore.getState().setGitRepo(activeRepo.path, updatedRepo);
+      } catch (error) {
+        console.error('Failed to delete branch:', error);
+      }
+    }
+
+    setDeleteBranch(false);
+  };
+
   return (
     <div className="git-panel">
       <GitPanelHeader />
@@ -626,6 +710,10 @@ const GitPanelFull = (): React.ReactNode => {
           currentBranch={activeRepo?.branch || 'main'}
           branches={mockGitData.branches}
           onSelect={() => {}}
+          onCreateBranch={onCreateBranch}
+          onDeleteBranch={onDeleteBranch}
+          isCreating={createBranch}
+          isDeleting={deleteBranch}
         />
         <AheadBehindIndicator
           ahead={activeRepo?.ahead || 0}
