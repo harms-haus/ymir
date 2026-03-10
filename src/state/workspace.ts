@@ -13,6 +13,7 @@ import {
   Workspace,
   Pane,
   Tab,
+  TabType,
   SplitNode,
   LeafNode,
   BranchNode,
@@ -193,16 +194,28 @@ function countPanes(workspaces: WorkspaceWithPanes[]): number {
   return count;
 }
 
-function createDefaultTab(cwd: string = '~'): Tab {
-  return {
+function createDefaultTab(cwd: string = '~', type: TabType = 'terminal'): Tab {
+  const title = type === 'browser' ? 'Browser' : 'bash';
+
+  const terminalTab = {
     id: crypto.randomUUID(),
-    title: 'bash',
+    title,
+    type,
     cwd,
     sessionId: '', // Empty until PTY is spawned
     scrollback: [],
     hasNotification: false,
     notificationCount: 0,
   };
+
+  const browserTab = {
+    ...terminalTab,
+    url: 'about:blank',
+    history: ['about:blank'],
+    historyIndex: 0,
+  };
+
+  return type === 'browser' ? browserTab : terminalTab;
 }
 
 function createDefaultPane(): Pane {
@@ -460,7 +473,7 @@ const useWorkspaceStore = create<WorkspaceState>()(
             }
           }),
 
-        createTab: (paneId: string, cwd?: string) =>
+        createTab: (paneId: string, cwd?: string, type?: TabType) =>
           set((state) => {
             const workspace = state.workspaces.find((ws) => ws.id === state.activeWorkspaceId);
             if (!workspace) return;
@@ -468,10 +481,10 @@ const useWorkspaceStore = create<WorkspaceState>()(
             const pane = workspace.panes[paneId];
             if (!pane) return;
 
-            const newTab = createDefaultTab(cwd);
+            const newTab = createDefaultTab(cwd, type);
             pane.tabs.push(newTab);
             pane.activeTabId = newTab.id;
-            logger.info('[Tab] Created tab', { paneId, tabId: newTab.id });
+            logger.info('[Tab] Created tab', { paneId, tabId: newTab.id, type });
           }),
 
         closeTab: async (paneId: string, tabId: string) => {
