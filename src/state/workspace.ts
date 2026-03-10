@@ -8,6 +8,7 @@ import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import { invoke } from '@tauri-apps/api/core';
 import { load, Store } from '@tauri-apps/plugin-store';
 import logger from '../lib/logger';
+import gitService from '../lib/git-service';
 
 import {
   Workspace,
@@ -24,6 +25,12 @@ import {
   PanelDefinition,
   GitRepo,
 } from './types';
+
+// ============================================================================
+// Git Polling State (module-level for interval tracking)
+// ============================================================================
+
+const gitPollingIntervals: Record<string, number> = {};
 import { MAX_PANES, MAX_SCROLLBACK_LINES, MIN_FONT_SIZE, MAX_FONT_SIZE } from './types';
 
 // ============================================================================
@@ -55,6 +62,8 @@ interface WorkspaceState {
   activeRepoPath: string | null;
   isGitLoading: boolean;
   gitError: string | null;
+  // Git polling state
+  isPolling: Record<string, boolean>;
 
   createWorkspace: (name: string) => void;
   closeWorkspace: (workspaceId: string) => void;
@@ -98,6 +107,9 @@ interface WorkspaceState {
   removeGitRepo: (repoPath: string) => void;
   setGitLoading: (loading: boolean) => void;
   setGitError: (error: string | null) => void;
+  // Git polling actions
+  startGitPolling: (repoPath: string) => void;
+  stopGitPolling: (repoPath: string) => void;
 }
 
 // ============================================================================
@@ -333,6 +345,8 @@ const useWorkspaceStore = create<WorkspaceState>()(
   activeRepoPath: null,
   isGitLoading: false,
   gitError: null,
+  // Initialize polling state
+  isPolling: {},
 
         createWorkspace: (name: string) =>
           set((state) => {
@@ -646,6 +660,11 @@ const useWorkspaceStore = create<WorkspaceState>()(
             state.panels = [];
             state.gitStagedCount = 0;
             state.gitChangesCount = 0;
+            state.gitRepos = {};
+            state.activeRepoPath = null;
+            state.isGitLoading = false;
+            state.gitError = null;
+            state.isPolling = {};
           }),
 
         setActiveSidebarTab: (tab: SidebarTab) =>
@@ -766,6 +785,52 @@ const useWorkspaceStore = create<WorkspaceState>()(
     set((state) => {
       state.gitError = error;
     }),
+
+  startGitPolling: (repoPath: string) => {
+    const state = get();
+
+    if (state.isPolling[repoPath]) {
+      return;
+    }
+
+    set((state) => {
+      state.isPolling[repoPath] = true;
+    });
+
+    const poll = async () => {
+      try {
+        const repo = await gitService.getGitStatus(repoPath);
+        set((state) => {
+          state.gitRepos[repoPath] = repo;
+          state.gitStagedCount = Object.values(state.gitRepos).reduce(
+            (sum, r) => sum + r.staged.length,
+            0
+          );
+          state.gitChangesCount = Object.values(state.gitRepos).reduce(
+            (sum, r) => sum + r.unstaged.length,
+            0
+          );
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error('Git polling failed', { repoPath, error: message });
+      }
+    };
+
+    poll();
+    gitPollingIntervals[repoPath] = window.setInterval(poll, 5000);
+  },
+
+  stopGitPolling: (repoPath: string) => {
+    if (gitPollingIntervals[repoPath]) {
+      window.clearInterval(gitPollingIntervals[repoPath]);
+      delete gitPollingIntervals[repoPath];
+    }
+
+    set((state) => {
+      state.isPolling[repoPath] = false;
+    });
+  },
 })),
       {
         name: 'workspace-storage',
