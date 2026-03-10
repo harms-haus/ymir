@@ -216,3 +216,59 @@ export type PaneMap = Record<string, Pane>;
 
 /** Map of tab IDs to Tab objects (for O(1) lookup) */
 export type TabMap = Record<string, Tab>;
+
+// ============================================================================
+// Git State Types
+// ============================================================================
+
+/** Status of a file in the git repository */
+export type GitFileStatus =
+  | 'modified'
+  | 'added'
+  | 'deleted'
+  | 'untracked'
+  | 'renamed'
+  | 'conflict';
+
+/** Information about a single file in the git repository */
+export interface GitFile {
+  /** Relative path from repository root */
+  path: string;
+  /** Current status of the file */
+  status: GitFileStatus;
+  /** Whether this file is in the staging area */
+  staged: boolean;
+  /** Original path if file was renamed */
+  originalPath?: string;
+}
+
+/** Information about a branch */
+export interface GitBranch {
+  /** Branch name */
+  name: string;
+  /** Whether this is the current (checked out) branch */
+  isCurrent: boolean;
+  /** Whether this is a remote branch */
+  isRemote: boolean;
+  /** Upstream branch name (if any) */
+  upstream?: string;
+}
+
+/** Complete repository state */
+export interface GitRepo {
+  /** Repository root path */
+  path: string;
+  /** Current branch name */
+  branch: string;
+  /** Number of commits ahead of upstream */
+  ahead: number;
+  /** Number of commits behind upstream */
+  behind: number;
+  /** Files staged for commit */
+  staged: GitFile[];
+  /** Files with unstaged changes */
+  unstaged: GitFile[];
+}
+
+/** Git state for multiple repositories */
+export type GitState = Record<string, GitRepo>;
