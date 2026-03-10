@@ -206,12 +206,13 @@ const FileItem: React.FC<{
 };
 
 // Staged files section with expandable tree and unstage checkbox
-const StagedFilesSection: React.FC<{ 
+const StagedFilesSection: React.FC<{
   files: GitFile[];
   onUnstage: (path: string) => void;
 }> = ({ files, onUnstage }) => {
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
-  
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
   const toggleExpand = (path: string) => {
     setExpandedFiles(prev => {
       const next = new Set(prev);
@@ -223,32 +224,40 @@ const StagedFilesSection: React.FC<{
       return next;
     });
   };
-  
+
+  const toggleCollapsed = () => {
+    setIsCollapsed(prev => !prev);
+  };
+
   return (
     <div className="git-section staged-files-section">
-      <div className="section-header">
+      <div className="section-header" onClick={toggleCollapsed}>
         <span className="section-title">Staged Changes</span>
         {files.length > 0 && (
           <span className="git-count-badge">{files.length}</span>
         )}
       </div>
-      {files.length === 0 ? (
-        <div className="git-empty-state">
-          <span className="git-empty-text">No staged changes</span>
-        </div>
-      ) : (
-        <div className="git-file-list">
-          {files.map((file) => (
-            <FileItem 
-              key={file.path} 
-              file={file} 
-              showCheckbox={true}
-              expanded={expandedFiles.has(file.path)}
-              onToggleExpand={() => toggleExpand(file.path)}
-              onCheckboxChange={() => onUnstage(file.path)}
-            />
-          ))}
-        </div>
+      {!isCollapsed && (
+        <>
+          {files.length === 0 ? (
+            <div className="git-empty-state">
+              <span className="git-empty-text">No staged changes</span>
+            </div>
+          ) : (
+            <div className="git-file-list">
+              {files.map((file) => (
+                <FileItem
+                  key={file.path}
+                  file={file}
+                  showCheckbox={true}
+                  expanded={expandedFiles.has(file.path)}
+                  onToggleExpand={() => toggleExpand(file.path)}
+                  onCheckboxChange={() => onUnstage(file.path)}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -260,6 +269,7 @@ const ChangesFilesSection: React.FC<{
   onStage: (path: string) => Promise<void>;
 }> = ({ files, onStage }) => {
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const toggleExpand = (path: string) => {
     setExpandedFiles(prev => {
@@ -273,31 +283,39 @@ const ChangesFilesSection: React.FC<{
     });
   };
 
+  const toggleCollapsed = () => {
+    setIsCollapsed(prev => !prev);
+  };
+
   return (
     <div className="git-section changes-files-section">
-      <div className="section-header">
+      <div className="section-header" onClick={toggleCollapsed}>
         <span className="section-title">Changes</span>
         {files.length > 0 && (
           <span className="git-count-badge">{files.length}</span>
         )}
       </div>
-      {files.length === 0 ? (
-        <div className="git-empty-state">
-          <span className="git-empty-text">No unstaged changes</span>
-        </div>
-      ) : (
-        <div className="git-file-list">
-          {files.map((file) => (
-            <FileItem
-              key={file.path}
-              file={file}
-              showCheckbox={true}
-              expanded={expandedFiles.has(file.path)}
-              onToggleExpand={() => toggleExpand(file.path)}
-              onCheckboxChange={() => onStage(file.path)}
-            />
-          ))}
-        </div>
+      {!isCollapsed && (
+        <>
+          {files.length === 0 ? (
+            <div className="git-empty-state">
+              <span className="git-empty-text">No unstaged changes</span>
+            </div>
+          ) : (
+            <div className="git-file-list">
+              {files.map((file) => (
+                <FileItem
+                  key={file.path}
+                  file={file}
+                  showCheckbox={true}
+                  expanded={expandedFiles.has(file.path)}
+                  onToggleExpand={() => toggleExpand(file.path)}
+                  onCheckboxChange={() => onStage(file.path)}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
