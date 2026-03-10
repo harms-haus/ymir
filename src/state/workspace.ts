@@ -22,6 +22,7 @@ import {
   isLeaf,
   SidebarTab,
   PanelDefinition,
+  GitRepo,
 } from './types';
 import { MAX_PANES, MAX_SCROLLBACK_LINES, MIN_FONT_SIZE, MAX_FONT_SIZE } from './types';
 
@@ -49,6 +50,11 @@ interface WorkspaceState {
   gitChangesCount: number;
   // Terminal font size
   fontSize: number;
+  // Git state management
+  gitRepos: Record<string, GitRepo>;
+  activeRepoPath: string | null;
+  isGitLoading: boolean;
+  gitError: string | null;
 
   createWorkspace: (name: string) => void;
   closeWorkspace: (workspaceId: string) => void;
@@ -84,6 +90,14 @@ interface WorkspaceState {
   zoomIn: () => void;
   zoomOut: () => void;
   resetZoom: () => void;
+
+  // Git state actions
+  setGitRepo: (repoPath: string, repo: GitRepo) => void;
+  setActiveRepo: (repoPath: string) => void;
+  updateGitFile: (repoPath: string, filePath: string, staged: boolean) => void;
+  removeGitRepo: (repoPath: string) => void;
+  setGitLoading: (loading: boolean) => void;
+  setGitError: (error: string | null) => void;
 }
 
 // ============================================================================
@@ -308,12 +322,17 @@ const useWorkspaceStore = create<WorkspaceState>()(
         activeWorkspaceId: 'workspace-1',
         sidebarCollapsed: false,
         notificationPanelOpen: false,
-        activeTab: 'workspaces',
-        panels: [],
-        // Initialize mock git state
-        gitStagedCount: 0,
-        gitChangesCount: 0,
-        fontSize: 14,
+  activeTab: 'workspaces',
+  panels: [],
+  // Initialize mock git state
+  gitStagedCount: 0,
+  gitChangesCount: 0,
+  fontSize: 14,
+  // Initialize git state
+  gitRepos: {},
+  activeRepoPath: null,
+  isGitLoading: false,
+  gitError: null,
 
         createWorkspace: (name: string) =>
           set((state) => {
@@ -663,11 +682,91 @@ const useWorkspaceStore = create<WorkspaceState>()(
             state.fontSize = Math.max(state.fontSize - 1, MIN_FONT_SIZE);
           }),
 
-        resetZoom: () =>
-          set((state) => {
-            state.fontSize = 14;
-          }),
-      })),
+  resetZoom: () =>
+    set((state) => {
+      state.fontSize = 14;
+    }),
+
+  setGitRepo: (repoPath: string, repo: GitRepo) =>
+    set((state) => {
+      state.gitRepos[repoPath] = repo;
+      state.gitStagedCount = Object.values(state.gitRepos).reduce(
+        (sum, r) => sum + r.staged.length,
+        0
+      );
+      state.gitChangesCount = Object.values(state.gitRepos).reduce(
+        (sum, r) => sum + r.unstaged.length,
+        0
+      );
+    }),
+
+  setActiveRepo: (repoPath: string) =>
+    set((state) => {
+      if (state.gitRepos[repoPath]) {
+        state.activeRepoPath = repoPath;
+      }
+    }),
+
+  updateGitFile: (repoPath: string, filePath: string, staged: boolean) =>
+    set((state) => {
+      const repo = state.gitRepos[repoPath];
+      if (!repo) return;
+
+      const file = repo.staged.find((f) => f.path === filePath) ||
+        repo.unstaged.find((f) => f.path === filePath);
+      if (!file) return;
+
+      file.staged = staged;
+
+      if (staged) {
+        if (!repo.staged.some((f) => f.path === filePath)) {
+          repo.staged.push(file);
+        }
+        repo.unstaged = repo.unstaged.filter((f) => f.path !== filePath);
+      } else {
+        if (!repo.unstaged.some((f) => f.path === filePath)) {
+          repo.unstaged.push(file);
+        }
+        repo.staged = repo.staged.filter((f) => f.path !== filePath);
+      }
+
+      state.gitStagedCount = Object.values(state.gitRepos).reduce(
+        (sum, r) => sum + r.staged.length,
+        0
+      );
+      state.gitChangesCount = Object.values(state.gitRepos).reduce(
+        (sum, r) => sum + r.unstaged.length,
+        0
+      );
+    }),
+
+  removeGitRepo: (repoPath: string) =>
+    set((state) => {
+      delete state.gitRepos[repoPath];
+      if (state.activeRepoPath === repoPath) {
+        const remainingRepos = Object.keys(state.gitRepos);
+        state.activeRepoPath = remainingRepos.length > 0 ? remainingRepos[0] : null;
+      }
+      state.gitStagedCount = Object.values(state.gitRepos).reduce(
+        (sum, r) => sum + r.staged.length,
+        0
+      );
+      state.gitChangesCount = Object.values(state.gitRepos).reduce(
+        (sum, r) => sum + r.unstaged.length,
+        0
+      );
+    }),
+
+  setGitLoading: (loading: boolean) =>
+    set((state) => {
+      state.isGitLoading = loading;
+    }),
+
+  setGitError: (error: string | null) =>
+    set((state) => {
+      state.gitError = error;
+    }),
+})),
       {
         name: 'workspace-storage',
         storage: createJSONStorage(() => tauriStorage),
@@ -726,6 +825,37 @@ export const getTotalNotificationCount = () => {
 export const getGitChangesCount = () => {
   const { gitStagedCount, gitChangesCount } = useWorkspaceStore.getState();
   return gitStagedCount + gitChangesCount;
+};
+
+// Git state selectors
+export const getActiveRepo = () => {
+  const { gitRepos, activeRepoPath } = useWorkspaceStore.getState();
+  return activeRepoPath ? gitRepos[activeRepoPath] || null : null;
+};
+
+export const getGitRepo = (repoPath: string) => {
+  const { gitRepos } = useWorkspaceStore.getState();
+  return gitRepos[repoPath] || null;
+};
+
+export const getAllGitRepos = () => {
+  const { gitRepos } = useWorkspaceStore.getState();
+  return Object.values(gitRepos);
+};
+
+export const getGitRepoPaths = () => {
+  const { gitRepos } = useWorkspaceStore.getState();
+  return Object.keys(gitRepos);
+};
+
+export const getGitLoading = () => {
+  const { isGitLoading } = useWorkspaceStore.getState();
+  return isGitLoading;
+};
+
+export const getGitError = () => {
+  const { gitError } = useWorkspaceStore.getState();
+  return gitError;
 };
 
 export default useWorkspaceStore;
