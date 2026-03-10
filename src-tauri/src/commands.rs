@@ -599,6 +599,71 @@ pub fn checkout_branch(repo_path: String, name: String) -> Result<(), String> {
     git::checkout_branch(&repo_path, &name).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+#[instrument]
+pub fn discover_git_repos(root_path: String) -> Result<Vec<String>, String> {
+    let mut repos = Vec::new();
+    search_for_git_repos(&root_path, &mut repos, 0);
+    info!(root_path = %root_path, found_count = repos.len(), "Git repository discovery completed");
+    Ok(repos)
+}
+
+fn search_for_git_repos(path: &str, repos: &mut Vec<String>, current_depth: u32) {
+    const MAX_DEPTH: u32 = 3;
+
+    if current_depth > MAX_DEPTH {
+        return;
+    }
+
+    let dir = match std::fs::read_dir(path) {
+        Ok(d) => d,
+        Err(e) => {
+            debug!(path = %path, error = %e, "Skipping directory (access denied)");
+            return;
+        }
+    };
+
+    for entry in dir {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(e) => {
+                debug!(path = %path, error = %e, "Skipping entry");
+                continue;
+            }
+        };
+
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+
+        if name_str.starts_with('.') && name_str != ".git" {
+            continue;
+        }
+
+        let skip_dirs = ["node_modules", "target", "dist", "build"];
+        if skip_dirs.contains(&name_str.as_str()) {
+            continue;
+        }
+
+        if entry.path().is_dir() {
+            if name_str == ".git" && current_depth > 0 {
+                continue;
+            }
+
+            let entry_path = entry.path();
+            let entry_path_str = entry_path.to_string_lossy().to_string();
+
+            if name_str == ".git" {
+                if let Some(parent) = entry_path.parent() {
+                    repos.push(parent.to_string_lossy().to_string());
+                    debug!(repo_path = %parent.display(), "Found git repository");
+                }
+            } else {
+                search_for_git_repos(&entry_path_str, repos, current_depth + 1);
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

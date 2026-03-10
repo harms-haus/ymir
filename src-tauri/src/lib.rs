@@ -19,8 +19,8 @@ use tauri::{RunEvent, WindowEvent};
 // Re-export types and commands needed by frontend
 pub use commands::{
     attach_pty_channel, checkout_branch, close_pane, commit_changes, create_branch,
-    create_pane_in_workspace, delete_branch, discard_file_changes, exit_app, focus_pane,
-    get_branches, get_git_status, get_pane_cwd, is_pty_alive, kill_all_sessions, kill_pty,
+    create_pane_in_workspace, delete_branch, discard_file_changes, discover_git_repos, exit_app,
+    focus_pane, get_branches, get_git_status, get_pane_cwd, is_pty_alive, kill_all_sessions, kill_pty,
     resize_pty, set_environment_context, spawn_pty, stage_file, unstage_file, write_pty,
     PtyEvent,
 };
@@ -56,6 +56,7 @@ pub fn run() {
             create_branch,
             delete_branch,
             checkout_branch,
+            discover_git_repos,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

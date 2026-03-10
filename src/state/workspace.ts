@@ -9,6 +9,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { load, Store } from '@tauri-apps/plugin-store';
 import logger from '../lib/logger';
 import gitService from '../lib/git-service';
+import { discoverGitRepos } from '../lib/git-discovery';
 
 import {
   Workspace,
@@ -110,6 +111,7 @@ interface WorkspaceState {
   // Git polling actions
   startGitPolling: (repoPath: string) => void;
   stopGitPolling: (repoPath: string) => void;
+  discoverAndRegisterRepos: (rootPath: string) => Promise<void>;
 }
 
 // ============================================================================
@@ -830,6 +832,30 @@ const useWorkspaceStore = create<WorkspaceState>()(
     set((state) => {
       state.isPolling[repoPath] = false;
     });
+  },
+
+  discoverAndRegisterRepos: async (rootPath: string) => {
+    const repos = await discoverGitRepos(rootPath);
+
+    for (const repoPath of repos) {
+      try {
+        const repo = await gitService.getGitStatus(repoPath);
+        set((state) => {
+          state.gitRepos[repoPath] = repo;
+          state.gitStagedCount = Object.values(state.gitRepos).reduce(
+            (sum, r) => sum + r.staged.length,
+            0
+          );
+          state.gitChangesCount = Object.values(state.gitRepos).reduce(
+            (sum, r) => sum + r.unstaged.length,
+            0
+          );
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error('Failed to register git repository', { repoPath, error: message });
+      }
+    }
   },
 })),
       {
