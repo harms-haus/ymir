@@ -666,7 +666,10 @@ mod tests {
         // Message with special characters
         let input = "\x1b]9;Hello! @#$%^&*()_+-=[]{}|;':\",./<>?\x07";
         let result = parse_notification(input);
-        assert_eq!(result, Some("Hello! @#$%^&*()_+-=[]{}|;':\",./<>?".to_string()));
+        assert_eq!(
+            result,
+            Some("Hello! @#$%^&*()_+-=[]{}|;':\",./<>?".to_string())
+        );
     }
 
     #[test]
