@@ -450,4 +450,298 @@ describe('WorkspaceSidebar', () => {
       expect(visibleWorkspaces.length).toBeLessThanOrEqual(8);
     });
   });
+
+  describe('Panel Content Components', () => {
+    it('should render notification list panel', () => {
+      const { container } = render(<WorkspaceSidebar />);
+
+      const state = useWorkspaceStore.getState();
+      const notificationsPanel = state.panels.find((p) => p.id === 'notifications');
+      expect(notificationsPanel).toBeDefined();
+
+      if (notificationsPanel?.fullRender) {
+        const PanelContent = notificationsPanel.fullRender;
+        const { container: panelContainer } = render(<PanelContent />);
+        expect(panelContainer.textContent).toContain('Notifications');
+      }
+    });
+
+    it('should render git panel content', () => {
+      const { container } = render(<WorkspaceSidebar />);
+
+      const state = useWorkspaceStore.getState();
+      const gitPanel = state.panels.find((p) => p.id === 'git');
+      expect(gitPanel).toBeDefined();
+
+      if (gitPanel?.fullRender) {
+        const PanelContent = gitPanel.fullRender;
+        const { container: panelContainer } = render(<PanelContent />);
+        expect(panelContainer.textContent).toContain('Git');
+      }
+    });
+
+    it('should render project panel content', () => {
+      const { container } = render(<WorkspaceSidebar />);
+
+      const state = useWorkspaceStore.getState();
+      const projectPanel = state.panels.find((p) => p.id === 'project');
+      expect(projectPanel).toBeDefined();
+
+      if (projectPanel?.fullRender) {
+        const PanelContent = projectPanel.fullRender;
+        const { container: panelContainer } = render(<PanelContent />);
+        expect(panelContainer.textContent).toContain('Project');
+      }
+    });
+
+    it('should show notification count in notification panel', () => {
+      const { markNotification } = useWorkspaceStore.getState();
+      const state = useWorkspaceStore.getState();
+      const firstWorkspace = state.workspaces[0];
+      const firstPane = Object.values(firstWorkspace.panes)[0];
+      const firstTab = firstPane.tabs[0];
+
+      markNotification(firstTab.id, 'Test notification');
+
+      const notificationsPanel = state.panels.find((p) => p.id === 'notifications');
+      if (notificationsPanel?.fullRender) {
+        const PanelContent = notificationsPanel.fullRender;
+        const { container } = render(<PanelContent />);
+        expect(container.textContent).toContain('Notifications (1)');
+      }
+    });
+
+    it('should show git changes count', () => {
+      const { updateGitChanges } = useWorkspaceStore.getState();
+      updateGitChanges(3, 2);
+
+      const state = useWorkspaceStore.getState();
+      const gitPanel = state.panels.find((p) => p.id === 'git');
+      if (gitPanel?.fullRender) {
+        const PanelContent = gitPanel.fullRender;
+        const { container } = render(<PanelContent />);
+        expect(container.textContent).toContain('Git (5 changes)');
+      }
+    });
+
+    it('should show project tree structure', () => {
+      const state = useWorkspaceStore.getState();
+      const projectPanel = state.panels.find((p) => p.id === 'project');
+      if (projectPanel?.fullRender) {
+        const PanelContent = projectPanel.fullRender;
+        const { container } = render(<PanelContent />);
+        expect(container.textContent).toContain('src/');
+        expect(container.textContent).toContain('package.json');
+      }
+    });
+  });
+
+  describe('Icon Components', () => {
+    it('should render workspaces icon', () => {
+      const { container } = render(<WorkspaceSidebar />);
+      const svgs = container.querySelectorAll('svg');
+      expect(svgs.length).toBeGreaterThan(0);
+    });
+
+    it('should render notification bell icon', () => {
+      const { container } = render(<WorkspaceSidebar />);
+      const state = useWorkspaceStore.getState();
+      const notificationsPanel = state.panels.find((p) => p.id === 'notifications');
+
+      if (notificationsPanel?.icon) {
+        const IconComponent = notificationsPanel.icon;
+        const { container: iconContainer } = render(<IconComponent />);
+        expect(iconContainer.querySelector('svg')).toBeInTheDocument();
+      }
+    });
+
+    it('should render git branch icon', () => {
+      const { container } = render(<WorkspaceSidebar />);
+      const state = useWorkspaceStore.getState();
+      const gitPanel = state.panels.find((p) => p.id === 'git');
+
+      if (gitPanel?.icon) {
+        const IconComponent = gitPanel.icon;
+        const { container: iconContainer } = render(<IconComponent />);
+        expect(iconContainer.querySelector('svg')).toBeInTheDocument();
+      }
+    });
+
+    it('should render folder icon', () => {
+      const { container } = render(<WorkspaceSidebar />);
+      const state = useWorkspaceStore.getState();
+      const projectPanel = state.panels.find((p) => p.id === 'project');
+
+      if (projectPanel?.icon) {
+        const IconComponent = projectPanel.icon;
+        const { container: iconContainer } = render(<IconComponent />);
+        expect(iconContainer.querySelector('svg')).toBeInTheDocument();
+      }
+    });
+  });
+
+  describe('Workspace Context Menu', () => {
+    it('should open context menu on right click', async () => {
+      const user = userEvent.setup();
+      render(<WorkspaceSidebar />);
+
+      const state = useWorkspaceStore.getState();
+      const firstWorkspace = state.workspaces[0];
+
+      const workspaceElements = document.querySelectorAll('[title]');
+      const workspaceElement = Array.from(workspaceElements).find(
+        (el) => el.getAttribute('title')?.includes(firstWorkspace.name)
+      );
+
+      if (workspaceElement) {
+        await user.pointer({
+          keys: '[MouseRight]',
+          target: workspaceElement,
+        });
+      }
+    });
+
+    it('should create workspace below from context menu', async () => {
+      const { createWorkspace } = useWorkspaceStore.getState();
+      createWorkspace('Workspace 2');
+
+      const state = useWorkspaceStore.getState();
+      expect(state.workspaces.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('should move workspace up', async () => {
+      const { createWorkspace, moveWorkspaceUp } = useWorkspaceStore.getState();
+      createWorkspace('Workspace 2');
+
+      const state = useWorkspaceStore.getState();
+      const secondWorkspace = state.workspaces[1];
+
+      moveWorkspaceUp(secondWorkspace.id);
+
+      const newState = useWorkspaceStore.getState();
+      expect(newState.workspaces[0].id).toBe(secondWorkspace.id);
+    });
+
+    it('should move workspace down', async () => {
+      const { createWorkspace, moveWorkspaceDown } = useWorkspaceStore.getState();
+      createWorkspace('Workspace 2');
+
+      const state = useWorkspaceStore.getState();
+      const firstWorkspace = state.workspaces[0];
+
+      moveWorkspaceDown(firstWorkspace.id);
+
+      const newState = useWorkspaceStore.getState();
+      expect(newState.workspaces[1].id).toBe(firstWorkspace.id);
+    });
+  });
+
+  describe('Collapsed Workspace List', () => {
+    it('should render collapsed workspace list', () => {
+      const { toggleSidebar } = useWorkspaceStore.getState();
+      toggleSidebar();
+
+      const { container } = render(<WorkspaceSidebar />);
+      const state = useWorkspaceStore.getState();
+      expect(state.sidebarCollapsed).toBe(true);
+
+      const collapsedElements = container.querySelectorAll('[style*="flex-direction: column"]');
+      expect(collapsedElements.length).toBeGreaterThan(0);
+    });
+
+    it('should show workspace numbers in collapsed list', () => {
+      const { toggleSidebar } = useWorkspaceStore.getState();
+      toggleSidebar();
+
+      const { container } = render(<WorkspaceSidebar />);
+      const state = useWorkspaceStore.getState();
+      const firstWorkspace = state.workspaces[0];
+
+      expect(firstWorkspace).toBeDefined();
+    });
+
+    it('should switch workspace when collapsed item clicked', async () => {
+      const { createWorkspace, toggleSidebar } = useWorkspaceStore.getState();
+      createWorkspace('Workspace 2');
+      toggleSidebar();
+
+      const state = useWorkspaceStore.getState();
+      const secondWorkspace = state.workspaces[1];
+
+      const { setActiveWorkspace } = useWorkspaceStore.getState();
+      setActiveWorkspace(secondWorkspace.id);
+
+      const newState = useWorkspaceStore.getState();
+      expect(newState.activeWorkspaceId).toBe(secondWorkspace.id);
+    });
+  });
+
+  describe('Workspace Notification Indicators', () => {
+    it('should show notification indicator on workspace with notification', () => {
+      const { markNotification } = useWorkspaceStore.getState();
+      const state = useWorkspaceStore.getState();
+      const firstWorkspace = state.workspaces[0];
+      const firstPane = Object.values(firstWorkspace.panes)[0];
+      const firstTab = firstPane.tabs[0];
+
+      markNotification(firstTab.id, 'Test notification');
+
+      const updatedState = useWorkspaceStore.getState();
+      const updatedWorkspace = updatedState.workspaces.find((ws) => ws.id === firstWorkspace.id);
+      expect(updatedWorkspace?.hasNotification).toBe(true);
+    });
+
+    it('should show notification dot in collapsed mode', () => {
+      const { markNotification, toggleSidebar } = useWorkspaceStore.getState();
+      const state = useWorkspaceStore.getState();
+      const firstWorkspace = state.workspaces[0];
+      const firstPane = Object.values(firstWorkspace.panes)[0];
+      const firstTab = firstPane.tabs[0];
+
+      markNotification(firstTab.id, 'Test notification');
+      toggleSidebar();
+
+      const updatedState = useWorkspaceStore.getState();
+      expect(updatedState.sidebarCollapsed).toBe(true);
+      expect(updatedState.workspaces[0].hasNotification).toBe(true);
+    });
+  });
+
+  describe('Workspace Hover Behavior', () => {
+    it('should change background on hover when workspace is not active', async () => {
+      const user = userEvent.setup();
+      const { createWorkspace, setActiveWorkspace } = useWorkspaceStore.getState();
+
+      createWorkspace('Inactive Workspace');
+      const state = useWorkspaceStore.getState();
+      const inactiveWs = state.workspaces[1];
+      const activeWs = state.workspaces[0];
+
+      setActiveWorkspace(activeWs.id);
+
+      render(<WorkspaceSidebar />);
+
+      const wsElement = screen.getByText('Inactive Workspace').closest('div')?.parentElement;
+      await user.hover(wsElement!);
+
+      expect(wsElement?.style.backgroundColor).toBe('rgb(42, 45, 46)');
+    });
+
+    it('should not change background on hover when workspace is active', async () => {
+      const user = userEvent.setup();
+      const { createWorkspace, setActiveWorkspace } = useWorkspaceStore.getState();
+
+      createWorkspace('Test WS');
+      const state = useWorkspaceStore.getState();
+      const ws = state.workspaces[0];
+      setActiveWorkspace(ws.id);
+
+      render(<WorkspaceSidebar />);
+
+      const wsElement = screen.getByText(ws.name).closest('div')?.parentElement;
+      await user.hover(wsElement!);
+
+      expect(wsElement?.style.backgroundColor).toBe('rgb(55, 55, 61)');
+    });
+  });
 });

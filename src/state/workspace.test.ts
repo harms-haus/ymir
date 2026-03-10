@@ -6,6 +6,10 @@ import useWorkspaceStore, {
   activePane,
   paneCount,
   hasNotifications,
+  getActivePanel,
+  getPanel,
+  getTotalNotificationCount,
+  getGitChangesCount,
 } from './workspace';
 
 // ============================================================================
@@ -1204,7 +1208,7 @@ describe('Workspace Store - Edge Cases: Deep Tree Manipulation', () => {
     };
 
     expect(workspace.root.type).toBe('branch');
-    expect(countLeafNodes(workspace.root as any)).toBe(Object.keys(workspace.panes).length);
+    expect(countLeafNodes(workspace.root)).toBe(Object.keys(workspace.panes).length);
   });
 });
 
@@ -1303,5 +1307,186 @@ describe('Workspace Store - Edge Cases: Pane Limits at Various States', () => {
 
     expect(paneCount()).toBe(20);
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Maximum 20 panes reached'));
+  });
+});
+
+describe('Workspace Store - Additional Branch Coverage', () => {
+  it('should keep workspace list unchanged when closing a non-existent workspace', () => {
+    const { closeWorkspace } = useWorkspaceStore.getState();
+    const beforeIds = useWorkspaceStore.getState().workspaces.map((ws) => ws.id);
+
+    closeWorkspace('workspace-does-not-exist');
+
+    expect(useWorkspaceStore.getState().workspaces.map((ws) => ws.id)).toEqual(beforeIds);
+  });
+
+  it('should create workspace after a specific workspace and respect max workspace limit', () => {
+    const { createWorkspaceAfter } = useWorkspaceStore.getState();
+    const firstId = useWorkspaceStore.getState().workspaces[0].id;
+
+    createWorkspaceAfter(firstId, 'After First');
+
+    expect(useWorkspaceStore.getState().workspaces[1].name).toBe('After First');
+
+    for (let i = 0; i < 12; i++) {
+      const anchorId = useWorkspaceStore.getState().workspaces[0].id;
+      createWorkspaceAfter(anchorId, `Extra ${i}`);
+    }
+
+    expect(useWorkspaceStore.getState().workspaces.length).toBe(8);
+  });
+
+  it('should not create workspace after an unknown workspace id', () => {
+    const { createWorkspaceAfter } = useWorkspaceStore.getState();
+    const beforeCount = useWorkspaceStore.getState().workspaces.length;
+
+    createWorkspaceAfter('unknown-workspace-id', 'Should Not Exist');
+
+    expect(useWorkspaceStore.getState().workspaces.length).toBe(beforeCount);
+  });
+
+  it('should move workspaces up and down with boundary no-ops', () => {
+    const { createWorkspace, moveWorkspaceUp, moveWorkspaceDown } = useWorkspaceStore.getState();
+
+    createWorkspace('Workspace 2');
+    createWorkspace('Workspace 3');
+
+    const stateAfterCreate = useWorkspaceStore.getState();
+    const firstId = stateAfterCreate.workspaces[0].id;
+    const secondId = stateAfterCreate.workspaces[1].id;
+    const thirdId = stateAfterCreate.workspaces[2].id;
+
+    moveWorkspaceUp(firstId);
+    expect(useWorkspaceStore.getState().workspaces.map((ws) => ws.id)).toEqual([firstId, secondId, thirdId]);
+
+    moveWorkspaceDown(thirdId);
+    expect(useWorkspaceStore.getState().workspaces.map((ws) => ws.id)).toEqual([firstId, secondId, thirdId]);
+
+    moveWorkspaceUp(thirdId);
+    expect(useWorkspaceStore.getState().workspaces.map((ws) => ws.id)).toEqual([firstId, thirdId, secondId]);
+
+    moveWorkspaceDown(firstId);
+    expect(useWorkspaceStore.getState().workspaces.map((ws) => ws.id)).toEqual([thirdId, firstId, secondId]);
+
+    moveWorkspaceDown('unknown-workspace-id');
+    expect(useWorkspaceStore.getState().workspaces.map((ws) => ws.id)).toEqual([thirdId, firstId, secondId]);
+  });
+
+  it('should set active sidebar tab and register panels with replacement behavior', () => {
+    const { setActiveSidebarTab, registerPanel } = useWorkspaceStore.getState();
+
+    const gitPanel = {
+      id: 'git' as const,
+      title: 'Git',
+      icon: () => null,
+      fullRender: () => null,
+    };
+
+    const gitPanelUpdated = {
+      id: 'git' as const,
+      title: 'Git Updated',
+      icon: () => null,
+      fullRender: () => null,
+    };
+
+    setActiveSidebarTab('notifications');
+    expect(useWorkspaceStore.getState().activeTab).toBe('notifications');
+
+    registerPanel(gitPanel);
+    expect(useWorkspaceStore.getState().panels).toHaveLength(1);
+    expect(useWorkspaceStore.getState().panels[0].title).toBe('Git');
+
+    registerPanel(gitPanelUpdated);
+    expect(useWorkspaceStore.getState().panels).toHaveLength(1);
+    expect(useWorkspaceStore.getState().panels[0].title).toBe('Git Updated');
+  });
+
+  it('should update git badge counts and selectors correctly', () => {
+    const { updateGitChanges } = useWorkspaceStore.getState();
+
+    updateGitChanges(3, 7);
+
+    const state = useWorkspaceStore.getState();
+    expect(state.gitStagedCount).toBe(3);
+    expect(state.gitChangesCount).toBe(7);
+    expect(getGitChangesCount()).toBe(10);
+  });
+
+  it('should clamp zoom actions to configured min and max values', () => {
+    const { zoomIn, zoomOut, resetZoom } = useWorkspaceStore.getState();
+
+    for (let i = 0; i < 100; i++) {
+      zoomIn();
+    }
+    expect(useWorkspaceStore.getState().fontSize).toBe(32);
+
+    for (let i = 0; i < 100; i++) {
+      zoomOut();
+    }
+    expect(useWorkspaceStore.getState().fontSize).toBe(8);
+
+    resetZoom();
+    expect(useWorkspaceStore.getState().fontSize).toBe(14);
+  });
+
+  it('should handle selector fallbacks for active and missing sidebar panels', () => {
+    const { registerPanel } = useWorkspaceStore.getState();
+
+    expect(getActivePanel()).toBeNull();
+    expect(getPanel('project')).toBeNull();
+
+    registerPanel({
+      id: 'project',
+      title: 'Project',
+      icon: () => null,
+      fullRender: () => null,
+    });
+    registerPanel({
+      id: 'notifications',
+      title: 'Notifications',
+      icon: () => null,
+      fullRender: () => null,
+    });
+
+    useWorkspaceStore.getState().setActiveSidebarTab('project');
+
+    expect(getPanel('project')?.title).toBe('Project');
+    expect(getActivePanel()?.id).toBe('project');
+  });
+
+  it('should compute total notification count across all panes and tabs', () => {
+    const { splitPane, createTab, markNotification } = useWorkspaceStore.getState();
+    const initialPaneId = Object.keys(useWorkspaceStore.getState().workspaces[0].panes)[0];
+
+    splitPane(initialPaneId, 'right');
+
+    const stateAfterSplit = useWorkspaceStore.getState();
+    const paneIds = Object.keys(stateAfterSplit.workspaces[0].panes);
+
+    createTab(paneIds[0]);
+    createTab(paneIds[1]);
+
+    const withTabs = useWorkspaceStore.getState();
+    const paneOneTabs = withTabs.workspaces[0].panes[paneIds[0]].tabs;
+    const paneTwoTabs = withTabs.workspaces[0].panes[paneIds[1]].tabs;
+
+    markNotification(paneOneTabs[0].id, 'n1');
+    markNotification(paneOneTabs[0].id, 'n2');
+    markNotification(paneOneTabs[1].id, 'n3');
+    markNotification(paneTwoTabs[0].id, 'n4');
+
+    expect(getTotalNotificationCount()).toBe(4);
+  });
+
+  it('should ignore updateTabSessionId for unknown pane and tab ids', () => {
+    const { updateTabSessionId } = useWorkspaceStore.getState();
+    const paneId = Object.keys(useWorkspaceStore.getState().workspaces[0].panes)[0];
+    const tabId = useWorkspaceStore.getState().workspaces[0].panes[paneId].tabs[0].id;
+
+    updateTabSessionId('missing-pane-id', tabId, 'session-x');
+    expect(useWorkspaceStore.getState().workspaces[0].panes[paneId].tabs[0].sessionId).toBe('');
+
+    updateTabSessionId(paneId, 'missing-tab-id', 'session-y');
+    expect(useWorkspaceStore.getState().workspaces[0].panes[paneId].tabs[0].sessionId).toBe('');
   });
 });

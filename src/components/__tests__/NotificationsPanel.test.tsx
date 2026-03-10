@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
-import { NotificationsPanelContent } from '../NotificationsPanel';
+import { NotificationsPanelContent, notificationsPanelDefinition } from '../NotificationsPanel';
 import useWorkspaceStore from '../../state/workspace';
 import {
   createMockTab,
@@ -10,7 +10,7 @@ import {
   resetIdCounter,
 } from '../../test-utils';
 
-vi.mock('../lib/logger', () => ({
+vi.mock('../../lib/logger', () => ({
   default: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -486,5 +486,92 @@ describe('NotificationsPanel Component', () => {
 
       expect(screen.getByText('New notification')).toBeInTheDocument();
     });
+  });
+});
+
+describe('NotificationsPanel Definition', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetIdCounter();
+
+    const { resetState } = useWorkspaceStore.getState();
+    if (resetState) {
+      resetState();
+    }
+  });
+
+  it('should have correct panel id', () => {
+    expect(notificationsPanelDefinition.id).toBe('notifications');
+  });
+
+  it('should have correct panel title', () => {
+    expect(notificationsPanelDefinition.title).toBe('Notifications');
+  });
+
+  it('should have icon renderer function', () => {
+    expect(notificationsPanelDefinition.icon).toBeDefined();
+    expect(typeof notificationsPanelDefinition.icon).toBe('function');
+  });
+
+  it('should render icon as SVG', () => {
+    const { container } = render(<>{notificationsPanelDefinition.icon()}</>);
+    const svg = container.querySelector('svg');
+    expect(svg).toBeInTheDocument();
+    expect(svg).toHaveAttribute('width', '16');
+    expect(svg).toHaveAttribute('height', '16');
+  });
+
+  it('should have badge renderer function', () => {
+    expect(notificationsPanelDefinition.badge).toBeDefined();
+    expect(typeof notificationsPanelDefinition.badge).toBe('function');
+  });
+
+  it('should return null badge when no notifications', () => {
+    const badge = notificationsPanelDefinition.badge?.();
+    expect(badge).toBeNull();
+  });
+
+  it('should return badge with count when there are notifications', () => {
+    const { markNotification } = useWorkspaceStore.getState();
+    const state = useWorkspaceStore.getState();
+    const firstWorkspace = state.workspaces[0];
+    const firstPane = Object.values(firstWorkspace.panes)[0];
+    const firstTab = firstPane.tabs[0];
+
+    markNotification(firstTab.id, 'Test notification');
+
+    const badge = notificationsPanelDefinition.badge?.();
+    expect(badge).toBeDefined();
+    expect(badge?.count).toBe(1);
+  });
+
+  it('should return badge with correct count for multiple notifications', () => {
+    const { markNotification, createTab } = useWorkspaceStore.getState();
+    const state = useWorkspaceStore.getState();
+    const firstWorkspace = state.workspaces[0];
+    const firstPane = Object.values(firstWorkspace.panes)[0];
+    const firstTab = firstPane.tabs[0];
+
+    markNotification(firstTab.id, 'First notification');
+    createTab(firstPane.id);
+
+    const updatedState = useWorkspaceStore.getState();
+    const newTab = updatedState.workspaces[0].panes[firstPane.id].tabs[1];
+    markNotification(newTab.id, 'Second notification');
+
+    const badge = notificationsPanelDefinition.badge?.();
+    expect(badge).toBeDefined();
+    expect(badge?.count).toBe(2);
+  });
+
+  it('should have fullRender function', () => {
+    expect(notificationsPanelDefinition.fullRender).toBeDefined();
+    expect(typeof notificationsPanelDefinition.fullRender).toBe('function');
+  });
+
+  it('should render full panel content', () => {
+    const PanelContent = notificationsPanelDefinition.fullRender;
+    const { container } = render(<PanelContent />);
+    expect(container.firstChild).toBeInTheDocument();
   });
 });
