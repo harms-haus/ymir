@@ -442,6 +442,55 @@ const GitPanelHeader: React.FC = () => {
   );
 };
 
+const GitPanelToolbar: React.FC<{
+  onRefresh: () => Promise<void>;
+  onStageAll: () => Promise<void>;
+  onUnstageAll: () => Promise<void>;
+  unstagedCount: number;
+  stagedCount: number;
+}> = ({ onRefresh, onStageAll, onUnstageAll, unstagedCount, stagedCount }) => {
+  return (
+    <div className="git-panel-toolbar">
+      <button
+        type="button"
+        className="git-toolbar-button"
+        onClick={onRefresh}
+        title="Refresh"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+        </svg>
+        <span>Refresh</span>
+      </button>
+      <button
+        type="button"
+        className="git-toolbar-button"
+        onClick={onStageAll}
+        disabled={unstagedCount === 0}
+        title="Stage all unstaged changes"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polyline points="20,6 9,17 4,12" />
+        </svg>
+        <span>Stage All</span>
+      </button>
+      <button
+        type="button"
+        className="git-toolbar-button"
+        onClick={onUnstageAll}
+        disabled={stagedCount === 0}
+        title="Unstage all staged changes"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+        <span>Unstage All</span>
+      </button>
+    </div>
+  );
+};
+
 // Icon renderer - git branch icon
 const GitPanelIcon = (): React.ReactNode => (
   <div className="git-panel-icon">
@@ -525,6 +574,46 @@ const GitPanelFull = (): React.ReactNode => {
     }
   };
 
+  const handleRefresh = async () => {
+    if (!activeRepo) return;
+    try {
+      const updatedRepo = await gitService.getGitStatus(activeRepo.path);
+      useWorkspaceStore.getState().setGitRepo(activeRepo.path, updatedRepo);
+    } catch (error) {
+      console.error('Refresh failed:', error);
+    }
+  };
+
+  const handleStageAll = async () => {
+    if (!activeRepo) return;
+    const unstagedFiles = activeRepo.unstaged;
+
+    for (const file of unstagedFiles) {
+      try {
+        await gitService.stageFile(activeRepo.path, file.path);
+      } catch (error) {
+        console.error(`Failed to stage ${file.path}:`, error);
+      }
+    }
+
+    await handleRefresh();
+  };
+
+  const handleUnstageAll = async () => {
+    if (!activeRepo) return;
+    const stagedFiles = activeRepo.staged;
+
+    for (const file of stagedFiles) {
+      try {
+        await gitService.unstageFile(activeRepo.path, file.path);
+      } catch (error) {
+        console.error(`Failed to unstage ${file.path}:`, error);
+      }
+    }
+
+    await handleRefresh();
+  };
+
   return (
     <div className="git-panel">
       <GitPanelHeader />
@@ -543,6 +632,14 @@ const GitPanelFull = (): React.ReactNode => {
           behind={activeRepo?.behind || 0}
         />
       </div>
+
+      <GitPanelToolbar
+        onRefresh={handleRefresh}
+        onStageAll={handleStageAll}
+        onUnstageAll={handleUnstageAll}
+        unstagedCount={activeRepo?.unstaged.length || 0}
+        stagedCount={activeRepo?.staged.length || 0}
+      />
 
       {/* Staged files */}
       <StagedFilesSection files={activeRepo?.staged || []} onUnstage={handleUnstage} />
