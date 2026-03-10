@@ -24,10 +24,13 @@ pub fn redact_sensitive(s: &str) -> String {
         // Simple pattern matching for JSON-like key-value pairs
         // Handles: "field": "value", "field":"value", field: value
         let patterns = [
-            // JSON format with quotes
+            // JSON format with double quotes
             format!(r#""{}":\s*"[^"]*""#, field),
+            // JSON format with single-quoted value
             format!(r#""{}":\s*'[^']*'"#, field),
-            // Key-value format
+            // Single-quoted keys (non-standard JSON)
+            format!(r#"'{}':\s*'[^']*'"#, field),
+            // Key-value format without quotes
             format!(r#"{}:\s*[^,\s\}}]*"#, field),
         ];
 
