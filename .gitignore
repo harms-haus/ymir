@@ -61,9 +61,8 @@ coverage/
 .temp/
 .tmp/
 
-# Sisyphus / AI workspace
-.sisyphus/
-
-
 # TypeScript
 *.tsbuildinfo
+
+# Worktrees
+.worktrees
