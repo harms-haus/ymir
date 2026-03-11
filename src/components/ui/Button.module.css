@@ -1,0 +1,103 @@
+.button {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  text-decoration: none;
+  border-radius: 0.375rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  user-select: none;
+  transition: all 150ms ease-in-out;
+  outline: none;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Sizes */
+.sizeSm {
+  height: 2rem;
+  padding: 0 0.75rem;
+  font-size: 0.75rem;
+}
+
+.sizeMd {
+  height: 2.5rem;
+  padding: 0 1rem;
+}
+
+.sizeLg {
+  height: 3rem;
+  padding: 0 1.5rem;
+  font-size: 1rem;
+}
+
+/* Variants */
+.primary {
+  background-color: var(--color-primary);
+  color: var(--color-primary-foreground);
+}
+
+.primary:hover:not(:disabled) {
+  background-color: var(--color-primary-hover);
+}
+
+.primary:active:not(:disabled) {
+  background-color: var(--color-primary-active);
+}
+
+.secondary {
+  background-color: var(--color-secondary);
+  color: var(--color-secondary-foreground);
+  border-color: var(--color-border);
+}
+
+.secondary:hover:not(:disabled) {
+  background-color: var(--color-secondary-hover);
+  border-color: var(--color-border-hover);
+}
+
+.secondary:active:not(:disabled) {
+  background-color: var(--color-secondary-active);
+}
+
+.ghost {
+  background-color: transparent;
+  color: var(--color-foreground);
+}
+
+.ghost:hover:not(:disabled) {
+  background-color: var(--color-accent);
+  color: var(--color-accent-foreground);
+}
+
+.ghost:active:not(:disabled) {
+  background-color: var(--color-accent-hover);
+}
+
+.destructive {
+  background-color: var(--color-destructive);
+  color: var(--color-destructive-foreground);
+}
+
+.destructive:hover:not(:disabled) {
+  background-color: var(--color-destructive-hover);
+}
+
+.destructive:active:not(:disabled) {
+  background-color: var(--color-destructive-active);
+}

@@ -1,4 +1,5 @@
 import logger from './lib/logger';
+import './styles/theme.css';
 
 import React from "react";
 import ReactDOM from "react-dom/client";

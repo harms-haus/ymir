@@ -1,0 +1,154 @@
+/**
+ * Ymir Theme System
+ * CSS Custom Properties using oklch() color space
+ * Supports light, dark, and custom .theme-ymir themes
+ */
+
+:root {
+  /* ========== LIGHT THEME ========== */
+
+  /* Background colors */
+  --background: oklch(100% 0 0);
+  --foreground: oklch(9% 0 0);
+
+  /* Card/Component backgrounds */
+  --card: oklch(100% 0 0);
+  --card-foreground: oklch(9% 0 0);
+
+  /* Primary brand colors */
+  --primary: oklch(47% 0.23 264);
+  --primary-foreground: oklch(100% 0 0);
+
+  /* Secondary colors */
+  --secondary: oklch(90% 0.02 264);
+  --secondary-foreground: oklch(9% 0 0);
+
+  /* Muted/subtle colors */
+  --muted: oklch(96% 0.01 264);
+  --muted-foreground: oklch(46% 0.02 264);
+
+  /* Accent colors */
+  --accent: oklch(96% 0.01 264);
+  --accent-foreground: oklch(9% 0 0);
+
+  /* Destructive/error colors */
+  --destructive: oklch(53% 0.23 25);
+  --destructive-foreground: oklch(100% 0 0);
+
+  /* Border and ring colors */
+  --border: oklch(89% 0.01 264);
+  --input: oklch(89% 0.01 264);
+  --ring: oklch(47% 0.23 264);
+
+  /* Radius tokens */
+  --radius: 0.5rem;
+
+  /* Spacing tokens */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  --spacing-2xl: 3rem;
+
+  /* Font sizes */
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+}
+
+/* ========== DARK THEME ========== */
+.dark {
+  /* Background colors */
+  --background: oklch(14% 0.01 264);
+  --foreground: oklch(98% 0 0);
+
+  /* Card/Component backgrounds */
+  --card: oklch(14% 0.01 264);
+  --card-foreground: oklch(98% 0 0);
+
+  /* Primary brand colors */
+  --primary: oklch(65% 0.23 264);
+  --primary-foreground: oklch(9% 0 0);
+
+  /* Secondary colors */
+  --secondary: oklch(20% 0.01 264);
+  --secondary-foreground: oklch(98% 0 0);
+
+  /* Muted/subtle colors */
+  --muted: oklch(20% 0.01 264);
+  --muted-foreground: oklch(70% 0.02 264);
+
+  /* Accent colors */
+  --accent: oklch(20% 0.01 264);
+  --accent-foreground: oklch(98% 0 0);
+
+  /* Destructive/error colors */
+  --destructive: oklch(60% 0.23 25);
+  --destructive-foreground: oklch(100% 0 0);
+
+  /* Border and ring colors */
+  --border: oklch(22% 0.02 264);
+  --input: oklch(22% 0.02 264);
+  --ring: oklch(65% 0.23 264);
+}
+
+/* ========== CUSTOM THEME: YMIR (VS Code-like) ========== */
+.theme-ymir {
+  /* VS Code Dark-like theme colors */
+  --background: oklch(17% 0.01 264);    /* VS Code background: #1e1e1e */
+  --foreground: oklch(98% 0 0);         /* VS Code foreground: #cccccc */
+
+  /* Card/Component backgrounds */
+  --card: oklch(20% 0.01 264);          /* VS Code panel: #252526 */
+  --card-foreground: oklch(96% 0 0);
+
+  /* Primary brand colors (VS Code blue accent) */
+  --primary: oklch(65% 0.25 250);       /* VS Code accent blue: #007acc */
+  --primary-foreground: oklch(100% 0 0);
+
+  /* Secondary colors */
+  --secondary: oklch(25% 0.01 264);     /* VS Code secondary background: #2d2d2d */
+  --secondary-foreground: oklch(96% 0 0);
+
+  /* Muted/subtle colors */
+  --muted: oklch(22% 0.01 264);         /* VS Code input background: #3c3c3c */
+  --muted-foreground: oklch(60% 0.02 264); /* VS Code description: #858585 */
+
+  /* Accent colors */
+  --accent: oklch(22% 0.01 264);
+  --accent-foreground: oklch(98% 0 0);
+
+  /* Destructive/error colors (VS Code error red) */
+  --destructive: oklch(60% 0.23 25);    /* VS Code error: #f14c4c */
+  --destructive-foreground: oklch(100% 0 0);
+
+  /* Border and ring colors */
+  --border: oklch(24% 0.01 264);        /* VS Code borders: #454545 */
+  --input: oklch(22% 0.01 264);
+  --ring: oklch(65% 0.25 250);
+
+  /* Syntax highlighting colors (for terminals/code) */
+  --syntax-keyword: oklch(65% 0.23 280);    /* Pink/purple keywords */
+  --syntax-string: oklch(70% 0.17 140);     /* Green strings */
+  --syntax-number: oklch(65% 0.23 50);      /* Orange numbers */
+  --syntax-comment: oklch(50% 0.02 264);    /* Gray comments */
+  --syntax-function: oklch(70% 0.17 210);   /* Blue functions */
+}
+
+/* ========== BASE STYLES ========== */
+* {
+  border-color: var(--border);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: var(--font-size-md);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
