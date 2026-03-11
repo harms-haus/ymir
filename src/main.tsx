@@ -6,6 +6,7 @@ import ReactDOM from "react-dom/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import App from "./App";
+import { ThemeProvider } from "./components/ThemeProvider";
 
 // Clean up all PTY sessions when window is about to close
 async function setupWindowCleanup() {
@@ -50,6 +51,8 @@ if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <App />
+    <ThemeProvider>
+      <App />
+    </ThemeProvider>
   </React.StrictMode>
 );
