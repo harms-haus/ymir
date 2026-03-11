@@ -253,7 +253,7 @@ Critical Path: Task 1 → Task 2 → Task 3 → Task 6-11 → Task 12-16 → Tas
 
 ## TODOs
 
-- [ ] 1. Install Base-UI + shadcn/ui Dependencies
+- [x] 1. Install Base-UI + shadcn/ui Dependencies
 
 **What to do**:
 - Install `@base-ui/react` package (v1.2.0+)
@@ -300,7 +300,7 @@ Evidence: .sisyphus/evidence/task-1-import-test.log
 
 ---
 
-- [ ] 2. Create theme.css with CSS Variables
+- [x] 2. Create theme.css with CSS Variables
 
 **What to do**:
 - Create `src/styles/theme.css`
@@ -386,7 +386,7 @@ Evidence: .sisyphus/evidence/task-2-theme-verification.txt
 
 ---
 
-- [ ] 3. Create Button Wrapper Component
+- [x] 3. Create Button Wrapper Component
 
 **What to do**:
 - Create `src/components/ui/button.tsx`
@@ -473,7 +473,7 @@ Evidence: .sisyphus/evidence/task-3-button-variants.png
 
 ---
 
-- [ ] 4. Create Badge Wrapper Component
+- [x] 4. Create Badge Wrapper Component
 
 **What to do**:
 - Create `src/components/ui/badge.tsx`
@@ -521,7 +521,7 @@ Evidence: .sisyphus/evidence/task-4-badges.png
 
 ---
 
-- [ ] 5. Create Tooltip Wrapper Component
+- [x] 5. Create Tooltip Wrapper Component
 
 **What to do**:
 - Create `src/components/ui/tooltip.tsx`
@@ -564,7 +564,7 @@ Evidence: .sisyphus/evidence/task-5-tooltip.png
 
 ---
 
-- [ ] 6. Migrate GitPanel Buttons
+- [x] 6. Migrate GitPanel Buttons
 
 **What to do**:
 - Replace ~10 buttons in GitPanel.tsx with appropriate sub-types:
@@ -651,7 +651,7 @@ Evidence: .sisyphus/evidence/task-6-gitpanel-buttons.png
 
 ---
 
-- [ ] 7. Migrate TabBar Buttons
+- [x] 7. Migrate TabBar Buttons
 
 **What to do**:
 - Replace buttons in TabBar.tsx with appropriate sub-types:
@@ -715,7 +715,7 @@ Evidence: .sisyphus/evidence/task-7-tabbar-buttons.png
 
 ---
 
-- [ ] 8. Migrate TabHeaderPanel Tabs
+- [x] 8. Migrate TabHeaderPanel Tabs
 
 **What to do**:
 - Replace horizontal/vertical tab buttons with Tabs primitive
@@ -761,7 +761,7 @@ Evidence: .sisyphus/evidence/task-8-tabheader-tabs.png
 
 ---
 
-- [ ] 9. Migrate WorkspaceSidebar Tabs
+- [x] 9. Migrate WorkspaceSidebar Tabs
 
 **What to do**:
 - Replace workspace list items with Tabs primitive
@@ -832,7 +832,7 @@ Evidence: .sisyphus/evidence/task-9-workspace-tabs.png
 
 ---
 
-- [ ] 10. Migrate TabBar Tabs
+- [x] 10. Migrate TabBar Tabs
 
 **What to do**:
 - Replace `.tab-item` divs with Tabs primitive
@@ -876,7 +876,7 @@ Evidence: .sisyphus/evidence/task-10-tabbar-tabs.png
 
 ---
 
-- [ ] 11. Create Accordion Wrapper Component
+- [x] 11. Create Accordion Wrapper Component
 
 **What to do**:
 - Create `src/components/ui/accordion.tsx`
@@ -923,7 +923,7 @@ Evidence: .sisyphus/evidence/task-11-accordion.gif
 
 ---
 
-- [ ] 12. Migrate Branch Selector Dropdown
+- [x] 12. Migrate Branch Selector Dropdown
 
 **What to do**:
 - Replace custom `.branch-dropdown` with Menu primitive
@@ -968,7 +968,7 @@ Evidence: .sisyphus/evidence/task-12-branch-selector.png
 
 ---
 
-- [ ] 13. Migrate Tab Overflow Menu
+- [x] 13. Migrate Tab Overflow Menu
 
 **What to do**:
 - Replace `.tab-bar-overflow-menu` with Menu primitive
@@ -1011,7 +1011,7 @@ Evidence: .sisyphus/evidence/task-13-overflow-menu.png
 
 ---
 
-- [ ] 14. Migrate Context Menus
+- [x] 14. Migrate Context Menus
 
 **What to do**:
 - Replace 2 custom context menus with Menu primitive:
@@ -1058,7 +1058,7 @@ Evidence: .sisyphus/evidence/task-14-context-menu.png
 
 ---
 
-- [ ] 15. Migrate GitPanel Accordions
+- [x] 15. Migrate GitPanel Accordions
 
 **What to do**:
 - Replace staged/changes sections with Accordion component
@@ -1101,7 +1101,7 @@ Evidence: .sisyphus/evidence/task-15-gitpanel-accordion.png
 
 ---
 
-- [ ] 16. Migrate ProjectPanel Accordion
+- [x] 16. Migrate ProjectPanel Accordion
 
 **What to do**:
 - Replace folder tree with Accordion (already recursive)
@@ -1143,7 +1143,7 @@ Evidence: .sisyphus/evidence/task-16-project-accordion.png
 
 ---
 
-- [ ] 17. Migrate Commit Textarea
+- [x] 17. Migrate Commit Textarea
 
 **What to do**:
 - Replace `.git-commit-textarea` with Textarea primitive
@@ -1184,7 +1184,7 @@ Evidence: .sisyphus/evidence/task-17-textarea.png
 
 ---
 
-- [ ] 18. Migrate File Staging Checkbox
+- [x] 18. Migrate File Staging Checkbox
 
 **What to do**:
 - Replace staging checkboxes with Checkbox primitive
@@ -1224,7 +1224,7 @@ Evidence: .sisyphus/evidence/task-18-checkbox.png
 
 ---
 
-- [ ] 19. Create Dialog Wrapper Component
+- [x] 19. Create Dialog Wrapper Component
 
 **What to do**:
 - Create `src/components/ui/dialog.tsx`
@@ -1264,7 +1264,7 @@ Evidence: .sisyphus/evidence/task-19-dialog.png
 
 ---
 
-- [ ] 20. Replace window.prompt with Dialog
+- [x] 20. Replace window.prompt with Dialog
 
 **What to do**:
 - Replace `window.prompt('Enter new branch name:')` with Dialog
@@ -1305,7 +1305,7 @@ Evidence: .sisyphus/evidence/task-20-branch-dialog.png
 
 ---
 
-- [ ] 21. Replace window.confirm with Dialog
+- [x] 21. Replace window.confirm with Dialog
 
 **What to do**:
 - Replace `window.confirm('Discard changes?')` with Dialog
@@ -1485,7 +1485,7 @@ Evidence: .sisyphus/evidence/task-24-project-items.png
 
 ---
 
-- [ ] 25. Remove Legacy CSS Files
+- [x] 25. Remove Legacy CSS Files
 
 **What to do**:
 - Delete 7 CSS files (after confirming all styles migrated):
