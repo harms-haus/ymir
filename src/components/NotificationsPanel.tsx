@@ -2,6 +2,7 @@ import React from 'react';
 import useWorkspaceStore from '../state/workspace';
 import { Tab } from '../state/types';
 import { PanelDefinition } from '../state/types';
+import { Button } from './ui/Button';
 
 interface NotificationItemProps {
   tab: Tab;
@@ -82,33 +83,15 @@ function NotificationItem({
             {tab.cwd}
           </div>
         </div>
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={onClear}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: '#cccccc',
-            cursor: 'pointer',
-            fontSize: '12px',
-            padding: '4px 8px',
-            borderRadius: '3px',
-            flexShrink: 0,
-            opacity: 0.7,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#c75450';
-            e.currentTarget.style.color = '#ffffff';
-            e.currentTarget.style.opacity = '1';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.style.color = '#cccccc';
-            e.currentTarget.style.opacity = '0.7';
-          }}
           title="Clear notification"
+          type="button"
         >
           Clear
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -225,27 +208,15 @@ function NotificationsPanelContent() {
           )}
         </div>
         {notificationTabs.length > 0 && (
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={handleJumpToFirstUnread}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#4fc3f7',
-              cursor: 'pointer',
-              fontSize: '12px',
-              padding: '4px 8px',
-              borderRadius: '3px',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#3c3c3c';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-            }}
             title="Jump to first unread (⌘⇧U)"
+            type="button"
           >
             Jump to Unread
-          </button>
+          </Button>
         )}
       </div>
 
@@ -291,30 +262,15 @@ function NotificationsPanelContent() {
             backgroundColor: '#2d2d30',
           }}
         >
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={handleClearAll}
-            style={{
-              width: '100%',
-              backgroundColor: '#37373d',
-              border: '1px solid #1e1e1e',
-              color: '#cccccc',
-              cursor: 'pointer',
-              fontSize: '12px',
-              padding: '8px 12px',
-              borderRadius: '3px',
-              transition: 'background-color 0.15s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#3c3c3c';
-              e.currentTarget.style.color = '#ffffff';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#37373d';
-              e.currentTarget.style.color = '#cccccc';
-            }}
+            type="button"
+            style={{ width: '100%' }}
           >
             Clear All
-          </button>
+          </Button>
         </div>
       )}
     </>

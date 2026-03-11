@@ -1,6 +1,7 @@
 import React from 'react';
 import './TabHeaderPanel.css';
 import { PanelDefinition, SidebarTab } from '../state/types';
+import { Button } from './ui/Button';
 
 interface TabHeaderPanelProps {
   panels: PanelDefinition[];
@@ -46,7 +47,9 @@ export const TabHeaderPanel: React.FC<TabHeaderPanelProps> = ({
       <div className="tab-header">
         {isCollapsed ? (
           <>
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={onToggleSidebar}
               className="collapse-button"
               title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -54,7 +57,7 @@ export const TabHeaderPanel: React.FC<TabHeaderPanelProps> = ({
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="m13 17 5-5-5-5M6 17l5-5-5-5" />
               </svg>
-            </button>
+            </Button>
             <div className="tab-headers-vertical">
               {panels.map((panel) => {
                 const isActive = panel.id === activeTab;
@@ -120,7 +123,9 @@ export const TabHeaderPanel: React.FC<TabHeaderPanelProps> = ({
                 );
               })}
             </div>
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={onToggleSidebar}
               className="collapse-button"
               title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -129,7 +134,7 @@ export const TabHeaderPanel: React.FC<TabHeaderPanelProps> = ({
                 <path d="m11 17-5-5 5-5" />
                 <path d="m18 17-5-5 5-5" />
               </svg>
-            </button>
+            </Button>
           </>
         )}
       </div>

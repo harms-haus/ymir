@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Tab } from '../state/types';
+import { Button } from './ui/Button';
 
 import './TabBar.css';
 
@@ -190,13 +191,16 @@ export function TabBar({
             )}
 
             {/* Close button */}
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               className="tab-close-button"
               onClick={(e) => handleCloseTab(e, tab.id)}
               title="Close tab"
+              aria-label="Close tab"
             >
               ×
-            </button>
+            </Button>
           </div>
         ))}
       </div>
@@ -204,13 +208,16 @@ export function TabBar({
       {/* Overflow button */}
       {showOverflow && (
         <div className="tab-bar-overflow" ref={overflowMenuRef}>
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             className={`tab-bar-overflow-button ${overflowMenuOpen ? 'open' : ''}`}
             onClick={toggleOverflowMenu}
             title="Show all tabs"
+            aria-label="Show all tabs"
           >
             ▼
-          </button>
+          </Button>
 
           {/* Overflow dropdown menu */}
           {overflowMenuOpen && (
@@ -238,11 +245,13 @@ export function TabBar({
       )}
 
       {/* Browser tab button */}
-      <button
+      <Button
+        variant="ghost"
+        size="sm"
         className="tab-bar-browser-button"
         onClick={onCreateBrowserTab}
         title="New browser tab"
-        type="button"
+        aria-label="New browser tab"
       >
         <svg
           width="16"
@@ -258,17 +267,19 @@ export function TabBar({
           <path d="M2 12h20" />
           <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
         </svg>
-      </button>
+      </Button>
 
       {/* New tab button */}
-      <button
+      <Button
+        variant="ghost"
+        size="sm"
         className="tab-bar-new-button"
         onClick={handleCreateTab}
         title="New tab"
-        type="button"
+        aria-label="New tab"
       >
         +
-      </button>
+      </Button>
 
       {/* Context Menu */}
       {contextMenu && (

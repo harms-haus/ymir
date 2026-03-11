@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { ErrorBoundary } from './ErrorBoundary';
+import { Button } from './ui/Button';
 import logger from '../lib/logger';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Webview } from '@tauri-apps/api/webview';
@@ -249,9 +250,9 @@ export function Browser({ tabId, url, paneId }: BrowserProps) {
     <ErrorBoundary>
         <div ref={containerRef} className="browser-container">
         <div className="browser-nav-bar">
-          <button
-            type="button"
-            className="browser-nav-button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => handleBack()}
             disabled={!canGoBack}
             title="Back"
@@ -259,11 +260,11 @@ export function Browser({ tabId, url, paneId }: BrowserProps) {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6" />
             </svg>
-          </button>
+          </Button>
           
-          <button
-            type="button"
-            className="browser-nav-button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => handleForward()}
             disabled={!canGoForward}
             title="Forward"
@@ -271,11 +272,11 @@ export function Browser({ tabId, url, paneId }: BrowserProps) {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="9 18 15 12 9 6" />
             </svg>
-          </button>
+          </Button>
           
-          <button
-            type="button"
-            className="browser-nav-button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={handleReload}
             disabled={isLoading}
             title={isLoading ? "Stop" : "Refresh"}
@@ -284,7 +285,7 @@ export function Browser({ tabId, url, paneId }: BrowserProps) {
               <path d="M21 12a9 9 0 11-2.636-6.364" />
               <path d="M21 3v6h-6" />
             </svg>
-          </button>
+          </Button>
           
           <input
             className="browser-url-input"
@@ -295,9 +296,9 @@ export function Browser({ tabId, url, paneId }: BrowserProps) {
             placeholder={isLoading ? 'Loading...' : 'Enter URL'}
           />
           
-          <button
-            type="button"
-            className="browser-nav-button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={handleOpenDevTools}
             title="Open DevTools"
           >
@@ -305,7 +306,7 @@ export function Browser({ tabId, url, paneId }: BrowserProps) {
               <polyline points="16 18 22 12 16 6" />
               <polyline points="8 6 2 12 8 18" />
             </svg>
-          </button>
+          </Button>
         </div>
         
         <div ref={webviewContainerRef}>

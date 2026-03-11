@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { PanelDefinition, GitFile } from '../state/types';
 import useWorkspaceStore, { getActiveRepo, getGitChangesCount, getGitError } from '../state/workspace';
 import gitService from '../lib/git-service';
+import { Button } from './ui/Button';
 import './GitPanel.css';
 
 const mockGitData = {
@@ -116,13 +117,14 @@ const NotAGitRepo: React.FC = () => {
       <div className="git-empty-state-message">
         This workspace is not a git repository
       </div>
-      <button
+      <Button
         className="git-empty-state-button"
         onClick={handleInitialize}
         title="Initialize Repository (coming soon)"
+        variant="primary"
       >
         Initialize Repository
-      </button>
+      </Button>
     </div>
   );
 };
@@ -160,10 +162,11 @@ const BranchSelector: React.FC<{
 
   return (
     <div className="branch-selector">
-      <button
+      <Button
         className="branch-selector-button"
         onClick={() => setIsOpen(!isOpen)}
         title="Switch branch"
+        variant="secondary"
       >
         <svg
           className={`branch-selector-chevron ${isOpen ? 'open' : ''}`}
@@ -177,26 +180,28 @@ const BranchSelector: React.FC<{
           <path d="M6 9l6 6 6-6" />
         </svg>
         <span className="branch-name">{currentBranch}</span>
-      </button>
+      </Button>
       {isOpen && (
         <div className="branch-dropdown">
-          <button
+          <Button
             className="branch-create-button"
             onClick={handleCreateBranch}
             title="Create new branch"
             disabled={isCreating}
+            variant="secondary"
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
             <span>Create New Branch</span>
-          </button>
+          </Button>
           {branches.map((branch) => (
-            <button
+            <Button
               key={branch}
               className={`branch-option ${branch === currentBranch ? 'current' : ''}`}
               onClick={() => handleSelect(branch)}
+              variant="secondary"
             >
               <GitBranchIcon />
               <span>{branch}</span>
@@ -214,7 +219,7 @@ const BranchSelector: React.FC<{
                 </svg>
               )}
               {branch !== currentBranch && (
-                <button
+                <Button
                   className="branch-delete-button"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -222,14 +227,16 @@ const BranchSelector: React.FC<{
                   }}
                   title={`Delete branch '${branch}'`}
                   disabled={isDeleting}
+                  variant="destructive"
+                  size="sm"
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <line x1="18" y1="6" x2="6" y2="18" />
                     <line x1="6" y1="6" x2="18" y2="18" />
                   </svg>
-                </button>
+                </Button>
               )}
-            </button>
+            </Button>
           ))}
         </div>
       )}
@@ -322,10 +329,12 @@ const FileItem: React.FC<{
         </div>
         <StatusBadge status={file.status} />
         {!file.staged && onDiscard && (
-          <button
+          <Button
             className="git-discard-button"
             onClick={handleDiscard}
             title="Discard changes"
+            variant="destructive"
+            size="sm"
           >
             <svg
               width="14"
@@ -340,7 +349,7 @@ const FileItem: React.FC<{
               <polyline points="3 6 5 6 21 6"></polyline>
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
             </svg>
-          </button>
+          </Button>
         )}
         {onToggleExpand && (
           <svg
@@ -544,17 +553,18 @@ const CommitSection: React.FC<{
           rows={3}
           disabled={stagedCount === 0}
         />
-        <button
+        <Button
           className="git-commit-button"
           onClick={handleCommit}
           disabled={!message.trim() || stagedCount === 0}
           title="Commit staged changes"
+          variant="primary"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <polyline points="20,6 9,17 4,12" />
           </svg>
           <span>Commit</span>
-        </button>
+        </Button>
       </div>
       {stagedCount > 0 && (
         <div className="git-commit-hint">
@@ -578,28 +588,32 @@ const GitPanelHeader: React.FC = () => {
     <div className="git-panel-header">
       <span className="git-panel-header-title">SOURCE CONTROL</span>
       <div className="git-panel-header-actions">
-        <button
+        <Button
           type="button"
           className="git-header-action-button"
           onClick={handleRefresh}
           title="Refresh"
+          variant="ghost"
+          size="sm"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 8 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 20.49 15" />
           </svg>
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           className="git-header-action-button"
           onClick={handleMoreActions}
           title="More Actions"
+          variant="ghost"
+          size="sm"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="12" cy="5" r="1" fill="currentColor" />
             <circle cx="12" cy="12" r="1" fill="currentColor" />
             <circle cx="12" cy="19" r="1" fill="currentColor" />
           </svg>
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -652,39 +666,45 @@ const GitPanelToolbarRow: React.FC<{
         <AheadBehindIndicator ahead={ahead} behind={behind} />
       </div>
       <div className="git-panel-toolbar-actions">
-        <button
+        <Button
           type="button"
           className="git-toolbar-icon-button"
           onClick={onRefresh}
           title="Refresh"
+          variant="ghost"
+          size="sm"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 8 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
           </svg>
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           className="git-toolbar-icon-button"
           onClick={onStageAll}
           disabled={unstagedCount === 0}
           title="Stage all unstaged changes"
+          variant="ghost"
+          size="sm"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <polyline points="20,6 9,17 4,12" />
           </svg>
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           className="git-toolbar-icon-button"
           onClick={onUnstageAll}
           disabled={stagedCount === 0}
           title="Unstage all staged changes"
+          variant="ghost"
+          size="sm"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <line x1="18" y1="6" x2="6" y2="18" />
             <line x1="6" y1="6" x2="18" y2="18" />
           </svg>
-        </button>
+        </Button>
       </div>
     </div>
   );
