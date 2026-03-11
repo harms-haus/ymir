@@ -3,6 +3,8 @@ import useWorkspaceStore from '../state/workspace';
 import { Tab } from '../state/types';
 import { PanelDefinition } from '../state/types';
 import { Button } from './ui/Button';
+import { Tooltip } from './ui/Tooltip';
+import './NotificationsPanel.css';
 
 interface NotificationItemProps {
   tab: Tab;
@@ -87,8 +89,9 @@ function NotificationItem({
           variant="ghost"
           size="sm"
           onClick={onClear}
-          title="Clear notification"
           type="button"
+          style={{ color: 'var(--destructive)' }}
+          className="hover:text-white hover:bg-[var(--destructive)]"
         >
           Clear
         </Button>
@@ -208,15 +211,17 @@ function NotificationsPanelContent() {
           )}
         </div>
         {notificationTabs.length > 0 && (
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleJumpToFirstUnread}
-            title="Jump to first unread (⌘⇧U)"
-            type="button"
-          >
-            Jump to Unread
-          </Button>
+          <Tooltip content="Jump to first unread (⌘⇧U)">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleJumpToFirstUnread}
+              type="button"
+              style={{ color: 'var(--primary)' }}
+            >
+              Jump to Unread
+            </Button>
+          </Tooltip>
         )}
       </div>
 

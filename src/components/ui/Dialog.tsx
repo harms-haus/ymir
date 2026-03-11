@@ -147,3 +147,17 @@ export const AlertDialogDescription = React.forwardRef<HTMLParagraphElement, Ale
 );
 
 AlertDialogDescription.displayName = 'AlertDialog.Description';
+
+export const AlertDialogClose = React.forwardRef<HTMLButtonElement, AlertDialog.Close.Props>(
+  ({ className = '', ...props }, ref) => {
+    return (
+      <AlertDialog.Close
+        ref={ref}
+        className={`ymir-alert-dialog-close ${className}`.trim()}
+        {...props}
+      />
+    );
+  },
+);
+
+AlertDialogClose.displayName = 'AlertDialog.Close';

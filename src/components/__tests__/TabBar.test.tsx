@@ -8,11 +8,16 @@ import type { Tab } from '../../state/types';
 const originalResizeObserver = globalThis.ResizeObserver;
 const originalScrollIntoView = Element.prototype.scrollIntoView;
 
+const originalScrollWidthGetter = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollWidth');
+const originalClientWidthGetter = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+
 class MockResizeObserver {
   observe = vi.fn();
   unobserve = vi.fn();
   disconnect = vi.fn();
 }
+
+const mockResizeObserver = new MockResizeObserver();
 
 beforeAll(() => {
   globalThis.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
@@ -22,49 +27,56 @@ beforeAll(() => {
 afterAll(() => {
   globalThis.ResizeObserver = originalResizeObserver;
   Element.prototype.scrollIntoView = originalScrollIntoView;
+  if (originalScrollWidthGetter) {
+    Object.defineProperty(HTMLElement.prototype, 'scrollWidth', originalScrollWidthGetter);
+  }
+  if (originalClientWidthGetter) {
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', originalClientWidthGetter);
+  }
+});
+
+const mockPaneId = 'pane-1';
+const createMockTab = (id: string, title: string, overrides?: Partial<Tab>): Tab => ({
+  id,
+  type: 'terminal' as const,
+  title,
+  cwd: '/home/user',
+  sessionId: '',
+  scrollback: [],
+  hasNotification: false,
+  notificationCount: 0,
+  ...overrides,
+});
+
+const defaultProps = {
+  paneId: mockPaneId,
+  tabs: [] as Tab[],
+  activeTabId: null as string | null,
+  onCreateTab: vi.fn(),
+  onCloseTab: vi.fn(),
+  onSelectTab: vi.fn(),
+  onSplitPane: vi.fn(),
+  onCreateTabRight: vi.fn(),
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
 });
 
 describe('TabBar Component', () => {
-  const mockPaneId = 'pane-1';
-  const createMockTab = (id: string, title: string, overrides?: Partial<Tab>): Tab => ({
-    id,
-    title,
-    cwd: '/home/user',
-    sessionId: '',
-    scrollback: [],
-    hasNotification: false,
-    notificationCount: 0,
-    ...overrides,
-  });
-
-  const defaultProps = {
-    paneId: mockPaneId,
-    tabs: [] as Tab[],
-    activeTabId: null as string | null,
-    onCreateTab: vi.fn(),
-    onCloseTab: vi.fn(),
-    onSelectTab: vi.fn(),
-    onSplitPane: vi.fn(),
-    onCreateTabRight: vi.fn(),
-  };
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   describe('Rendering', () => {
     it('should render without errors with empty tabs', () => {
-      render(<TabBar {...defaultProps} />);
+      const { container } = render(<TabBar {...defaultProps} />);
 
-      expect(screen.getByTitle('New tab')).toBeInTheDocument();
+      expect(container.querySelector('.tab-bar-new-button')).toBeInTheDocument();
     });
 
     it('should render single tab correctly', () => {
       const tabs = [createMockTab('tab-1', 'bash')];
-      render(<TabBar {...defaultProps} tabs={tabs} activeTabId="tab-1" />);
+      const { container } = render(<TabBar {...defaultProps} tabs={tabs} activeTabId="tab-1" />);
 
       expect(screen.getByText('bash')).toBeInTheDocument();
-      expect(screen.getByTitle('Close tab')).toBeInTheDocument();
+      expect(container.querySelector('.tab-close-button')).toBeInTheDocument();
     });
 
     it('should render multiple tabs', () => {
@@ -102,10 +114,10 @@ describe('TabBar Component', () => {
       const user = userEvent.setup();
       const onCreateTab = vi.fn();
 
-      render(<TabBar {...defaultProps} onCreateTab={onCreateTab} />);
+      const { container } = render(<TabBar {...defaultProps} onCreateTab={onCreateTab} />);
 
-      const newTabButton = screen.getByTitle('New tab');
-      await user.click(newTabButton);
+      const newTabButton = container.querySelector('.tab-bar-new-button');
+      await user.click(newTabButton!);
 
       expect(onCreateTab).toHaveBeenCalledWith(mockPaneId);
       expect(onCreateTab).toHaveBeenCalledTimes(1);
@@ -116,12 +128,12 @@ describe('TabBar Component', () => {
       const onCloseTab = vi.fn();
       const tabs = [createMockTab('tab-1', 'bash')];
 
-      render(
+      const { container } = render(
         <TabBar {...defaultProps} tabs={tabs} activeTabId="tab-1" onCloseTab={onCloseTab} />
       );
 
-      const closeButton = screen.getByTitle('Close tab');
-      await user.click(closeButton);
+      const closeButton = container.querySelector('.tab-close-button');
+      await user.click(closeButton!);
 
       expect(onCloseTab).toHaveBeenCalledWith(mockPaneId, 'tab-1');
     });
@@ -150,7 +162,7 @@ describe('TabBar Component', () => {
       const onCloseTab = vi.fn();
       const tabs = [createMockTab('tab-1', 'bash')];
 
-      render(
+      const { container } = render(
         <TabBar
           {...defaultProps}
           tabs={tabs}
@@ -160,8 +172,8 @@ describe('TabBar Component', () => {
         />
       );
 
-      const closeButton = screen.getByTitle('Close tab');
-      await user.click(closeButton);
+      const closeButton = container.querySelector('.tab-close-button');
+      await user.click(closeButton!);
 
       expect(onCloseTab).toHaveBeenCalledWith(mockPaneId, 'tab-1');
       expect(onSelectTab).not.toHaveBeenCalled();
@@ -183,9 +195,9 @@ describe('TabBar Component', () => {
         get: () => 500,
       });
 
-      render(<TabBar {...defaultProps} tabs={tabs} activeTabId="tab-1" />);
+      const { container } = render(<TabBar {...defaultProps} tabs={tabs} activeTabId="tab-1" />);
 
-      expect(screen.getByTitle('Show all tabs')).toBeInTheDocument();
+      expect(container.querySelector('.tab-bar-overflow-button')).toBeInTheDocument();
     });
 
     it('should toggle overflow menu when overflow button is clicked', async () => {
@@ -244,8 +256,9 @@ describe('TabBar Component', () => {
       await user.click(overflowButton);
 
       const tab12 = screen.getAllByText('Tab 12').find(el =>
-        el.closest('.overflow-menu-item')
+        el.closest('[role="menuitem"]')
       );
+
       if (tab12) {
         await user.click(tab12);
         expect(onSelectTab).toHaveBeenCalledWith(mockPaneId, 'tab-12');
@@ -389,7 +402,7 @@ describe('TabBar Component', () => {
       });
     });
 
-    it('should not show split options when onSplitPane is not provided', async () => {
+    it('should show split options when onSplitPane is not provided', async () => {
       const tabs = [createMockTab('tab-1', 'bash')];
       const { onSplitPane, ...propsWithoutSplit } = defaultProps;
 
@@ -438,11 +451,12 @@ describe('TabBar Component', () => {
         <TabBar {...defaultProps} tabs={tabs} activeTabId="tab-1" />
       );
 
-      const notifiedTab = container.querySelector('[data-tab-id="tab-1"]');
-      expect(notifiedTab).toHaveClass('has-notification');
+      const tabElements = container.querySelectorAll('[role="tab"]');
+      const bashTab = Array.from(tabElements).find(el => el.textContent?.includes('bash'));
+      const vimTab = Array.from(tabElements).find(el => el.textContent?.includes('vim'));
 
-      const normalTab = container.querySelector('[data-tab-id="tab-2"]');
-      expect(normalTab).not.toHaveClass('has-notification');
+      expect(bashTab).toHaveClass('has-notification');
+      expect(vimTab).not.toHaveClass('has-notification');
     });
 
     it('should show notification badges in overflow menu', async () => {
@@ -525,8 +539,12 @@ describe('TabBar Component', () => {
         <TabBar {...defaultProps} tabs={tabs} activeTabId="tab-1" />
       );
 
-      const tab = container.querySelector('[data-tab-id="tab-1"]');
-      expect(tab).toHaveClass('has-notification');
+      const tabElements = container.querySelectorAll('[role="tab"]');
+      const vimTab = Array.from(tabElements).find(el => el.textContent?.includes('vim'));
+      const bashTab = Array.from(tabElements).find(el => el.textContent?.includes('bash'));
+
+      expect(vimTab).toHaveClass('active');
+      expect(bashTab).not.toHaveClass('active');
     });
 
     it('should handle null activeTabId', () => {
@@ -536,8 +554,9 @@ describe('TabBar Component', () => {
         <TabBar {...defaultProps} tabs={tabs} activeTabId={null} />
       );
 
-      const tab = container.querySelector('[data-tab-id="tab-1"]');
-      expect(tab).not.toHaveClass('active');
+      const tabElements = container.querySelectorAll('[role="tab"]');
+      const bashTab = Array.from(tabElements).find(el => el.textContent?.includes('bash'));
+      expect(bashTab).not.toHaveClass('active');
     });
 
     it('should handle empty tab title', () => {

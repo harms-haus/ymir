@@ -1,154 +1,83 @@
 /**
- * Ymir Theme System
- * CSS Custom Properties using oklch() color space
- * Supports light, dark, and custom .theme-ymir themes
+ * Ymir Theme System - CSS Custom Properties
+ * Matches VS Code Dark theme colors used throughout the application
  */
 
 :root {
-  /* ========== LIGHT THEME ========== */
+  /* ========== Backgrounds ========== */
+  --background: #1e1e1e;
+  --background-secondary: #252526;
+  --background-tertiary: #3c3c3c;
+  --background-active: #37373d;
+  --background-hover: #2a2d2e;
+  --background-hover-alt: #2a2d2f;
+  --background-button-hover: #4c4c4c;
+  --background-button-active: #4a4a4a;
 
-  /* Background colors */
-  --background: oklch(100% 0 0);
-  --foreground: oklch(9% 0 0);
+  /* ========== Text ========== */
+  --foreground: #cccccc;
+  --foreground-secondary: #858585;
+  --foreground-muted: #666666;
+  --foreground-active: #ffffff;
+  --foreground-subtle: #555555;
 
-  /* Card/Component backgrounds */
-  --card: oklch(100% 0 0);
-  --card-foreground: oklch(9% 0 0);
+  /* ========== Accents ========== */
+  --primary: #007acc;
+  --primary-hover: #0098ff;
+  --notification: #4fc3f7;
+  --destructive: #c75450;
+  --destructive-alt: #f48771;
 
-  /* Primary brand colors */
-  --primary: oklch(47% 0.23 264);
-  --primary-foreground: oklch(100% 0 0);
+  /* ========== Status Colors ========== */
+  --status-modified: #ff9f00;
+  --status-modified-alt: #ffa726;
+  --status-added: #4caf50;
+  --status-deleted: #f44336;
+  --status-untracked: #73bf99;
+  --status-renamed: #e8c39b;
+  --status-conflict: #c94a4c;
 
-  /* Secondary colors */
-  --secondary: oklch(90% 0.02 264);
-  --secondary-foreground: oklch(9% 0 0);
+  /* ========== Borders ========== */
+  --border: #1e1e1e;
+  --border-secondary: #3c3c3c;
+  --border-tertiary: #333;
+  --border-dark: #454545;
 
-  /* Muted/subtle colors */
-  --muted: oklch(96% 0.01 264);
-  --muted-foreground: oklch(46% 0.02 264);
+  /* ========== Effects ========== */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.2s ease;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+  --radius-2xl: 10px;
 
-  /* Accent colors */
-  --accent: oklch(96% 0.01 264);
-  --accent-foreground: oklch(9% 0 0);
+  /* ========== Shadows ========== */
+  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
 
-  /* Destructive/error colors */
-  --destructive: oklch(53% 0.23 25);
-  --destructive-foreground: oklch(100% 0 0);
+  /* ========== Special Colors ========== */
+  --folder-color: #dcb67a;
+  --checkbox-accent: #4caf50;
 
-  /* Border and ring colors */
-  --border: oklch(89% 0.01 264);
-  --input: oklch(89% 0.01 264);
-  --ring: oklch(47% 0.23 264);
+  /* ========== Spacing Tokens ========== */
+  --spacing-xs: 2px;
+  --spacing-sm: 4px;
+  --spacing-md: 6px;
+  --spacing-lg: 8px;
+  --spacing-xl: 10px;
+  --spacing-2xl: 12px;
+  --spacing-3xl: 16px;
 
-  /* Radius tokens */
-  --radius: 0.5rem;
-
-  /* Spacing tokens */
-  --spacing-xs: 0.25rem;
-  --spacing-sm: 0.5rem;
-  --spacing-md: 1rem;
-  --spacing-lg: 1.5rem;
-  --spacing-xl: 2rem;
-  --spacing-2xl: 3rem;
-
-  /* Font sizes */
-  --font-size-xs: 0.75rem;
-  --font-size-sm: 0.875rem;
-  --font-size-md: 1rem;
-  --font-size-lg: 1.125rem;
-  --font-size-xl: 1.25rem;
-}
-
-/* ========== DARK THEME ========== */
-.dark {
-  /* Background colors */
-  --background: oklch(14% 0.01 264);
-  --foreground: oklch(98% 0 0);
-
-  /* Card/Component backgrounds */
-  --card: oklch(14% 0.01 264);
-  --card-foreground: oklch(98% 0 0);
-
-  /* Primary brand colors */
-  --primary: oklch(65% 0.23 264);
-  --primary-foreground: oklch(9% 0 0);
-
-  /* Secondary colors */
-  --secondary: oklch(20% 0.01 264);
-  --secondary-foreground: oklch(98% 0 0);
-
-  /* Muted/subtle colors */
-  --muted: oklch(20% 0.01 264);
-  --muted-foreground: oklch(70% 0.02 264);
-
-  /* Accent colors */
-  --accent: oklch(20% 0.01 264);
-  --accent-foreground: oklch(98% 0 0);
-
-  /* Destructive/error colors */
-  --destructive: oklch(60% 0.23 25);
-  --destructive-foreground: oklch(100% 0 0);
-
-  /* Border and ring colors */
-  --border: oklch(22% 0.02 264);
-  --input: oklch(22% 0.02 264);
-  --ring: oklch(65% 0.23 264);
-}
-
-/* ========== CUSTOM THEME: YMIR (VS Code-like) ========== */
-.theme-ymir {
-  /* VS Code Dark-like theme colors */
-  --background: oklch(17% 0.01 264);    /* VS Code background: #1e1e1e */
-  --foreground: oklch(98% 0 0);         /* VS Code foreground: #cccccc */
-
-  /* Card/Component backgrounds */
-  --card: oklch(20% 0.01 264);          /* VS Code panel: #252526 */
-  --card-foreground: oklch(96% 0 0);
-
-  /* Primary brand colors (VS Code blue accent) */
-  --primary: oklch(65% 0.25 250);       /* VS Code accent blue: #007acc */
-  --primary-foreground: oklch(100% 0 0);
-
-  /* Secondary colors */
-  --secondary: oklch(25% 0.01 264);     /* VS Code secondary background: #2d2d2d */
-  --secondary-foreground: oklch(96% 0 0);
-
-  /* Muted/subtle colors */
-  --muted: oklch(22% 0.01 264);         /* VS Code input background: #3c3c3c */
-  --muted-foreground: oklch(60% 0.02 264); /* VS Code description: #858585 */
-
-  /* Accent colors */
-  --accent: oklch(22% 0.01 264);
-  --accent-foreground: oklch(98% 0 0);
-
-  /* Destructive/error colors (VS Code error red) */
-  --destructive: oklch(60% 0.23 25);    /* VS Code error: #f14c4c */
-  --destructive-foreground: oklch(100% 0 0);
-
-  /* Border and ring colors */
-  --border: oklch(24% 0.01 264);        /* VS Code borders: #454545 */
-  --input: oklch(22% 0.01 264);
-  --ring: oklch(65% 0.25 250);
-
-  /* Syntax highlighting colors (for terminals/code) */
-  --syntax-keyword: oklch(65% 0.23 280);    /* Pink/purple keywords */
-  --syntax-string: oklch(70% 0.17 140);     /* Green strings */
-  --syntax-number: oklch(65% 0.23 50);      /* Orange numbers */
-  --syntax-comment: oklch(50% 0.02 264);    /* Gray comments */
-  --syntax-function: oklch(70% 0.17 210);   /* Blue functions */
-}
-
-/* ========== BASE STYLES ========== */
-* {
-  border-color: var(--border);
-}
-
-body {
-  background-color: var(--background);
-  color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  font-size: var(--font-size-md);
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  /* ========== Font Sizes ========== */
+  --font-size-xs: 9px;
+  --font-size-sm: 10px;
+  --font-size-md: 11px;
+  --font-size-lg: 12px;
+  --font-size-xl: 13px;
+  --font-size-2xl: 14px;
+  --font-size-3xl: 18px;
+  --font-size-4xl: 32px;
+  --font-size-5xl: 40px;
+  --font-size-6xl: 48px;
 }

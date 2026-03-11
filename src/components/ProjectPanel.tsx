@@ -1,5 +1,13 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { PanelDefinition, TabBadge } from '../state/types';
+import {
+  AccordionRoot,
+  AccordionItem,
+  AccordionHeader,
+  AccordionTrigger,
+  AccordionPanel,
+} from './ui/Accordion';
+import { Button } from './ui/Button';
 import './ProjectPanel.css';
 
 // Mock file tree data
@@ -131,8 +139,8 @@ const FolderIcon: React.FC<{ isOpen: boolean }> = ({ isOpen }) => (
   </svg>
 );
 
-// Chevron icon for expand/collapse
-const ChevronIcon: React.FC<{ isOpen: boolean }> = ({ isOpen }) => (
+// Chevron icon for expand/collapse - rendered by AccordionTrigger
+const ChevronIcon: React.FC = () => (
   <svg
     width="12"
     height="12"
@@ -144,46 +152,38 @@ const ChevronIcon: React.FC<{ isOpen: boolean }> = ({ isOpen }) => (
     strokeLinejoin="round"
     style={{
       flexShrink: 0,
-      transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
-      transition: 'transform 0.15s ease',
       color: '#858585',
     }}
+    className="accordion-chevron"
   >
     <polyline points="9 18 15 12 9 6" />
   </svg>
 );
 
-// File tree item component
+// File tree item component using Base-UI Accordion
 interface FileTreeItemProps {
   node: FileNode;
   depth: number;
 }
 
 const FileTreeItem: React.FC<FileTreeItemProps> = ({ node, depth }) => {
-  const [isOpen, setIsOpen] = useState(depth < 2); // Auto-expand first two levels
-
-  const handleClick = () => {
-    if (node.type === 'folder') {
-      setIsOpen(!isOpen);
-    }
-  };
-
-
   const paddingLeft = 8 + depth * 12;
 
-  if (node.type === 'folder') {
+  if (node.type === 'folder' && node.children) {
+    // Use Accordion for folders
     return (
-      <div className="folder-node">
-        <div
-          className="project-folder-item"
-          onClick={handleClick}
-          style={{ paddingLeft: `${paddingLeft}px` }}
-        >
-          <ChevronIcon isOpen={isOpen} />
-          <FolderIcon isOpen={isOpen} />
-          <span className="file-name">{node.name}</span>
-        </div>
-        {isOpen && node.children && (
+      <AccordionItem className="folder-accordion-item">
+        <AccordionHeader className="folder-accordion-header">
+          <AccordionTrigger
+            className="folder-accordion-trigger"
+            style={{ paddingLeft: `${paddingLeft}px` }}
+          >
+            <ChevronIcon />
+            <FolderIcon isOpen={false} />
+            <span className="file-name">{node.name}</span>
+          </AccordionTrigger>
+        </AccordionHeader>
+        <AccordionPanel className="folder-accordion-panel">
           <div className="project-folder-tree">
             {node.children.map((child, index) => (
               <FileTreeItem
@@ -193,20 +193,22 @@ const FileTreeItem: React.FC<FileTreeItemProps> = ({ node, depth }) => {
               />
             ))}
           </div>
-        )}
-      </div>
+        </AccordionPanel>
+      </AccordionItem>
     );
   }
 
+  // Files are simple clickable items
   return (
-    <div
-      className="project-folder-item"
-      onClick={handleClick}
-      style={{ paddingLeft: `${paddingLeft + 12}px` }} // Extra padding for files (no chevron)
+    <Button
+      variant="ghost"
+      size="sm"
+      className="project-folder-item file-item"
+      style={{ paddingLeft: `${paddingLeft + 12}px`, justifyContent: 'flex-start' }}
     >
       {getFileIcon(node.extension)}
       <span className="file-name">{node.name}</span>
-    </div>
+    </Button>
   );
 };
 
@@ -233,7 +235,7 @@ const ProjectPanelBadge = (): TabBadge | null => {
   return null;
 };
 
-// Full panel content - file tree
+// Full panel content - file tree using Accordion
 const ProjectPanelFull: React.FC = () => {
   return (
     <div className="project-panel">
@@ -243,11 +245,11 @@ const ProjectPanelFull: React.FC = () => {
       <div className="project-panel-content">
         <div className="project-section">
           <div className="project-section-title">Files</div>
-          <div className="file-tree">
+          <AccordionRoot className="file-tree-accordion">
             {mockFileTree.map((node, index) => (
               <FileTreeItem key={`${node.name}-${index}`} node={node} depth={0} />
             ))}
-          </div>
+          </AccordionRoot>
         </div>
       </div>
     </div>

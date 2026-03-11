@@ -106,7 +106,7 @@ describe('TabHeaderPanel', () => {
     });
 
     it('should call onTabClick when tab is clicked', () => {
-      render(
+      const { container } = render(
         <TabHeaderPanel
           panels={mockPanels}
           activeTab="workspaces"
@@ -116,8 +116,8 @@ describe('TabHeaderPanel', () => {
         />
       );
 
-      const notificationsButton = screen.getByTitle('Notifications');
-      fireEvent.click(notificationsButton);
+      const tabButtons = container.querySelectorAll('.tab-button');
+      fireEvent.click(tabButtons[1]);
 
       expect(mockOnTabClick).toHaveBeenCalledWith('notifications');
     });
@@ -316,7 +316,8 @@ describe('TabHeaderPanel', () => {
         />
       );
 
-      const projectButton = screen.getByTitle('Project');
+      const tabButtons = container.querySelectorAll('.tab-button');
+      const projectButton = tabButtons[3];
       const badge = projectButton.querySelector('.tab-badge');
       expect(badge).toBeNull();
     });
@@ -324,7 +325,7 @@ describe('TabHeaderPanel', () => {
 
   describe('Auto-expand Behavior', () => {
     it('should auto-expand sidebar when clicking tab without collapsedRender while collapsed', () => {
-      render(
+      const { container } = render(
         <TabHeaderPanel
           panels={mockPanels}
           activeTab="workspaces"
@@ -334,7 +335,8 @@ describe('TabHeaderPanel', () => {
         />
       );
 
-      const notificationsButton = screen.getByTitle('Notifications');
+      const tabButtons = container.querySelectorAll('.tab-button-vertical');
+      const notificationsButton = tabButtons[1];
       fireEvent.click(notificationsButton);
 
       expect(mockOnToggleSidebar).toHaveBeenCalled();
@@ -342,7 +344,7 @@ describe('TabHeaderPanel', () => {
     });
 
     it('should not auto-expand when tab has collapsedRender', () => {
-      render(
+      const { container } = render(
         <TabHeaderPanel
           panels={mockPanels}
           activeTab="notifications"
@@ -352,7 +354,8 @@ describe('TabHeaderPanel', () => {
         />
       );
 
-      const workspacesButton = screen.getByTitle('Workspaces');
+      const tabButtons = container.querySelectorAll('.tab-button-vertical');
+      const workspacesButton = tabButtons[0];
       fireEvent.click(workspacesButton);
 
       expect(mockOnToggleSidebar).not.toHaveBeenCalled();
@@ -360,7 +363,7 @@ describe('TabHeaderPanel', () => {
     });
 
     it('should not auto-expand when not collapsed', () => {
-      render(
+      const { container } = render(
         <TabHeaderPanel
           panels={mockPanels}
           activeTab="workspaces"
@@ -370,7 +373,8 @@ describe('TabHeaderPanel', () => {
         />
       );
 
-      const notificationsButton = screen.getByTitle('Notifications');
+      const tabButtons = container.querySelectorAll('.tab-button');
+      const notificationsButton = tabButtons[1];
       fireEvent.click(notificationsButton);
 
       expect(mockOnToggleSidebar).not.toHaveBeenCalled();
@@ -416,7 +420,7 @@ describe('TabHeaderPanel', () => {
       const { container } = render(
         <TabHeaderPanel
           panels={mockPanels}
-          activeTab="nonexistent" as SidebarTab
+          activeTab={"nonexistent" as SidebarTab}
           isCollapsed={false}
           onTabClick={mockOnTabClick}
           onToggleSidebar={mockOnToggleSidebar}

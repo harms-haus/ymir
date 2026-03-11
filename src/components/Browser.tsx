@@ -1,10 +1,11 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { ErrorBoundary } from './ErrorBoundary';
 import { Button } from './ui/Button';
+import { Tooltip } from './ui/Tooltip';
+import './Browser.css';
 import logger from '../lib/logger';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Webview } from '@tauri-apps/api/webview';
-import './Browser.css';
 
 export interface BrowserProps {
   tabId: string;
@@ -250,43 +251,46 @@ export function Browser({ tabId, url, paneId }: BrowserProps) {
     <ErrorBoundary>
         <div ref={containerRef} className="browser-container">
         <div className="browser-nav-bar">
+        <Tooltip content="Back">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => handleBack()}
             disabled={!canGoBack}
-            title="Back"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6" />
             </svg>
           </Button>
-          
+        </Tooltip>
+
+        <Tooltip content="Forward">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => handleForward()}
             disabled={!canGoForward}
-            title="Forward"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="9 18 15 12 9 6" />
             </svg>
           </Button>
-          
+        </Tooltip>
+
+        <Tooltip content={isLoading ? "Stop" : "Refresh"}>
           <Button
             variant="ghost"
             size="sm"
             onClick={handleReload}
             disabled={isLoading}
-            title={isLoading ? "Stop" : "Refresh"}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 12a9 9 0 11-2.636-6.364" />
               <path d="M21 3v6h-6" />
             </svg>
           </Button>
-          
+        </Tooltip>
+
           <input
             className="browser-url-input"
             type="text"
@@ -295,18 +299,19 @@ export function Browser({ tabId, url, paneId }: BrowserProps) {
             onKeyDown={(e) => { if (e.key === 'Enter') { handleNavigate(currentUrl); } }}
             placeholder={isLoading ? 'Loading...' : 'Enter URL'}
           />
-          
+
+        <Tooltip content="Open DevTools">
           <Button
             variant="ghost"
             size="sm"
             onClick={handleOpenDevTools}
-            title="Open DevTools"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="16 18 22 12 16 6" />
               <polyline points="8 6 2 12 8 18" />
             </svg>
           </Button>
+        </Tooltip>
         </div>
         
         <div ref={webviewContainerRef}>

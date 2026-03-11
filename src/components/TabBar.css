@@ -95,20 +95,27 @@
   flex-shrink: 0;
 }
 
-/* Close button - Button component override */
+/* Close button */
 .tab-close-button {
+  background: none;
+  border: none;
+  color: #cccccc;
+  cursor: pointer;
   font-size: 14px;
   line-height: 1;
   padding: 2px 4px;
   border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   opacity: 0.6;
   flex-shrink: 0;
-  min-width: 18px;
+  transition: all 0.15s ease;
 }
 
 .tab-close-button:hover {
-  background-color: #c75450 !important;
-  color: #ffffff !important;
+  background-color: #c75450;
+  color: #ffffff;
   opacity: 1;
 }
 
@@ -122,13 +129,20 @@
   flex-shrink: 0;
 }
 
-/* Overflow button - Button component override */
+/* Overflow button */
 .tab-bar-overflow-button {
+  background: none;
+  border: none;
+  border-left: 1px solid #1e1e1e;
+  color: #cccccc;
+  cursor: pointer;
   font-size: 10px;
   width: 28px;
   height: 34px;
-  border-left: 1px solid #1e1e1e;
-  border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
 }
 
 .tab-bar-overflow-button:hover {
@@ -219,13 +233,21 @@
   flex-shrink: 0;
 }
 
-/* New tab button - Button component override */
+/* New tab button */
 .tab-bar-new-button {
+  background: none;
+  border: none;
+  border-left: 1px solid #1e1e1e;
+  color: #cccccc;
+  cursor: pointer;
   font-size: 18px;
   width: 32px;
   height: 34px;
-  border-left: 1px solid #1e1e1e;
-  border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
 }
 
 .tab-bar-new-button:hover {
@@ -233,12 +255,20 @@
   color: #ffffff;
 }
 
-/* Browser tab button - Button component override */
+/* Browser tab button */
 .tab-bar-browser-button {
+  background: none;
+  border: none;
+  border-left: 1px solid #1e1e1e;
+  color: #cccccc;
+  cursor: pointer;
   width: 32px;
   height: 34px;
-  border-left: 1px solid #1e1e1e;
-  border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
 }
 
 .tab-bar-browser-button:hover {

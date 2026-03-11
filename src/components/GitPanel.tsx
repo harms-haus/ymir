@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PanelDefinition, GitFile } from '../state/types';
 import useWorkspaceStore, { getActiveRepo, getGitChangesCount, getGitError } from '../state/workspace';
 import gitService from '../lib/git-service';
 import { Button } from './ui/Button';
+import { Checkbox, Textarea, Input } from './ui/Input';
+import { Tooltip } from './ui/Tooltip';
+import { DialogRoot, DialogPortal, DialogPopup, DialogTitle, DialogClose } from './ui/Dialog';
 import './GitPanel.css';
 
 const mockGitData = {
@@ -117,20 +120,92 @@ const NotAGitRepo: React.FC = () => {
       <div className="git-empty-state-message">
         This workspace is not a git repository
       </div>
-      <Button
-        className="git-empty-state-button"
-        onClick={handleInitialize}
-        title="Initialize Repository (coming soon)"
-        variant="primary"
-      >
-        Initialize Repository
-      </Button>
+      <Tooltip content="Initialize Repository (coming soon)">
+        <Button
+          className="git-empty-state-button"
+          onClick={handleInitialize}
+          variant="primary"
+        >
+          Initialize Repository
+        </Button>
+      </Tooltip>
     </div>
   );
 };
 
+const CreateBranchDialog: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onCreateBranch: (branchName: string) => void;
+  isCreating?: boolean;
+}> = ({ isOpen, onClose, onCreateBranch, isCreating }) => {
+  const [branchName, setBranchName] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
 
-// Branch selector dropdown component - redesigned as plain text with left chevron
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (branchName.trim()) {
+        onCreateBranch(branchName.trim());
+        setBranchName('');
+        onClose();
+      }
+    }
+    if (e.key === 'Escape') {
+      setBranchName('');
+      onClose();
+    }
+  };
+
+  const handleCreate = () => {
+    if (branchName.trim()) {
+      onCreateBranch(branchName.trim());
+      setBranchName('');
+      onClose();
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isOpen]);
+
+  return (
+    <DialogRoot open={isOpen} onOpenChange={(open) => { if (!open) { setBranchName(''); onClose(); } }}>
+      <DialogPortal>
+        <DialogPopup className="create-branch-dialog">
+          <DialogTitle className="create-branch-dialog-title">
+            Create New Branch
+          </DialogTitle>
+          <Input
+            ref={inputRef}
+            className="create-branch-dialog-input"
+            placeholder="Enter branch name..."
+            value={branchName}
+            onChange={(e) => setBranchName(e.target.value)}
+            onKeyDown={handleKeyDown}
+          />
+          <div className="create-branch-dialog-actions">
+            <DialogClose className="create-branch-dialog-cancel" onClick={() => { setBranchName(''); onClose(); }}>
+              Cancel
+            </DialogClose>
+            <Button
+              className="create-branch-dialog-create"
+              variant="primary"
+              disabled={!branchName.trim() || isCreating}
+              onClick={handleCreate}
+            >
+              {isCreating ? 'Creating...' : 'Create'}
+            </Button>
+          </div>
+        </DialogPopup>
+      </DialogPortal>
+    </DialogRoot>
+  );
+};
+
+
 const BranchSelector: React.FC<{
   currentBranch: string;
   branches: string[];
@@ -141,18 +216,25 @@ const BranchSelector: React.FC<{
   isDeleting?: boolean;
 }> = ({ currentBranch, branches, onSelect, onCreateBranch, onDeleteBranch, isCreating, isDeleting }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const handleSelect = (branch: string) => {
     onSelect(branch);
     setIsOpen(false);
   };
 
-  const handleCreateBranch = () => {
-    const branchName = window.prompt('Enter new branch name:');
-    if (branchName && branchName.trim()) {
-      onCreateBranch(branchName.trim());
-    }
+  const handleOpenDialog = () => {
+    setIsDialogOpen(true);
     setIsOpen(false);
+  };
+
+  const handleCloseDialog = () => {
+    setIsDialogOpen(false);
+  };
+
+  const handleCreateBranch = (branchName: string) => {
+    onCreateBranch(branchName);
+    handleCloseDialog();
   };
 
   const handleDeleteBranch = (branchName: string) => {
@@ -162,40 +244,42 @@ const BranchSelector: React.FC<{
 
   return (
     <div className="branch-selector">
-      <Button
-        className="branch-selector-button"
-        onClick={() => setIsOpen(!isOpen)}
-        title="Switch branch"
-        variant="secondary"
-      >
-        <svg
-          className={`branch-selector-chevron ${isOpen ? 'open' : ''}`}
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
+      <Tooltip content="Switch branch">
+        <Button
+          className="branch-selector-button"
+          onClick={() => setIsOpen(!isOpen)}
+          variant="secondary"
         >
-          <path d="M6 9l6 6 6-6" />
-        </svg>
-        <span className="branch-name">{currentBranch}</span>
-      </Button>
+          <svg
+            className={`branch-selector-chevron ${isOpen ? 'open' : ''}`}
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+          <span className="branch-name">{currentBranch}</span>
+        </Button>
+      </Tooltip>
       {isOpen && (
         <div className="branch-dropdown">
-          <Button
-            className="branch-create-button"
-            onClick={handleCreateBranch}
-            title="Create new branch"
-            disabled={isCreating}
-            variant="secondary"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            <span>Create New Branch</span>
-          </Button>
+          <Tooltip content="Create new branch">
+            <Button
+              className="branch-create-button"
+              onClick={handleOpenDialog}
+              disabled={isCreating}
+              variant="secondary"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              <span>Create New Branch</span>
+            </Button>
+          </Tooltip>
           {branches.map((branch) => (
             <Button
               key={branch}
@@ -219,30 +303,39 @@ const BranchSelector: React.FC<{
                 </svg>
               )}
               {branch !== currentBranch && (
-                <Button
-                  className="branch-delete-button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteBranch(branch);
-                  }}
-                  title={`Delete branch '${branch}'`}
-                  disabled={isDeleting}
-                  variant="destructive"
-                  size="sm"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                </Button>
+                <Tooltip content={`Delete branch '${branch}'`}>
+                  <Button
+                    className="branch-delete-button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteBranch(branch);
+                    }}
+                    disabled={isDeleting}
+                    variant="destructive"
+                    size="sm"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </Button>
+                </Tooltip>
               )}
             </Button>
           ))}
         </div>
       )}
+      <CreateBranchDialog
+        isOpen={isDialogOpen}
+        onClose={handleCloseDialog}
+        onCreateBranch={handleCreateBranch}
+        isCreating={isCreating}
+      />
     </div>
   );
 };
+
+
 
 // Ahead/Behind indicator component
 const AheadBehindIndicator: React.FC<{
@@ -254,20 +347,24 @@ const AheadBehindIndicator: React.FC<{
   return (
     <div className="ahead-behind-indicator">
       {ahead > 0 && (
-        <span className="ahead" title={`${ahead} commits ahead`}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M12 19V5M5 12l7-7 7 7" />
-          </svg>
-          {ahead}
-        </span>
+        <Tooltip content={`${ahead} commits ahead`}>
+          <span className="ahead">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 19V5M5 12l7-7 7 7" />
+            </svg>
+            {ahead}
+          </span>
+        </Tooltip>
       )}
       {behind > 0 && (
-        <span className="behind" title={`${behind} commits behind`}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M12 5v14M5 12l7 7 7-7" />
-          </svg>
-          {behind}
-        </span>
+        <Tooltip content={`${behind} commits behind`}>
+          <span className="behind">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 5v14M5 12l7 7 7-7" />
+            </svg>
+            {behind}
+          </span>
+        </Tooltip>
       )}
     </div>
   );
@@ -310,46 +407,48 @@ const FileItem: React.FC<{
     <div className="git-item-wrapper">
       <div className="git-item" onClick={onToggleExpand}>
         {showCheckbox && (
-          <input
-            type="checkbox"
-            className="git-checkbox"
-            checked={file.staged || false}
-            onChange={(e) => {
-              e.stopPropagation();
-              onCheckboxChange?.();
-            }}
-            title={file.staged ? 'Unstage file' : 'Stage file'}
-            onClick={(e) => e.stopPropagation()}
-          />
+          <Tooltip content={file.staged ? 'Unstage file' : 'Stage file'}>
+            <Checkbox
+              className="git-checkbox"
+              checked={file.staged || false}
+              onCheckedChange={() => {
+                onCheckboxChange?.();
+              }}
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
+            />
+          </Tooltip>
         )}
         <span className="git-file-icon">📄</span>
         <div className="git-file-info">
-          <span className="git-file-name" title={file.path}>{fileName}</span>
+          <Tooltip content={file.path}>
+            <span className="git-file-name">{fileName}</span>
+          </Tooltip>
           {dirPath && <span className="git-file-path">{dirPath}</span>}
         </div>
         <StatusBadge status={file.status} />
         {!file.staged && onDiscard && (
-          <Button
-            className="git-discard-button"
-            onClick={handleDiscard}
-            title="Discard changes"
-            variant="destructive"
-            size="sm"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+          <Tooltip content="Discard changes">
+            <Button
+              className="git-discard-button"
+              onClick={handleDiscard}
+              variant="destructive"
+              size="sm"
             >
-              <polyline points="3 6 5 6 21 6"></polyline>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-            </svg>
-          </Button>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+            </Button>
+          </Tooltip>
         )}
         {onToggleExpand && (
           <svg
@@ -544,27 +643,27 @@ const CommitSection: React.FC<{
   return (
     <div className="git-commit-section">
       <div className="git-commit-textarea-wrapper">
-        <textarea
+        <Textarea
           className="git-commit-textarea"
           placeholder={stagedCount === 0 ? "No staged changes to commit" : "Commit message..."}
           value={message}
-          onChange={(e) => setMessage(e.target.value)}
+          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
-          rows={3}
           disabled={stagedCount === 0}
         />
-        <Button
-          className="git-commit-button"
-          onClick={handleCommit}
-          disabled={!message.trim() || stagedCount === 0}
-          title="Commit staged changes"
-          variant="primary"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <polyline points="20,6 9,17 4,12" />
-          </svg>
-          <span>Commit</span>
-        </Button>
+        <Tooltip content="Commit staged changes">
+          <Button
+            className="git-commit-button"
+            onClick={handleCommit}
+            disabled={!message.trim() || stagedCount === 0}
+            variant="primary"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="20,6 9,17 4,12" />
+            </svg>
+            <span>Commit</span>
+          </Button>
+        </Tooltip>
       </div>
       {stagedCount > 0 && (
         <div className="git-commit-hint">
@@ -588,32 +687,34 @@ const GitPanelHeader: React.FC = () => {
     <div className="git-panel-header">
       <span className="git-panel-header-title">SOURCE CONTROL</span>
       <div className="git-panel-header-actions">
-        <Button
-          type="button"
-          className="git-header-action-button"
-          onClick={handleRefresh}
-          title="Refresh"
-          variant="ghost"
-          size="sm"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 8 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 20.49 15" />
-          </svg>
-        </Button>
-        <Button
-          type="button"
-          className="git-header-action-button"
-          onClick={handleMoreActions}
-          title="More Actions"
-          variant="ghost"
-          size="sm"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="5" r="1" fill="currentColor" />
-            <circle cx="12" cy="12" r="1" fill="currentColor" />
-            <circle cx="12" cy="19" r="1" fill="currentColor" />
-          </svg>
-        </Button>
+        <Tooltip content="Refresh">
+          <Button
+            type="button"
+            className="git-header-action-button"
+            onClick={handleRefresh}
+            variant="ghost"
+            size="sm"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+          </Button>
+        </Tooltip>
+        <Tooltip content="More Actions">
+          <Button
+            type="button"
+            className="git-header-action-button"
+            onClick={handleMoreActions}
+            variant="ghost"
+            size="sm"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="5" r="1" fill="currentColor" />
+              <circle cx="12" cy="12" r="1" fill="currentColor" />
+              <circle cx="12" cy="19" r="1" fill="currentColor" />
+            </svg>
+          </Button>
+        </Tooltip>
       </div>
     </div>
   );
@@ -666,45 +767,48 @@ const GitPanelToolbarRow: React.FC<{
         <AheadBehindIndicator ahead={ahead} behind={behind} />
       </div>
       <div className="git-panel-toolbar-actions">
-        <Button
-          type="button"
-          className="git-toolbar-icon-button"
-          onClick={onRefresh}
-          title="Refresh"
-          variant="ghost"
-          size="sm"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 8 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-          </svg>
-        </Button>
-        <Button
-          type="button"
-          className="git-toolbar-icon-button"
-          onClick={onStageAll}
-          disabled={unstagedCount === 0}
-          title="Stage all unstaged changes"
-          variant="ghost"
-          size="sm"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <polyline points="20,6 9,17 4,12" />
-          </svg>
-        </Button>
-        <Button
-          type="button"
-          className="git-toolbar-icon-button"
-          onClick={onUnstageAll}
-          disabled={stagedCount === 0}
-          title="Unstage all staged changes"
-          variant="ghost"
-          size="sm"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </Button>
+        <Tooltip content="Refresh">
+          <Button
+            type="button"
+            className="git-toolbar-icon-button"
+            onClick={onRefresh}
+            variant="ghost"
+            size="sm"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+          </Button>
+        </Tooltip>
+        <Tooltip content="Stage all unstaged changes">
+          <Button
+            type="button"
+            className="git-toolbar-icon-button"
+            onClick={onStageAll}
+            disabled={unstagedCount === 0}
+            variant="ghost"
+            size="sm"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="20,6 9,17 4,12" />
+            </svg>
+          </Button>
+        </Tooltip>
+        <Tooltip content="Unstage all staged changes">
+          <Button
+            type="button"
+            className="git-toolbar-icon-button"
+            onClick={onUnstageAll}
+            disabled={stagedCount === 0}
+            variant="ghost"
+            size="sm"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </Button>
+        </Tooltip>
       </div>
     </div>
   );

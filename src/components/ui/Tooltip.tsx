@@ -1,58 +1,37 @@
 import * as React from 'react';
-import { Tooltip } from '@base-ui/react/tooltip';
+import { Tooltip as TooltipPrimitive } from '@base-ui/react/tooltip';
+import { cn } from '@/lib/utils';
 
-export const TooltipRoot = (props: Tooltip.Root.Props) => {
-  return <Tooltip.Root {...props} />;
+export interface TooltipProps {
+  content: React.ReactNode;
+  children: React.ReactNode;
+  side?: 'top' | 'bottom' | 'left' | 'right';
+  delay?: number;
+}
+
+export const Tooltip = ({ content, children, side = 'top', delay = 700 }: TooltipProps) => {
+  return (
+    <TooltipPrimitive.Provider delay={delay}>
+      <TooltipPrimitive.Root>
+<TooltipPrimitive.Trigger render={children as React.ReactElement} />
+        <TooltipPrimitive.Portal>
+          <TooltipPrimitive.Positioner side={side} sideOffset={8}>
+            <TooltipPrimitive.Popup
+              className={cn(
+                'px-2 py-1 text-xs',
+                'bg-[var(--background)] text-[var(--foreground-active)]',
+                'border border-[var(--border-secondary)]',
+                'rounded-[var(--radius-md)]',
+                'shadow-[var(--shadow-md)]'
+              )}
+            >
+              {content}
+            </TooltipPrimitive.Popup>
+          </TooltipPrimitive.Positioner>
+        </TooltipPrimitive.Portal>
+      </TooltipPrimitive.Root>
+    </TooltipPrimitive.Provider>
+  );
 };
 
-TooltipRoot.displayName = 'Tooltip.Root';
-
-export const TooltipTrigger = React.forwardRef<HTMLButtonElement, Tooltip.Trigger.Props>(
-  ({ className = '', ...props }, ref) => {
-    return (
-      <Tooltip.Trigger
-        ref={ref}
-        className={`ymir-tooltip-trigger ${className}`.trim()}
-        {...props}
-      />
-    );
-  },
-);
-
-TooltipTrigger.displayName = 'Tooltip.Trigger';
-
-export const TooltipPortal = React.forwardRef<HTMLDivElement, Tooltip.Portal.Props>(
-  (props, ref) => {
-    return <Tooltip.Portal ref={ref} {...props} />;
-  },
-);
-
-TooltipPortal.displayName = 'Tooltip.Portal';
-
-export const TooltipPositioner = React.forwardRef<HTMLDivElement, Tooltip.Positioner.Props>(
-  ({ className = '', ...props }, ref) => {
-    return (
-      <Tooltip.Positioner
-        ref={ref}
-        className={`ymir-tooltip-positioner ${className}`.trim()}
-        {...props}
-      />
-    );
-  },
-);
-
-TooltipPositioner.displayName = 'Tooltip.Positioner';
-
-export const TooltipPopup = React.forwardRef<HTMLDivElement, Tooltip.Popup.Props>(
-  ({ className = '', ...props }, ref) => {
-    return (
-      <Tooltip.Popup
-        ref={ref}
-        className={`ymir-tooltip-popup ${className}`.trim()}
-        {...props}
-      />
-    );
-  },
-);
-
-TooltipPopup.displayName = 'Tooltip.Popup';
+Tooltip.displayName = 'Tooltip';

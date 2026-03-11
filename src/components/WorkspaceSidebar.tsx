@@ -1,194 +1,14 @@
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import useWorkspaceStore, {
   getTotalNotificationCount,
 } from '../state/workspace';
-import { Workspace, PanelDefinition, SidebarTab } from '../state/types';
+import { PanelDefinition, SidebarTab } from '../state/types';
 import { TabHeaderPanel } from './TabHeaderPanel';
 import { gitPanelDefinition, createRepoPanelDefinition } from './GitPanel';
-
-import './TabBar.css';
-
-// ============================================================================
-// Workspace Item Component (for Workspaces panel content)
-// ============================================================================
-
-interface WorkspaceItemProps {
-  workspace: Workspace;
-  isActive: boolean;
-  index: number;
-  collapsed: boolean;
-  onClick: () => void;
-  onContextMenu?: (e: React.MouseEvent) => void;
-}
-
-function WorkspaceItem({
-  workspace,
-  isActive,
-  index,
-  collapsed,
-  onClick,
-  onContextMenu,
-}: WorkspaceItemProps) {
-  const shortcutNumber = index + 1;
-
-  if (collapsed) {
-    return (
-      <div
-        onClick={onClick}
-        onContextMenu={onContextMenu}
-        style={{ 
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '12px 0',
-          cursor: 'pointer',
-          backgroundColor: isActive ? '#37373d' : 'transparent',
-          borderLeft: workspace.hasNotification
-            ? '3px solid #4fc3f7'
-            : isActive
-              ? '2px solid #007acc'
-              : '2px solid transparent',
-          transition: 'background-color 0.15s ease',
-          position: 'relative',
-        }}
-        onMouseEnter={(e) => {
-          if (!isActive) {
-            e.currentTarget.style.backgroundColor = '#2a2d2e';
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (!isActive) {
-            e.currentTarget.style.backgroundColor = 'transparent';
-          }
-        }}
-        title={`${workspace.name} (⌘${shortcutNumber})`}
-      >
-        <span
-          style={{
-            width: '28px',
-            height: '28px',
-            borderRadius: '6px',
-            backgroundColor: isActive ? '#007acc' : '#3c3c3c',
-            color: '#ffffff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '12px',
-            fontWeight: 600,
-          }}
-        >
-          {shortcutNumber}
-        </span>
-        {workspace.hasNotification && (
-          <span
-            style={{
-              position: 'absolute',
-              top: '8px',
-              right: '8px',
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              backgroundColor: '#4fc3f7',
-            }}
-          />
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div
-      onClick={onClick}
-      onContextMenu={onContextMenu}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '10px 12px',
-        cursor: 'pointer',
-        backgroundColor: isActive ? '#37373d' : 'transparent',
-        borderLeft: workspace.hasNotification
-          ? '3px solid #4fc3f7'
-          : isActive
-          ? '2px solid #007acc'
-          : '2px solid transparent',
-        transition: 'background-color 0.15s ease',
-        fontSize: '13px',
-        color: isActive ? '#ffffff' : '#cccccc',
-        userSelect: 'none',
-      }}
-      onMouseEnter={(e) => {
-        if (!isActive) {
-          e.currentTarget.style.backgroundColor = '#2a2d2e';
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (!isActive) {
-          e.currentTarget.style.backgroundColor = 'transparent';
-        }
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-          overflow: 'hidden',
-        }}
-      >
-        <span
-          style={{
-            width: '24px',
-            height: '24px',
-            borderRadius: '4px',
-            backgroundColor: isActive ? '#007acc' : '#3c3c3c',
-            color: '#ffffff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '11px',
-            fontWeight: 600,
-            flexShrink: 0,
-          }}
-        >
-          {shortcutNumber}
-        </span>
-        <span
-          style={{
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {workspace.name}
-        </span>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-        {workspace.hasNotification && (
-          <span
-            style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              backgroundColor: '#4fc3f7',
-            }}
-          />
-        )}
-        <span
-          style={{
-            color: '#858585',
-            fontSize: '11px',
-            padding: '2px 6px',
-            backgroundColor: '#2d2d30',
-            borderRadius: '4px',
-          }}
-        >
-          ⌘{shortcutNumber}
-        </span>
-      </div>
-    </div>
-  );
-}
+import { TabsRoot, TabsList, TabsTab } from './ui/Tabs';
+import { Button } from './ui/Button';
+import { MenuRoot, MenuPortal, MenuPositioner, MenuPopup, MenuItem } from './ui/Menu';
+import { Tooltip } from './ui/Tooltip';
 
 // ============================================================================
 // Panel Content Components
@@ -212,35 +32,9 @@ function WorkspaceList({ collapsed }: WorkspaceListProps) {
 
   const visibleWorkspaces = workspaces.slice(0, 8);
 
-  const [contextMenu, setContextMenu] = useState<{
-    x: number;
-    y: number;
-    workspaceId: string;
-    index: number;
-  } | null>(null);
-  const contextMenuRef = useRef<HTMLDivElement>(null);
-
-  // Close context menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (
-        contextMenu &&
-        !contextMenuRef.current?.contains(e.target as Node)
-      ) {
-        setContextMenu(null);
-      }
-    };
-
-    if (contextMenu) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      if (contextMenu) {
-        document.removeEventListener('mousedown', handleClickOutside);
-      }
-    };
-  }, [contextMenu]);
+  const [contextMenuOpen, setContextMenuOpen] = useState(false);
+  const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
+  const [contextMenuAnchor, setContextMenuAnchor] = useState<{ workspaceId: string; index: number } | null>(null);
 
   const handleCreateWorkspace = () => {
     const nextNumber = workspaces.length + 1;
@@ -249,177 +43,157 @@ function WorkspaceList({ collapsed }: WorkspaceListProps) {
 
   const handleContextMenu = (e: React.MouseEvent, workspaceId: string, index: number) => {
     e.preventDefault();
-    setContextMenu({ x: e.clientX, y: e.clientY, workspaceId, index });
+    setContextMenuPosition({ x: e.clientX, y: e.clientY });
+    setContextMenuAnchor({ workspaceId, index });
+    setContextMenuOpen(true);
   };
 
   const handleNewWorkspaceBelow = () => {
-    if (contextMenu) {
+    if (contextMenuAnchor) {
       const nextNumber = workspaces.length + 1;
-      createWorkspaceAfter(contextMenu.workspaceId, `Workspace ${nextNumber}`);
-      setContextMenu(null);
+      createWorkspaceAfter(contextMenuAnchor.workspaceId, `Workspace ${nextNumber}`);
+      setContextMenuOpen(false);
     }
   };
 
   const handleMoveUp = () => {
-    if (contextMenu && contextMenu.index > 0) {
-      moveWorkspaceUp(contextMenu.workspaceId);
-      setContextMenu(null);
+    if (contextMenuAnchor && contextMenuAnchor.index > 0) {
+      moveWorkspaceUp(contextMenuAnchor.workspaceId);
+      setContextMenuOpen(false);
     }
   };
 
   const handleMoveDown = () => {
-    if (contextMenu && contextMenu.index < workspaces.length - 1) {
-      moveWorkspaceDown(contextMenu.workspaceId);
-      setContextMenu(null);
+    if (contextMenuAnchor && contextMenuAnchor.index < workspaces.length - 1) {
+      moveWorkspaceDown(contextMenuAnchor.workspaceId);
+      setContextMenuOpen(false);
     }
   };
 
   const handleCloseWorkspace = () => {
-    if (contextMenu && workspaces.length > 1) {
-      closeWorkspace(contextMenu.workspaceId);
-      setContextMenu(null);
+    if (contextMenuAnchor && workspaces.length > 1) {
+      closeWorkspace(contextMenuAnchor.workspaceId);
+      setContextMenuOpen(false);
     }
   };
 
-  const isFirst = contextMenu ? contextMenu.index === 0 : false;
-  const isLast = contextMenu ? contextMenu.index === workspaces.length - 1 : false;
+  const isFirst = contextMenuAnchor ? contextMenuAnchor.index === 0 : false;
+  const isLast = contextMenuAnchor ? contextMenuAnchor.index === workspaces.length - 1 : false;
   const isOnly = workspaces.length === 1;
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-      }}
+    <TabsRoot
+      value={activeWorkspaceId}
+      onValueChange={(value) => setActiveWorkspace(value as string)}
+      className="workspace-tabs-root"
     >
-      {/* Workspace List */}
-      <div
-        style={{
-          flex: 1,
-          overflowY: 'auto',
-          overflowX: 'hidden',
-        }}
-      >
+      <TabsList className="workspace-tabs-list">
         {visibleWorkspaces.length === 0 ? (
-          <div
-            style={{
-              padding: '20px 12px',
-              textAlign: 'center',
-              color: '#666666',
-              fontSize: '12px',
-            }}
-          >
+          <div className="workspace-empty-state">
             No workspaces
           </div>
         ) : (
           visibleWorkspaces.map((workspace, index) => (
-            <WorkspaceItem
+            <TabsTab
               key={workspace.id}
-              workspace={workspace}
-              isActive={workspace.id === activeWorkspaceId}
-              index={index}
-              collapsed={collapsed}
-              onClick={() => setActiveWorkspace(workspace.id)}
+              value={workspace.id}
+              className={`workspace-tab ${
+                workspace.hasNotification ? 'has-notification' : ''
+              }`}
               onContextMenu={(e) => handleContextMenu(e, workspace.id, index)}
-            />
+            >
+              <div className="workspace-tab-content">
+                <span className="workspace-number-badge">
+                  {index + 1}
+                </span>
+                <span className="workspace-name">
+                  {workspace.name}
+                </span>
+              </div>
+              <div className="workspace-tab-right">
+                {workspace.hasNotification && (
+                  <span className="workspace-notification-dot" />
+                )}
+                <span className="workspace-shortcut">
+                  {String.fromCharCode(8984)}{index + 1}
+                </span>
+              </div>
+            </TabsTab>
           ))
         )}
-      </div>
+      </TabsList>
 
-      {/* New Workspace Button */}
       {!collapsed && (
-        <div
-          style={{
-            padding: '10px 12px',
-            backgroundColor: '#252526',
-            borderTop: '1px solid #333',
-          }}
-        >
-          <button
-            type="button"
-            onClick={handleCreateWorkspace}
-            disabled={workspaces.length >= 8}
-            style={{
-              width: '100%',
-              background: 'none',
-              border: '1px solid #3c3c3c',
-              color: workspaces.length >= 8 ? '#666666' : '#cccccc',
-              cursor: workspaces.length >= 8 ? 'not-allowed' : 'pointer',
-              fontSize: '14px',
-              padding: '8px 12px',
-              borderRadius: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              transition: 'all 0.15s ease',
-            }}
-            onMouseEnter={(e) => {
-              if (workspaces.length < 8) {
-                e.currentTarget.style.backgroundColor = '#3c3c3c';
-                e.currentTarget.style.color = '#ffffff';
-                e.currentTarget.style.borderColor = '#007acc';
-              }
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-              e.currentTarget.style.color =
-                workspaces.length >= 8 ? '#666666' : '#cccccc';
-              e.currentTarget.style.borderColor = '#3c3c3c';
-            }}
-            title={workspaces.length >= 8 ? 'Maximum 8 workspaces' : 'New workspace'}
-          >
-            <span style={{ fontSize: '18px', lineHeight: '1' }}>+</span>
-            <span>New</span>
-          </button>
+        <div className="workspace-new-button-container">
+          <Tooltip content={workspaces.length >= 8 ? 'Maximum 8 workspaces' : 'New workspace'}>
+            <Button
+              variant="ghost"
+              onClick={handleCreateWorkspace}
+              disabled={workspaces.length >= 8}
+              className="new-workspace-button"
+            >
+              <span className="new-workspace-icon">+</span>
+              <span>New</span>
+            </Button>
+          </Tooltip>
         </div>
       )}
 
-      {/* Context Menu */}
-      {contextMenu && (
-        <>
-          <div
-            className="context-menu-backdrop"
-            onClick={() => setContextMenu(null)}
-          />
-          <div
-            ref={contextMenuRef}
-            className="context-menu"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
+      {/* Context Menu using Base-UI Menu primitive */}
+      <MenuRoot open={contextMenuOpen} onOpenChange={setContextMenuOpen}>
+        <MenuPortal>
+          <MenuPositioner
+            anchor={
+              contextMenuPosition
+                ? {
+                    getBoundingClientRect: () => ({
+                      x: contextMenuPosition.x,
+                      y: contextMenuPosition.y,
+                      width: 0,
+                      height: 0,
+                      top: contextMenuPosition.y,
+                      left: contextMenuPosition.x,
+                      right: contextMenuPosition.x,
+                      bottom: contextMenuPosition.y,
+                      toJSON: () => '',
+                    }),
+                  }
+                : null
+            }
+            align="start"
+            sideOffset={0}
           >
-            <div
-              className="context-menu-item"
-              onClick={handleNewWorkspaceBelow}
-            >
-              New Workspace Below
-            </div>
-            <div
-              className={`context-menu-item ${isFirst ? 'disabled' : ''}`}
-              onClick={handleMoveUp}
-              style={{ opacity: isFirst ? 0.4 : 1, cursor: isFirst ? 'not-allowed' : 'pointer' }}
-            >
-              Move Up
-            </div>
-            <div
-              className={`context-menu-item ${isLast ? 'disabled' : ''}`}
-              onClick={handleMoveDown}
-              style={{ opacity: isLast ? 0.4 : 1, cursor: isLast ? 'not-allowed' : 'pointer' }}
-            >
-              Move Down
-            </div>
-            <div className="context-menu-separator" />
-            <div
-              className={`context-menu-item context-menu-item-danger ${isOnly ? 'disabled' : ''}`}
-              onClick={handleCloseWorkspace}
-              style={{ opacity: isOnly ? 0.4 : 1, cursor: isOnly ? 'not-allowed' : 'pointer' }}
-            >
-              Close Workspace
-            </div>
-          </div>
-        </>
-      )}
-    </div>
+            <MenuPopup className="context-menu">
+              <MenuItem className="context-menu-item" onClick={handleNewWorkspaceBelow}>
+                New Workspace Below
+              </MenuItem>
+              <MenuItem
+                className={`context-menu-item ${isFirst ? 'disabled' : ''}`}
+                onClick={handleMoveUp}
+                disabled={isFirst}
+              >
+                Move Up
+              </MenuItem>
+              <MenuItem
+                className={`context-menu-item ${isLast ? 'disabled' : ''}`}
+                onClick={handleMoveDown}
+                disabled={isLast}
+              >
+                Move Down
+              </MenuItem>
+              <div className="context-menu-separator" />
+              <MenuItem
+                className={`context-menu-item context-menu-item-danger ${isOnly ? 'disabled' : ''}`}
+                onClick={handleCloseWorkspace}
+                disabled={isOnly}
+              >
+                Close Workspace
+              </MenuItem>
+            </MenuPopup>
+          </MenuPositioner>
+        </MenuPortal>
+      </MenuRoot>
+    </TabsRoot>
   );
 }
 
@@ -428,63 +202,30 @@ function CollapsedWorkspaceList() {
   const visibleWorkspaces = workspaces.slice(0, 8);
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        padding: '4px 0',
-        gap: '4px',
-      }}
+    <TabsRoot
+      value={activeWorkspaceId}
+      onValueChange={(value) => setActiveWorkspace(value as string)}
+      className="workspace-tabs-collapsed"
     >
-      {visibleWorkspaces.map((workspace, index) => (
-        <div
-          key={workspace.id}
-          onClick={() => setActiveWorkspace(workspace.id)}
-          style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: '6px',
-            backgroundColor: workspace.id === activeWorkspaceId ? '#007acc' : '#3c3c3c',
-            color: '#ffffff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '12px',
-            fontWeight: 600,
-            cursor: 'pointer',
-            position: 'relative',
-            transition: 'background-color 0.15s ease',
-          }}
-          onMouseEnter={(e) => {
-            if (workspace.id !== activeWorkspaceId) {
-              e.currentTarget.style.backgroundColor = '#2a2d2e';
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (workspace.id !== activeWorkspaceId) {
-              e.currentTarget.style.backgroundColor = '#3c3c3c';
-            }
-          }}
-          title={`${workspace.name} (⌘${index + 1})`}
-        >
-          {index + 1}
-          {workspace.hasNotification && (
-            <span
-              style={{
-                position: 'absolute',
-                top: '2px',
-                right: '2px',
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                backgroundColor: '#4fc3f7',
-              }}
-            />
-          )}
-        </div>
-      ))}
-    </div>
+      <TabsList className="workspace-tabs-collapsed-list">
+        {visibleWorkspaces.map((workspace, index) => (
+          <Tooltip
+            key={workspace.id}
+            content={`${workspace.name} (${String.fromCharCode(8984)}${index + 1})`}
+          >
+            <TabsTab
+              value={workspace.id}
+              className="workspace-tab-collapsed"
+            >
+              {index + 1}
+              {workspace.hasNotification && (
+                <span className="workspace-notification-dot" />
+              )}
+            </TabsTab>
+          </Tooltip>
+        ))}
+      </TabsList>
+    </TabsRoot>
   );
 }
 

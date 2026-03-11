@@ -1,7 +1,8 @@
 import React from 'react';
-import './TabHeaderPanel.css';
 import { PanelDefinition, SidebarTab } from '../state/types';
 import { Button } from './ui/Button';
+import { Tooltip } from './ui/Tooltip';
+import './TabHeaderPanel.css';
 
 interface TabHeaderPanelProps {
   panels: PanelDefinition[];
@@ -47,45 +48,47 @@ export const TabHeaderPanel: React.FC<TabHeaderPanelProps> = ({
       <div className="tab-header">
         {isCollapsed ? (
           <>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onToggleSidebar}
-              className="collapse-button"
-              title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="m13 17 5-5-5-5M6 17l5-5-5-5" />
-              </svg>
-            </Button>
+            <Tooltip content={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="collapse-button"
+                onClick={onToggleSidebar}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m11 17-5-5 5-5" />
+                  <path d="m18 17-5-5 5-5" />
+                </svg>
+              </Button>
+            </Tooltip>
             <div className="tab-headers-vertical">
               {panels.map((panel) => {
                 const isActive = panel.id === activeTab;
                 const badge = panel.badge ? panel.badge() : null;
 
                 return (
-                  <button
-                    key={panel.id}
-                    className={`tab-button-vertical ${isActive ? 'active' : ''}`}
-                    onClick={() => handleTabClick(panel.id)}
-                    title={panel.title}
-                  >
-                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                      {panel.icon()}
-                      {badge && badge.count !== undefined && (
-                        <span
-                          className="tab-badge"
-                          style={{
-                            position: 'absolute',
-                            top: '-6px',
-                            right: '-6px',
-                          }}
-                        >
-                          {badge.count > 99 ? '99+' : badge.count}
-                        </span>
-                      )}
-                    </div>
-                  </button>
+                  <Tooltip key={panel.id} content={panel.title}>
+                    <button
+                      className={`tab-button-vertical ${isActive ? 'active' : ''}`}
+                      onClick={() => handleTabClick(panel.id)}
+                    >
+                      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                        {panel.icon()}
+                        {badge && badge.count !== undefined && (
+                          <span
+                            className="tab-badge"
+                            style={{
+                              position: 'absolute',
+                              top: '-6px',
+                              right: '-6px',
+                            }}
+                          >
+                            {badge.count > 99 ? '99+' : badge.count}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  </Tooltip>
                 );
               })}
             </div>
@@ -98,43 +101,44 @@ export const TabHeaderPanel: React.FC<TabHeaderPanelProps> = ({
                 const badge = panel.badge ? panel.badge() : null;
 
                 return (
-                  <button
-                    key={panel.id}
-                    className={`tab-button ${isActive ? 'active' : ''}`}
-                    onClick={() => handleTabClick(panel.id)}
-                    title={panel.title}
-                  >
-                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                      {panel.icon()}
-                      {badge && badge.count !== undefined && (
-                        <span
-                          className="tab-badge"
-                          style={{
-                            position: 'absolute',
-                            top: '-6px',
-                            right: '-6px',
-                          }}
-                        >
-                          {badge.count > 99 ? '99+' : badge.count}
-                        </span>
-                      )}
-                    </div>
-                  </button>
+                  <Tooltip key={panel.id} content={panel.title}>
+                    <button
+                      className={`tab-button ${isActive ? 'active' : ''}`}
+                      onClick={() => handleTabClick(panel.id)}
+                    >
+                      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                        {panel.icon()}
+                        {badge && badge.count !== undefined && (
+                          <span
+                            className="tab-badge"
+                            style={{
+                              position: 'absolute',
+                              top: '-6px',
+                              right: '-6px',
+                            }}
+                          >
+                            {badge.count > 99 ? '99+' : badge.count}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  </Tooltip>
                 );
               })}
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onToggleSidebar}
-              className="collapse-button"
-              title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="m11 17-5-5 5-5" />
-                <path d="m18 17-5-5 5-5" />
-              </svg>
-            </Button>
+            <Tooltip content={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="collapse-button"
+                onClick={onToggleSidebar}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m11 17-5-5 5-5" />
+                  <path d="m18 17-5-5 5-5" />
+                </svg>
+              </Button>
+            </Tooltip>
           </>
         )}
       </div>

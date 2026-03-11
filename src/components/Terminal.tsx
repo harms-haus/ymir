@@ -160,17 +160,21 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
 
   // Handle resize with ResizeObserver
   useEffect(() => {
-    if (!ref.current || !fitAddon) return;
+    if (!ref.current || !fitAddon || !instance) return;
 
     const resizeObserver = new ResizeObserver(() => {
-      fitAddon.fit();
+      try {
+        fitAddon.fit();
+      } catch (error) {
+        // Silently ignore fit errors during initialization
+      }
     });
     resizeObserver.observe(ref.current);
 
     return () => {
       resizeObserver.disconnect();
     };
-  }, [fitAddon, ref]);
+  }, [fitAddon, ref, instance]);
 
   // Handle PTY resize
   useEffect(() => {

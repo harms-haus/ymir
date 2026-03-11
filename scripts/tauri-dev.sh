@@ -4,6 +4,21 @@
 
 set -e
 
+# Kill any process using port 5173 (Vite dev server)
+kill_port_5173() {
+    local pid=$(lsof -t -i :5173 2>/dev/null || true)
+    if [ -n "$pid" ]; then
+        echo "Killing process $pid on port 5173..."
+        kill $pid 2>/dev/null || true
+        sleep 1
+    fi
+}
+
+# Only kill port 5173 for dev command
+if [ "$1" = "dev" ]; then
+    kill_port_5173
+fi
+
 # WebKitGTK environment variables for better Wayland/X11 compatibility
 # Disable DMABUF renderer which can cause issues on some Wayland setups
 export WEBKIT_DISABLE_DMABUF_RENDERER=1

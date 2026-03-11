@@ -1,8 +1,18 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Tab } from '../state/types';
 import { Button } from './ui/Button';
-
+import { TabsRoot, TabsList, TabsTab } from './ui/Tabs';
+import { Badge } from './ui/badge';
+import { Tooltip } from './ui/Tooltip';
 import './TabBar.css';
+import {
+  MenuRoot,
+  MenuTrigger,
+  MenuPortal,
+  MenuPositioner,
+  MenuPopup,
+  MenuItem,
+} from './ui/Menu';
 
 interface TabBarProps {
   paneId: string;
@@ -18,311 +28,299 @@ interface TabBarProps {
 
 export function TabBar({
   paneId,
-  tabs,
-  activeTabId,
-  onCreateTab,
-  onCloseTab,
-  onSelectTab,
-  onSplitPane,
-  onCreateTabRight,
-  onCreateBrowserTab,
+    tabs,
+    activeTabId,
+    onCreateTab,
+    onCloseTab,
+    onSelectTab,
+    onSplitPane,
+    onCreateTabRight,
+    onCreateBrowserTab,
 }: TabBarProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [showOverflow, setShowOverflow] = useState(false);
-  const [overflowMenuOpen, setOverflowMenuOpen] = useState(false);
-  const overflowMenuRef = useRef<HTMLDivElement>(null);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; anchorTabId: string; anchorPaneId: string } | null>(null);
-  const contextMenuRef = useRef<HTMLDivElement>(null);
+  const [contextMenuOpen, setContextMenuOpen] = useState(false);
+  const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
+  const [contextMenuAnchor, setContextMenuAnchor] = useState<{ tabId: string; paneId: string } | null>(null);
 
-  // Close context menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (
-        contextMenu &&
-        !contextMenuRef.current?.contains(e.target as Node)
-      ) {
-        setContextMenu(null);
-      }
-    };
+    // Check for overflow on mount and when tabs change
+    useEffect(() => {
+        const checkOverflow = () => {
+            const container = scrollContainerRef.current;
+            if (container) {
+                const hasOverflow = container.scrollWidth > container.clientWidth;
+                setShowOverflow(hasOverflow);
+            }
+        };
 
-    if (contextMenu) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
+        checkOverflow();
 
-    return () => {
-      if (contextMenu) {
-        document.removeEventListener('mousedown', handleClickOutside);
-      }
-    };
-  }, [contextMenu]);
+        // Also check on resize
+        const resizeObserver = new ResizeObserver(checkOverflow);
+        if (scrollContainerRef.current) {
+            resizeObserver.observe(scrollContainerRef.current);
+        }
 
-  // Check for overflow on mount and when tabs change
-  useEffect(() => {
-    const checkOverflow = () => {
-      const container = scrollContainerRef.current;
-      if (container) {
-        const hasOverflow = container.scrollWidth > container.clientWidth;
-        setShowOverflow(hasOverflow);
-      }
-    };
+        return () => resizeObserver.disconnect();
+    }, [tabs]);
 
-    checkOverflow();
+    // Scroll active tab into view
+    useEffect(() => {
+        const container = scrollContainerRef.current;
+        if (container && activeTabId) {
+            const activeTabElement = container.querySelector(
+                `[data-tab-id="${activeTabId}"]`
+            ) as HTMLElement;
+            if (activeTabElement) {
+                activeTabElement.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'nearest',
+                    inline: 'center',
+                });
+            }
+        }
+    }, [activeTabId]);
 
-    // Also check on resize
-    const resizeObserver = new ResizeObserver(checkOverflow);
-    if (scrollContainerRef.current) {
-      resizeObserver.observe(scrollContainerRef.current);
-    }
+    const handleCreateTab = useCallback(() => {
+        onCreateTab(paneId);
+    }, [paneId, onCreateTab]);
 
-    return () => resizeObserver.disconnect();
-  }, [tabs]);
+    const handleCloseTab = useCallback(
+        (e: React.MouseEvent, tabId: string) => {
+            e.stopPropagation();
+            onCloseTab(paneId, tabId);
+        },
+        [paneId, onCloseTab]
+    );
 
-  // Scroll active tab into view
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (container && activeTabId) {
-      const activeTabElement = container.querySelector(
-        `[data-tab-id="${activeTabId}"]`
-      ) as HTMLElement;
-      if (activeTabElement) {
-        activeTabElement.scrollIntoView({
-          behavior: 'smooth',
-          block: 'nearest',
-          inline: 'center',
-        });
-      }
-    }
-  }, [activeTabId]);
-
-  const handleCreateTab = useCallback(() => {
-    onCreateTab(paneId);
-  }, [paneId, onCreateTab]);
-
-  const handleCloseTab = useCallback(
-    (e: React.MouseEvent, tabId: string) => {
-      e.stopPropagation();
-      onCloseTab(paneId, tabId);
-    },
-    [paneId, onCloseTab]
-  );
-
-  const handleSelectTab = useCallback(
-    (tabId: string) => {
-      onSelectTab(paneId, tabId);
-    },
-    [paneId, onSelectTab]
-  );
+    const handleSelectTab = useCallback(
+        (tabId: string) => {
+            onSelectTab(paneId, tabId);
+        },
+        [paneId, onSelectTab]
+    );
 
   const handleContextMenu = useCallback(
     (e: React.MouseEvent, tab: Tab) => {
       e.preventDefault();
-      setContextMenu({ x: e.clientX, y: e.clientY, anchorTabId: tab.id, anchorPaneId: paneId });
+      setContextMenuPosition({ x: e.clientX, y: e.clientY });
+      setContextMenuAnchor({ tabId: tab.id, paneId });
+      setContextMenuOpen(true);
     },
     [paneId]
   );
 
   const handleSplitHorizontal = useCallback(() => {
-    if (contextMenu && onSplitPane) {
-      onSplitPane(contextMenu.anchorPaneId, 'horizontal');
-      setContextMenu(null);
+    if (contextMenuAnchor && onSplitPane) {
+      onSplitPane(contextMenuAnchor.paneId, 'horizontal');
+      setContextMenuOpen(false);
     }
-  }, [contextMenu, onSplitPane]);
+  }, [contextMenuAnchor, onSplitPane]);
 
   const handleSplitVertical = useCallback(() => {
-    if (contextMenu && onSplitPane) {
-      onSplitPane(contextMenu.anchorPaneId, 'vertical');
-      setContextMenu(null);
+    if (contextMenuAnchor && onSplitPane) {
+      onSplitPane(contextMenuAnchor.paneId, 'vertical');
+      setContextMenuOpen(false);
     }
-  }, [contextMenu, onSplitPane]);
+  }, [contextMenuAnchor, onSplitPane]);
 
   const handleCloseTabContext = useCallback(() => {
-    if (contextMenu) {
-      onCloseTab(contextMenu.anchorPaneId, contextMenu.anchorTabId);
-      setContextMenu(null);
+    if (contextMenuAnchor) {
+      onCloseTab(contextMenuAnchor.paneId, contextMenuAnchor.tabId);
+      setContextMenuOpen(false);
     }
-  }, [contextMenu, onCloseTab]);
+  }, [contextMenuAnchor, onCloseTab]);
 
   const handleCreateTabRight = useCallback(() => {
-    if (contextMenu) {
+    if (contextMenuAnchor) {
       if (onCreateTabRight) {
-        onCreateTabRight(contextMenu.anchorPaneId, contextMenu.anchorTabId);
+        onCreateTabRight(contextMenuAnchor.paneId, contextMenuAnchor.tabId);
       } else {
-        onCreateTab(contextMenu.anchorPaneId);
+        onCreateTab(contextMenuAnchor.paneId);
       }
-      setContextMenu(null);
+      setContextMenuOpen(false);
     }
-  }, [contextMenu, onCreateTab, onCreateTabRight]);
-
-  const toggleOverflowMenu = () => {
-    setOverflowMenuOpen(!overflowMenuOpen);
-  };
+  }, [contextMenuAnchor, onCreateTab, onCreateTabRight]);
 
   const handleOverflowTabSelect = (tabId: string) => {
     handleSelectTab(tabId);
-    setOverflowMenuOpen(false);
   };
 
-  return (
-    <div className="tab-bar">
-      {/* Scrollable tab container */}
-      <div ref={scrollContainerRef} className="tab-bar-scroll-container">
-        {tabs.map((tab) => (
-          <div
-            key={tab.id}
-            data-tab-id={tab.id}
-            className={`tab-item ${tab.id === activeTabId ? 'active' : ''} ${
-              tab.hasNotification ? 'has-notification' : ''
-            }`}
-            onClick={() => handleSelectTab(tab.id)}
-            onContextMenu={(e) => handleContextMenu(e, tab)}
-            title={tab.title}
-          >
-            {/* Tab icon */}
-            <span className="tab-icon">$</span>
+    return (
+        <TabsRoot value={activeTabId ?? ''} onValueChange={(value) => {
+            if (value) {
+                onSelectTab(paneId, value);
+            }
+        }} className="tab-bar">
+            {/* Scrollable tab container */}
+            <TabsList ref={scrollContainerRef} className="tab-bar-scroll-container">
+                {tabs.map((tab) => (
+                  <Tooltip key={tab.id} content={tab.title}>
+                    <TabsTab
+                        value={tab.id}
+                        data-tab-id={tab.id}
+                        className={`tab-item ${tab.hasNotification ? 'has-notification' : ''}`}
+                        onContextMenu={(e) => handleContextMenu(e, tab)}
+                    >
+                        {/* Tab icon */}
+                        <span className="tab-icon">$</span>
 
-            {/* Tab title */}
-            <span className="tab-title">{tab.title}</span>
+                        {/* Tab title */}
+                        <span className="tab-title">{tab.title}</span>
 
-            {/* Notification badge */}
-            {tab.hasNotification && tab.notificationCount > 0 && (
-              <span className="tab-notification-badge">
-                {tab.notificationCount > 99 ? '99+' : tab.notificationCount}
-              </span>
-            )}
+                        {/* Notification badge */}
+                        {tab.hasNotification && tab.notificationCount && tab.notificationCount > 0 && (
+                            <Badge variant="default" className="tab-notification-badge">
+                                {tab.notificationCount > 99 ? '99+' : tab.notificationCount}
+                            </Badge>
+                        )}
 
-            {/* Close button */}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="tab-close-button"
-              onClick={(e) => handleCloseTab(e, tab.id)}
-              title="Close tab"
-              aria-label="Close tab"
-            >
-              ×
-            </Button>
-          </div>
-        ))}
-      </div>
+                        {/* Close button */}
+                        <Tooltip content="Close tab">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="tab-close-button"
+                                onClick={(e) => handleCloseTab(e, tab.id)}
+                                aria-label="Close tab"
+                            >
+                                ×
+                            </Button>
+                        </Tooltip>
+                    </TabsTab>
+                  </Tooltip>
+                ))}
+            </TabsList>
 
-      {/* Overflow button */}
+      {/* Overflow menu using Base-UI Menu primitive */}
       {showOverflow && (
-        <div className="tab-bar-overflow" ref={overflowMenuRef}>
-          <Button
-            variant="ghost"
-            size="sm"
-            className={`tab-bar-overflow-button ${overflowMenuOpen ? 'open' : ''}`}
-            onClick={toggleOverflowMenu}
-            title="Show all tabs"
-            aria-label="Show all tabs"
-          >
-            ▼
-          </Button>
-
-          {/* Overflow dropdown menu */}
-          {overflowMenuOpen && (
-            <div className="tab-bar-overflow-menu">
-              {tabs.map((tab) => (
-                <div
-                  key={tab.id}
-                  className={`overflow-menu-item ${
-                    tab.id === activeTabId ? 'active' : ''
-                  } ${tab.hasNotification ? 'has-notification' : ''}`}
-                  onClick={() => handleOverflowTabSelect(tab.id)}
-                >
-                  <span className="overflow-menu-icon">$</span>
-                  <span className="overflow-menu-title">{tab.title}</span>
-                  {tab.hasNotification && tab.notificationCount > 0 && (
-                    <span className="overflow-menu-badge">
-                      {tab.notificationCount > 99 ? '99+' : tab.notificationCount}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+        <div className="tab-bar-overflow">
+          <MenuRoot>
+            <Tooltip content="Show all tabs">
+              <MenuTrigger
+                className="tab-bar-overflow-button"
+                aria-label="Show all tabs"
+              >
+                ▼
+              </MenuTrigger>
+            </Tooltip>
+            <MenuPortal>
+              <MenuPositioner className="tab-bar-overflow-positioner" align="end" sideOffset={4}>
+                <MenuPopup className="tab-bar-overflow-menu">
+                  {tabs.map((tab) => (
+                    <MenuItem
+                      key={tab.id}
+                      className={`overflow-menu-item ${
+                        tab.id === activeTabId ? 'active' : ''
+                      } ${tab.hasNotification ? 'has-notification' : ''}`}
+                      onClick={() => handleOverflowTabSelect(tab.id)}
+                    >
+                      <span className="overflow-menu-icon">$</span>
+                      <span className="overflow-menu-title">{tab.title}</span>
+                      {tab.hasNotification && tab.notificationCount && tab.notificationCount > 0 && (
+                        <Badge variant="default" className="overflow-menu-badge">
+                          {tab.notificationCount > 99 ? '99+' : tab.notificationCount}
+                        </Badge>
+                      )}
+                    </MenuItem>
+                  ))}
+                </MenuPopup>
+              </MenuPositioner>
+            </MenuPortal>
+          </MenuRoot>
         </div>
       )}
 
-      {/* Browser tab button */}
-      <Button
-        variant="ghost"
-        size="sm"
-        className="tab-bar-browser-button"
-        onClick={onCreateBrowserTab}
-        title="New browser tab"
-        aria-label="New browser tab"
-      >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <path d="M2 12h20" />
-          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-        </svg>
-      </Button>
+            {/* Browser tab button */}
+            <Tooltip content="New browser tab">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="tab-bar-browser-button"
+                onClick={onCreateBrowserTab}
+                aria-label="New browser tab"
+              >
+                <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                >
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M2 12h20" />
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1 4-10 5.3 15.3 0 0 1 4-10 5.3 15.3 0 0 1 4-10 5.3 15.3 0 0 1 4-10 5.3 15.3 0 0 1 4-10 5.3 12.5 4 10 5.4-6" />
+                    <path d="m12 5v14m-7-7" />
+                    <circle cx="6" cy="18" r="3" />
+                </svg>
+              </Button>
+            </Tooltip>
 
-      {/* New tab button */}
-      <Button
-        variant="ghost"
-        size="sm"
-        className="tab-bar-new-button"
-        onClick={handleCreateTab}
-        title="New tab"
-        aria-label="New tab"
-      >
-        +
-      </Button>
+            {/* New tab button */}
+            <Tooltip content="New tab">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="tab-bar-new-button"
+                onClick={handleCreateTab}
+                aria-label="New tab"
+              >
+                +
+              </Button>
+            </Tooltip>
 
-      {/* Context Menu */}
-      {contextMenu && (
-        <>
-          <div
-            className="context-menu-backdrop"
-            onClick={() => setContextMenu(null)}
-          />
-          <div
-            ref={contextMenuRef}
-            className="context-menu"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
+
+
+      {/* Context Menu using Base-UI Menu primitive */}
+      <MenuRoot open={contextMenuOpen} onOpenChange={setContextMenuOpen}>
+        <MenuPortal>
+          <MenuPositioner
+            anchor={
+              contextMenuPosition
+                ? {
+                    getBoundingClientRect: () => ({
+                      x: contextMenuPosition.x,
+                      y: contextMenuPosition.y,
+                      width: 0,
+                      height: 0,
+                      top: contextMenuPosition.y,
+                      left: contextMenuPosition.x,
+                      right: contextMenuPosition.x,
+                      bottom: contextMenuPosition.y,
+                      toJSON: () => '',
+                    }),
+                  }
+                : null
+            }
+            align="start"
+            sideOffset={0}
           >
-            <div
-              className="context-menu-item"
-              onClick={handleSplitHorizontal}
-            >
-              Split Horizontal
-            </div>
-            <div
-              className="context-menu-item"
-              onClick={handleSplitVertical}
-            >
-              Split Vertical
-            </div>
-            <div className="context-menu-separator" />
-            <div
-              className="context-menu-item"
-              onClick={handleCreateTabRight}
-            >
-              New Tab Right
-            </div>
-            <div
-              className="context-menu-item context-menu-item-danger"
-              onClick={handleCloseTabContext}
-            >
-              Close Tab
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
+            <MenuPopup className="context-menu">
+              <MenuItem className="context-menu-item" onClick={handleSplitHorizontal}>
+                Split Horizontal
+              </MenuItem>
+              <MenuItem className="context-menu-item" onClick={handleSplitVertical}>
+                Split Vertical
+              </MenuItem>
+              <div className="context-menu-separator" />
+              <MenuItem className="context-menu-item" onClick={handleCreateTabRight}>
+                New Tab Right
+              </MenuItem>
+              <MenuItem
+                className="context-menu-item context-menu-item-danger"
+                onClick={handleCloseTabContext}
+              >
+                Close Tab
+              </MenuItem>
+            </MenuPopup>
+          </MenuPositioner>
+        </MenuPortal>
+      </MenuRoot>
+        </TabsRoot>
+    );
 }
 
 export default TabBar;
