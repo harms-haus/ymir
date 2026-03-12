@@ -20,9 +20,9 @@ use tauri::{RunEvent, WindowEvent};
 pub use commands::{
     attach_pty_channel, checkout_branch, close_pane, commit_changes, create_branch,
     create_pane_in_workspace, delete_branch, discard_file_changes, discover_git_repos, exit_app,
-    focus_pane, get_branches, get_git_status, get_pane_cwd, is_pty_alive, kill_all_sessions, kill_pty,
-    resize_pty, set_environment_context, spawn_pty, stage_file, unstage_file, write_pty,
-    PtyEvent,
+    focus_pane, get_app_cwd, get_branches, get_git_status, get_pane_cwd, is_pty_alive,
+    kill_all_sessions, kill_pty, resize_pty, set_environment_context, spawn_pty, stage_file,
+    unstage_file, write_pty, PtyEvent,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -47,6 +47,7 @@ pub fn run() {
             attach_pty_channel,
             kill_all_sessions,
             exit_app,
+            get_app_cwd,
             get_git_status,
             stage_file,
             unstage_file,

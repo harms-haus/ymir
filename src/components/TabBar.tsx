@@ -13,6 +13,7 @@ import {
   MenuPopup,
   MenuItem,
 } from './ui/Menu';
+import { Globe } from 'lucide-react';
 
 interface TabBarProps {
   paneId: string;
@@ -164,7 +165,11 @@ export function TabBar({
           title={tab.title}
         >
           {/* Tab icon */}
-          <span className="tab-icon">$</span>
+          {tab.type === 'browser' ? (
+            <Globe className="tab-icon-svg" size={14} />
+          ) : (
+            <span className="tab-icon">$</span>
+          )}
 
           {/* Tab title */}
           <span className="tab-title">{tab.title}</span>
@@ -212,7 +217,13 @@ export function TabBar({
                       } ${tab.hasNotification ? 'has-notification' : ''}`}
                       onClick={() => handleOverflowTabSelect(tab.id)}
                     >
-                      <span className="overflow-menu-icon">$</span>
+                      <span className="overflow-menu-icon">
+                        {tab.type === 'browser' ? (
+                          <Globe size={14} />
+                        ) : (
+                          '$'
+                        )}
+                      </span>
                       <span className="overflow-menu-title">{tab.title}</span>
                       {tab.hasNotification && tab.notificationCount && tab.notificationCount > 0 && (
                         <Badge variant="default" className="overflow-menu-badge">
@@ -237,24 +248,7 @@ export function TabBar({
                 onClick={onCreateBrowserTab}
                 aria-label="New browser tab"
               >
-      <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <title>Browser icon</title>
-      <circle cx="12" cy="12" r="10" />
-      <path d="M2 12h20" />
-      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1 4-10 5.3 15.3 0 0 1 4-10 5.3 15.3 0 0 1 4-10 5.3 15.3 0 0 1 4-10 5.3 15.3 0 0 1 4-10 5.3 12.5 4 10 5.4-6" />
-      <path d="m12 5v14m-7-7" />
-      <circle cx="6" cy="18" r="3" />
-    </svg>
+                <Globe size={18} />
               </Button>
             </Tooltip>
 

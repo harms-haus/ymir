@@ -84,6 +84,7 @@ interface WorkspaceState {
   markNotification: (tabId: string, message: string) => void;
   clearNotification: (tabId: string) => void;
   updateTabSessionId: (paneId: string, tabId: string, sessionId: string) => void;
+  updateTabTitle: (paneId: string, tabId: string, title: string) => void;
 
 
   toggleSidebar: () => void;
@@ -648,6 +649,19 @@ const useWorkspaceStore = create<WorkspaceState>()(
                 const tab = pane.tabs.find((t) => t.id === tabId);
                 if (tab) {
                   tab.sessionId = sessionId;
+                }
+              }
+            }
+          }),
+
+        updateTabTitle: (paneId: string, tabId: string, title: string) =>
+          set((state) => {
+            for (const workspace of state.workspaces) {
+              const pane = workspace.panes[paneId];
+              if (pane) {
+                const tab = pane.tabs.find((t) => t.id === tabId);
+                if (tab) {
+                  tab.title = title;
                 }
               }
             }

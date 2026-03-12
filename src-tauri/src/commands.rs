@@ -131,6 +131,7 @@ pub async fn spawn_pty(
     state: tauri::State<'_, PtyState>,
     on_event: Channel<PtyEvent>,
     correlation_id: Option<String>,
+    cwd: Option<String>,
 ) -> Result<String, String> {
     let pty_system = native_pty_system();
 
@@ -146,6 +147,10 @@ pub async fn spawn_pty(
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
     let mut cmd = CommandBuilder::new(&shell);
     cmd.arg("-i"); // Start as interactive shell to get a prompt
+
+    if let Some(ref work_dir) = cwd {
+        cmd.cwd(std::path::Path::new(work_dir));
+    }
 
     let child = pair
         .slave
@@ -205,6 +210,7 @@ pub async fn create_pane_in_workspace(
     on_event: Channel<PtyEvent>,
     workspace_id: String,
     pane_id: String,
+    cwd: Option<String>,
 ) -> Result<String, String> {
     let pty_system = native_pty_system();
 
@@ -224,6 +230,10 @@ pub async fn create_pane_in_workspace(
     // Set environment variables for CLI
     cmd.env("CMUX_WORKSPACE", &workspace_id);
     cmd.env("CMUX_PANE", &pane_id);
+
+    if let Some(ref work_dir) = cwd {
+        cmd.cwd(std::path::Path::new(work_dir));
+    }
 
     let child = pair
         .slave
@@ -547,6 +557,14 @@ pub async fn exit_app() {
 
 #[tauri::command]
 #[instrument]
+pub fn get_app_cwd() -> Result<String, String> {
+    std::env::current_dir()
+        .map(|p| p.to_string_lossy().to_string())
+        .map_err(|e| format!("Failed to get current directory: {}", e))
+}
+
+#[tauri::command]
+#[instrument]
 pub fn get_git_status(path: String) -> Result<GitStatus, String> {
     git::get_repo_status(&path).map_err(|e| e.to_string())
 }
@@ -603,8 +621,9 @@ pub fn checkout_branch(repo_path: String, name: String) -> Result<(), String> {
 #[instrument]
 pub fn discover_git_repos(root_path: String) -> Result<Vec<String>, String> {
     let mut repos = Vec::new();
+    info!(root_path = %root_path, "Starting git repository discovery");
     search_for_git_repos(&root_path, &mut repos, 0);
-    info!(root_path = %root_path, found_count = repos.len(), "Git repository discovery completed");
+    info!(root_path = %root_path, found_count = repos.len(), found_repos = ?repos, "Git repository discovery completed");
     Ok(repos)
 }
 

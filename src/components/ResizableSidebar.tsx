@@ -15,7 +15,7 @@ const SIDEBAR_MAX_WIDTH = 500;
 const SIDEBAR_DEFAULT_WIDTH = 250;
 
 /** Resize handle dimensions */
-const RESIZE_HANDLE_WIDTH = 6;
+const RESIZE_HANDLE_WIDTH = 4;
 
 // ============================================================================
 // ResizableSidebar Component

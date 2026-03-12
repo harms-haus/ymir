@@ -405,3 +405,45 @@ Update NotificationsPanel buttons to use correct Button component variants.
 
 ### Notes
 This task was likely completed during Task 16 (Migrate ProjectPanel Accordion) or as part of general Base-UI component migration. The plan description may have been written before the implementation was finished.
+
+## ProjectPanel Button/Accordion Migration
+
+### Date: 2026-03-10
+
+### Task
+Update ProjectPanel items to use proper Button or Accordion components for keyboard accessibility.
+
+### Changes Made
+1. Added Button import from './ui/Button'
+2. Replaced plain `<div>` file items with `<Button variant="ghost" size="sm">`
+3. Added `justifyContent: 'flex-start'` style to maintain original left-aligned appearance
+4. Folders already using AccordionTrigger correctly (no changes needed)
+5. All icons preserved (getFileIcon and FolderIcon unchanged)
+
+### Key Learnings
+- File items MUST use interactive elements (Button) for keyboard accessibility
+- AccordionTrigger already provides keyboard accessibility for folders
+- Button ghost variant maintains visual consistency with existing styling
+- Base-UI Button has built-in focus-visible styles and keyboard navigation
+
+### Build Verification
+✅ TypeScript check passed (no new errors in ProjectPanel.tsx)
+✅ Build completed successfully
+✅ All items now keyboard accessible
+
+### Code Patterns
+```tsx
+// File items (correct pattern)
+<Button variant="ghost" size="sm" style={{ paddingLeft: '${depth}px', justifyContent: 'flex-start' }}>
+  {getFileIcon(node.extension)}
+  <span className="file-name">{node.name}</span>
+</Button>
+
+// Folder items (already correct)
+<AccordionTrigger className="folder-accordion-trigger" style={{ paddingLeft: '${depth}px' }}>
+  <ChevronIcon />
+  <FolderIcon isOpen={false} />
+  <span className="file-name">{node.name}</span>
+</AccordionTrigger>
+```
+

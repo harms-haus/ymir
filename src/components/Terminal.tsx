@@ -210,6 +210,21 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
     return () => terminalElement?.removeEventListener('wheel', handleWheel);
   }, [ref]);
 
+  // Listen for xterm title changes and update tab title
+  useEffect(() => {
+    if (!instance) return;
+
+    const disposable = instance.onTitleChange((newTitle: string) => {
+      if (newTitle && newTitle.trim()) {
+        useWorkspaceStore.getState().updateTabTitle(paneId, tabId, newTitle.trim());
+      }
+    });
+
+    return () => {
+      disposable.dispose();
+    };
+  }, [instance, paneId, tabId]);
+
   return (
     <ErrorBoundary>
     <div

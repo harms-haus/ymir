@@ -59,13 +59,15 @@
 }
 
 /* Tab icon */
-.tab-icon {
+.tab-icon,
+.tab-icon-svg {
   font-size: 11px;
   color: #858585;
   flex-shrink: 0;
 }
 
-.tab-item.active .tab-icon {
+.tab-item.active .tab-icon,
+.tab-item.active .tab-icon-svg {
   color: #cccccc;
 }
 

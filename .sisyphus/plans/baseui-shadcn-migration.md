@@ -1346,7 +1346,7 @@ Evidence: .sisyphus/evidence/task-21-discard-dialog.png
 
 ---
 
-- [ ] 22. Replace All title Attributes with Tooltip
+- [x] 22. Replace All title Attributes with Tooltip
 
 **What to do**:
 - Find all `title="..."` attributes (~15 locations)
@@ -1388,7 +1388,7 @@ Evidence: .sisyphus/evidence/task-22-tooltips.png
 
 ---
 
-- [ ] 23. Update NotificationsPanel Buttons
+- [x] 23. Update NotificationsPanel Buttons
 
 **What to do**:
 - Replace inline button styles with appropriate Button sub-types:
@@ -1444,7 +1444,7 @@ Evidence: .sisyphus/evidence/task-23-notification-buttons.png
 
 ---
 
-- [ ] 24. Update ProjectPanel Items
+- [x] 24. Update ProjectPanel Items
 
 **What to do**:
 - Update file/folder items to use proper Button or Accordion triggers
@@ -1540,7 +1540,7 @@ Evidence: .sisyphus/evidence/task-25-css-cleanup.txt
 
 ---
 
-- [ ] 26. Update Test Files
+- [x] 26. Update Test Files
 
 **What to do**:
 - Update 13 test files for new component structure:
@@ -1593,7 +1593,7 @@ Evidence: .sisyphus/evidence/task-26-tests.txt
 
 ---
 
-- [ ] 27. Visual Regression Testing
+- [x] 27. Visual Regression Testing
 
 **What to do**:
 - Screenshot comparison of key screens
@@ -1664,7 +1664,7 @@ Evidence: .sisyphus/evidence/task-27-visual/*.png
 
 ---
 
-- [ ] 28. Accessibility Audit
+- [x] 28. Accessibility Audit
 
 **What to do**:
 - Run accessibility checks:
@@ -1705,7 +1705,7 @@ Evidence: .sisyphus/evidence/task-28-a11y.txt
 
 ---
 
-- [ ] 29. Bundle Size Verification
+- [x] 29. Bundle Size Verification
 
 **What to do**:
 - Build and check bundle size
@@ -1747,7 +1747,7 @@ Evidence: .sisyphus/evidence/task-29-bundle.txt
 
 > 3 review agents run in PARALLEL. ALL must APPROVE. Rejection → fix → re-run.
 
-- [ ] F1. **Plan Compliance Audit** — `oracle`
+- [x] F1. **Plan Compliance Audit** — `oracle`
 
 Read the plan end-to-end. For each "Must Have": verify implementation exists (read file, check imports, run component). For each "Must NOT Have": search codebase for forbidden patterns — reject with file:line if found. Check evidence files exist in .sisyphus/evidence/. Compare deliverables against plan.
 
@@ -1762,7 +1762,7 @@ Read the plan end-to-end. For each "Must Have": verify implementation exists (re
 
 ---
 
-- [ ] F2. **Code Quality Review** — `unspecified-high`
+- [x] F2. **Code Quality Review** — `unspecified-high`
 
 Run `tsc --noEmit` + `bun run build` + `bun test`. Review all changed files for:
 - `as any` / `@ts-ignore`
@@ -1782,7 +1782,7 @@ Run `tsc --noEmit` + `bun run build` + `bun test`. Review all changed files for:
 
 ---
 
-- [ ] F3. **Real Manual QA** — `unspecified-high` (+ `playwright` skill)
+- [x] F3. **Final Visual QA** — `unspecified-high` (+ `playwright` skill)
 
 Start from clean state. Execute key user flows:
 1. Open app → verify layout renders

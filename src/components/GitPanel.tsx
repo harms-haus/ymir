@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { PanelDefinition, GitFile, GitRepo } from '../state/types';
 import useWorkspaceStore, { getAllGitRepos, getGitChangesCount, getGitError } from '../state/workspace';
 import gitService from '../lib/git-service';
+import { invoke } from '@tauri-apps/api/core';
 import { Button } from './ui/Button';
 import { Checkbox, Input } from './ui/Input';
 import { Tooltip } from './ui/Tooltip';
@@ -743,7 +744,13 @@ const GitPanelFull = (): React.ReactNode => {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   useEffect(() => {
-    discoverAndRegisterRepos('/home/blake/Documents/software/ymir');
+    invoke<string>('get_app_cwd').then((cwd) => {
+      console.log('[GitPanel] get_app_cwd returned:', cwd);
+      discoverAndRegisterRepos(cwd);
+    }).catch((err) => {
+      console.log('[GitPanel] get_app_cwd failed:', err);
+      discoverAndRegisterRepos('.');
+    });
   }, [discoverAndRegisterRepos]);
 
   const showToast = useCallback((message: string, type: 'error' | 'success' = 'error') => {

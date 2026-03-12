@@ -49,7 +49,7 @@ export const TabHeaderPanel: React.FC<TabHeaderPanelProps> = ({
       <div className="tab-header">
         {isCollapsed ? (
           <>
-            <Tooltip content={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+            <Tooltip content="Expand sidebar">
               <Button
                 variant="ghost"
                 size="sm"
@@ -57,8 +57,8 @@ export const TabHeaderPanel: React.FC<TabHeaderPanelProps> = ({
                 onClick={onToggleSidebar}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="m11 17-5-5 5-5" />
-                  <path d="m18 17-5-5 5-5" />
+                  <path d="m13 17 5-5-5-5" />
+                  <path d="m6 17 5-5-5-5" />
                 </svg>
               </Button>
             </Tooltip>
@@ -139,7 +139,7 @@ export const TabHeaderPanel: React.FC<TabHeaderPanelProps> = ({
           <TabsIndicator className="tab-indicator" />
         </TabsList>
       </TabsRoot>
-      <Tooltip content={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+      <Tooltip content="Collapse sidebar">
               <Button
                 variant="ghost"
                 size="sm"

@@ -25,29 +25,34 @@ function transformGitStatus(rustStatus: any): GitRepo {
   const unstaged: GitFile[] = [];
 
   for (const file of files) {
-    const rustStatus = file.status;
-    const rustSecondaryStatus = file.secondary_status;
+    // Rust sends: status (primary), secondary_status (optional, for files with both stages)
+    // Primary is always the staged status when present, secondary is the unstaged status
+    const primaryStatus = file.status;
+    const secondaryStatus = file.secondary_status;
 
     // Check if file has staged status
-    if (rustStatus === 'Added' || rustStatus === 'StagedModified' ||
-        rustStatus === 'StagedDeleted' || rustStatus === 'StagedRenamed') {
+    if (primaryStatus === 'Added' || primaryStatus === 'StagedModified' ||
+        primaryStatus === 'StagedDeleted' || primaryStatus === 'StagedRenamed') {
       staged.push({
         path: file.path,
-        status: mapFileStatus(rustStatus),
+        status: mapFileStatus(primaryStatus),
         staged: true,
       });
     }
 
     // Check if file has unstaged status (either primary or secondary)
     const hasUnstaged =
-      rustStatus === 'Modified' || rustStatus === 'Deleted' ||
-      rustStatus === 'Untracked' || rustStatus === 'Conflicted' ||
-      rustSecondaryStatus === 'Modified' || rustSecondaryStatus === 'Deleted' ||
-      rustSecondaryStatus === 'Untracked' || rustSecondaryStatus === 'Conflicted';
+      primaryStatus === 'Modified' || primaryStatus === 'Deleted' ||
+      primaryStatus === 'Untracked' || primaryStatus === 'Conflicted' ||
+      secondaryStatus === 'Modified' || secondaryStatus === 'Deleted' ||
+      secondaryStatus === 'Untracked' || secondaryStatus === 'Conflicted';
 
     if (hasUnstaged) {
       // Use secondary status if available (for files with both staged and unstaged changes)
-      const unstagedStatus = rustSecondaryStatus || rustStatus;
+      const unstagedStatus = secondaryStatus || primaryStatus;
+      // Always create a NEW object — files with both staged/unstaged changes
+      // appear in both arrays, and they must be independent so mutating one
+      // (e.g. via updateGitFile) doesn't corrupt the other
       unstaged.push({
         path: file.path,
         status: mapFileStatus(unstagedStatus),
@@ -138,7 +143,7 @@ export async function getGitStatus(repoPath: string): Promise<GitRepo> {
 export async function stageFile(repoPath: string, filePath: string): Promise<void> {
   try {
     logger.debug('Staging file', { repoPath, filePath });
-    await invoke('stage_file', { repoPath, filePath });
+    await invoke('stage_file', { repo_path: repoPath, file_path: filePath });
     logger.info('File staged successfully', { filePath });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -155,7 +160,7 @@ export async function stageFile(repoPath: string, filePath: string): Promise<voi
 export async function unstageFile(repoPath: string, filePath: string): Promise<void> {
   try {
     logger.debug('Unstaging file', { repoPath, filePath });
-    await invoke('unstage_file', { repoPath, filePath });
+    await invoke('unstage_file', { repo_path: repoPath, file_path: filePath });
     logger.info('File unstaged successfully', { filePath });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -172,7 +177,7 @@ export async function unstageFile(repoPath: string, filePath: string): Promise<v
 export async function discardChanges(repoPath: string, filePath: string): Promise<void> {
   try {
     logger.debug('Discarding changes', { repoPath, filePath });
-    await invoke('discard_file_changes', { repoPath, filePath });
+    await invoke('discard_file_changes', { repo_path: repoPath, file_path: filePath });
     logger.info('Changes discarded successfully', { filePath });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -190,7 +195,7 @@ export async function discardChanges(repoPath: string, filePath: string): Promis
 export async function commit(repoPath: string, message: string): Promise<string> {
   try {
     logger.debug('Creating commit', { repoPath, message });
-    const commitId = await invoke('commit_changes', { repoPath, message });
+    const commitId = await invoke('commit_changes', { repo_path: repoPath, message });
     logger.info('Commit created successfully', { commitId, message });
     return commitId as string;
   } catch (error) {
@@ -208,7 +213,7 @@ export async function commit(repoPath: string, message: string): Promise<string>
 export async function getBranches(repoPath: string): Promise<GitBranch[]> {
   try {
     logger.debug('Getting branches', { repoPath });
-    const rustBranches = await invoke('get_branches', { repoPath }) as any[];
+    const rustBranches = await invoke('get_branches', { repo_path: repoPath }) as any[];
     const result = rustBranches.map(transformBranch);
     logger.info('Branches retrieved', { repoPath, count: result.length });
     return result;
@@ -227,7 +232,7 @@ export async function getBranches(repoPath: string): Promise<GitBranch[]> {
 export async function createBranch(repoPath: string, name: string): Promise<void> {
   try {
     logger.debug('Creating branch', { repoPath, name });
-    await invoke('create_branch', { repoPath, name });
+    await invoke('create_branch', { repo_path: repoPath, name });
     logger.info('Branch created successfully', { name });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -244,7 +249,7 @@ export async function createBranch(repoPath: string, name: string): Promise<void
 export async function deleteBranch(repoPath: string, name: string): Promise<void> {
   try {
     logger.debug('Deleting branch', { repoPath, name });
-    await invoke('delete_branch', { repoPath, name });
+    await invoke('delete_branch', { repo_path: repoPath, name });
     logger.info('Branch deleted successfully', { name });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -261,7 +266,7 @@ export async function deleteBranch(repoPath: string, name: string): Promise<void
 export async function checkoutBranch(repoPath: string, name: string): Promise<void> {
   try {
     logger.debug('Checking out branch', { repoPath, name });
-    await invoke('checkout_branch', { repoPath, name });
+    await invoke('checkout_branch', { repo_path: repoPath, name });
     logger.info('Branch checked out successfully', { name });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

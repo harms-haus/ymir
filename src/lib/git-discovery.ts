@@ -4,7 +4,7 @@ export async function discoverGitRepos(rootPath: string): Promise<string[]> {
   try {
     const { invoke } = await import('@tauri-apps/api/core');
     logger.info('Starting git repository discovery', { rootPath });
-    const repos = await invoke<string[]>('discover_git_repos', { rootPath });
+    const repos = await invoke<string[]>('discover_git_repos', { root_path: rootPath });
     logger.info('Git repository discovery completed', {
       rootPath,
       foundRepos: repos.length
