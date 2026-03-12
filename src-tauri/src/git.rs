@@ -621,9 +621,10 @@ pub fn checkout_branch(repo_path: &str, name: &str) -> Result<(), GitError> {
     let treeish = reference.resolve().map_err(GitError::from)?;
 
     // Get the commit and its tree
-    let commit = repo
-        .find_commit(treeish.target().unwrap())
-        .map_err(GitError::from)?;
+    let target_oid = treeish
+        .target()
+        .ok_or_else(|| GitError::Other("Reference has no target".to_string()))?;
+    let commit = repo.find_commit(target_oid).map_err(GitError::from)?;
     let tree = commit.tree().map_err(GitError::from)?;
 
     // Checkout the branch
@@ -634,8 +635,10 @@ pub fn checkout_branch(repo_path: &str, name: &str) -> Result<(), GitError> {
         .map_err(GitError::from)?;
 
     // Move HEAD to the branch
-    repo.set_head(reference.name().unwrap())
-        .map_err(GitError::from)?;
+    let ref_name = reference
+        .name()
+        .ok_or_else(|| GitError::Other("Reference has no name".to_string()))?;
+    repo.set_head(ref_name).map_err(GitError::from)?;
 
     info!(branch_name = %name, "Branch checked out successfully");
     Ok(())
