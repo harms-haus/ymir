@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import useWorkspaceStore from '../state/workspace';
+import { shallow } from 'zustand/shallow';
 import { Terminal } from './Terminal';
 import { Browser } from './Browser';
 import { TabBar } from './TabBar';
@@ -13,17 +14,13 @@ interface PaneProps {
 }
 
 export function Pane({ paneId, workspaceId, windowControlsPosition, isTopmost }: PaneProps) {
-  const pane = useWorkspaceStore((state) => {
-    const workspace = state.workspaces.find((ws) => ws.id === workspaceId);
-    const paneData = workspace?.panes[paneId];
-    if (!paneData) return null;
-    return {
-      id: paneData.id,
-      activeTabId: paneData.activeTabId,
-      tabs: paneData.tabs,
-      hasNotification: paneData.hasNotification,
-    };
-  });
+  const pane = useWorkspaceStore(
+    (state) => {
+      const workspace = state.workspaces.find((ws) => ws.id === workspaceId);
+      return workspace?.panes[paneId] || null;
+    },
+    shallow
+  );
 
   if (!pane) {
     return (

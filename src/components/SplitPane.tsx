@@ -1,6 +1,7 @@
 // SplitPane recursive component using react-resizable-panels
 // Renders workspace split tree structure with horizontal/vertical splits
 
+import React from 'react';
 import { Group, Panel, Separator, type Orientation } from 'react-resizable-panels';
 import { SplitNode, BranchNode, LeafNode, isBranch, isLeaf } from '../state/types';
 import useWorkspaceStore from '../state/workspace';
@@ -64,7 +65,7 @@ export function findTopmostPanes(node: SplitNode, isAboveSplit: boolean = false)
 
 const MIN_PANEL_SIZE_PERCENTAGE = 10;
 
-function LeafPane({ node, workspaceId, windowControlsPosition, targetPaneId, isTopmost }: LeafPaneProps) {
+const LeafPane = React.memo(function LeafPane({ node, workspaceId, windowControlsPosition, targetPaneId, isTopmost }: LeafPaneProps) {
   const workspace = useWorkspaceStore((state) =>
     state.workspaces.find((ws) => ws.id === workspaceId)
   );
@@ -99,7 +100,7 @@ function LeafPane({ node, workspaceId, windowControlsPosition, targetPaneId, isT
       isTopmost={isTopmost}
     />
   );
-}
+});
 
 function BranchPane({ node, workspaceId, targetPaneId, topmostPaneIds }: BranchPaneProps) {
   const orientation: Orientation =

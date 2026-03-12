@@ -4,6 +4,7 @@ import useWorkspaceStore, { getAllGitRepos, getGitChangesCount, getGitError } fr
 import gitService from '../lib/git-service';
 import logger from '../lib/logger';
 import { invoke } from '@tauri-apps/api/core';
+import { useExpandCollapse } from '../hooks/useExpandCollapse';
 import { Button } from './ui/Button';
 import { Checkbox, Input } from './ui/Input';
 import { Tooltip } from './ui/Tooltip';
@@ -40,34 +41,6 @@ import {
   ToastClose,
 } from './ui/Toast';
 import './GitPanel.css';
-
-const mockGitData = {
-  currentBranch: 'main',
-  branches: ['main', 'dev', 'feature/sidebar', 'bugfix/terminal-fix'],
-  ahead: 2,
-  behind: 0,
-  stagedCount: 2,
-  changesCount: 5,
-};
-
-const dummyStagedFiles = [
-  { path: 'src/components/Header.tsx', status: 'modified' as const, staged: true },
-  { path: 'src/lib/utils.ts', status: 'added' as const, staged: true },
-  { path: 'package.json', status: 'modified' as const, staged: true },
-];
-
-const dummyUnstagedFiles = [
-  { path: 'src/components/GitPanel.tsx', status: 'modified' as const, staged: false },
-  { path: 'src/App.tsx', status: 'modified' as const, staged: false },
-  { path: 'src/state/workspace.ts', status: 'modified' as const, staged: false },
-  { path: 'src/styles/theme.css', status: 'added' as const, staged: false },
-  { path: 'README.md', status: 'modified' as const, staged: false },
-  { path: 'src/components/OldComponent.tsx', status: 'deleted' as const, staged: false },
-  { path: 'src/utils/helpers.ts', status: 'renamed' as const, staged: false, originalPath: 'src/utils/old-helpers.ts' },
-  { path: 'src/config/local.json', status: 'untracked' as const, staged: false },
-];
-
-const USE_DUMMY_DATA = false;
 
 const GitBranchIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -320,7 +293,7 @@ const FileItem: React.FC<{
   onToggleExpand?: () => void;
   onCheckboxChange?: () => void;
   onDiscard?: () => void;
-}> = ({ file, showCheckbox = true, expanded = false, onToggleExpand, onCheckboxChange, onDiscard }) => {
+}> = React.memo(({ file, showCheckbox = true, expanded = false, onToggleExpand, onCheckboxChange, onDiscard }) => {
   const fileName = file.path.split('/').pop() || file.path;
   const dirPath = file.path.includes('/') ? file.path.substring(0, file.path.lastIndexOf('/')) : '';
 
@@ -376,25 +349,14 @@ const FileItem: React.FC<{
       )}
     </div>
   );
-};
+});
 
 const StagedFilesSection: React.FC<{
   files: GitFile[];
   onUnstage: (path: string) => void;
   onUnstageAll: () => Promise<void>;
 }> = ({ files, onUnstage, onUnstageAll }) => {
-  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
-  const [isCollapsed, setIsCollapsed] = useState(false);
-
-  const toggleExpand = (path: string) => {
-    setExpandedFiles(prev => {
-      const next = new Set(prev);
-      if (next.has(path)) next.delete(path); else next.add(path);
-      return next;
-    });
-  };
-
-  const toggleCollapsed = () => setIsCollapsed(prev => !prev);
+  const { expandedFiles, isCollapsed, toggleExpand, toggleCollapsed } = useExpandCollapse();
 
   return (
     <div className="git-section staged-files-section">
@@ -441,18 +403,7 @@ const ChangesFilesSection: React.FC<{
   onStageAll: () => Promise<void>;
   onDiscardAll: () => Promise<void>;
 }> = ({ files, onStage, onDiscard, onStageAll, onDiscardAll }) => {
-  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
-  const [isCollapsed, setIsCollapsed] = useState(false);
-
-  const toggleExpand = (path: string) => {
-    setExpandedFiles(prev => {
-      const next = new Set(prev);
-      if (next.has(path)) next.delete(path); else next.add(path);
-      return next;
-    });
-  };
-
-  const toggleCollapsed = () => setIsCollapsed(prev => !prev);
+  const { expandedFiles, isCollapsed, toggleExpand, toggleCollapsed } = useExpandCollapse();
 
   const handleDiscardAll = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -602,30 +553,42 @@ const RepoSection: React.FC<{
 
   const handleStageAll = async () => {
     const unstagedFiles = repo.unstaged;
-    for (const file of unstagedFiles) {
-      try { await gitService.stageFile(repoPath, file.path); } catch (error) { logger.error(`Failed to stage file`, { repoPath, path: file.path, error }); }
-    }
+    await Promise.all(
+      unstagedFiles.map(file =>
+        gitService.stageFile(repoPath, file.path).catch(error => {
+          logger.error('Failed to stage file', { repoPath, path: file.path, error });
+        })
+      )
+    );
     await handleRefresh();
   };
 
   const handleUnstageAll = async () => {
     const stagedFiles = repo.staged;
-    for (const file of stagedFiles) {
-      try { await gitService.unstageFile(repoPath, file.path); } catch (error) { logger.error(`Failed to unstage file`, { repoPath, path: file.path, error }); }
-    }
+    await Promise.all(
+      stagedFiles.map(file =>
+        gitService.unstageFile(repoPath, file.path).catch(error => {
+          logger.error('Failed to unstage file', { repoPath, path: file.path, error });
+        })
+      )
+    );
     await handleRefresh();
   };
 
   const handleDiscardAll = async () => {
     const unstagedFiles = repo.unstaged;
-    for (const file of unstagedFiles) {
-      try { await gitService.discardChanges(repoPath, file.path); } catch (error) { logger.error(`Failed to discard file`, { repoPath, path: file.path, error }); }
-    }
+    await Promise.all(
+      unstagedFiles.map(file =>
+        gitService.discardChanges(repoPath, file.path).catch(error => {
+          logger.error('Failed to discard file', { repoPath, path: file.path, error });
+        })
+      )
+    );
     await handleRefresh();
   };
 
-  const displayStaged = USE_DUMMY_DATA ? dummyStagedFiles : (repo?.staged || []);
-  const displayUnstaged = USE_DUMMY_DATA ? dummyUnstagedFiles : (repo?.unstaged || []);
+  const displayStaged = repo?.staged || [];
+  const displayUnstaged = repo?.unstaged || [];
 
   return (
     <div className="git-repo-section">
@@ -654,6 +617,7 @@ const RepoAccordionTrigger: React.FC<{
   onShowToast: (message: string, type?: 'error' | 'success') => void;
   isExpanded?: boolean;
 }> = ({ repo, onRefresh, onShowToast, isExpanded }) => {
+  const [branches, setBranches] = useState<string[]>([]);
   const handleRefresh = async (e: React.MouseEvent) => {
     e.stopPropagation();
     await onRefresh();
@@ -704,6 +668,19 @@ const RepoAccordionTrigger: React.FC<{
     }
   };
 
+  useEffect(() => {
+    const fetchBranches = async () => {
+      try {
+        const branchInfo = await gitService.getBranches(repo.path);
+        setBranches(branchInfo.map(b => b.name));
+      } catch (error) {
+        logger.error('Failed to fetch branches', { repoPath: repo.path, error });
+      }
+    };
+
+    fetchBranches();
+  }, [repo.path]);
+
   return (
     <div className="repo-accordion-trigger-content">
       <AccordionChevronIcon className="repo-accordion-chevron" expanded={isExpanded} />
@@ -716,7 +693,7 @@ const RepoAccordionTrigger: React.FC<{
       <div className="branch-selector-wrapper" onClick={handleBranchSelectorClick}>
         <BranchSelector
           currentBranch={repo.branch}
-          branches={mockGitData.branches}
+          branches={branches}
           onSelect={handleSelectBranch}
           onCreateBranch={handleCreateBranch}
           onDeleteBranch={handleDeleteBranch}
@@ -766,7 +743,7 @@ const GitPanelFull = (): React.ReactNode => {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  if (!USE_DUMMY_DATA && (allRepos.length === 0 || gitError)) {
+  if (allRepos.length === 0 || gitError) {
     return (
       <div className="git-panel">
         <NotAGitRepo />
@@ -774,9 +751,7 @@ const GitPanelFull = (): React.ReactNode => {
     );
   }
 
-  const reposToDisplay = USE_DUMMY_DATA && allRepos.length === 0
-    ? [{ path: '/home/blake/Documents/software/ymir', branch: 'main', ahead: 2, behind: 0, staged: dummyStagedFiles, unstaged: dummyUnstagedFiles }]
-    : allRepos;
+  const reposToDisplay = allRepos;
 
   const defaultExpandedValues = reposToDisplay.map(repo => repo.path);
 

@@ -11,6 +11,16 @@ import logger from '../lib/logger';
 import gitService from '../lib/git-service';
 import { discoverGitRepos } from '../lib/git-discovery';
 import { generateUUID } from '../lib/utils';
+import {
+  MAX_WORKSPACES,
+  MAX_PANES,
+  PANE_WARNING_THRESHOLD,
+  MAX_SCROLLBACK_LINES,
+  DEFAULT_FONT_SIZE,
+  MIN_FONT_SIZE,
+  MAX_FONT_SIZE,
+  GIT_POLLING_INTERVAL_MS,
+} from '../lib/constants';
 
 import {
   Workspace,
@@ -34,7 +44,6 @@ import {
 // ============================================================================
 
 const gitPollingIntervals: Record<string, number> = {};
-import { MAX_PANES, MAX_SCROLLBACK_LINES, MIN_FONT_SIZE, MAX_FONT_SIZE } from './types';
 
 // ============================================================================
 // Extended Workspace with Pane Map
@@ -409,7 +418,7 @@ const useWorkspaceStore = create<WorkspaceState>()(
 
         createWorkspaceAfter: (workspaceId: string, name: string) =>
           set((state) => {
-            if (state.workspaces.length >= 8) return;
+            if (state.workspaces.length >= MAX_WORKSPACES) return;
             const index = state.workspaces.findIndex((ws) => ws.id === workspaceId);
             if (index < 0) return;
 
@@ -455,7 +464,7 @@ const useWorkspaceStore = create<WorkspaceState>()(
               return;
             }
 
-            if (currentPaneCount >= 15) {
+            if (currentPaneCount >= PANE_WARNING_THRESHOLD) {
               logger.warn(`Warning: ${currentPaneCount} panes in use. Approaching maximum of 20 panes.`);
             }
 
@@ -733,7 +742,7 @@ const useWorkspaceStore = create<WorkspaceState>()(
 
   resetZoom: () =>
     set((state) => {
-      state.fontSize = 14;
+      state.fontSize = DEFAULT_FONT_SIZE;
     }),
 
   setGitRepo: (repoPath: string, repo: GitRepo) =>
@@ -843,13 +852,13 @@ const useWorkspaceStore = create<WorkspaceState>()(
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        logger.error('Git polling failed', { repoPath, error: message });
-      }
-    };
+logger.error('Git polling failed', { repoPath, error: message });
+    }
+  };
 
-    poll();
-    gitPollingIntervals[repoPath] = window.setInterval(poll, 5000);
-  },
+  poll();
+  gitPollingIntervals[repoPath] = window.setInterval(poll, GIT_POLLING_INTERVAL_MS);
+},
 
   stopGitPolling: (repoPath: string) => {
     if (gitPollingIntervals[repoPath]) {

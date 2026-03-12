@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useCallback } from 'react';
 import useWorkspaceStore from '../state/workspace';
 import { Tab } from '../state/types';
 import { PanelDefinition } from '../state/types';
@@ -14,7 +14,7 @@ interface NotificationItemProps {
   onClear: (e: React.MouseEvent) => void;
 }
 
-function NotificationItem({
+const NotificationItem = React.memo(function NotificationItem({
   tab,
   onClick,
   onClear,
@@ -98,7 +98,7 @@ function NotificationItem({
       </div>
     </div>
   );
-}
+});
 
 interface NotificationTabInfo {
   tab: Tab;
@@ -115,7 +115,7 @@ function NotificationsPanelContent() {
     useWorkspaceStore.getState();
 
   // Collect all tabs with notifications across all workspaces
-  const getNotificationTabs = (): NotificationTabInfo[] => {
+  const notificationTabs = useMemo((): NotificationTabInfo[] => {
     const notificationTabs: NotificationTabInfo[] = [];
     for (const ws of workspaces) {
       for (const paneId of Object.keys(ws.panes)) {
@@ -132,28 +132,26 @@ function NotificationsPanelContent() {
       }
     }
     return notificationTabs;
-  };
+  }, [workspaces]);
 
-  const notificationTabs = getNotificationTabs();
-
-  const handleItemClick = (
+  const handleItemClick = useCallback((
     tabId: string,
     paneId: string,
     workspaceId: string
   ) => {
-    // Switch to the workspace containing the notification
+    // Switch to workspace containing notification
     if (workspaceId !== activeWorkspaceId) {
       setActiveWorkspace(workspaceId);
     }
-    // Activate the pane and tab
+    // Activate pane and tab
     setActivePane(paneId);
     setActiveTab(paneId, tabId);
-  };
+  }, [activeWorkspaceId, setActiveWorkspace, setActivePane, setActiveTab]);
 
-  const handleClear = (e: React.MouseEvent, tabId: string) => {
+  const handleClear = useCallback((e: React.MouseEvent, tabId: string) => {
     e.stopPropagation();
     clearNotification(tabId);
-  };
+  }, [clearNotification]);
 
   const handleClearAll = () => {
     // Clear all notifications

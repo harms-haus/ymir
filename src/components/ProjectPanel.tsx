@@ -166,7 +166,7 @@ interface FileTreeItemProps {
   depth: number;
 }
 
-const FileTreeItem: React.FC<FileTreeItemProps> = ({ node, depth }) => {
+const FileTreeItem: React.FC<FileTreeItemProps> = React.memo(({ node, depth }) => {
   const paddingLeft = 8 + depth * 12;
 
   if (node.type === 'folder' && node.children) {
@@ -210,7 +210,7 @@ const FileTreeItem: React.FC<FileTreeItemProps> = ({ node, depth }) => {
       <span className="file-name">{node.name}</span>
     </Button>
   );
-};
+});
 
 // Icon component - SVG folder icon
 const ProjectPanelIcon: React.FC = () => (

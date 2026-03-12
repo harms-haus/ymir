@@ -36,46 +36,46 @@ function WorkspaceList({ collapsed }: WorkspaceListProps) {
   const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const [contextMenuAnchor, setContextMenuAnchor] = useState<{ workspaceId: string; index: number } | null>(null);
 
-  const handleCreateWorkspace = () => {
+  const handleCreateWorkspace = useCallback(() => {
     const nextNumber = workspaces.length + 1;
     createWorkspace(`Workspace ${nextNumber}`);
-  };
+  }, [workspaces.length, createWorkspace]);
 
-  const handleContextMenu = (e: React.MouseEvent, workspaceId: string, index: number) => {
+  const handleContextMenu = useCallback((e: React.MouseEvent, workspaceId: string, index: number) => {
     e.preventDefault();
     setContextMenuPosition({ x: e.clientX, y: e.clientY });
     setContextMenuAnchor({ workspaceId, index });
     setContextMenuOpen(true);
-  };
+  }, []);
 
-  const handleNewWorkspaceBelow = () => {
+  const handleNewWorkspaceBelow = useCallback(() => {
     if (contextMenuAnchor) {
       const nextNumber = workspaces.length + 1;
       createWorkspaceAfter(contextMenuAnchor.workspaceId, `Workspace ${nextNumber}`);
       setContextMenuOpen(false);
     }
-  };
+  }, [contextMenuAnchor, workspaces.length, createWorkspaceAfter]);
 
-  const handleMoveUp = () => {
+  const handleMoveUp = useCallback(() => {
     if (contextMenuAnchor && contextMenuAnchor.index > 0) {
       moveWorkspaceUp(contextMenuAnchor.workspaceId);
       setContextMenuOpen(false);
     }
-  };
+  }, [contextMenuAnchor, moveWorkspaceUp]);
 
-  const handleMoveDown = () => {
+  const handleMoveDown = useCallback(() => {
     if (contextMenuAnchor && contextMenuAnchor.index < workspaces.length - 1) {
       moveWorkspaceDown(contextMenuAnchor.workspaceId);
       setContextMenuOpen(false);
     }
-  };
+  }, [contextMenuAnchor, workspaces.length, moveWorkspaceDown]);
 
-  const handleCloseWorkspace = () => {
+  const handleCloseWorkspace = useCallback(() => {
     if (contextMenuAnchor && workspaces.length > 1) {
       closeWorkspace(contextMenuAnchor.workspaceId);
       setContextMenuOpen(false);
     }
-  };
+  }, [contextMenuAnchor, workspaces.length, closeWorkspace]);
 
   const isFirst = contextMenuAnchor ? contextMenuAnchor.index === 0 : false;
   const isLast = contextMenuAnchor ? contextMenuAnchor.index === workspaces.length - 1 : false;
@@ -404,9 +404,9 @@ export function WorkspaceSidebar() {
     });
   }, [panels, registerPanel]);
 
-  const handleTabClick = (tab: SidebarTab | string) => {
+  const handleTabClick = useCallback((tab: SidebarTab | string) => {
     setActiveSidebarTab(tab);
-  };
+  }, [setActiveSidebarTab]);
 
   return (
     <div

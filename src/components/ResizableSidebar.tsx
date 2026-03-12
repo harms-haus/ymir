@@ -5,17 +5,12 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { WorkspaceSidebar } from './WorkspaceSidebar';
 import useWorkspaceStore from '../state/workspace';
 
-// ============================================================================
-// Constants
-// ============================================================================
-
-/** Sidebar width constraints in pixels */
-const SIDEBAR_MIN_WIDTH = 200;
-const SIDEBAR_MAX_WIDTH = 500;
-const SIDEBAR_DEFAULT_WIDTH = 250;
-
-/** Resize handle dimensions */
-const RESIZE_HANDLE_WIDTH = 4;
+import {
+  SIDEBAR_MIN_WIDTH,
+  SIDEBAR_MAX_WIDTH,
+  SIDEBAR_DEFAULT_WIDTH,
+  RESIZE_HANDLE_WIDTH,
+} from '../lib/constants';
 
 // ============================================================================
 // ResizableSidebar Component
@@ -109,12 +104,18 @@ export function ResizableSidebar() {
         }}
         onMouseEnter={(e: React.MouseEvent) => {
           if (!isResizing) {
-            (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--border-dark)';
+            const target = e.currentTarget;
+            if (target instanceof HTMLElement) {
+              target.style.backgroundColor = 'var(--border-dark)';
+            }
           }
         }}
         onMouseLeave={(e: React.MouseEvent) => {
           if (!isResizing) {
-            (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--background-tertiary)';
+            const target = e.currentTarget;
+            if (target instanceof HTMLElement) {
+              target.style.backgroundColor = 'var(--background-tertiary)';
+            }
           }
         }}
       />
