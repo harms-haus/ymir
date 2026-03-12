@@ -847,32 +847,4 @@ export const gitPanelDefinition: PanelDefinition = {
   fullRender: GitPanelFull,
 };
 
-function getRepoFolderNameOld(repoPath: string): string {
-  const normalizedPath = repoPath.replace(/\\/g, '/');
-  const parts = normalizedPath.split('/').filter(Boolean);
-  return parts[parts.length - 1] || 'repo';
-}
 
-function RepoPanelContent({ repoPath }: { repoPath: string }): React.ReactElement {
-  const { setActiveRepo } = useWorkspaceStore();
-  React.useEffect(() => { setActiveRepo(repoPath); }, [repoPath, setActiveRepo]);
-  return <GitPanelFull />;
-}
-
-export function createRepoPanelDefinition(repoPath: string): PanelDefinition {
-  const folderName = getRepoFolderNameOld(repoPath);
-  const panelId = `git-${repoPath}`;
-  return {
-    id: panelId,
-    title: folderName,
-    icon: GitPanelIcon,
-    badge: () => {
-      const { gitRepos } = useWorkspaceStore.getState();
-      const repo = gitRepos[repoPath];
-      if (!repo) return null;
-      const count = repo.staged.length + repo.unstaged.length;
-      return count > 0 ? { count, color: 'var(--notification)' } : null;
-    },
-    fullRender: () => React.createElement(RepoPanelContent, { repoPath }),
-  };
-}

@@ -180,32 +180,6 @@ export interface PanelDefinition {
 // Helper Types
 // ============================================================================
 
-/** Complete pane tree layout snapshot for persistence */
-export interface LayoutSnapshot {
-  /** All workspaces in this layout */
-  workspaces: Workspace[];
-  /** Currently active workspace ID */
-  activeWorkspaceId: string;
-  /** Sidebar collapsed state */
-  sidebarCollapsed: boolean;
-}
-
-/** Size information from react-resizable-panels onLayout callback */
-export interface PanelSize {
-  /** Size as percentage (0-100) */
-  asPercentage: number;
-  /** Size in pixels */
-  inPixels: number;
-}
-
-/** Resize event data from react-resizable-panels */
-export interface ResizeEvent {
-  /** New sizes for all panels in the group (percentages) */
-  sizes: number[];
-  /** Panel group direction */
-  direction: 'horizontal' | 'vertical';
-}
-
 // ============================================================================
 // Utility Types
 // ============================================================================
@@ -220,11 +194,7 @@ export function isLeaf(node: SplitNode): node is LeafNode {
   return node.type === 'leaf';
 }
 
-/** Map of pane IDs to Pane objects (for O(1) lookup) */
-export type PaneMap = Record<string, Pane>;
 
-/** Map of tab IDs to Tab objects (for O(1) lookup) */
-export type TabMap = Record<string, Tab>;
 
 // ============================================================================
 // Git State Types
@@ -279,5 +249,4 @@ export interface GitRepo {
   unstaged: GitFile[];
 }
 
-/** Git state for multiple repositories */
-export type GitState = Record<string, GitRepo>;
+

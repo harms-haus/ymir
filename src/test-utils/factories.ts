@@ -77,19 +77,6 @@ export function createMockBranchNode(
 }
 
 /**
- * Create a mock SplitNode (leaf by default)
- */
-export function createMockSplitNode(
-  type?: 'leaf' | 'branch',
-  overrides?: { paneId?: string; children?: [SplitNode, SplitNode]; axis?: 'horizontal' | 'vertical' }
-): SplitNode {
-  if (type === 'branch') {
-    return createMockBranchNode(overrides?.children, overrides?.axis);
-  }
-  return createMockLeafNode(overrides?.paneId);
-}
-
-/**
  * Create a mock Workspace with sensible defaults
  */
 export function createMockWorkspace(overrides?: Partial<Workspace>): Workspace {

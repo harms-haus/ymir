@@ -1,5 +1,5 @@
 import { ReactElement } from 'react';
-import { render, RenderOptions, waitFor } from '@testing-library/react';
+import { render, RenderOptions } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
@@ -85,12 +85,4 @@ export function renderWithStore(
   };
 }
 
-/**
- * Helper to wait for store updates
- */
-export async function waitForStoreUpdate(
-  callback: () => void,
-  timeout: number = 1000
-): Promise<void> {
-  return waitFor(callback, { timeout });
-}
+

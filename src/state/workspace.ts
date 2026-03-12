@@ -10,6 +10,7 @@ import { load, Store } from '@tauri-apps/plugin-store';
 import logger from '../lib/logger';
 import gitService from '../lib/git-service';
 import { discoverGitRepos } from '../lib/git-discovery';
+import { generateUUID } from '../lib/utils';
 
 import {
   Workspace,
@@ -221,19 +222,6 @@ function countPanes(workspaces: WorkspaceWithPanes[]): number {
     count += Object.keys(ws.panes).length;
   }
   return count;
-}
-
-// UUID generator that works in both secure and non-secure contexts
-function generateUUID(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  // Fallback for non-secure contexts (HTTP)
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
 }
 
 function createDefaultTab(cwd: string = '~', type: TabType = 'terminal'): Tab {
@@ -959,24 +947,9 @@ export const getGitChangesCount = () => {
 };
 
 // Git state selectors
-export const getActiveRepo = () => {
-  const { gitRepos, activeRepoPath } = useWorkspaceStore.getState();
-  return activeRepoPath ? gitRepos[activeRepoPath] || null : null;
-};
-
-export const getGitRepo = (repoPath: string) => {
-  const { gitRepos } = useWorkspaceStore.getState();
-  return gitRepos[repoPath] || null;
-};
-
 export const getAllGitRepos = () => {
   const { gitRepos } = useWorkspaceStore.getState();
   return Object.values(gitRepos);
-};
-
-export const getGitRepoPaths = () => {
-  const { gitRepos } = useWorkspaceStore.getState();
-  return Object.keys(gitRepos);
 };
 
 export const getGitLoading = () => {
