@@ -11,24 +11,72 @@ import {
 } from '../state/types';
 
 // ============================================================================
-// Type Transformations (Rust to TypeScript)
+// Rust Response Types (matching src-tauri/src/git.rs structs)
 // ============================================================================
 
 /**
- * Transform Rust GitStatus to TypeScript GitRepo
+ * Rust FileStatus enum serialized as string
+ * See git.rs FileStatus enum for all variants
  */
-function transformGitStatus(rustStatus: any): GitRepo {
+type RustFileStatus =
+  | 'Added'
+  | 'StagedModified'
+  | 'StagedDeleted'
+  | 'StagedRenamed'
+  | 'Modified'
+  | 'Deleted'
+  | 'Untracked'
+  | 'Ignored'
+  | 'Conflicted'
+  | 'Clean';
+
+/**
+ * Rust GitFile struct (serde camelCase)
+ */
+interface RustGitFile {
+  path: string;
+  status: RustFileStatus;
+  secondaryStatus?: RustFileStatus | null;
+}
+
+/**
+ * Rust GitStatus struct (serde camelCase)
+ */
+interface RustGitStatus {
+  repoPath: string;
+  currentBranch: string;
+  files: RustGitFile[];
+  stagedCount: number;
+  modifiedCount: number;
+  untrackedCount: number;
+  conflictedCount: number;
+  aheadCount: number;
+  behindCount: number;
+}
+
+/**
+ * Rust BranchInfo struct (serde camelCase)
+ */
+interface RustBranchInfo {
+  name: string;
+  isHead: boolean;
+  isRemote: boolean;
+  upstream?: string | null;
+}
+
+// ============================================================================
+// Type Transformations (Rust to TypeScript)
+// ============================================================================
+
+function transformGitStatus(rustStatus: RustGitStatus): GitRepo {
   const { repoPath, currentBranch, files, aheadCount, behindCount } = rustStatus;
 
-  // Separate staged and unstaged files
   const staged: GitFile[] = [];
   const unstaged: GitFile[] = [];
 
   for (const file of files) {
-    // Rust sends: status (primary), secondary_status (optional, for files with both stages)
-    // Primary is always the staged status when present, secondary is the unstaged status
     const primaryStatus = file.status;
-    const secondaryStatus = file.secondary_status;
+    const secondaryStatus = file.secondaryStatus;
 
     // Check if file has staged status
     if (primaryStatus === 'Added' || primaryStatus === 'StagedModified' ||
@@ -95,15 +143,12 @@ function mapFileStatus(rustStatus: string): GitFileStatus {
   }
 }
 
-/**
- * Transform Rust BranchInfo to TypeScript GitBranch
- */
-function transformBranch(rustBranch: any): GitBranch {
+function transformBranch(rustBranch: RustBranchInfo): GitBranch {
   return {
     name: rustBranch.name,
-    isCurrent: rustBranch.is_head,
-    isRemote: rustBranch.is_remote,
-    upstream: rustBranch.upstream,
+    isCurrent: rustBranch.isHead,
+    isRemote: rustBranch.isRemote,
+    upstream: rustBranch.upstream ?? undefined,
   };
 }
 
@@ -119,7 +164,7 @@ function transformBranch(rustBranch: any): GitBranch {
 export async function getGitStatus(repoPath: string): Promise<GitRepo> {
   try {
     logger.debug('Getting git status', { repoPath });
-    const rustStatus = await invoke('get_git_status', { path: repoPath });
+    const rustStatus = await invoke<RustGitStatus>('get_git_status', { path: repoPath });
     const result = transformGitStatus(rustStatus);
     logger.info('Git status retrieved', {
       repoPath,
@@ -213,7 +258,7 @@ export async function commit(repoPath: string, message: string): Promise<string>
 export async function getBranches(repoPath: string): Promise<GitBranch[]> {
   try {
     logger.debug('Getting branches', { repoPath });
-    const rustBranches = await invoke('get_branches', { repo_path: repoPath }) as any[];
+    const rustBranches = await invoke<RustBranchInfo[]>('get_branches', { repo_path: repoPath });
     const result = rustBranches.map(transformBranch);
     logger.info('Branches retrieved', { repoPath, count: result.length });
     return result;
