@@ -28,10 +28,24 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
   const channelRef = useRef<Channel<{ event: string; data?: unknown }> | null>(null);
   const isConnectingRef = useRef(false);
   const onNotificationRef = useRef<((message: string) => void) | undefined>(onNotification);
+  const resizeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     onNotificationRef.current = onNotification;
   }, [onNotification]);
+
+  const debounceResize = useCallback((cols: number, rows: number, sessionId: string) => {
+    if (resizeTimeoutRef.current) {
+      clearTimeout(resizeTimeoutRef.current);
+    }
+
+    resizeTimeoutRef.current = setTimeout(() => {
+        const correlationId = generateUUID();
+        invoke('resize_pty', { sessionId, cols, rows, correlationId }).catch((error) => {
+          logger.warn('Failed to resize PTY', { error, sessionId, cols, rows });
+        });
+      }, 100);
+  }, []);
 
   const fitAddon = useMemo(() => new FitAddon(), []);
   const webLinksAddon = useMemo(() => new WebLinksAddon(), []);
@@ -171,15 +185,8 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
     if (!isReady || !currentSessionIdRef.current || !instance) return;
 
     const { cols, rows } = instance;
-    const correlationId = generateUUID();
-
-    invoke('resize_pty', {
-      sessionId: currentSessionIdRef.current,
-      cols,
-      rows,
-      correlationId,
-    });
-  }, [isReady, instance]);
+    debounceResize(cols, rows, currentSessionIdRef.current);
+  }, [isReady, instance, debounceResize]);
 
   // Handle ctrl+scroll zoom
   useEffect(() => {
