@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import useWorkspaceStore, {
   getTotalNotificationCount,
 } from '../state/workspace';
@@ -30,7 +30,7 @@ function WorkspaceList({ collapsed }: WorkspaceListProps) {
     closeWorkspace,
   } = useWorkspaceStore();
 
-  const visibleWorkspaces = workspaces.slice(0, 8);
+  const visibleWorkspaces = useMemo(() => workspaces.slice(0, 8), [workspaces]);
 
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
@@ -199,7 +199,7 @@ function WorkspaceList({ collapsed }: WorkspaceListProps) {
 
 function CollapsedWorkspaceList() {
   const { workspaces, activeWorkspaceId, setActiveWorkspace } = useWorkspaceStore();
-  const visibleWorkspaces = workspaces.slice(0, 8);
+  const visibleWorkspaces = useMemo(() => workspaces.slice(0, 8), [workspaces]);
 
   return (
     <TabsRoot
@@ -297,7 +297,7 @@ function ProjectTree() {
 // Icon Components
 // ============================================================================
 
-function WorkspacesIcon() {
+const WorkspacesIcon = React.memo(function WorkspacesIcon() {
   return (
     <svg
       width="16"
@@ -315,9 +315,9 @@ function WorkspacesIcon() {
       <rect x="3" y="14" width="7" height="7" />
     </svg>
   );
-}
+});
 
-function BellIcon() {
+const BellIcon = React.memo(function BellIcon() {
   return (
     <svg
       width="16"
@@ -333,9 +333,9 @@ function BellIcon() {
       <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
     </svg>
   );
-}
+});
 
-function FolderIcon() {
+const FolderIcon = React.memo(function FolderIcon() {
   return (
     <svg
       width="16"
@@ -350,7 +350,7 @@ function FolderIcon() {
       <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
     </svg>
   );
-}
+});
 
 // ============================================================================
 // WorkspaceSidebar Component
