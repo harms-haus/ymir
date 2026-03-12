@@ -1,11 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { PanelDefinition, GitFile } from '../state/types';
-import useWorkspaceStore, { getActiveRepo, getGitChangesCount, getGitError } from '../state/workspace';
+import { PanelDefinition, GitFile, GitRepo } from '../state/types';
+import useWorkspaceStore, { getAllGitRepos, getGitChangesCount, getGitError } from '../state/workspace';
 import gitService from '../lib/git-service';
 import { Button } from './ui/Button';
 import { Checkbox, Textarea, Input } from './ui/Input';
 import { Tooltip } from './ui/Tooltip';
 import { DialogRoot, DialogPortal, DialogPopup, DialogTitle, DialogClose } from './ui/Dialog';
+import {
+  AccordionRoot,
+  AccordionItem,
+  AccordionHeader,
+  AccordionTrigger,
+  AccordionPanel,
+} from './ui/Accordion';
 import './GitPanel.css';
 
 const mockGitData = {
@@ -828,106 +835,88 @@ const GitPanelBadge = (): import('../state/types').TabBadge | null => {
 
   return {
     count,
-    color: '#4fc3f7', // notification blue accent
+    color: 'var(--notification)',
   };
 };
 
-// Full panel renderer
-const GitPanelFull = (): React.ReactNode => {
-  const activeRepo = getActiveRepo();
-  const gitError = getGitError();
-  const { discoverAndRegisterRepos, updateGitFile } = useWorkspaceStore();
+// Helper function to get folder name from repo path
+function getRepoFolderName(repoPath: string): string {
+  const normalizedPath = repoPath.replace(/\\/g, '/');
+  const parts = normalizedPath.split('/').filter(Boolean);
+  return parts[parts.length - 1] || 'repo';
+}
 
+// RepoSection component - contains all git UI for a single repo
+const RepoSection: React.FC<{
+  repoPath: string;
+  repo: GitRepo;
+}> = ({ repoPath, repo }) => {
+  const { updateGitFile } = useWorkspaceStore();
   const [createBranch, setCreateBranch] = useState(false);
   const [deleteBranch, setDeleteBranch] = useState(false);
 
-  // Discover git repos on mount
-  useEffect(() => {
-    discoverAndRegisterRepos('/home/blake/Documents/software/ymir');
-  }, [discoverAndRegisterRepos]);
-
-  // Show empty state when no active repo or git error exists (unless using dummy data)
-  if (!USE_DUMMY_DATA && (!activeRepo || gitError)) {
-    return (
-      <div className="git-panel">
-        <GitPanelHeader />
-        <NotAGitRepo />
-      </div>
-    );
-  }
-
   // Handle staging a file
   const handleStage = async (path: string) => {
-    if (!activeRepo) return;
-
     // Optimistic UI update - move file from unstaged to staged
-    updateGitFile(activeRepo.path, path, true);
+    updateGitFile(repoPath, path, true);
 
     try {
-      await gitService.stageFile(activeRepo.path, path);
+      await gitService.stageFile(repoPath, path);
     } catch (error) {
       // Revert optimistic update on error
-      updateGitFile(activeRepo.path, path, false);
+      updateGitFile(repoPath, path, false);
     }
   };
 
   // Handle unstaging a file
   const handleUnstage = async (path: string) => {
-    if (!activeRepo) return;
-
     // Optimistic UI update - move file from staged to unstaged
-    updateGitFile(activeRepo.path, path, false);
+    updateGitFile(repoPath, path, false);
 
     try {
-      await gitService.unstageFile(activeRepo.path, path);
+      await gitService.unstageFile(repoPath, path);
     } catch (error) {
       // Revert optimistic update on error
-      updateGitFile(activeRepo.path, path, true);
+      updateGitFile(repoPath, path, true);
     }
   };
 
   // Handle commit
   const handleCommit = async (message: string) => {
-    if (!activeRepo) return;
-
     try {
-      await gitService.commit(activeRepo.path, message);
-      const updatedRepo = await gitService.getGitStatus(activeRepo.path);
-      useWorkspaceStore.getState().setGitRepo(activeRepo.path, updatedRepo);
+      await gitService.commit(repoPath, message);
+      const updatedRepo = await gitService.getGitStatus(repoPath);
+      useWorkspaceStore.getState().setGitRepo(repoPath, updatedRepo);
     } catch (error) {
       console.error('Commit failed:', error);
     }
   };
 
   const handleDiscard = async (path: string) => {
-    if (!activeRepo) return;
-
     try {
-      await gitService.discardChanges(activeRepo.path, path);
-      const updatedRepo = await gitService.getGitStatus(activeRepo.path);
-      useWorkspaceStore.getState().setGitRepo(activeRepo.path, updatedRepo);
+      await gitService.discardChanges(repoPath, path);
+      const updatedRepo = await gitService.getGitStatus(repoPath);
+      useWorkspaceStore.getState().setGitRepo(repoPath, updatedRepo);
     } catch (error) {
       console.error('Discard failed:', error);
     }
   };
 
   const handleRefresh = async () => {
-    if (!activeRepo) return;
     try {
-      const updatedRepo = await gitService.getGitStatus(activeRepo.path);
-      useWorkspaceStore.getState().setGitRepo(activeRepo.path, updatedRepo);
+      const updatedRepo = await gitService.getGitStatus(repoPath);
+      useWorkspaceStore.getState().setGitRepo(repoPath, updatedRepo);
     } catch (error) {
       console.error('Refresh failed:', error);
     }
   };
 
   const handleStageAll = async () => {
-    if (!activeRepo) return;
-    const unstagedFiles = activeRepo.unstaged;
+    const unstagedFiles = repo.unstaged;
 
     for (const file of unstagedFiles) {
       try {
-        await gitService.stageFile(activeRepo.path, file.path);
+        await gitService.stageFile(repoPath, file.path);
       } catch (error) {
         console.error(`Failed to stage ${file.path}:`, error);
       }
@@ -937,12 +926,11 @@ const GitPanelFull = (): React.ReactNode => {
   };
 
   const handleUnstageAll = async () => {
-    if (!activeRepo) return;
-    const stagedFiles = activeRepo.staged;
+    const stagedFiles = repo.staged;
 
     for (const file of stagedFiles) {
       try {
-        await gitService.unstageFile(activeRepo.path, file.path);
+        await gitService.unstageFile(repoPath, file.path);
       } catch (error) {
         console.error(`Failed to unstage ${file.path}:`, error);
       }
@@ -952,15 +940,13 @@ const GitPanelFull = (): React.ReactNode => {
   };
 
   const onCreateBranch = async (branchName: string) => {
-    if (!activeRepo) return;
-
     setCreateBranch(true);
 
     if (window.confirm(`Create branch '${branchName}'?`)) {
       try {
-        await gitService.createBranch(activeRepo.path, branchName);
-        const updatedRepo = await gitService.getGitStatus(activeRepo.path);
-        useWorkspaceStore.getState().setGitRepo(activeRepo.path, updatedRepo);
+        await gitService.createBranch(repoPath, branchName);
+        const updatedRepo = await gitService.getGitStatus(repoPath);
+        useWorkspaceStore.getState().setGitRepo(repoPath, updatedRepo);
       } catch (error) {
         console.error('Failed to create branch:', error);
       }
@@ -970,15 +956,13 @@ const GitPanelFull = (): React.ReactNode => {
   };
 
   const onDeleteBranch = async (branchName: string) => {
-    if (!activeRepo) return;
-
     setDeleteBranch(true);
 
     if (window.confirm(`Delete branch '${branchName}'?`)) {
       try {
-        await gitService.deleteBranch(activeRepo.path, branchName);
-        const updatedRepo = await gitService.getGitStatus(activeRepo.path);
-        useWorkspaceStore.getState().setGitRepo(activeRepo.path, updatedRepo);
+        await gitService.deleteBranch(repoPath, branchName);
+        const updatedRepo = await gitService.getGitStatus(repoPath);
+        useWorkspaceStore.getState().setGitRepo(repoPath, updatedRepo);
       } catch (error) {
         console.error('Failed to delete branch:', error);
       }
@@ -987,16 +971,14 @@ const GitPanelFull = (): React.ReactNode => {
     setDeleteBranch(false);
   };
 
-  const displayStaged = USE_DUMMY_DATA ? dummyStagedFiles : (activeRepo?.staged || []);
-  const displayUnstaged = USE_DUMMY_DATA ? dummyUnstagedFiles : (activeRepo?.unstaged || []);
+  const displayStaged = USE_DUMMY_DATA ? dummyStagedFiles : (repo?.staged || []);
+  const displayUnstaged = USE_DUMMY_DATA ? dummyUnstagedFiles : (repo?.unstaged || []);
 
   return (
-    <div className="git-panel">
-      <GitPanelHeader />
-
-      {/* Branch selector + toolbar row - now ABOVE commit section */}
+    <div className="git-repo-section">
+      {/* Branch selector + toolbar row */}
       <GitPanelToolbarRow
-        currentBranch={activeRepo?.branch || 'main'}
+        currentBranch={repo?.branch || 'main'}
         branches={mockGitData.branches}
         onSelectBranch={() => {}}
         onCreateBranch={onCreateBranch}
@@ -1006,13 +988,13 @@ const GitPanelFull = (): React.ReactNode => {
         onUnstageAll={handleUnstageAll}
         unstagedCount={displayUnstaged.length}
         stagedCount={displayStaged.length}
-        ahead={activeRepo?.ahead || 0}
-        behind={activeRepo?.behind || 0}
+        ahead={repo?.ahead || 0}
+        behind={repo?.behind || 0}
         isCreating={createBranch}
         isDeleting={deleteBranch}
       />
 
-      {/* Commit section - now BELOW branch selector */}
+      {/* Commit section */}
       <CommitSection stagedCount={displayStaged.length} onCommit={handleCommit} />
 
       {/* Staged files */}
@@ -1020,6 +1002,72 @@ const GitPanelFull = (): React.ReactNode => {
 
       {/* Changes files */}
       <ChangesFilesSection files={displayUnstaged} onStage={handleStage} onDiscard={handleDiscard} />
+    </div>
+  );
+};
+
+// Full panel renderer - shows all repos in accordion
+const GitPanelFull = (): React.ReactNode => {
+  const gitError = getGitError();
+  const { discoverAndRegisterRepos } = useWorkspaceStore();
+  const allRepos = getAllGitRepos();
+
+  // Discover git repos on mount
+  useEffect(() => {
+    discoverAndRegisterRepos('/home/blake/Documents/software/ymir');
+  }, [discoverAndRegisterRepos]);
+
+  // Show empty state when no repos or git error exists (unless using dummy data)
+  if (!USE_DUMMY_DATA && (allRepos.length === 0 || gitError)) {
+    return (
+      <div className="git-panel">
+        <GitPanelHeader />
+        <NotAGitRepo />
+      </div>
+    );
+  }
+
+  // If using dummy data and no repos, show a single dummy repo
+  const reposToDisplay = USE_DUMMY_DATA && allRepos.length === 0
+    ? [{
+        path: '/home/blake/Documents/software/ymir',
+        branch: 'main',
+        ahead: 2,
+        behind: 0,
+        staged: dummyStagedFiles,
+        unstaged: dummyUnstagedFiles,
+      }]
+    : allRepos;
+
+  return (
+    <div className="git-panel">
+      <GitPanelHeader />
+
+      <AccordionRoot className="git-repos-accordion" multiple>
+        {reposToDisplay.map((repo) => (
+          <AccordionItem
+            key={repo.path}
+            value={repo.path}
+            className="git-repo-accordion-item"
+          >
+            <AccordionHeader className="git-repo-accordion-header">
+              <AccordionTrigger className="git-repo-accordion-trigger">
+                <GitBranchIcon className="git-repo-icon" />
+                <span className="git-repo-name">{getRepoFolderName(repo.path)}</span>
+                <span className="git-repo-branch">({repo.branch})</span>
+                {(repo.staged.length + repo.unstaged.length) > 0 && (
+                  <span className="git-repo-changes-badge">
+                    {repo.staged.length + repo.unstaged.length}
+                  </span>
+                )}
+              </AccordionTrigger>
+            </AccordionHeader>
+            <AccordionPanel className="git-repo-accordion-panel">
+              <RepoSection repoPath={repo.path} repo={repo} />
+            </AccordionPanel>
+          </AccordionItem>
+        ))}
+      </AccordionRoot>
     </div>
   );
 };
@@ -1033,7 +1081,7 @@ export const gitPanelDefinition: PanelDefinition = {
   fullRender: GitPanelFull,
 };
 
-function getRepoFolderName(repoPath: string): string {
+function getRepoFolderNameOld(repoPath: string): string {
   const normalizedPath = repoPath.replace(/\\/g, '/');
   const parts = normalizedPath.split('/').filter(Boolean);
   return parts[parts.length - 1] || 'repo';
@@ -1050,7 +1098,7 @@ function RepoPanelContent({ repoPath }: { repoPath: string }): React.ReactElemen
 }
 
 export function createRepoPanelDefinition(repoPath: string): PanelDefinition {
-  const folderName = getRepoFolderName(repoPath);
+  const folderName = getRepoFolderNameOld(repoPath);
   const panelId = `git-${repoPath}`;
 
   return {
@@ -1062,7 +1110,7 @@ export function createRepoPanelDefinition(repoPath: string): PanelDefinition {
       const repo = gitRepos[repoPath];
       if (!repo) return null;
       const count = repo.staged.length + repo.unstaged.length;
-      return count > 0 ? { count, color: '#4fc3f7' } : null;
+      return count > 0 ? { count, color: 'var(--notification)' } : null;
     },
     fullRender: () => React.createElement(RepoPanelContent, { repoPath }),
   };

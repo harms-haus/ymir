@@ -33,7 +33,7 @@ const RESIZE_HANDLE_WIDTH = 6;
  *
  * Resize handle:
  * - 4px wide
- * - Color: #333333 (default), #007acc (hover/active)
+ * - Color: var(--border-tertiary) (default), hsl(var(--primary)) (hover/active)
  */
 export function ResizableSidebar() {
   const sidebarCollapsed = useWorkspaceStore((state) => state.sidebarCollapsed);
@@ -96,28 +96,28 @@ export function ResizableSidebar() {
 
       {/* Resize Handle - only visible when expanded */}
       {!sidebarCollapsed && (
-        <div
-          onMouseDown={handleMouseDown}
-          style={{
-            width: `${RESIZE_HANDLE_WIDTH}px`,
-            height: '100%',
-            backgroundColor: isResizing ? '#007acc' : '#3c3c3c',
-            cursor: 'col-resize',
-            transition: isResizing ? 'none' : 'background-color 0.15s ease',
-            flexShrink: 0,
-            userSelect: 'none',
-          }}
-          onMouseEnter={(e: React.MouseEvent) => {
-            if (!isResizing) {
-              (e.currentTarget as HTMLElement).style.backgroundColor = '#555555';
-            }
-          }}
-          onMouseLeave={(e: React.MouseEvent) => {
-            if (!isResizing) {
-              (e.currentTarget as HTMLElement).style.backgroundColor = '#3c3c3c';
-            }
-          }}
-        />
+      <div
+        onMouseDown={handleMouseDown}
+        style={{
+          width: `${RESIZE_HANDLE_WIDTH}px`,
+          height: '100%',
+          backgroundColor: isResizing ? 'hsl(var(--primary))' : 'var(--background-tertiary)',
+          cursor: 'col-resize',
+          transition: isResizing ? 'none' : 'background-color 0.15s ease',
+          flexShrink: 0,
+          userSelect: 'none',
+        }}
+        onMouseEnter={(e: React.MouseEvent) => {
+          if (!isResizing) {
+            (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--border-dark)';
+          }
+        }}
+        onMouseLeave={(e: React.MouseEvent) => {
+          if (!isResizing) {
+            (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--background-tertiary)';
+          }
+        }}
+      />
       )}
     </div>
   );

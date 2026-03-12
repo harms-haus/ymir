@@ -25,12 +25,12 @@ function NotificationItem({
       style={{
         padding: '12px',
         cursor: 'pointer',
-        borderBottom: '1px solid #1e1e1e',
+        borderBottom: '1px solid var(--border-hex)',
         backgroundColor: 'transparent',
         transition: 'background-color 0.15s ease',
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.backgroundColor = '#2a2d2e';
+        e.currentTarget.style.backgroundColor = 'var(--background-hover)';
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.backgroundColor = 'transparent';
@@ -44,47 +44,47 @@ function NotificationItem({
           gap: '8px',
         }}
       >
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            style={{
-              fontSize: '13px',
-              fontWeight: 600,
-              color: '#ffffff',
-              marginBottom: '4px',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {tab.title}
-          </div>
-          <div
-            style={{
-              fontSize: '12px',
-              color: '#4fc3f7',
-              marginBottom: '4px',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              lineHeight: '1.4',
-            }}
-          >
-            {tab.notificationText || 'New notification'}
-          </div>
-          <div
-            style={{
-              fontSize: '11px',
-              color: '#666666',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {tab.cwd}
-          </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            fontSize: '13px',
+            fontWeight: 600,
+            color: 'var(--foreground-active)',
+            marginBottom: '4px',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {tab.title}
         </div>
+        <div
+          style={{
+            fontSize: '12px',
+            color: 'var(--notification)',
+            marginBottom: '4px',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            lineHeight: '1.4',
+          }}
+        >
+          {tab.notificationText || 'New notification'}
+        </div>
+        <div
+          style={{
+            fontSize: '11px',
+            color: 'var(--foreground-muted)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {tab.cwd}
+        </div>
+      </div>
         <Button
           variant="ghost"
           size="sm"
@@ -175,41 +175,41 @@ function NotificationsPanelContent() {
 
   return (
     <>
-      {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '12px 16px',
-          borderBottom: '1px solid #1e1e1e',
-          backgroundColor: '#2d2d30',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+    {/* Header */}
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '12px 16px',
+        borderBottom: '1px solid var(--border-hex)',
+        backgroundColor: 'var(--background-tertiary)',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <span
+          style={{
+            fontSize: '13px',
+            fontWeight: 600,
+            color: 'var(--foreground-active)',
+          }}
+        >
+          Notifications
+        </span>
+        {notificationTabs.length > 0 && (
           <span
             style={{
-              fontSize: '13px',
-              fontWeight: 600,
-              color: '#ffffff',
+              fontSize: '11px',
+              color: 'var(--notification)',
+              backgroundColor: 'hsl(var(--primary) / 0.1)',
+              padding: '2px 8px',
+              borderRadius: '10px',
             }}
           >
-            Notifications
+            {notificationTabs.length}
           </span>
-          {notificationTabs.length > 0 && (
-            <span
-              style={{
-                fontSize: '11px',
-                color: '#4fc3f7',
-                backgroundColor: 'rgba(79, 195, 247, 0.1)',
-                padding: '2px 8px',
-                borderRadius: '10px',
-              }}
-            >
-              {notificationTabs.length}
-            </span>
-          )}
-        </div>
+        )}
+      </div>
         {notificationTabs.length > 0 && (
           <Tooltip content="Jump to first unread (⌘⇧U)">
             <Button
@@ -233,18 +233,18 @@ function NotificationsPanelContent() {
           overflowX: 'hidden',
         }}
       >
-        {notificationTabs.length === 0 ? (
-          <div
-            style={{
-              padding: '40px 20px',
-              textAlign: 'center',
-              color: '#666666',
-              fontSize: '13px',
-            }}
-          >
-            No notifications
-          </div>
-        ) : (
+    {notificationTabs.length === 0 ? (
+      <div
+        style={{
+          padding: '40px 20px',
+          textAlign: 'center',
+          color: 'var(--foreground-muted)',
+          fontSize: '13px',
+        }}
+      >
+        No notifications
+      </div>
+    ) : (
           notificationTabs.map(({ tab, paneId, workspaceId }) => (
             <NotificationItem
               key={tab.id}
@@ -258,15 +258,15 @@ function NotificationsPanelContent() {
         )}
       </div>
 
-      {/* Footer with Clear All */}
-      {notificationTabs.length > 0 && (
-        <div
-          style={{
-            padding: '12px 16px',
-            borderTop: '1px solid #1e1e1e',
-            backgroundColor: '#2d2d30',
-          }}
-        >
+    {/* Footer with Clear All */}
+    {notificationTabs.length > 0 && (
+      <div
+        style={{
+          padding: '12px 16px',
+          borderTop: '1px solid var(--border-hex)',
+          backgroundColor: 'var(--background-tertiary)',
+        }}
+      >
           <Button
             variant="secondary"
             size="sm"

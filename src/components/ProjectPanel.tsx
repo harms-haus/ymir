@@ -123,7 +123,7 @@ const FolderIcon: React.FC<{ isOpen: boolean }> = ({ isOpen }) => (
     height="14"
     viewBox="0 0 24 24"
     fill="none"
-    stroke={isOpen ? '#dcb67a' : '#dcb67a'}
+    stroke="var(--folder-color)"
     strokeWidth="2"
     strokeLinecap="round"
     strokeLinejoin="round"
@@ -131,7 +131,7 @@ const FolderIcon: React.FC<{ isOpen: boolean }> = ({ isOpen }) => (
   >
     {isOpen ? (
       <>
-        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" fill="#dcb67a" />
+        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" fill="var(--folder-color)" />
       </>
     ) : (
       <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
@@ -152,7 +152,7 @@ const ChevronIcon: React.FC = () => (
     strokeLinejoin="round"
     style={{
       flexShrink: 0,
-      color: '#858585',
+      color: 'var(--foreground-secondary)',
     }}
     className="accordion-chevron"
   >

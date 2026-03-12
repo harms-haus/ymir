@@ -212,17 +212,17 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
 
   return (
     <ErrorBoundary>
-      <div
-        ref={ref as React.RefObject<HTMLDivElement>}
-        style={{
-          width: '100%',
-          height: '100%',
-          backgroundColor: '#1e1e1e',
-          boxShadow: hasNotification ? '0 0 0 2px #4fc3f7' : 'none',
-          transition: 'box-shadow 0.2s ease',
-          opacity: isReady ? 1 : 0.7,
-        }}
-      />
+    <div
+      ref={ref as React.RefObject<HTMLDivElement>}
+      style={{
+        width: '100%',
+        height: '100%',
+        backgroundColor: 'var(--background-hex)',
+        boxShadow: hasNotification ? '0 0 0 2px var(--notification)' : 'none',
+        transition: 'box-shadow 0.2s ease',
+        opacity: isReady ? 1 : 0.7,
+      }}
+    />
     </ErrorBoundary>
   );
 }

@@ -38,15 +38,15 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   render(): ReactNode {
     if (this.state.hasError) {
       return (
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '100vh',
-            backgroundColor: '#1e1e1e',
-            color: '#cccccc',
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100vh',
+          backgroundColor: 'var(--background-hex)',
+          color: 'var(--foreground-hex)',
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
             fontSize: '14px',
             padding: '20px',
@@ -58,91 +58,92 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               maxWidth: '600px',
             }}
           >
-            <div
-              style={{
-                fontSize: '48px',
-                marginBottom: '16px',
-                color: '#007acc',
-              }}
-            >
+        <div
+          style={{
+            fontSize: '48px',
+            marginBottom: '16px',
+            color: 'hsl(var(--primary))',
+          }}
+        >
               ⚠️
             </div>
 
-            <h2
-              style={{
-                fontSize: '24px',
-                fontWeight: 600,
-                color: '#ffffff',
-                marginBottom: '12px',
-              }}
-            >
+        <h2
+          style={{
+            fontSize: '24px',
+            fontWeight: 600,
+            color: 'var(--foreground-active)',
+            marginBottom: '12px',
+          }}
+        >
               Something went wrong
             </h2>
 
-            <p
-              style={{
-                fontSize: '14px',
-                color: '#666666',
-                marginBottom: '24px',
-                lineHeight: '1.5',
-              }}
-            >
+        <p
+          style={{
+            fontSize: '14px',
+            color: 'var(--foreground-muted)',
+            marginBottom: '24px',
+            lineHeight: '1.5',
+          }}
+        >
               An unexpected error occurred. You can try reloading the page to recover.
             </p>
 
-            <button
-              onClick={this.handleReload}
-              style={{
-                backgroundColor: '#007acc',
-                color: '#ffffff',
-                border: 'none',
-                padding: '10px 20px',
-                borderRadius: '4px',
-                fontSize: '14px',
-                cursor: 'pointer',
-                transition: 'background-color 0.15s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#005a9e';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = '#007acc';
-              }}
-            >
+        <button
+          onClick={this.handleReload}
+          type="button"
+          style={{
+            backgroundColor: 'hsl(var(--primary))',
+            color: 'var(--foreground-active)',
+            border: 'none',
+            padding: '10px 20px',
+            borderRadius: '4px',
+            fontSize: '14px',
+            cursor: 'pointer',
+            transition: 'background-color 0.15s ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = 'hsl(var(--primary-foreground))';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'hsl(var(--primary))';
+          }}
+        >
               Try again
             </button>
 
             {import.meta.env.DEV && this.state.error && (
               <details
-                style={{
-                  marginTop: '32px',
-                  textAlign: 'left',
-                  backgroundColor: '#252526',
-                  padding: '16px',
-                  borderRadius: '4px',
-                  border: '1px solid #333',
-                }}
+          style={{
+            marginTop: '32px',
+            textAlign: 'left',
+            backgroundColor: 'var(--background-secondary)',
+            padding: '16px',
+            borderRadius: '4px',
+            border: '1px solid var(--border-tertiary)',
+          }}
               >
-                <summary
-                  style={{
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    color: '#4fc3f7',
-                    marginBottom: '8px',
-                  }}
-                >
+          <summary
+            style={{
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontWeight: 600,
+              color: 'var(--notification)',
+              marginBottom: '8px',
+            }}
+          >
                   Error details (development mode)
                 </summary>
-                <pre
-                  style={{
-                    fontSize: '11px',
-                    color: '#666666',
-                    overflow: 'auto',
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                  }}
-                >
+          <pre
+            style={{
+              fontSize: '11px',
+              color: 'var(--foreground-muted)',
+              overflow: 'auto',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+            }}
+          >
                   {this.state.error.toString()}
                   {this.state.errorInfo && (
                     <>

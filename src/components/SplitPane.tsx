@@ -56,8 +56,8 @@ function LeafPane({ node, workspaceId }: LeafPaneProps) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: '#1e1e1e',
-          color: '#666666',
+          backgroundColor: 'var(--background-hex)',
+          color: 'var(--foreground-muted)',
           fontSize: '14px',
         }}
       >
@@ -104,29 +104,29 @@ function BranchPane({ node, workspaceId }: BranchPaneProps) {
       </Panel>
 
       {/* Resize handle */}
-      <Separator
-        style={{
-          backgroundColor: '#333333',
-          transition: 'background-color 0.15s ease',
-          ...(orientation === 'horizontal'
-            ? {
-                width: '4px',
-                cursor: 'col-resize',
-              }
-            : {
-                height: '4px',
-                cursor: 'row-resize',
-              }),
-        }}
-        onMouseEnter={(e) => {
-          const target = e.target as HTMLElement;
-          target.style.backgroundColor = '#007acc';
-        }}
-        onMouseLeave={(e) => {
-          const target = e.target as HTMLElement;
-          target.style.backgroundColor = '#333333';
-        }}
-      />
+    <Separator
+      style={{
+        backgroundColor: 'var(--border-tertiary)',
+        transition: 'background-color 0.15s ease',
+        ...(orientation === 'horizontal'
+          ? {
+              width: '4px',
+              cursor: 'col-resize',
+            }
+          : {
+              height: '4px',
+              cursor: 'row-resize',
+            }),
+      }}
+      onMouseEnter={(e) => {
+        const target = e.target as HTMLElement;
+        target.style.backgroundColor = 'hsl(var(--primary))';
+      }}
+      onMouseLeave={(e) => {
+        const target = e.target as HTMLElement;
+        target.style.backgroundColor = 'var(--border-tertiary)';
+      }}
+    />
 
       {/* Second child */}
       <Panel
@@ -169,8 +169,8 @@ export function SplitPane({ node, workspaceId }: SplitPaneProps) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#1e1e1e',
-        color: '#ff6b6b',
+        backgroundColor: 'var(--background-hex)',
+        color: 'var(--destructive-hex)',
         fontSize: '14px',
       }}
     >

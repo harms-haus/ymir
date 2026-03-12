@@ -37,7 +37,7 @@ export function Layout() {
         height: '100vh',
         width: '100vw',
         overflow: 'hidden',
-        backgroundColor: '#1e1e1e',
+        backgroundColor: 'var(--background-hex)',
       }}
     >
       {/* Workspace Sidebar */}
@@ -49,7 +49,7 @@ export function Layout() {
           flex: 1,
           display: 'flex',
           flexDirection: 'column',
-          backgroundColor: '#1e1e1e',
+          backgroundColor: 'var(--background-hex)',
           position: 'relative',
           overflow: 'hidden',
         }}
@@ -61,14 +61,14 @@ export function Layout() {
           />
         ) : (
           <div
-            style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#666666',
-              fontSize: '14px',
-            }}
+          style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--foreground-muted)',
+            fontSize: '14px',
+          }}
           >
             No active workspace
           </div>

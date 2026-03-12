@@ -1,83 +1,190 @@
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/figtree";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /**
  * Ymir Theme System - CSS Custom Properties
  * Matches VS Code Dark theme colors used throughout the application
+ * Compatible with shadcn/ui
  */
 
-:root {
-  /* ========== Backgrounds ========== */
-  --background: #1e1e1e;
-  --background-secondary: #252526;
-  --background-tertiary: #3c3c3c;
-  --background-active: #37373d;
-  --background-hover: #2a2d2e;
-  --background-hover-alt: #2a2d2f;
-  --background-button-hover: #4c4c4c;
-  --background-button-active: #4a4a4a;
+@layer base {
+  :root {
+    /* ========== shadcn/ui CSS Variables (HSL format) ========== */
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.141 0.005 285.823);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.141 0.005 285.823);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.141 0.005 285.823);
+    --primary: oklch(0.5 0.134 242.749);
+    --primary-foreground: oklch(0.977 0.013 236.62);
+    --secondary: oklch(0.967 0.001 286.375);
+    --secondary-foreground: oklch(0.21 0.006 285.885);
+    --muted: oklch(0.967 0.001 286.375);
+    --muted-foreground: oklch(0.552 0.016 285.938);
+    --accent: oklch(0.967 0.001 286.375);
+    --accent-foreground: oklch(0.21 0.006 285.885);
+    --destructive: oklch(0.577 0.245 27.325);
+    --destructive-foreground: 0 0% 100%;
+    --border: oklch(0.92 0.004 286.32);
+    --input: oklch(0.92 0.004 286.32);
+    --ring: oklch(0.705 0.015 286.067);
+    --radius: 0.625rem;
 
-  /* ========== Text ========== */
-  --foreground: #cccccc;
-  --foreground-secondary: #858585;
-  --foreground-muted: #666666;
-  --foreground-active: #ffffff;
-  --foreground-subtle: #555555;
+    /* ========== Legacy Backgrounds (hex format) ========== */
+    --background-hex: #1e1e1e;
+    --background-secondary: #252526;
+    --background-tertiary: #3c3c3c;
+    --background-active: #37373d;
+    --background-hover: #2a2d2e;
+    --background-hover-alt: #2a2d2f;
+    --background-button-hover: #4c4c4c;
+    --background-button-active: #4a4a4a;
 
-  /* ========== Accents ========== */
-  --primary: #007acc;
-  --primary-hover: #0098ff;
-  --notification: #4fc3f7;
-  --destructive: #c75450;
-  --destructive-alt: #f48771;
+    /* ========== Legacy Text (hex format) ========== */
+    --foreground-hex: #cccccc;
+    --foreground-secondary: #858585;
+    --foreground-muted: #666666;
+    --foreground-active: #ffffff;
+    --foreground-subtle: #555555;
 
-  /* ========== Status Colors ========== */
-  --status-modified: #ff9f00;
-  --status-modified-alt: #ffa726;
-  --status-added: #4caf50;
-  --status-deleted: #f44336;
-  --status-untracked: #73bf99;
-  --status-renamed: #e8c39b;
-  --status-conflict: #c94a4c;
+    /* ========== Legacy Accents (hex format) ========== */
+    /* Nova style with Rose theme */
+    --primary-hex: #e11d48;
+    --primary-hover: #fb7185;
+    --notification: #fda4af;
+    --destructive-hex: #c75450;
+    --destructive-alt: #f48771;
+    --rose-500: #f43f5e;
+    --rose-600: #e11d48;
 
-  /* ========== Borders ========== */
-  --border: #1e1e1e;
-  --border-secondary: #3c3c3c;
-  --border-tertiary: #333;
-  --border-dark: #454545;
+    /* ========== Status Colors ========== */
+    --status-modified: #ff9f00;
+    --status-modified-alt: #ffa726;
+    --status-added: #4caf50;
+    --status-deleted: #f44336;
+    --status-untracked: #73bf99;
+    --status-renamed: #e8c39b;
+    --status-conflict: #c94a4c;
 
-  /* ========== Effects ========== */
-  --transition-fast: 0.15s ease;
-  --transition-normal: 0.2s ease;
-  --radius-sm: 3px;
-  --radius-md: 4px;
-  --radius-lg: 6px;
-  --radius-xl: 8px;
-  --radius-2xl: 10px;
+    /* ========== Legacy Borders ========== */
+    --border-hex: #1e1e1e;
+    --border-secondary: #3c3c3c;
+    --border-tertiary: #333;
+    --border-dark: #454545;
 
-  /* ========== Shadows ========== */
-  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+    /* ========== Effects ========== */
+    --transition-fast: 0.15s ease;
+    --transition-normal: 0.2s ease;
+    --radius-sm: 0.375rem;
+    --radius-md: 0.5rem;
+    --radius-lg: 0.75rem;
+    --radius-xl: 1rem;
+    --radius-2xl: 1.5rem;
 
-  /* ========== Special Colors ========== */
-  --folder-color: #dcb67a;
-  --checkbox-accent: #4caf50;
+    /* ========== Shadows ========== */
+    --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
 
-  /* ========== Spacing Tokens ========== */
-  --spacing-xs: 2px;
-  --spacing-sm: 4px;
-  --spacing-md: 6px;
-  --spacing-lg: 8px;
-  --spacing-xl: 10px;
-  --spacing-2xl: 12px;
-  --spacing-3xl: 16px;
+    /* ========== Special Colors ========== */
+    --folder-color: #dcb67a;
+    --checkbox-accent: #4caf50;
 
-  /* ========== Font Sizes ========== */
-  --font-size-xs: 9px;
-  --font-size-sm: 10px;
-  --font-size-md: 11px;
-  --font-size-lg: 12px;
-  --font-size-xl: 13px;
-  --font-size-2xl: 14px;
-  --font-size-3xl: 18px;
-  --font-size-4xl: 32px;
-  --font-size-5xl: 40px;
-  --font-size-6xl: 48px;
+    /* ========== Spacing Tokens ========== */
+    --spacing-xs: 2px;
+    --spacing-sm: 4px;
+    --spacing-md: 6px;
+    --spacing-lg: 8px;
+    --spacing-xl: 10px;
+    --spacing-2xl: 12px;
+    --spacing-3xl: 16px;
+
+    /* ========== Font Family ========== */
+    --font-family-sans: 'Lora', 'Inter', system-ui, sans-serif;
+    --font-family-mono: 'JetBrains Mono', 'NerdFontSymbols', monospace;
+    --font-family-serif: 'Lora', Georgia, serif;
+
+    /* ========== Font Sizes ========== */
+    --font-size-xs: 9px;
+    --font-size-sm: 10px;
+    --font-size-md: 11px;
+    --font-size-lg: 12px;
+    --font-size-xl: 13px;
+    --font-size-2xl: 14px;
+    --font-size-3xl: 18px;
+    --font-size-4xl: 32px;
+    --font-size-5xl: 40px;
+    --font-size-6xl: 48px;
+    --chart-1: oklch(0.828 0.111 230.318);
+    --chart-2: oklch(0.685 0.169 237.323);
+    --chart-3: oklch(0.588 0.158 241.966);
+    --chart-4: oklch(0.5 0.134 242.749);
+    --chart-5: oklch(0.443 0.11 240.79);
+    --sidebar: oklch(0.985 0 0);
+    --sidebar-foreground: oklch(0.141 0.005 285.823);
+    --sidebar-primary: oklch(0.588 0.158 241.966);
+    --sidebar-primary-foreground: oklch(0.977 0.013 236.62);
+    --sidebar-accent: oklch(0.967 0.001 286.375);
+    --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
+    --sidebar-border: oklch(0.92 0.004 286.32);
+    --sidebar-ring: oklch(0.705 0.015 286.067);
+  }
+  .dark {
+    --background: oklch(0.141 0.005 285.823);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.21 0.006 285.885);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.21 0.006 285.885);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.443 0.11 240.79);
+    --primary-foreground: oklch(0.977 0.013 236.62);
+    --secondary: oklch(0.274 0.006 286.033);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.274 0.006 286.033);
+    --muted-foreground: oklch(0.705 0.015 286.067);
+    --accent: oklch(0.274 0.006 286.033);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.552 0.016 285.938);
+    --chart-1: oklch(0.828 0.111 230.318);
+    --chart-2: oklch(0.685 0.169 237.323);
+    --chart-3: oklch(0.588 0.158 241.966);
+    --chart-4: oklch(0.5 0.134 242.749);
+    --chart-5: oklch(0.443 0.11 240.79);
+    --sidebar: oklch(0.21 0.006 285.885);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.685 0.169 237.323);
+    --sidebar-primary-foreground: oklch(0.293 0.066 243.157);
+    --sidebar-accent: oklch(0.274 0.006 286.033);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.552 0.016 285.938);
+  }
+  .theme {
+    --font-sans: 'Figtree Variable', sans-serif;
+  }
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
 }

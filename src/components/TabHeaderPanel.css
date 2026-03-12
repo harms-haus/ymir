@@ -1,11 +1,11 @@
-/* TabHeaderPanel Component Styles - Dark Theme */
+/* TabHeaderPanel Component Styles - shadcn Theme */
 
 .tab-header-panel {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background-color: #252526;
-  border-right: 1px solid #1e1e1e;
+  background-color: var(--background-secondary, #252526);
+  border-right: 1px solid var(--border, #1e1e1e);
   overflow: hidden;
 }
 
@@ -15,8 +15,8 @@
   align-items: center;
   justify-content: flex-start;
   min-height: 35px;
-  background-color: #252526;
-  border-bottom: 1px solid #1e1e1e;
+  background-color: var(--background-secondary, #252526);
+  border-bottom: 1px solid var(--border, #1e1e1e);
   padding: 0 4px;
   gap: 4px;
   overflow: visible;
@@ -26,7 +26,8 @@
   display: none;
 }
 
-.tab-button {
+/* BaseUI Tabs Tab Styling - Horizontal */
+.ymir-tabs-tab.tab-button {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -34,40 +35,80 @@
   cursor: pointer;
   background-color: transparent;
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: var(--radius-sm, 4px);
   transition:
     background-color 0.15s ease,
-    border-color 0.15s ease;
+    border-color 0.15s ease,
+    color 0.15s ease;
   user-select: none;
   flex-shrink: 0;
   font-size: 12px;
-  color: #cccccc;
+  color: var(--foreground-secondary, #cccccc);
   white-space: nowrap;
 }
 
-.tab-button:hover {
-  background-color: #2a2d2e;
-  border-color: #3c3c3c;
+.ymir-tabs-tab.tab-button:hover {
+  background-color: var(--background-tertiary, #2a2d2e);
+  border-color: var(--border-secondary, #3c3c3c);
+}
+
+.ymir-tabs-tab.tab-button[data-selected="true"] {
+  background-color: var(--background-tertiary, #37373d);
+  border-color: var(--primary, #007acc);
+  color: var(--foreground, #ffffff);
+}
+
+/* BaseUI Tabs Tab Styling - Vertical */
+.ymir-tabs-tab.tab-button-vertical {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+  background-color: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 4px);
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+  user-select: none;
+  flex-shrink: 0;
+  color: var(--foreground-secondary, #cccccc);
+}
+
+.ymir-tabs-tab.tab-button-vertical:hover {
+  background-color: var(--background-tertiary, #2a2d2e);
+  border-color: var(--border-secondary, #3c3c3c);
+}
+
+.ymir-tabs-tab.tab-button-vertical[data-selected="true"] {
+  background-color: var(--background-tertiary, #37373d);
+  border-color: var(--primary, #007acc);
+  color: var(--foreground, #ffffff);
 }
 
 /* Collapse button styles */
 .collapse-button {
   background: none;
   border: none;
-  color: #cccccc;
+  color: var(--foreground-secondary, #cccccc);
   cursor: pointer;
   font-size: 14px;
   padding: 4px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm, 4px);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   margin-left: auto;
 }
+
 .collapse-button:hover {
-  background-color: #3c3c3c;
-  color: #ffffff;
+  background-color: var(--background-tertiary, #3c3c3c);
+  color: var(--foreground, #ffffff);
 }
 
 /* Collapse button when collapsed - centered at top */
@@ -114,7 +155,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
-  scrollbar-color: #3c3c3c #1e1e1e;
+  scrollbar-color: var(--border-secondary, #3c3c3c) var(--border, #1e1e1e);
 }
 
 .tab-headers-vertical::-webkit-scrollbar {
@@ -122,43 +163,12 @@
 }
 
 .tab-headers-vertical::-webkit-scrollbar-track {
-  background: #1e1e1e;
+  background: var(--border, #1e1e1e);
 }
 
 .tab-headers-vertical::-webkit-scrollbar-thumb {
-  background-color: #3c3c3c;
+  background-color: var(--border-secondary, #3c3c3c);
   border-radius: 3px;
-}
-
-/* Vertical tab button */
-.tab-button-vertical {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px;
-  width: 40px;
-  height: 40px;
-  cursor: pointer;
-  background-color: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  transition:
-    background-color 0.15s ease,
-    border-color 0.15s ease;
-  user-select: none;
-  flex-shrink: 0;
-  color: #cccccc;
-}
-
-.tab-button-vertical:hover {
-  background-color: #2a2d2e;
-  border-color: #3c3c3c;
-}
-
-.tab-button-vertical.active {
-  background-color: #37373d;
-  border-color: #007acc;
-  color: #ffffff;
 }
 
 /* Panel content in collapsed state */
@@ -170,15 +180,10 @@
   gap: 4px;
 }
 
-.tab-button.active {
-  background-color: #37373d;
-  border-color: #007acc;
-  color: #ffffff;
-}
-
+/* Tab badge styling */
 .tab-badge {
-  background-color: #007acc;
-  color: #ffffff;
+  background-color: var(--primary, #007acc);
+  color: var(--foreground, #ffffff);
   font-size: 9px;
   padding: 1px 5px;
   border-radius: 6px;
@@ -187,13 +192,75 @@
   flex-shrink: 0;
 }
 
-.tab-button.active .tab-badge {
-  background-color: #4fc3f7;
+.ymir-tabs-tab[data-selected="true"] .tab-badge {
+  background-color: var(--primary-foreground, #4fc3f7);
 }
 
+/* Panel content area */
 .tab-panel-content {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  background-color: #1e1e1e;
+  background-color: var(--background, #1e1e1e);
+}
+
+/* Tabs root containers */
+.tab-headers-horizontal-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.tab-headers-vertical-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+/* BaseUI Tabs list styling */
+.ymir-tabs-list {
+  display: flex;
+}
+
+.ymir-tabs-list.tab-headers-horizontal {
+  flex-direction: row;
+}
+
+.ymir-tabs-list.tab-headers-vertical {
+  flex-direction: column;
+}
+
+/* BaseUI Tabs Indicator Styling - Horizontal */
+.ymir-tabs-indicator.tab-indicator {
+  position: absolute;
+  bottom: 2px;
+  left: var(--active-tab-left);
+  width: var(--active-tab-width);
+  height: 3px;
+  background-color: var(--primary, #007acc);
+  border-radius: 2px;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+/* BaseUI Tabs Indicator Styling - Vertical */
+.ymir-tabs-indicator.tab-indicator-vertical {
+  position: absolute;
+  left: 2px;
+  top: var(--active-tab-top);
+  width: 3px;
+  height: var(--active-tab-height);
+  background-color: var(--primary, #007acc);
+  border-radius: 2px;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+/* Make TabsList position relative for indicator positioning */
+.tab-headers-horizontal {
+  position: relative;
+}
+
+.tab-headers-vertical {
+  position: relative;
 }

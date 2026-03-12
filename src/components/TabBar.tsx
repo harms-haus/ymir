@@ -62,7 +62,7 @@ export function TabBar({
         }
 
         return () => resizeObserver.disconnect();
-    }, [tabs]);
+    }, []);
 
     // Scroll active tab into view
     useEffect(() => {
@@ -154,42 +154,39 @@ export function TabBar({
         }} className="tab-bar">
             {/* Scrollable tab container */}
             <TabsList ref={scrollContainerRef} className="tab-bar-scroll-container">
-                {tabs.map((tab) => (
-                  <Tooltip key={tab.id} content={tab.title}>
-                    <TabsTab
-                        value={tab.id}
-                        data-tab-id={tab.id}
-                        className={`tab-item ${tab.hasNotification ? 'has-notification' : ''}`}
-                        onContextMenu={(e) => handleContextMenu(e, tab)}
-                    >
-                        {/* Tab icon */}
-                        <span className="tab-icon">$</span>
+      {tabs.map((tab) => (
+        <TabsTab
+          key={tab.id}
+          value={tab.id}
+          data-tab-id={tab.id}
+          className={`tab-item ${tab.hasNotification ? 'has-notification' : ''}`}
+          onContextMenu={(e) => handleContextMenu(e, tab)}
+          title={tab.title}
+        >
+          {/* Tab icon */}
+          <span className="tab-icon">$</span>
 
-                        {/* Tab title */}
-                        <span className="tab-title">{tab.title}</span>
+          {/* Tab title */}
+          <span className="tab-title">{tab.title}</span>
 
-                        {/* Notification badge */}
-                        {tab.hasNotification && tab.notificationCount && tab.notificationCount > 0 && (
-                            <Badge variant="default" className="tab-notification-badge">
-                                {tab.notificationCount > 99 ? '99+' : tab.notificationCount}
-                            </Badge>
-                        )}
+          {/* Notification badge */}
+          {tab.hasNotification && tab.notificationCount && tab.notificationCount > 0 && (
+            <Badge variant="default" className="tab-notification-badge">
+              {tab.notificationCount > 99 ? '99+' : tab.notificationCount}
+            </Badge>
+          )}
 
-                        {/* Close button */}
-                        <Tooltip content="Close tab">
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="tab-close-button"
-                                onClick={(e) => handleCloseTab(e, tab.id)}
-                                aria-label="Close tab"
-                            >
-                                ×
-                            </Button>
-                        </Tooltip>
-                    </TabsTab>
-                  </Tooltip>
-                ))}
+          {/* Close button */}
+          <button
+            type="button"
+            className="tab-close-button"
+            onClick={(e) => handleCloseTab(e, tab.id)}
+            aria-label={`Close ${tab.title}`}
+          >
+            ×
+          </button>
+        </TabsTab>
+      ))}
             </TabsList>
 
       {/* Overflow menu using Base-UI Menu primitive */}
@@ -240,22 +237,24 @@ export function TabBar({
                 onClick={onCreateBrowserTab}
                 aria-label="New browser tab"
               >
-                <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                >
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M2 12h20" />
-                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1 4-10 5.3 15.3 0 0 1 4-10 5.3 15.3 0 0 1 4-10 5.3 15.3 0 0 1 4-10 5.3 15.3 0 0 1 4-10 5.3 12.5 4 10 5.4-6" />
-                    <path d="m12 5v14m-7-7" />
-                    <circle cx="6" cy="18" r="3" />
-                </svg>
+      <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <title>Browser icon</title>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M2 12h20" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1 4-10 5.3 15.3 0 0 1 4-10 5.3 15.3 0 0 1 4-10 5.3 15.3 0 0 1 4-10 5.3 15.3 0 0 1 4-10 5.3 12.5 4 10 5.4-6" />
+      <path d="m12 5v14m-7-7" />
+      <circle cx="6" cy="18" r="3" />
+    </svg>
               </Button>
             </Tooltip>
 

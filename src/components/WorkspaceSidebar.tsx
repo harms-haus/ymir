@@ -4,7 +4,7 @@ import useWorkspaceStore, {
 } from '../state/workspace';
 import { PanelDefinition, SidebarTab } from '../state/types';
 import { TabHeaderPanel } from './TabHeaderPanel';
-import { gitPanelDefinition, createRepoPanelDefinition } from './GitPanel';
+import { gitPanelDefinition } from './GitPanel';
 import { TabsRoot, TabsList, TabsTab } from './ui/Tabs';
 import { Button } from './ui/Button';
 import { MenuRoot, MenuPortal, MenuPositioner, MenuPopup, MenuItem } from './ui/Menu';
@@ -236,7 +236,7 @@ function NotificationList() {
     <div
       style={{
         padding: '16px',
-        color: '#cccccc',
+        color: 'var(--foreground-hex)',
         fontSize: '13px',
       }}
     >
@@ -244,18 +244,18 @@ function NotificationList() {
         style={{
           marginBottom: '12px',
           fontWeight: 600,
-          borderBottom: '1px solid #333',
+          borderBottom: '1px solid var(--border-tertiary)',
           paddingBottom: '8px',
         }}
       >
         Notifications ({notificationCount})
       </div>
       {notificationCount === 0 ? (
-        <div style={{ color: '#666666', textAlign: 'center', padding: '20px 0' }}>
+        <div style={{ color: 'var(--foreground-muted)', textAlign: 'center', padding: '20px 0' }}>
           No notifications
         </div>
       ) : (
-        <div style={{ color: '#858585' }}>
+        <div style={{ color: 'var(--foreground-secondary)' }}>
           Notification items will be displayed here
         </div>
       )}
@@ -268,7 +268,7 @@ function ProjectTree() {
     <div
       style={{
         padding: '16px',
-        color: '#cccccc',
+        color: 'var(--foreground-hex)',
         fontSize: '13px',
       }}
     >
@@ -276,13 +276,13 @@ function ProjectTree() {
         style={{
           marginBottom: '12px',
           fontWeight: 600,
-          borderBottom: '1px solid #333',
+          borderBottom: '1px solid var(--border-tertiary)',
           paddingBottom: '8px',
         }}
       >
         Project
       </div>
-      <div style={{ color: '#858585' }}>
+      <div style={{ color: 'var(--foreground-secondary)' }}>
         <div style={{ marginBottom: '4px' }}>📁 src/</div>
         <div style={{ marginLeft: '16px', marginBottom: '4px' }}>📁 components/</div>
         <div style={{ marginLeft: '16px', marginBottom: '4px' }}>📁 state/</div>
@@ -363,10 +363,7 @@ export function WorkspaceSidebar() {
     activeTab,
     setActiveSidebarTab,
     registerPanel,
-    gitRepos,
   } = useWorkspaceStore();
-
-  const repoPaths = useMemo(() => Object.keys(gitRepos), [gitRepos]);
 
   const panels: PanelDefinition[] = useMemo(() => {
     const staticPanels: PanelDefinition[] = [
@@ -398,12 +395,8 @@ export function WorkspaceSidebar() {
       },
     ];
 
-    const repoPanels = repoPaths.map((repoPath) =>
-      createRepoPanelDefinition(repoPath)
-    );
-
-    return [...staticPanels, ...repoPanels];
-  }, [repoPaths]);
+    return staticPanels;
+  }, []);
 
   useEffect(() => {
     panels.forEach((panel) => {
@@ -420,7 +413,7 @@ export function WorkspaceSidebar() {
       style={{
         width: sidebarCollapsed ? '50px' : '100%',
         height: '100%',
-        backgroundColor: '#1e1e1e',
+        backgroundColor: 'var(--background-hex)',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',

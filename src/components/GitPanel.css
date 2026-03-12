@@ -786,3 +786,102 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* Accordion styles for multiple repos */
+.git-repos-accordion {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.git-repo-accordion-item {
+  border-bottom: 1px solid var(--border);
+}
+
+.git-repo-accordion-item:last-child {
+  border-bottom: none;
+}
+
+.git-repo-accordion-header {
+  margin: 0;
+}
+
+.git-repo-accordion-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  background-color: var(--background-secondary);
+  border: none;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.git-repo-accordion-trigger:hover {
+  background-color: var(--background-hover);
+}
+
+.git-repo-accordion-trigger[data-panel-open] {
+  background-color: var(--background-tertiary);
+}
+
+.git-repo-icon {
+  flex-shrink: 0;
+  color: var(--primary);
+}
+
+.git-repo-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-repo-branch {
+  color: var(--foreground-secondary);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.git-repo-changes-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background-color: var(--notification);
+  color: white;
+  min-width: 18px;
+  text-align: center;
+}
+
+.git-repo-accordion-panel {
+  background-color: var(--background);
+}
+
+.git-repo-accordion-panel[data-open] {
+  animation: accordion-slide-down 0.2s ease-out;
+}
+
+.git-repo-section {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 8px;
+}
+
+@keyframes accordion-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

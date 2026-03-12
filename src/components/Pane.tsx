@@ -35,8 +35,8 @@ export function Pane({ paneId, workspaceId }: PaneProps) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: '#1e1e1e',
-          color: '#666666',
+          backgroundColor: 'var(--background-hex)',
+          color: 'var(--foreground-muted)',
           fontSize: '14px',
         }}
       >
@@ -96,8 +96,8 @@ export function Pane({ paneId, workspaceId }: PaneProps) {
           flex: 1,
           display: 'flex',
           flexDirection: 'column',
-          backgroundColor: '#1e1e1e',
-          boxShadow: pane.hasNotification ? 'inset 0 0 0 2px #4fc3f7' : 'none',
+          backgroundColor: 'var(--background-hex)',
+          boxShadow: pane.hasNotification ? 'inset 0 0 0 2px var(--notification)' : 'none',
           transition: 'box-shadow 0.2s ease',
         }}
       >
@@ -113,16 +113,16 @@ export function Pane({ paneId, workspaceId }: PaneProps) {
           onSplitPane={handleSplitPane}
         />
 
-        {/* Tab content area */}
-        <div
-          style={{
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            borderTop: '1px solid #333',
-          }}
-        >
+      {/* Tab content area */}
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          borderTop: '1px solid var(--border-tertiary)',
+        }}
+      >
           {pane.tabs.map((tab) => (
             <div
               key={tab.id}
