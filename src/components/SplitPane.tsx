@@ -15,12 +15,14 @@ interface SplitPaneProps {
   workspaceId: string;
   windowControlsPosition?: 'left' | 'right';
   targetPaneId?: string | null;
+  topmostPaneIds?: Set<string>;
 }
 
 interface BranchPaneProps {
   node: BranchNode;
   workspaceId: string;
   targetPaneId?: string | null;
+  topmostPaneIds?: Set<string>;
 }
 
 interface LeafPaneProps {
@@ -28,6 +30,7 @@ interface LeafPaneProps {
   workspaceId: string;
   windowControlsPosition?: 'left' | 'right';
   targetPaneId?: string | null;
+  isTopmost?: boolean;
 }
 
 export function findLeftmostPane(node: SplitNode): string | null {
@@ -40,9 +43,28 @@ export function findRightmostPane(node: SplitNode): string | null {
   return findRightmostPane(node.children[1]);
 }
 
+/**
+ * Collects pane IDs that are "topmost" — no vertical split has them in the bottom child.
+ * These panes' tab bars should be draggable for window movement.
+ */
+export function findTopmostPanes(node: SplitNode, isAboveSplit: boolean = false): Set<string> {
+  if (isLeaf(node)) {
+    return isAboveSplit ? new Set() : new Set([node.paneId]);
+  }
+
+  // First child: inherits isAboveSplit. Second child of vertical split: definitely not topmost.
+  const firstChildTopmost = findTopmostPanes(node.children[0], isAboveSplit);
+  const secondChildTopmost = findTopmostPanes(
+    node.children[1],
+    isAboveSplit || node.axis === 'vertical'
+  );
+
+  return new Set([...firstChildTopmost, ...secondChildTopmost]);
+}
+
 const MIN_PANEL_SIZE_PERCENTAGE = 10;
 
-function LeafPane({ node, workspaceId, windowControlsPosition, targetPaneId }: LeafPaneProps) {
+function LeafPane({ node, workspaceId, windowControlsPosition, targetPaneId, isTopmost }: LeafPaneProps) {
   const workspace = useWorkspaceStore((state) =>
     state.workspaces.find((ws) => ws.id === workspaceId)
   );
@@ -74,11 +96,12 @@ function LeafPane({ node, workspaceId, windowControlsPosition, targetPaneId }: L
       paneId={node.paneId}
       workspaceId={workspaceId}
       windowControlsPosition={controlsPosition}
+      isTopmost={isTopmost}
     />
   );
 }
 
-function BranchPane({ node, workspaceId, targetPaneId }: BranchPaneProps) {
+function BranchPane({ node, workspaceId, targetPaneId, topmostPaneIds }: BranchPaneProps) {
   const orientation: Orientation =
     node.axis === 'horizontal' ? 'horizontal' : 'vertical';
 
@@ -99,7 +122,7 @@ function BranchPane({ node, workspaceId, targetPaneId }: BranchPaneProps) {
           overflow: 'hidden',
         }}
       >
-        <SplitPane node={node.children[0]} workspaceId={workspaceId} targetPaneId={targetPaneId} />
+        <SplitPane node={node.children[0]} workspaceId={workspaceId} targetPaneId={targetPaneId} topmostPaneIds={topmostPaneIds} />
       </Panel>
 
       {/* Resize handle */}
@@ -136,19 +159,19 @@ function BranchPane({ node, workspaceId, targetPaneId }: BranchPaneProps) {
           overflow: 'hidden',
         }}
       >
-        <SplitPane node={node.children[1]} workspaceId={workspaceId} targetPaneId={targetPaneId} />
+        <SplitPane node={node.children[1]} workspaceId={workspaceId} targetPaneId={targetPaneId} topmostPaneIds={topmostPaneIds} />
       </Panel>
     </Group>
   );
 }
 
-export function SplitPane({ node, workspaceId, windowControlsPosition, targetPaneId }: SplitPaneProps) {
+export function SplitPane({ node, workspaceId, windowControlsPosition, targetPaneId, topmostPaneIds }: SplitPaneProps) {
   if (isBranch(node)) {
-    return <BranchPane node={node} workspaceId={workspaceId} targetPaneId={targetPaneId} />;
+    return <BranchPane node={node} workspaceId={workspaceId} targetPaneId={targetPaneId} topmostPaneIds={topmostPaneIds} />;
   }
 
   if (isLeaf(node)) {
-    return <LeafPane node={node} workspaceId={workspaceId} windowControlsPosition={windowControlsPosition} targetPaneId={targetPaneId} />;
+    return <LeafPane node={node} workspaceId={workspaceId} windowControlsPosition={windowControlsPosition} targetPaneId={targetPaneId} isTopmost={topmostPaneIds?.has(node.paneId) ?? false} />;
   }
 
   // Fallback for unknown node types

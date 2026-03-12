@@ -27,6 +27,7 @@ interface TabBarProps {
   onCreateTabRight?: (paneId: string, tabId: string) => void;
   onCreateBrowserTab?: () => void;
   windowControlsPosition?: 'left' | 'right';
+  isTopmost?: boolean;
 }
 
 export function TabBar({
@@ -40,6 +41,7 @@ export function TabBar({
     onCreateTabRight,
     onCreateBrowserTab,
     windowControlsPosition,
+    isTopmost,
 }: TabBarProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [showOverflow, setShowOverflow] = useState(false);
@@ -160,7 +162,9 @@ export function TabBar({
               <WindowControls position={windowControlsPosition} />
             )}
             {/* Scrollable tab container */}
-            <TabsList ref={scrollContainerRef} className="tab-bar-scroll-container">
+            <TabsList ref={scrollContainerRef} className="tab-bar-scroll-container"
+              {...(isTopmost ? { 'data-tauri-drag-region': 'true' } as Record<string, string> : {})}
+            >
       {tabs.map((tab) => (
         <TabsTab
           key={tab.id}

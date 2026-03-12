@@ -9,14 +9,14 @@
   overflow: hidden;
 }
 
-/* Drag region for window dragging */
+/* Drag region for window dragging - applied to scroll container so empty space behind tabs is draggable */
 [data-tauri-drag-region] {
   -webkit-app-region: drag;
-  flex-shrink: 0;
 }
 
 /* Disable dragging on interactive elements within drag region */
-.tab-bar-scroll-container[data-tauri-drag-region] {
+.tab-bar-scroll-container[data-tauri-drag-region] .tab-item,
+.tab-bar-scroll-container[data-tauri-drag-region] .tab-close-button {
   -webkit-app-region: no-drag;
 }
 

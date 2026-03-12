@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { ResizableSidebar } from './ResizableSidebar';
-import { SplitPane, findLeftmostPane, findRightmostPane } from './SplitPane';
+import { SplitPane, findLeftmostPane, findRightmostPane, findTopmostPanes } from './SplitPane';
 import useWorkspaceStore, { activeWorkspace } from '../state/workspace';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { usePlatformDetection } from '../hooks/usePlatformDetection';
@@ -26,6 +26,12 @@ export function Layout() {
       ? findLeftmostPane(currentWorkspace.root)
       : findRightmostPane(currentWorkspace.root);
   }, [currentWorkspace?.root, buttonPosition]);
+
+  // Panes whose tab bars should be draggable (topmost in window = no pane above them)
+  const topmostPaneIds = useMemo(() => {
+    if (!currentWorkspace?.root) return new Set<string>();
+    return findTopmostPanes(currentWorkspace.root);
+  }, [currentWorkspace?.root]);
 
   useEffect(() => {
     const ws = workspaces.find((w) => w.id === activeWorkspaceId);
@@ -56,6 +62,7 @@ export function Layout() {
           workspaceId={currentWorkspace.id}
           windowControlsPosition={buttonPosition}
           targetPaneId={targetPaneId}
+          topmostPaneIds={topmostPaneIds}
         />
       ) : (
         <div

@@ -9,9 +9,10 @@ interface PaneProps {
   paneId: string;
   workspaceId: string;
   windowControlsPosition?: 'left' | 'right';
+  isTopmost?: boolean;
 }
 
-export function Pane({ paneId, workspaceId, windowControlsPosition }: PaneProps) {
+export function Pane({ paneId, workspaceId, windowControlsPosition, isTopmost }: PaneProps) {
   const pane = useWorkspaceStore((state) => {
     const workspace = state.workspaces.find((ws) => ws.id === workspaceId);
     const paneData = workspace?.panes[paneId];
@@ -109,6 +110,7 @@ export function Pane({ paneId, workspaceId, windowControlsPosition }: PaneProps)
           onSelectTab={handleSelectTab}
           onSplitPane={handleSplitPane}
           windowControlsPosition={windowControlsPosition}
+          isTopmost={isTopmost}
         />
 
       {/* Tab content area */}
