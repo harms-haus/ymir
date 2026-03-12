@@ -3,6 +3,7 @@
 
 import useWorkspaceStore from '../state/workspace';
 import { SplitDirection } from '../state/types';
+import logger from '../lib/logger';
 
 /**
  * CLI command interface for Ymir window system
@@ -185,7 +186,7 @@ export const CLI = {
 export function initCLI(): void {
   if (typeof window !== 'undefined') {
     (window as Window & { ymir?: YmirCLI }).ymir = CLI;
-    console.log('[ymir] CLI initialized on window.ymir');
+    logger.info('[ymir] CLI initialized on window.ymir');
   }
 }
 

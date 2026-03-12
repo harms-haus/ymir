@@ -16,6 +16,7 @@
 
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import logger from '../lib/logger';
 
 /**
  * Platform info return type
@@ -99,7 +100,7 @@ export function usePlatformDetection(): PlatformInfo {
         });
       } catch (error) {
         // Fallback to browser detection if Tauri is unavailable
-        console.warn('Failed to get platform info from Tauri, using browser fallback:', error);
+        logger.warn('Failed to get platform info from Tauri, using browser fallback', { error });
         if (!isMounted) return;
 
         const fallback = detectPlatformBrowser();

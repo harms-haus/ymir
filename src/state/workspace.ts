@@ -451,12 +451,12 @@ const useWorkspaceStore = create<WorkspaceState>()(
           set((state) => {
             const currentPaneCount = countPanes(state.workspaces);
             if (currentPaneCount >= MAX_PANES) {
-              console.warn('Maximum 20 panes reached. Cannot create more panes.');
+              logger.warn('Maximum 20 panes reached. Cannot create more panes.');
               return;
             }
 
             if (currentPaneCount >= 15) {
-              console.warn(`Warning: ${currentPaneCount} panes in use. Approaching maximum of 20 panes.`);
+              logger.warn(`Warning: ${currentPaneCount} panes in use. Approaching maximum of 20 panes.`);
             }
 
             const { axis, splitIndex } = getSplitAxisAndIndex(direction);
@@ -476,7 +476,7 @@ const useWorkspaceStore = create<WorkspaceState>()(
 
             workspace.root = splitNodeRecursive(workspace.root, paneId, newLeaf, axis, splitIndex);
             if (countPanes(state.workspaces) >= MAX_PANES) {
-              console.warn('Maximum 20 panes reached. Cannot create more panes.');
+              logger.warn('Maximum 20 panes reached. Cannot create more panes.');
             }
             logger.info('[Pane] Split pane', { paneId, direction, newPaneId: newPane.id });
           }),
@@ -540,7 +540,7 @@ const useWorkspaceStore = create<WorkspaceState>()(
             try {
               await invoke('kill_pty', { sessionId: tabToClose.sessionId });
             } catch (error) {
-
+              logger.error('Failed to kill PTY session', { error, sessionId: tabToClose.sessionId });
             }
           }
 

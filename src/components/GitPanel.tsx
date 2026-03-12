@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { PanelDefinition, GitFile, GitRepo } from '../state/types';
 import useWorkspaceStore, { getAllGitRepos, getGitChangesCount, getGitError } from '../state/workspace';
 import gitService from '../lib/git-service';
+import logger from '../lib/logger';
 import { invoke } from '@tauri-apps/api/core';
 import { Button } from './ui/Button';
 import { Checkbox, Input } from './ui/Input';
@@ -79,7 +80,7 @@ const GitBranchIcon: React.FC<{ className?: string }> = ({ className }) => (
 
 const NotAGitRepo: React.FC = () => {
   const handleInitialize = () => {
-    console.log('Initialize Repository clicked - not implemented in v1');
+    logger.info('Initialize Repository clicked - not implemented in v1');
   };
 
   return (
@@ -581,7 +582,7 @@ const RepoSection: React.FC<{
       await gitService.commit(repoPath, message);
       const updatedRepo = await gitService.getGitStatus(repoPath);
       useWorkspaceStore.getState().setGitRepo(repoPath, updatedRepo);
-    } catch (error) { console.error('Commit failed:', error); }
+    } catch (error) { logger.error('Commit failed', { repoPath, error }); }
   };
 
   const handleDiscard = async (path: string) => {
@@ -589,20 +590,20 @@ const RepoSection: React.FC<{
       await gitService.discardChanges(repoPath, path);
       const updatedRepo = await gitService.getGitStatus(repoPath);
       useWorkspaceStore.getState().setGitRepo(repoPath, updatedRepo);
-    } catch (error) { console.error('Discard failed:', error); }
+    } catch (error) { logger.error('Discard failed', { repoPath, path, error }); }
   };
 
   const handleRefresh = async () => {
     try {
       const updatedRepo = await gitService.getGitStatus(repoPath);
       useWorkspaceStore.getState().setGitRepo(repoPath, updatedRepo);
-    } catch (error) { console.error('Refresh failed:', error); }
+    } catch (error) { logger.error('Refresh failed', { repoPath, error }); }
   };
 
   const handleStageAll = async () => {
     const unstagedFiles = repo.unstaged;
     for (const file of unstagedFiles) {
-      try { await gitService.stageFile(repoPath, file.path); } catch (error) { console.error(`Failed to stage ${file.path}:`, error); }
+      try { await gitService.stageFile(repoPath, file.path); } catch (error) { logger.error(`Failed to stage file`, { repoPath, path: file.path, error }); }
     }
     await handleRefresh();
   };
@@ -610,7 +611,7 @@ const RepoSection: React.FC<{
   const handleUnstageAll = async () => {
     const stagedFiles = repo.staged;
     for (const file of stagedFiles) {
-      try { await gitService.unstageFile(repoPath, file.path); } catch (error) { console.error(`Failed to unstage ${file.path}:`, error); }
+      try { await gitService.unstageFile(repoPath, file.path); } catch (error) { logger.error(`Failed to unstage file`, { repoPath, path: file.path, error }); }
     }
     await handleRefresh();
   };
@@ -618,7 +619,7 @@ const RepoSection: React.FC<{
   const handleDiscardAll = async () => {
     const unstagedFiles = repo.unstaged;
     for (const file of unstagedFiles) {
-      try { await gitService.discardChanges(repoPath, file.path); } catch (error) { console.error(`Failed to discard ${file.path}:`, error); }
+      try { await gitService.discardChanges(repoPath, file.path); } catch (error) { logger.error(`Failed to discard file`, { repoPath, path: file.path, error }); }
     }
     await handleRefresh();
   };
@@ -745,10 +746,10 @@ const GitPanelFull = (): React.ReactNode => {
 
   useEffect(() => {
     invoke<string>('get_app_cwd').then((cwd) => {
-      console.log('[GitPanel] get_app_cwd returned:', cwd);
+      logger.info('[GitPanel] get_app_cwd returned', { cwd });
       discoverAndRegisterRepos(cwd);
     }).catch((err) => {
-      console.log('[GitPanel] get_app_cwd failed:', err);
+      logger.info('[GitPanel] get_app_cwd failed, using fallback', { err });
       discoverAndRegisterRepos('.');
     });
   }, [discoverAndRegisterRepos]);

@@ -1,4 +1,5 @@
 import { load } from '@tauri-apps/plugin-store';
+import logger from './logger';
 
 const THEME_STORE_PATH = '.theme.json';
 
@@ -17,7 +18,7 @@ export async function getStoredTheme(): Promise<string | null> {
     const theme = await store.get<string>('theme');
     return theme || null;
   } catch (error) {
-    console.error('Failed to get stored theme:', error);
+    logger.error('Failed to get stored theme', { error });
     return null;
   }
 }
@@ -27,7 +28,7 @@ export async function setStoredTheme(theme: string): Promise<void> {
     const store = await getStore();
     await store.set('theme', theme);
   } catch (error) {
-    console.error('Failed to save theme:', error);
+    logger.error('Failed to save theme', { error });
     throw error;
   }
 }
