@@ -1,21 +1,12 @@
 export { mockInvoke, mockChannel, mockTauriStore, setupTauriMocks } from './mocks';
-export {
-  createMockTab,
-  createMockPane,
-  createMockWorkspace,
-  createMockSplitNode,
-  createMockLeafNode,
-  createMockBranchNode,
-  createMockWorkspaceWithPanes,
-  resetIdCounter,
-} from './factories';
-export { renderWithStore, waitForStoreUpdate } from './render';
+export { renderWithStore } from './render';
 export {
   fireKeyDown,
   fireMetaKeyDown,
   fireMetaShiftKeyDown,
   fireShortcut,
 } from './events';
+
 export {
   render,
   screen,
