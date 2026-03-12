@@ -197,7 +197,9 @@ export function Browser({ tabId, url, paneId }: BrowserProps) {
         unlistenersRef.current.forEach(unlisten => {
           try {
             unlisten();
-          } catch {}
+          } catch (error) {
+            logger.error('Failed to cleanup webview listeners', { error, tabId });
+          }
         });
         unlistenersRef.current = [];
 
