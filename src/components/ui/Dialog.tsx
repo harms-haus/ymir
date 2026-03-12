@@ -106,6 +106,14 @@ export const AlertDialogTrigger = React.forwardRef<HTMLButtonElement, AlertDialo
 
 AlertDialogTrigger.displayName = 'AlertDialog.Trigger';
 
+export const AlertDialogPortal = React.forwardRef<HTMLDivElement, AlertDialog.Portal.Props>(
+  (props, ref) => {
+    return <AlertDialog.Portal ref={ref} {...props} />;
+  },
+);
+
+AlertDialogPortal.displayName = 'AlertDialog.Portal';
+
 export const AlertDialogPopup = React.forwardRef<HTMLDivElement, AlertDialog.Popup.Props>(
   ({ className = '', ...props }, ref) => {
     return (
