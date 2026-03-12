@@ -2,8 +2,10 @@
   "active_plan": "/home/blake/Documents/software/ymir/.sisyphus/plans/custom-titlebar.md",
   "started_at": "2026-03-12T05:03:58.710Z",
   "session_ids": [
-    "ses_31f91e346ffe1sHhZSdGZYsKtw"
+    "ses_31f91e346ffe1sHhZSdGZYsKtw",
+    "ses_31d70de40ffekdkLMLBsTQIugO"
   ],
   "plan_name": "custom-titlebar",
-  "agent": "atlas"
+  "agent": "atlas",
+  "worktree_path": "/home/blake/Documents/software/ymir/.worktrees/custom-titlebar"
 }

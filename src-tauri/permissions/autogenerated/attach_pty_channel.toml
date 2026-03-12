@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-attach-pty-channel"
+description = "Enables the attach_pty_channel command without any pre-configured scope."
+commands.allow = ["attach_pty_channel"]
+
+[[permission]]
+identifier = "deny-attach-pty-channel"
+description = "Denies the attach_pty_channel command without any pre-configured scope."
+commands.deny = ["attach_pty_channel"]

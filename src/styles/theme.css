@@ -188,3 +188,7 @@
     @apply bg-background text-foreground;
   }
 }
+
+.layout-reversed {
+  flex-direction: row-reverse;
+}

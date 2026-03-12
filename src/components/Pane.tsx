@@ -8,22 +8,19 @@ import { ErrorBoundary } from './ErrorBoundary';
 interface PaneProps {
   paneId: string;
   workspaceId: string;
+  windowControlsPosition?: 'left' | 'right';
 }
 
-export function Pane({ paneId, workspaceId }: PaneProps) {
-  // Select only the specific pane to prevent re-renders when other parts of the store change
-  // The selector creates a new object each time, but that's okay - React's diffing will handle it
-  // The key is we don't subscribe to ALL store changes, just this workspace's pane
+export function Pane({ paneId, workspaceId, windowControlsPosition }: PaneProps) {
   const pane = useWorkspaceStore((state) => {
     const workspace = state.workspaces.find((ws) => ws.id === workspaceId);
-    const pane = workspace?.panes[paneId];
-    if (!pane) return null;
-    // Return only the data we need - this prevents re-renders from unrelated store changes
+    const paneData = workspace?.panes[paneId];
+    if (!paneData) return null;
     return {
-      id: pane.id,
-      activeTabId: pane.activeTabId,
-      tabs: pane.tabs,
-      hasNotification: pane.hasNotification,
+      id: paneData.id,
+      activeTabId: paneData.activeTabId,
+      tabs: paneData.tabs,
+      hasNotification: paneData.hasNotification,
     };
   });
 
@@ -111,6 +108,7 @@ export function Pane({ paneId, workspaceId }: PaneProps) {
           onCloseTab={handleCloseTab}
           onSelectTab={handleSelectTab}
           onSplitPane={handleSplitPane}
+          windowControlsPosition={windowControlsPosition}
         />
 
       {/* Tab content area */}

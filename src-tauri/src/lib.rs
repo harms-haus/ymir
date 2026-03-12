@@ -11,6 +11,7 @@ fn init_logging() {
 mod commands;
 mod git;
 mod logging;
+mod platform;
 mod state;
 
 use state::PtyState;
@@ -24,6 +25,7 @@ pub use commands::{
     kill_all_sessions, kill_pty, resize_pty, set_environment_context, spawn_pty, stage_file,
     unstage_file, write_pty, PtyEvent,
 };
+pub use platform::get_platform_info;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -58,6 +60,7 @@ pub fn run() {
             delete_branch,
             checkout_branch,
             discover_git_repos,
+            get_platform_info,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

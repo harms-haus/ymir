@@ -9,18 +9,28 @@
   overflow: hidden;
 }
 
-/* Scrollable container for tabs */
+/* Drag region for window dragging */
+[data-tauri-drag-region] {
+  -webkit-app-region: drag;
+  flex-shrink: 0;
+}
+
+/* Disable dragging on interactive elements within drag region */
+.tab-bar-scroll-container[data-tauri-drag-region] {
+  -webkit-app-region: no-drag;
+}
+
 .tab-bar-scroll-container {
   display: flex;
   flex: 1;
   overflow-x: auto;
   overflow-y: hidden;
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .tab-bar-scroll-container::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, Opera */
+  display: none;
 }
 
 /* Individual tab item */

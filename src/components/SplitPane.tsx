@@ -11,37 +11,38 @@ import { Pane } from './Pane';
 // ============================================================================
 
 interface SplitPaneProps {
-  /** Split node to render (Branch or Leaf) */
   node: SplitNode;
-  /** Workspace ID for state updates */
   workspaceId: string;
+  windowControlsPosition?: 'left' | 'right';
+  targetPaneId?: string | null;
 }
 
 interface BranchPaneProps {
-  /** Branch node containing split children */
   node: BranchNode;
-  /** Workspace ID for state updates */
   workspaceId: string;
+  targetPaneId?: string | null;
 }
 
 interface LeafPaneProps {
-  /** Leaf node referencing a pane */
   node: LeafNode;
-  /** Workspace ID for state updates */
   workspaceId: string;
+  windowControlsPosition?: 'left' | 'right';
+  targetPaneId?: string | null;
 }
 
-/** Minimum panel size as percentage */
+export function findLeftmostPane(node: SplitNode): string | null {
+  if (isLeaf(node)) return node.paneId;
+  return findLeftmostPane(node.children[0]);
+}
+
+export function findRightmostPane(node: SplitNode): string | null {
+  if (isLeaf(node)) return node.paneId;
+  return findRightmostPane(node.children[1]);
+}
+
 const MIN_PANEL_SIZE_PERCENTAGE = 10;
 
-// ============================================================================
-// Leaf Pane Component
-// ============================================================================
-
-/**
- * LeafPane renders a terminal pane using the actual Pane component
- */
-function LeafPane({ node, workspaceId }: LeafPaneProps) {
+function LeafPane({ node, workspaceId, windowControlsPosition, targetPaneId }: LeafPaneProps) {
   const workspace = useWorkspaceStore((state) =>
     state.workspaces.find((ws) => ws.id === workspaceId)
   );
@@ -66,20 +67,18 @@ function LeafPane({ node, workspaceId }: LeafPaneProps) {
     );
   }
 
-  return <Pane paneId={node.paneId} workspaceId={workspaceId} />;
+  const controlsPosition = node.paneId === targetPaneId ? windowControlsPosition : undefined;
+
+  return (
+    <Pane
+      paneId={node.paneId}
+      workspaceId={workspaceId}
+      windowControlsPosition={controlsPosition}
+    />
+  );
 }
 
-// ============================================================================
-// Branch Pane Component
-// ============================================================================
-
-/**
- * BranchPane renders a split container with two children
- * Uses react-resizable-panels for resize functionality
- * Note: Panel sizes are managed internally by react-resizable-panels
- * to avoid re-renders during resize
- */
-function BranchPane({ node, workspaceId }: BranchPaneProps) {
+function BranchPane({ node, workspaceId, targetPaneId }: BranchPaneProps) {
   const orientation: Orientation =
     node.axis === 'horizontal' ? 'horizontal' : 'vertical';
 
@@ -100,7 +99,7 @@ function BranchPane({ node, workspaceId }: BranchPaneProps) {
           overflow: 'hidden',
         }}
       >
-        <SplitPane node={node.children[0]} workspaceId={workspaceId} />
+        <SplitPane node={node.children[0]} workspaceId={workspaceId} targetPaneId={targetPaneId} />
       </Panel>
 
       {/* Resize handle */}
@@ -137,27 +136,19 @@ function BranchPane({ node, workspaceId }: BranchPaneProps) {
           overflow: 'hidden',
         }}
       >
-        <SplitPane node={node.children[1]} workspaceId={workspaceId} />
+        <SplitPane node={node.children[1]} workspaceId={workspaceId} targetPaneId={targetPaneId} />
       </Panel>
     </Group>
   );
 }
 
-// ============================================================================
-// Main SplitPane Component
-// ============================================================================
-
-/**
- * SplitPane recursively renders the workspace split tree
- * Supports horizontal and vertical splits via react-resizable-panels
- */
-export function SplitPane({ node, workspaceId }: SplitPaneProps) {
+export function SplitPane({ node, workspaceId, windowControlsPosition, targetPaneId }: SplitPaneProps) {
   if (isBranch(node)) {
-    return <BranchPane node={node} workspaceId={workspaceId} />;
+    return <BranchPane node={node} workspaceId={workspaceId} targetPaneId={targetPaneId} />;
   }
 
   if (isLeaf(node)) {
-    return <LeafPane node={node} workspaceId={workspaceId} />;
+    return <LeafPane node={node} workspaceId={workspaceId} windowControlsPosition={windowControlsPosition} targetPaneId={targetPaneId} />;
   }
 
   // Fallback for unknown node types

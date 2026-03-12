@@ -4,6 +4,7 @@ import { Button } from './ui/Button';
 import { TabsRoot, TabsList, TabsTab } from './ui/Tabs';
 import { Badge } from './ui/badge';
 import { Tooltip } from './ui/Tooltip';
+import { WindowControls } from './WindowControls';
 import './TabBar.css';
 import {
   MenuRoot,
@@ -25,6 +26,7 @@ interface TabBarProps {
   onSplitPane?: (paneId: string, direction: 'horizontal' | 'vertical') => void;
   onCreateTabRight?: (paneId: string, tabId: string) => void;
   onCreateBrowserTab?: () => void;
+  windowControlsPosition?: 'left' | 'right';
 }
 
 export function TabBar({
@@ -37,6 +39,7 @@ export function TabBar({
     onSplitPane,
     onCreateTabRight,
     onCreateBrowserTab,
+    windowControlsPosition,
 }: TabBarProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [showOverflow, setShowOverflow] = useState(false);
@@ -153,6 +156,9 @@ export function TabBar({
                 onSelectTab(paneId, value);
             }
         }} className="tab-bar">
+            {windowControlsPosition === 'left' && (
+              <WindowControls position={windowControlsPosition} />
+            )}
             {/* Scrollable tab container */}
             <TabsList ref={scrollContainerRef} className="tab-bar-scroll-container">
       {tabs.map((tab) => (
@@ -265,9 +271,10 @@ export function TabBar({
               </Button>
             </Tooltip>
 
+            {windowControlsPosition === 'right' && <WindowControls position={windowControlsPosition} />}
 
 
-      {/* Context Menu using Base-UI Menu primitive */}
+       {/* Context Menu using Base-UI Menu primitive */}
       <MenuRoot open={contextMenuOpen} onOpenChange={setContextMenuOpen}>
         <MenuPortal>
           <MenuPositioner

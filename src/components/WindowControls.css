@@ -1,0 +1,66 @@
+/* WindowControls Component Styles - Matching TabBar Design */
+
+.window-controls-container {
+  display: flex;
+  align-items: center;
+  height: 35px;
+  background-color: #252526;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.window-controls {
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+/* Window control buttons - matches TabBar button styling */
+.window-controls button {
+  background: none;
+  border: none;
+  color: #cccccc;
+  cursor: pointer;
+  width: 36px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.window-controls button:hover {
+  background-color: #3c3c3c;
+  color: #ffffff;
+}
+
+/* Close button specific styling - red on hover */
+.window-controls button[data-window-close="true"]:hover {
+  background-color: #c75450;
+  color: #ffffff;
+}
+
+/* Left-aligned controls (macOS style) */
+.window-controls-left {
+  border-right: 1px solid #1e1e1e;
+  padding-left: 8px;
+}
+
+/* Right-aligned controls (Windows/Linux style) */
+.window-controls-right {
+  border-left: 1px solid #1e1e1e;
+  padding-right: 8px;
+}
+
+/* Ensure tauri-controls Titlebar matches TabBar height */
+.window-controls .titlebar {
+  height: 35px;
+}
+
+/* Window state indicators (optional - if tauri-controls supports icons) */
+.window-controls button svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.5;
+}

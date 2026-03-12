@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-checkout-branch"
+description = "Enables the checkout_branch command without any pre-configured scope."
+commands.allow = ["checkout_branch"]
+
+[[permission]]
+identifier = "deny-checkout-branch"
+description = "Denies the checkout_branch command without any pre-configured scope."
+commands.deny = ["checkout_branch"]
