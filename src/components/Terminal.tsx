@@ -1,31 +1,55 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Terminal as GhosttyTerminal, FitAddon } from 'ghostty-web';
-import { invoke, Channel } from '@tauri-apps/api/core';
 import { sendNotification } from '@tauri-apps/plugin-notification';
-import useWorkspaceStore from '../state/workspace';
 import { ErrorBoundary } from './ErrorBoundary';
 import logger from '../lib/logger';
 import { terminalTheme } from '../theme/terminal';
-import { generateUUID } from '../lib/utils';
+import {
+  getWebSocketService,
+  resolveWebSocketUrl,
+  type JsonRpcIncomingMessage,
+  type JsonRpcNotification,
+} from '../services/websocket';
+import { useRuntimeUiState, zoomRuntimeIn, zoomRuntimeOut } from '../lib/runtime-ui-state';
+import { setActivePaneSelection, setActiveTabSelection } from '../lib/runtime-selection';
 
 interface TerminalProps {
   sessionId?: string;
   tabId: string;
   paneId: string;
+  workspaceId?: string;
   onNotification?: (message: string) => void;
   hasNotification?: boolean;
 }
 
-export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotification }: TerminalProps) {
+function extractErrorMessage(error: unknown): string {
+  if (!error || typeof error !== 'object') {
+    return String(error);
+  }
+
+  const candidate = error as { message?: unknown };
+  if (typeof candidate.message === 'string' && candidate.message.length > 0) {
+    return candidate.message;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return 'Unknown PTY error';
+  }
+}
+
+export function Terminal({ sessionId, tabId, paneId, workspaceId, onNotification, hasNotification }: TerminalProps) {
   const [isReady, setIsReady] = useState(false);
 
-  const fontSize = useWorkspaceStore((state) => state.fontSize);
+  const fontSize = useRuntimeUiState((state) => state.fontSize);
 
   const currentSessionIdRef = useRef<string | null>(null);
-  const channelRef = useRef<Channel<{ event: string; data?: unknown }> | null>(null);
   const isConnectingRef = useRef(false);
   const onNotificationRef = useRef<((message: string) => void) | undefined>(onNotification);
   const resizeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recoveredTabIdsRef = useRef<Set<string>>(new Set());
+  const websocketService = getWebSocketService();
 
   // Ghostty-web refs
   const containerRef = useRef<HTMLDivElement>(null);
@@ -36,17 +60,40 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
     onNotificationRef.current = onNotification;
   }, [onNotification]);
 
-  const debounceResize = useCallback((cols: number, rows: number, sessionId: string) => {
+  const debounceResize = useCallback((cols: number, rows: number, targetTabId: string) => {
     if (resizeTimeoutRef.current) {
       clearTimeout(resizeTimeoutRef.current);
     }
 
     resizeTimeoutRef.current = setTimeout(() => {
-      const correlationId = generateUUID();
-      invoke('resize_pty', { sessionId, cols, rows, correlationId }).catch((error) => {
-        logger.warn('Failed to resize PTY', { error, sessionId, cols, rows });
+      websocketService.request('pty.resize', { tabId: targetTabId, cols, rows }).catch((error) => {
+        logger.warn('Failed to resize PTY', { error, tabId: targetTabId, cols, rows });
       });
     }, 100);
+  }, [websocketService]);
+
+  const applyScrollback = useCallback((term: GhosttyTerminal, scrollback: Array<{ text?: unknown }>) => {
+    if (!Array.isArray(scrollback) || scrollback.length === 0) {
+      return;
+    }
+
+    const content = scrollback
+      .map((line) => {
+        if (typeof line?.text === 'string') {
+          return line.text;
+        }
+
+        if (line?.text === undefined || line?.text === null) {
+          return '';
+        }
+
+        return String(line.text);
+      })
+      .join('\r\n');
+
+    if (content.length > 0) {
+      term.write(`${content}\r\n`);
+    }
   }, []);
 
   // Initialize ghostty-web terminal
@@ -88,92 +135,167 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
 
     const disposable = term.onData((data: string) => {
       if (currentSessionIdRef.current) {
-        invoke('write_pty', { sessionId: currentSessionIdRef.current, data });
+        websocketService.request('pty.write', { tabId: currentSessionIdRef.current, data }).catch((error) => {
+          logger.warn('Failed to write to PTY', { error, tabId: currentSessionIdRef.current });
+        });
       }
     });
 
     return () => disposable.dispose();
-  }, []);
+  }, [websocketService]);
+
+  useEffect(() => {
+    const term = terminalRef.current;
+    if (!term) {
+      return;
+    }
+
+    const unsubscribe = websocketService.onMessage((message: JsonRpcIncomingMessage) => {
+      if (!('method' in message) || message.method !== 'pty.output') {
+        return;
+      }
+
+      const notification = message as JsonRpcNotification<{
+        type?: string;
+        tabId?: string;
+        data?: unknown;
+        message?: unknown;
+        code?: number | null;
+      }>;
+      const params = notification.params;
+
+      if (!params || typeof params !== 'object') {
+        return;
+      }
+
+      const eventTabId = typeof params.tabId === 'string' ? params.tabId : null;
+      if (!eventTabId || eventTabId !== currentSessionIdRef.current) {
+        return;
+      }
+
+      switch (params.type) {
+        case 'output': {
+          if (params.data === undefined || params.data === null) {
+            return;
+          }
+
+          const output = typeof params.data === 'string' ? params.data : String(params.data);
+          term.write(output);
+          break;
+        }
+        case 'notification': {
+          if (params.message === undefined || params.message === null) {
+            return;
+          }
+
+          const messageText = typeof params.message === 'string' ? params.message : String(params.message);
+          onNotificationRef.current?.(messageText);
+
+          try {
+            sendNotification({ title: 'Ymir', body: messageText });
+          } catch (error) {
+            logger.warn('Failed to send desktop notification', { error });
+          }
+          break;
+        }
+        case 'exit': {
+          if (typeof params.code === 'number') {
+            term.write(`\r\n[Process exited with code ${params.code}]\r\n`);
+          } else {
+            term.write('\r\n[Process exited]\r\n');
+          }
+          break;
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [websocketService]);
 
   // Connect to PTY
   useEffect(() => {
     const term = terminalRef.current;
     if (!term) return;
 
-    async function connectToPty(sid: string | undefined, term: GhosttyTerminal) {
+    async function connectToPty(existingSessionId: string | undefined, term: GhosttyTerminal) {
       if (isConnectingRef.current) return;
-      if (currentSessionIdRef.current) {
+
+      const targetTabId = existingSessionId && existingSessionId.trim().length > 0
+        ? existingSessionId
+        : tabId;
+
+      if (currentSessionIdRef.current === targetTabId) {
         setIsReady(true);
         return;
       }
 
       isConnectingRef.current = true;
-      const correlationId = generateUUID();
 
-      const channel = new Channel<{ event: string; data?: unknown }>();
-      channelRef.current = channel;
-
-      channel.onmessage = (message) => {
-        if (!message || typeof message !== 'object') return;
-
-        switch (message.event) {
-          case 'output': {
-            const outputData = (message.data as { data?: string })?.data ?? message.data;
-            if (outputData !== undefined && outputData !== null) {
-              const outputStr = typeof outputData === 'string' ? outputData : String(outputData);
-              term.write(outputStr);
-            }
-            break;
-          }
-          case 'notification': {
-            const notifMessage = (message.data as { message?: string })?.message ?? message.data;
-            if (notifMessage !== undefined && notifMessage !== null) {
-              const messageStr = typeof notifMessage === 'string' ? notifMessage : String(notifMessage);
-              onNotificationRef.current?.(messageStr);
-              try {
-                sendNotification({ title: 'Ymir', body: messageStr });
-              } catch (error) {
-                logger.warn('Failed to send desktop notification', { error });
-              }
-            }
-            break;
-          }
-          case 'exit':
-            term.write('\r\n[Process exited]\r\n');
-            break;
-        }
-      };
-
-      if (sid) {
-        try {
-          const isAlive = await invoke<boolean>('is_pty_alive', { sessionId: sid, correlationId });
-          if (isAlive) {
-            await invoke('attach_pty_channel', { sessionId: sid, onEvent: channel, correlationId });
-            currentSessionIdRef.current = sid;
-            setIsReady(true);
-            isConnectingRef.current = false;
-            return;
-          }
-        } catch (error) {
-          logger.warn('Failed to attach, spawning new', { sessionId: sid, error });
-        }
-      }
+      setIsReady(false);
 
       try {
-        const newSessionId = await invoke<string>('spawn_pty', { onEvent: channel, correlationId });
-        currentSessionIdRef.current = newSessionId;
+        if (!websocketService.isConnected()) {
+          await websocketService.connect(resolveWebSocketUrl());
+        }
+
+        await websocketService.request('pty.connect', { tabId: targetTabId });
+
+        const tabsResult = await websocketService.request<{ tabs?: Array<{ id?: string; sessionId?: string; scrollback?: Array<{ text?: unknown }> }> }>(
+          'tab.list',
+          { paneId },
+        ).catch((error) => {
+          logger.warn('Failed to load tab scrollback', { error, paneId, tabId: targetTabId });
+          return null;
+        });
+
+        const matchingTab = tabsResult?.tabs?.find((candidate) => {
+          if (!candidate || typeof candidate !== 'object') {
+            return false;
+          }
+
+          if (candidate.id === tabId || candidate.id === targetTabId) {
+            return true;
+          }
+
+          return candidate.sessionId === targetTabId;
+        });
+
+        if (matchingTab?.scrollback?.length) {
+          applyScrollback(term, matchingTab.scrollback);
+        }
+
+        currentSessionIdRef.current = targetTabId;
         setIsReady(true);
-        useWorkspaceStore.getState().updateTabSessionId(paneId, tabId, newSessionId);
       } catch (error) {
-        logger.error('Failed to spawn PTY', { error });
-        term.write('\r\n[Error: Failed to spawn PTY]\r\n');
+        const errorMessage = extractErrorMessage(error);
+        if (workspaceId && !recoveredTabIdsRef.current.has(targetTabId)) {
+          recoveredTabIdsRef.current.add(targetTabId);
+          try {
+            const recoveryResult = await websocketService.request<{ tab?: { id?: string } }>('tab.create', {
+              workspaceId,
+              paneId,
+            });
+            const nextTabId = recoveryResult?.tab?.id;
+            if (nextTabId) {
+              setActivePaneSelection(paneId);
+              setActiveTabSelection(nextTabId);
+              void websocketService.request('tab.close', { id: targetTabId }).catch(() => undefined);
+              return;
+            }
+          } catch {
+            recoveredTabIdsRef.current.delete(targetTabId);
+          }
+        }
+
+        logger.warn('Terminal PTY connection failed', { error: errorMessage, tabId: targetTabId });
+        term.write('\r\n[Error: Failed to connect PTY]\r\n');
       } finally {
         isConnectingRef.current = false;
       }
     }
 
-    connectToPty(sessionId, term);
-  }, [paneId, tabId, sessionId]);
+    void connectToPty(sessionId, term).catch(() => undefined);
+  }, [applyScrollback, paneId, sessionId, tabId, websocketService, workspaceId]);
 
   // Handle resize with ResizeObserver
   useEffect(() => {
@@ -190,7 +312,7 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
           const { cols, rows } = term;
           debounceResize(cols, rows, currentSessionIdRef.current);
         }
-      } catch (error) {
+      } catch (_error) {
         // Silently ignore fit errors during initialization
       }
     });
@@ -202,13 +324,12 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
   // Handle ctrl+scroll zoom
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        const { zoomIn, zoomOut } = useWorkspaceStore.getState();
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
         if (e.deltaY < 0) {
-          zoomIn();
+          zoomRuntimeIn();
         } else if (e.deltaY > 0) {
-          zoomOut();
+          zoomRuntimeOut();
         }
       }
     };
@@ -218,19 +339,16 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
     return () => terminalElement?.removeEventListener('wheel', handleWheel);
   }, []);
 
-  // Listen for title changes and update tab title
   useEffect(() => {
-    const term = terminalRef.current;
-    if (!term) return;
-
-    const disposable = term.onTitleChange((newTitle: string) => {
-      if (newTitle && newTitle.trim()) {
-        useWorkspaceStore.getState().updateTabTitle(paneId, tabId, newTitle.trim());
+    return () => {
+      if (!resizeTimeoutRef.current) {
+        return;
       }
-    });
 
-    return () => disposable.dispose();
-  }, [paneId, tabId]);
+      clearTimeout(resizeTimeoutRef.current);
+      resizeTimeoutRef.current = null;
+    };
+  }, []);
 
   return (
     <ErrorBoundary>

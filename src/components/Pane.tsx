@@ -1,8 +1,19 @@
-import { useCallback, useMemo } from 'react';
-import useWorkspaceStore from '../state/workspace';
-import { shallow } from 'zustand/shallow';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useTabs } from '../hooks/useTabs';
+import { getWebSocketService } from '../services/websocket';
+import {
+  clearTabNotification,
+  getTabNotification,
+  markTabNotification,
+  syncPaneTabs,
+  useRuntimeNotifications,
+} from '../lib/runtime-notifications';
+import {
+  useRuntimeSelection,
+  setActivePaneSelection,
+  setActiveTabSelection,
+} from '../lib/runtime-selection';
 import { Terminal } from './Terminal';
-import { Browser } from './Browser';
 import { TabBar } from './TabBar';
 import { ErrorBoundary } from './ErrorBoundary';
 
@@ -14,15 +25,140 @@ interface PaneProps {
 }
 
 export function Pane({ paneId, workspaceId, windowControlsPosition, isTopmost }: PaneProps) {
-  const pane = useWorkspaceStore(
-    (state) => {
-      const workspace = state.workspaces.find((ws) => ws.id === workspaceId);
-      return workspace?.panes[paneId] || null;
+  const { tabs, refetch: refetchTabs } = useTabs(paneId);
+  const hasBootstrappedTabRef = useRef(false);
+  const selectedPaneId = useRuntimeSelection((state) => state.activePaneId);
+  const selectedTabId = useRuntimeSelection((state) => state.activeTabId);
+  const websocketService = useMemo(() => getWebSocketService(), []);
+  useRuntimeNotifications((snapshot) => snapshot);
+
+  useEffect(() => {
+    syncPaneTabs(workspaceId, paneId, tabs);
+  }, [paneId, tabs, workspaceId]);
+
+  const activeTabId = useMemo(() => {
+    if (selectedTabId && tabs.some((tab) => tab.id === selectedTabId)) {
+      return selectedTabId;
+    }
+
+    return tabs[0]?.id ?? null;
+  }, [selectedTabId, tabs]);
+
+  useEffect(() => {
+    if (selectedPaneId === paneId && activeTabId) {
+      setActiveTabSelection(activeTabId);
+    }
+  }, [activeTabId, paneId, selectedPaneId]);
+
+  useEffect(() => {
+    if (tabs.length > 0) {
+      hasBootstrappedTabRef.current = false;
+      return;
+    }
+
+    if (hasBootstrappedTabRef.current) {
+      return;
+    }
+
+    hasBootstrappedTabRef.current = true;
+    void websocketService
+      .request<{ tab?: { id?: string } }>('tab.create', {
+        workspaceId,
+        paneId,
+      })
+      .then(async (result) => {
+        const createdTabId = result?.tab?.id;
+        if (createdTabId) {
+          setActivePaneSelection(paneId);
+          setActiveTabSelection(createdTabId);
+        }
+        await refetchTabs();
+      })
+      .catch(() => {
+        hasBootstrappedTabRef.current = false;
+      });
+  }, [paneId, refetchTabs, tabs.length, websocketService, workspaceId]);
+
+  const handleCreateTab = useCallback(
+    (targetPaneId: string) => {
+      void websocketService
+        .request<{ tab?: { id?: string } }>('tab.create', {
+          workspaceId,
+          paneId: targetPaneId,
+        })
+        .then(async (result) => {
+          const createdTabId = result?.tab?.id;
+          if (createdTabId && targetPaneId === paneId) {
+            setActivePaneSelection(targetPaneId);
+            setActiveTabSelection(createdTabId);
+          }
+          await refetchTabs();
+        })
+        .catch(() => undefined);
     },
-    shallow
+    [paneId, refetchTabs, websocketService, workspaceId],
   );
 
-  if (!pane) {
+  const handleCloseTab = useCallback(
+    (_paneId: string, tabId: string) => {
+      clearTabNotification(tabId);
+      void websocketService
+        .request('tab.close', { id: tabId })
+        .catch(() => undefined);
+    },
+    [websocketService],
+  );
+
+  const handleSelectTab = useCallback((_paneId: string, tabId: string) => {
+    setActivePaneSelection(_paneId);
+    setActiveTabSelection(tabId);
+    clearTabNotification(tabId);
+  }, []);
+
+  const handleSplitPane = useCallback(
+    async () => {
+      const response = await websocketService.request<{ pane?: { id?: string } }>('pane.create', {
+        workspaceId,
+      });
+      if (response?.pane?.id) {
+        setActivePaneSelection(response.pane.id);
+      }
+    },
+    [websocketService, workspaceId],
+  );
+
+  const tabNotificationHandlers = useMemo(() => {
+    const handlers: Record<string, (message: string) => void> = {};
+    tabs.forEach((tab) => {
+      handlers[tab.id] = (message: string) => {
+        markTabNotification(workspaceId, paneId, tab, message);
+      };
+    });
+    return handlers;
+  }, [paneId, tabs, workspaceId]);
+
+  const decoratedTabs = useMemo(
+    () =>
+      tabs.map((tab) => {
+        const notification = getTabNotification(tab.id);
+        return {
+          ...tab,
+          hasNotification: notification.count > 0,
+          notificationCount: notification.count,
+          notificationText: notification.text,
+        };
+      }),
+    [tabs],
+  );
+
+  const activeTab = useMemo(
+    () => decoratedTabs.find((tab) => tab.id === activeTabId) ?? null,
+    [activeTabId, decoratedTabs],
+  );
+
+  const hasNotification = decoratedTabs.some((tab) => tab.hasNotification);
+
+  if (tabs.length === 0) {
     return (
       <div
         style={{
@@ -35,54 +171,10 @@ export function Pane({ paneId, workspaceId, windowControlsPosition, isTopmost }:
           fontSize: '14px',
         }}
       >
-        Pane not found
+        Initializing pane...
       </div>
     );
   }
-
-  const handleCreateTab = useCallback(() => {
-    useWorkspaceStore.getState().createTab(paneId);
-  }, [paneId]);
-
-  const handleCreateBrowserTab = useCallback(() => {
-    useWorkspaceStore.getState().createTab(paneId, undefined, 'browser');
-  }, [paneId]);
-
-  const handleCloseTab = useCallback(
-    (_paneId: string, tabId: string) => {
-      useWorkspaceStore.getState().closeTab(_paneId, tabId);
-    },
-    []
-  );
-
-  const handleSelectTab = useCallback(
-    (_paneId: string, tabId: string) => {
-      useWorkspaceStore.getState().setActiveTab(_paneId, tabId);
-    },
-    []
-  );
-
-  // Convert UI direction to store direction
-  const handleSplitPane = useCallback(
-    (_paneId: string, direction: 'horizontal' | 'vertical') => {
-      // 'horizontal' split creates panes side by side -> 'right'
-      // 'vertical' split creates panes stacked -> 'down'
-      const storeDirection = direction === 'horizontal' ? 'right' : 'down';
-      useWorkspaceStore.getState().splitPane(_paneId, storeDirection);
-    },
-    []
-  );
-
-  const tabNotificationHandlers = useMemo(() => {
-    const handlers: Record<string, (message: string) => void> = {};
-    pane.tabs.forEach((tab) => {
-      handlers[tab.id] = (message: string) => {
-        const { markNotification } = useWorkspaceStore.getState();
-        markNotification(tab.id, message);
-      };
-    });
-    return handlers;
-  }, [pane.tabs]);
 
   return (
     <ErrorBoundary>
@@ -92,61 +184,53 @@ export function Pane({ paneId, workspaceId, windowControlsPosition, isTopmost }:
           display: 'flex',
           flexDirection: 'column',
           backgroundColor: 'var(--background-hex)',
-          boxShadow: pane.hasNotification ? 'inset 0 0 0 2px var(--notification)' : 'none',
+          boxShadow: hasNotification ? 'inset 0 0 0 2px var(--notification)' : 'none',
           transition: 'box-shadow 0.2s ease',
         }}
       >
-        {/* TabBar at top */}
         <TabBar
           paneId={paneId}
-          tabs={pane.tabs}
-          activeTabId={pane.activeTabId}
+          tabs={decoratedTabs}
+          activeTabId={activeTabId}
           onCreateTab={handleCreateTab}
-          onCreateBrowserTab={handleCreateBrowserTab}
           onCloseTab={handleCloseTab}
           onSelectTab={handleSelectTab}
-          onSplitPane={handleSplitPane}
+          onSplitPane={() => {
+            void handleSplitPane();
+          }}
           windowControlsPosition={windowControlsPosition}
           isTopmost={isTopmost}
         />
 
-      {/* Tab content area */}
-      <div
-        style={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          borderTop: '1px solid var(--border-tertiary)',
-        }}
-      >
-          {pane.tabs.map((tab) => (
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            borderTop: '1px solid var(--border-tertiary)',
+          }}
+        >
+          {activeTab && (
             <div
-              key={tab.id}
+              key={activeTab.id}
               style={{
-                display: tab.id === pane.activeTabId ? 'flex' : 'none',
+                display: 'flex',
                 flex: 1,
                 width: '100%',
                 height: '100%',
               }}
             >
-              {tab.type === 'browser' ? (
-                <Browser
-                  tabId={tab.id}
-                  url={tab.url || 'about:blank'}
-                  paneId={paneId}
-                />
-              ) : (
-                <Terminal
-                  sessionId={tab.sessionId}
-                  tabId={tab.id}
-                  paneId={paneId}
-                  onNotification={tabNotificationHandlers[tab.id]}
-                  hasNotification={tab.hasNotification}
-                />
-              )}
+              <Terminal
+                sessionId={activeTab.sessionId}
+                tabId={activeTab.id}
+                paneId={paneId}
+                workspaceId={workspaceId}
+                onNotification={tabNotificationHandlers[activeTab.id]}
+                hasNotification={activeTab.hasNotification}
+              />
             </div>
-          ))}
+          )}
         </div>
       </div>
     </ErrorBoundary>

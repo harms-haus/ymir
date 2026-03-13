@@ -1,0 +1,29 @@
+[package]
+name = "ymir-core"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "ymir_core"
+crate-type = ["rlib"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+libsql = "0.9"
+dirs = "5.0"
+tokio = { version = "1", features = ["rt", "sync", "fs", "time", "signal"] }
+portable-pty = "0.9"
+dashmap = "6.0"
+tracing = "0.1"
+git2 = "0.19"
+tempfile = "3"
+axum = { version = "0.7", features = ["ws"] }
+tokio-tungstenite = "0.24"
+futures = "0.3"
+uuid = { version = "1.10", features = ["v4", "serde"] }
+async-trait = "0.1"
+tower = "0.4"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

@@ -1,4 +1,4 @@
-export { mockInvoke, mockChannel, mockTauriStore, setupTauriMocks } from './mocks';
+export { mockInvoke, mockChannel, setupTauriMocks } from './mocks';
 export { renderWithStore } from './render';
 export {
   fireKeyDown,
@@ -6,6 +6,14 @@ export {
   fireMetaShiftKeyDown,
   fireShortcut,
 } from './events';
+export {
+  resetIdCounter,
+  createMockTab,
+  createMockPane,
+  createMockLeafNode,
+  createMockBranchNode,
+  createMockWorkspace,
+} from './factories';
 
 export {
   render,

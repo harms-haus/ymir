@@ -3,7 +3,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { WorkspaceSidebar } from './WorkspaceSidebar';
-import useWorkspaceStore from '../state/workspace';
+import { useRuntimeUiState } from '../lib/runtime-ui-state';
 
 import {
   SIDEBAR_MIN_WIDTH,
@@ -31,7 +31,7 @@ import {
  * - Color: var(--border-tertiary) (default), hsl(var(--primary)) (hover/active)
  */
 export function ResizableSidebar() {
-  const sidebarCollapsed = useWorkspaceStore((state) => state.sidebarCollapsed);
+  const sidebarCollapsed = useRuntimeUiState((state) => state.sidebarCollapsed);
   const [width, setWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
 

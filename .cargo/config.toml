@@ -1,0 +1,28 @@
+# Cargo workspace configuration
+#
+# This file configures cross-compilation targets for sidecar binaries.
+
+[build]
+# Target directory for all compiled binaries
+target-dir = "target"
+
+# Sidecar Binary Naming Convention
+# -------------------------------
+# The ymir-server sidecar binary is built via Cargo workspace:
+# - Debug builds: target/debug/ymir-server
+# - Release builds: target/release/ymir-server
+#
+# For Tauri bundling, the binary path is:
+# - Relative to ymir-tauri/: "../target/release/ymir-server"
+# - Tauri expects this base path and will append target triple suffix during bundling
+#
+# Cross-compilation binary naming for multi-platform support:
+# - Linux: ymir-server-x86_64-unknown-linux-gnu
+# - macOS (Intel): ymir-server-x86_64-apple-darwin
+# - macOS (Apple Silicon): ymir-server-aarch64-apple-darwin
+# - Windows: ymir-server-x86_64-pc-windows-msvc.exe
+
+[env]
+# Optional: Set default Rust toolchain for all workspace members
+# CARGO_BUILD_RUSTC = "rustc"
+# CARGO_BUILD_RUSTDOC = "rustdoc"
