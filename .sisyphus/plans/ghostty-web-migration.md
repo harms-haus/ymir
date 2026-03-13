@@ -133,7 +133,7 @@ Wave 4 (Final Verification):
 
 ## TODOs
 
-- [ ] **Task 1: Remove xterm packages from package.json**
+- [x] **Task 1: Remove xterm packages from package.json**
 
 **What to do**:
 Remove these dependencies from package.json:
@@ -174,7 +174,7 @@ Evidence: .sisyphus/evidence/task-1-packages-removed.txt
 
 ---
 
-- [ ] **Task 2: Add ghostty-web dependency**
+- [x] **Task 2: Add ghostty-web dependency**
 
 **What to do**:
 Add `ghostty-web` to dependencies in package.json:
@@ -215,7 +215,7 @@ Evidence: .sisyphus/evidence/task-2-ghostty-installed.txt
 
 ---
 
-- [ ] **Task 3: Create feature branch**
+- [x] **Task 3: Create feature branch**
 
 **What to do**:
 Create and switch to feature branch:
@@ -246,7 +246,7 @@ Evidence: .sisyphus/evidence/task-3-branch-created.txt
 
 ---
 
-- [ ] **Task 4: Update TypeScript types**
+- [x] **Task 4: Update TypeScript types**
 
 **What to do**:
 Update or remove TypeScript types for xterm.js. Check for:
@@ -283,7 +283,7 @@ Evidence: .sisyphus/evidence/task-4-typescript-check.txt
 
 ---
 
-- [ ] **Task 5: Refactor Terminal.tsx for ghostty-web**
+- [x] **Task 5: Refactor Terminal.tsx for ghostty-web**
 
 **What to do**:
 Rewrite src/components/Terminal.tsx to use ghostty-web instead of react-xtermjs:
