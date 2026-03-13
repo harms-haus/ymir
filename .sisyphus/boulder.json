@@ -1,11 +1,9 @@
 {
-  "active_plan": "/home/blake/Documents/software/ymir/.sisyphus/plans/custom-titlebar.md",
-  "started_at": "2026-03-12T05:03:58.710Z",
+  "active_plan": "/home/blake/Documents/software/ymir/.sisyphus/plans/codebase-audit.md",
+  "started_at": "2026-03-12T20:57:38.320Z",
   "session_ids": [
-    "ses_31f91e346ffe1sHhZSdGZYsKtw",
-    "ses_31d70de40ffekdkLMLBsTQIugO"
+    "ses_31c6eca9bffeAg4A5dNixRd40W"
   ],
-  "plan_name": "custom-titlebar",
-  "agent": "atlas",
-  "worktree_path": "/home/blake/Documents/software/ymir/.worktrees/custom-titlebar"
+  "plan_name": "codebase-audit",
+  "agent": "atlas"
 }

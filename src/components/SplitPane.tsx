@@ -142,12 +142,14 @@ function BranchPane({ node, workspaceId, targetPaneId, topmostPaneIds }: BranchP
             }),
       }}
       onMouseEnter={(e) => {
-        const target = e.target as HTMLElement;
-        target.style.backgroundColor = 'hsl(var(--primary))';
+        if (e.target instanceof HTMLElement) {
+          e.target.style.backgroundColor = 'hsl(var(--primary))';
+        }
       }}
       onMouseLeave={(e) => {
-        const target = e.target as HTMLElement;
-        target.style.backgroundColor = 'var(--border-tertiary)';
+        if (e.target instanceof HTMLElement) {
+          e.target.style.backgroundColor = 'var(--border-tertiary)';
+        }
       }}
     />
 
