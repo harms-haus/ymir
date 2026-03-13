@@ -1,29 +1,28 @@
-# Workspace Settings Enhancement Plan
+# Workspace Settings with WebSocket Integration Plan
 
 ## TL;DR
 
-> **Quick Summary**: Add customizable workspace settings (color, icon, working directory, subtitle) with a modal dialog for configuration, accessible via a new context menu item.
+> **Objective**: Update workspace settings to work with WebSocket-based core service, storing in `.ymir/workspace-settings.yaml` with WebSocket protocol communication.
 
 > **Deliverables**:
-> - Extended Workspace type with color, icon, workingDirectory, subtitle, name fields
-> - `updateWorkspaceSettings` action in Zustand store
-> - `WorkspaceSettingsDialog` component using existing Base-UI Dialog wrappers
-> - "Settings" context menu item in workspace sidebar
-> - Visual accent line (3px left border) colored by workspace setting
-> - Icon display on workspace tabs
-> - Subtitle display below workspace name
-> - Directory picker using Tauri plugin
+> - Extended Rust/TypeScript Workspace types with settings fields (color, icon, workingDirectory, subtitle)
+> - Updated database schema with workspace settings columns (migration 002)
+> - WebSocket handlers for settings CRUD (`workspace.updateSettings`, `workspace.getSettings`)
+> - React WebSocket hooks for settings (`useWorkspaceSettings`)
+> - `.ymir/workspace-settings.yaml` file-based storage
+> - WorkspaceSettingsDialog adapted for WebSocket architecture
+> - Settings sync between YAML file and database
 
-> **Estimated Effort**: Medium
-> **Parallel Execution**: YES - 4 waves
-> **Critical Path**: Type extension → Store action → Dialog UI → Visual integration
+> **Estimated Effort**: Medium (~15 tasks)
+> **Parallel Execution**: YES - 4 waves with 3-5 tasks each
+> **Critical Path**: Types → Schema → Handlers → React Hooks → UI Integration
 
 ---
 
 ## Context
 
-### Original Request
-User wants to add workspace customization features:
+### Original Request (Pre-Refactor)
+User wants workspace customization features that were planned before the WebSocket refactor:
 1. Color assignment (accent line on sidebar)
 2. Icon assignment
 3. Working directory (default to CWD)
@@ -32,95 +31,99 @@ User wants to add workspace customization features:
 6. Modal dialog using base-ui.com/components/dialog
 7. Context menu item to access settings
 
-### Interview Summary
-**Key Discussions**:
-- Color format: Hex string (e.g., "#ff5733")
-- Icon system: Predefined set of Lucide React icons (already installed)
-- Working directory: Affects new tabs only; existing tabs keep their CWD
-- Subtitle: Shows in expanded view, hidden when collapsed
-- Accent line: 3px left border on workspace tab
-- Hotkeys: Display only (Cmd+1-8), not customizable
+### WebSocket Refactor Status
+The websocket-core-refactor is **partially implemented** (Worktree: `.worktrees/websocket-core-refactor/`):
 
-**Research Findings**:
-- Workspace type currently: id, name, root, activePaneId, hasNotification
-- Context menu pattern exists with Base-UI Menu + custom anchor positioning
-- Dialog wrappers exist: DialogRoot, DialogPortal, DialogPopup, DialogTitle, DialogDescription, DialogClose
-- Menu wrappers exist: MenuRoot, MenuPortal, MenuPositioner, MenuPopup, MenuItem
-- No existing workspace color/icon/theme support
-- `@tauri-apps/plugin-dialog` not installed (needed for directory picker)
-- lucide-react already installed in package.json
+**Completed Tasks:**
+- ✅ Task 1-4: Cargo workspace, types, schema, migrations
+- ✅ Task 5-8: Database client, PTY manager, scrollback, Git service
+- ✅ Task 9-12: WebSocket server, protocol, workspace/pane handlers
+- ✅ Task 14-15: Git handlers, auth middleware
+- ✅ Task 18-20: CLI, browser spawning, sidecar config
 
-### Metis Review
-**Identified Gaps** (addressed):
-- Color format specified: hex string
-- Icon system: predefined Lucide icons (8-12 icons)
-- Working directory: only affects new tabs
-- Subtitle: plain text, max 50 chars
-- Accent line: 3px left border (VS Code pattern)
+**Remaining Tasks:**
+- ⏳ Task 13: Tab/PTY handlers (partially complete)
+- ⏳ Task 16-17: Standalone server, Tauri embedded
+- ⏳ Tasks 21-26: React WebSocket client, hooks, terminal adapter
+- ⏳ Tasks 27-31: Cleanup
+
+### Key Constraint: Storage Location
+User explicitly requires settings to be stored in `.ymir/workspace-settings.yaml` (YAML file) rather than solely in the database. This enables:
+- Human-readable configuration
+- Version control of workspace settings
+- Easy backup/restore
+- Manual editing
+
+### Architecture Decision: Hybrid Storage
+- **Database**: Primary source of truth for runtime state
+- **YAML file**: Persistent settings storage with sync on startup
+- **WebSocket**: Communication protocol between frontend and backend
+- **Sync**: Rust core loads from YAML on startup, saves to YAML on changes
 
 ---
 
 ## Work Objectives
 
 ### Core Objective
-Add workspace customization (color, icon, working directory, subtitle) with a settings modal dialog accessible from the context menu.
+Extend the WebSocket-based core service to support workspace settings (color, icon, workingDirectory, subtitle) with file-based persistence in `.ymir/workspace-settings.yaml`, adapting the React UI to use WebSocket communication instead of Zustand/Tauri invoke.
 
 ### Concrete Deliverables
-- Extended `Workspace` type in `src/state/types.ts`
-- `updateWorkspaceSettings` store action in `src/state/workspace.ts`
-- New `src/components/WorkspaceSettingsDialog.tsx` component
-- "Settings" menu item in `src/components/WorkspaceSidebar.tsx`
-- Updated `WorkspaceList` rendering with accent line, icon, subtitle
-- New CSS in `src/components/WorkspaceSidebar.css`
-- Store tests for new action
+1. `ymir-core` crate: Extended types with settings fields
+2. Database migration: 002_workspace_settings.sql
+3. YAML storage: Settings serialization/deserialization in Rust
+4. WebSocket handlers: `workspace.updateSettings`, `workspace.getSettings`
+5. React hooks: `useWorkspaceSettings()` WebSocket-based hook
+6. Settings dialog: Updated for WebSocket architecture (no Zustand)
+7. Settings sync: Load YAML on startup, save on changes
 
 ### Definition of Done
-- [ ] All new Workspace fields persist via Tauri Store
-- [ ] Settings dialog opens from context menu and saves correctly
-- [ ] Color accent line renders on workspace tabs
-- [ ] Icon displays on workspace tabs when set
-- [ ] Subtitle displays below name in expanded view, hidden when collapsed
-- [ ] Working directory used for new tabs in that workspace
-- [ ] All acceptance criteria pass (see tasks)
+- [ ] Workspace struct has settings fields in both Rust and TypeScript
+- [ ] Database schema supports settings columns
+- [ ] `.ymir/workspace-settings.yaml` loads on server startup
+- [ ] WebSocket handlers for settings CRUD work
+- [ ] React hooks subscribe to settings changes
+- [ ] Settings dialog opens and saves via WebSocket
+- [ ] Accent line, icon, subtitle render correctly
+- [ ] Settings persist across server restarts
 
 ### Must Have
-- 4 optional fields on Workspace: color, icon, workingDirectory, subtitle
-- updateWorkspaceSettings action in Zustand store
-- WorkspaceSettingsDialog using existing Base-UI Dialog wrappers
-- "Settings" MenuItem in existing context menu
-- 3px left border accent line when color is set
-- Icon display when icon is set
-- Subtitle display (max 50 chars, truncated with ellipsis)
+- Settings fields: color, icon, workingDirectory, subtitle on Workspace type
+- YAML file storage: `.ymir/workspace-settings.yaml`
+- WebSocket handlers for settings operations
+- React hooks replacing Zustand actions
+- Settings dialog with immediate-save (no submit button)
+- Color picker with 10 preset colors
+- Icon picker with Lucide icons
+- Directory browser using Tauri dialog (in Tauri mode) or native (in browser mode)
+- Working directory affects new tab CWD
 
 ### Must NOT Have (Guardrails)
-- Do NOT add more fields beyond the 4 specified
-- Do NOT create custom hooks, contexts, or providers
-- Do NOT add workspace hotkey customization (Cmd+1-8 is display-only)
-- Do NOT add custom color picker (10 preset colors only)
-- Do NOT add upload custom icons (predefined Lucide set only)
-- Do NOT add workspace templates or presets
-- Do NOT add export/import functionality
-- Do NOT create multiple plans — everything in this single plan
+- NO Zustand store for settings (use WebSocket hooks)
+- NO Tauri invoke for settings operations
+- NO localStorage for settings persistence
+- NO separate settings table (columns on workspaces table)
+- NO manual YAML editing while server is running
+- NO split pane settings (removed in refactor)
+- NO browser tab settings (removed in refactor)
 
 ---
 
-## Verification Strategy (MANDATORY)
-
-> **ZERO HUMAN INTERVENTION** — ALL verification is agent-executed. No exceptions.
+## Verification Strategy
 
 ### Test Decision
-- **Infrastructure exists**: YES (vitest + playwright)
-- **Automated tests**: Tests-after (add tests for store action + components)
-- **Framework**: vitest for unit tests, playwright for E2E
-- **If TDD**: No — tests-after approach for this feature
+- **Infrastructure exists**: YES (websocket plan has test framework)
+- **Automated tests**: Tests-after implementation
+- **Framework**: Rust: built-in test, TS: Vitest + Playwright
+- **Agent-Executed QA**: MANDATORY for all tasks
 
 ### QA Policy
-Every task MUST include agent-executed QA scenarios (see TODO template below).
-Evidence saved to `.sisyphus/evidence/task-{N}-{scenario-slug}.{ext}`.
+Every task includes agent-executed QA scenarios:
+- **Frontend/UI**: Playwright - navigate, interact, assert DOM, screenshot
+- **Rust/WebSocket**: Bash - wscat/custom client for WebSocket testing
+- **File System**: Bash - verify YAML file contents
+- **Database**: SQL - verify settings columns
 
-- **Frontend/UI**: Use Playwright — Navigate, interact, assert DOM, screenshot
-- **Store/State**: Use vitest — Unit tests for actions and selectors
-- **Integration**: Use Bash — curl/API verification where applicable
+Evidence saved to `.sisyphus/evidence/task-{N}-{scenario-slug}.{ext}`
 
 ---
 
@@ -129,998 +132,1001 @@ Evidence saved to `.sisyphus/evidence/task-{N}-{scenario-slug}.{ext}`.
 ### Parallel Execution Waves
 
 ```
-Wave 1 (Start Immediately — foundation):
-├── Task 1: Extend Workspace type in types.ts [quick]
-├── Task 2: Add updateWorkspaceSettings action to store [quick]
-└── Task 3: Install @tauri-apps/plugin-dialog [quick]
+Wave 1 (Foundation - Rust types + schema):
+├── Task 1: Extend Rust Workspace type with settings fields [quick]
+├── Task 2: Create database migration 002 for settings columns [quick]
+└── Task 3: Implement YAML serialization for settings [quick]
 
-Wave 2 (After Wave 1 — UI components, MAX PARALLEL):
-├── Task 4: Create WorkspaceSettingsDialog component [deep]
-├── Task 5: Add "Settings" context menu item [quick]
-├── Task 6: Add color picker subcomponent [quick]
-├── Task 7: Add icon picker subcomponent [quick]
-└── Task 8: Add directory browser integration [quick]
+Wave 2 (Core Service - Handlers + storage):
+├── Task 4: Add workspace settings WebSocket handlers [unspecified-high]
+├── Task 5: Implement YAML file load on startup [unspecified-high]
+├── Task 6: Implement YAML file save on settings change [unspecified-high]
+└── Task 7: Add workspace.updateSettings to protocol [quick]
 
-Wave 3 (After Wave 2 — visual integration):
-├── Task 9: Add accent line CSS + rendering [quick]
-├── Task 10: Add icon display to workspace tabs [quick]
-├── Task 11: Add subtitle display to workspace tabs [quick]
-└── Task 12: Update WorkspaceList component [quick]
+Wave 3 (React Client - Hooks + UI):
+├── Task 8: Create useWorkspaceSettings WebSocket hook [unspecified-high]
+├── Task 9: Update WorkspaceSettingsDialog for WebSocket [deep]
+├── Task 10: Integrate settings into WorkspaceSidebar [quick]
+└── Task 11: Add accent line/icon/subtitle rendering [quick]
 
-Wave 4 (After Wave 3 — verification):
-├── Task 13: Add store unit tests [quick]
-├── Task 14: Add dialog E2E tests [deep]
+Wave 4 (Verification):
+├── Task 12: Add WebSocket handler tests [quick]
+├── Task 13: Add React hook tests [quick]
+├── Task 14: Add E2E tests for settings dialog [unspecified-high]
 └── Task 15: Final QA pass [unspecified-high]
 
-Critical Path: Task 1 → Task 2 → Task 4 → Task 9 → Task 13 → Task 15
-Parallel Speedup: ~60% faster than sequential
-Max Concurrent: 7 (Waves 1 & 2)
+Critical Path: Task 1 → Task 2 → Task 4 → Task 8 → Task 9 → Task 15
+Parallel Speedup: ~50% faster than sequential
+Max Concurrent: 3-4 tasks per wave
 ```
 
 ### Dependency Matrix
 
-- **1** (type extension): — → 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13
-- **2** (store action): 1 → 4, 5, 13
-- **3** (install dialog plugin): — → 8
-- **4** (dialog component): 1, 2 → 5, 14
-- **5** (context menu item): 1, 4 → 12
-- **6** (color picker): 1 → 4
-- **7** (icon picker): 1 → 4
-- **8** (directory browser): 1, 3 → 4
-- **9** (accent line CSS): 1 → 12
-- **10** (icon display): 1, 7 → 12
-- **11** (subtitle display): 1 → 12
-- **12** (update WorkspaceList): 5, 9, 10, 11 → 14
-- **13** (store tests): 2 → 15
-- **14** (E2E tests): 4, 12 → 15
-- **15** (final QA): 13, 14
-
-### Agent Dispatch Summary
-
-- **Wave 1**: 3 tasks — quick × 3
-- **Wave 2**: 5 tasks — deep × 1, quick × 4
-- **Wave 3**: 4 tasks — quick × 4
-- **Wave 4**: 3 tasks — quick × 1, deep × 1, unspecified-high × 1
+| Task | Depends On | Blocks |
+|------|-----------|--------|
+| 1 | - | 2, 4 |
+| 2 | - | 4, 5, 6 |
+| 3 | - | 5, 6 |
+| 4 | 1, 2 | 8, 12 |
+| 5 | 2, 3 | 15 |
+| 6 | 2, 3, 4 | 15 |
+| 7 | - | 4 |
+| 8 | 4 | 9, 10, 13 |
+| 9 | 8 | 10, 14 |
+| 10 | 8 | 11, 14 |
+| 11 | 10 | 14 |
+| 12 | 4 | 15 |
+| 13 | 8 | 15 |
+| 14 | 9, 10, 11 | 15 |
+| 15 | 5, 6, 12, 13, 14 | - |
 
 ---
 
 ## TODOs
 
-- [ ] 1. Extend Workspace Type with New Fields
+### Wave 1: Foundation (Rust Types + Schema)
 
-  **What to do**:
-  - Add 4 optional fields to `Workspace` interface in `src/state/types.ts` (lines 132-143):
-    - `color?: string` — hex color string (e.g., "#ff5733") for workspace accent line
-    - `icon?: string` — Lucide icon name string (e.g., "Terminal", "Code", "Server") for workspace icon
-    - `workingDirectory?: string` — path string for workspace default working directory
-    - `subtitle?: string` — subtitle text (max 50 chars, truncated with ellipsis)
-  - Add `WORKSPACE_COLORS` constant array of 10 hex color strings
-  - Add `WORKSPACE_ICONS` constant array of ~12 Lucide icon name strings
-  - Export both constants from types.ts
+- [ ] **1. Extend Rust Workspace Type with Settings Fields**
 
-  **Must NOT do**:
-  - Do NOT add any fields beyond the 4 specified above
-  - Do NOT add a default value for these fields in the type definition itself (undefined = not set)
+**What to do**:
+- Update `ymir-core/src/types.rs` Workspace struct (lines 195-209) to add:
+  - `color: Option<String>` - hex color string
+  - `icon: Option<String>` - Lucide icon name
+  - `working_directory: Option<String>` - path string
+  - `subtitle: Option<String>` - subtitle text
+- Add serde derives for all new fields
+- Update Default impl if present
+- Add constants for WORKSPACE_COLORS and WORKSPACE_ICONS
 
-  **Recommended Agent Profile**:
-  - **Category**: `quick`
-  - **Skills**: []
-  - **Skills Evaluated but Omitted**: N/A — trivial type extension
+**Must NOT do**:
+- Don't change existing fields (id, name, root, active_pane_id, has_notification)
+- Don't make new fields required (use Option<T>)
 
-  **Parallelization**:
-  - **Can Run In Parallel**: YES
-  - **Parallel Group**: Wave 1 (with Tasks 2, 3)
-  - **Blocks**: Tasks 4, 5, 6, 7, 8, 9, 10, 11, 12, 13
-  - **Blocked By**: None
+**Recommended Agent Profile**:
+- **Category**: `quick`
+- **Skills**: []
 
-  **References**:
-  - `src/state/types.ts:132-143` — Current Workspace interface to extend
-  - `src/state/types.ts:230-232` — Where to add WORKSPACE_COLORS and WORKSPACE_ICONS constants (after Git types)
+**Parallelization**:
+- **Can Run In Parallel**: YES
+- **Blocks**: Task 4
+- **Blocked By**: None
 
-  **Acceptance Criteria**:
-  - [ ] Workspace interface has 4 new optional fields
-  - [ ] WORKSPACE_COLORS array has exactly 10 hex color strings
-  - [ ] WORKSPACE_ICONS array has 8-12 Lucide icon name strings
-  - [ ] `npx tsc --noEmit` passes with no errors
+**References**:
+- `ymir-core/src/types.rs:195-209` - Current Workspace struct
+- `websocket-core-refactor.md` - Task 2 for type patterns
 
-  **QA Scenarios**:
-  ```
-  Scenario: Type extension compiles correctly
-    Tool: Bash
-    Preconditions: Types file updated
-    Steps:
-      1. Run `npx tsc --noEmit`
-      2. Check exit code is 0
-    Expected Result: No TypeScript errors
-    Evidence: .sisyphus/evidence/task-1-type-check.txt
-  ```
+**Acceptance Criteria**:
+- [ ] Workspace struct has 4 new Option<String> fields
+- [ ] serde Serialize/Deserialize derives cover new fields
+- [ ] `cargo check -p ymir-core` passes
 
-  **Commit**: YES
-  - Message: `feat(types): add workspace color, icon, workingDirectory, subtitle fields`
-  - Files: `src/state/types.ts`
-  - Pre-commit: `npx tsc --noEmit`
+**QA Scenarios**:
+```
+Scenario: Types compile correctly
+Tool: Bash
+Steps:
+1. cd ymir-core && cargo check
+2. Verify no errors
+Expected: Clean compilation
+Evidence: .sisyphus/evidence/task-1-types-compile.txt
+```
+
+**Commit**: YES
+- Message: `feat(core): add workspace settings fields to Workspace type`
+- Files: `ymir-core/src/types.rs`
+- Pre-commit: `cargo check -p ymir-core`
 
 ---
 
-- [ ] 2. Add updateWorkspaceSettings Store Action
+- [ ] **2. Create Database Migration 002 for Settings Columns**
 
-  **What to do**:
-  - Add `updateWorkspaceSettings` method to `WorkspaceState` interface in `src/state/workspace.ts`
-  - Signature: `(workspaceId: string, updates: { color?: string; icon?: string; workingDirectory?: string; subtitle?: string }) => void`
-  - Implement the action in the store using Immer draft:
-    - Find workspace by ID
-    - Apply updates only to provided fields (partial update pattern)
-    - Validate subtitle length (max 50 chars, truncate if exceeded)
-    - Validate color format (must be valid hex)
-    - Log the change via logger.info
-  - Update `resetState` to clear the new fields (set to undefined)
+**What to do**:
+- Create `ymir-core/migrations/002_workspace_settings.sql`
+- Add columns to workspaces table:
+  - `color TEXT` - hex color
+  - `icon TEXT` - Lucide icon name
+  - `working_directory TEXT` - path
+  - `subtitle TEXT` - subtitle
+- Add indexes if needed (color for filtering)
+- Ensure columns are nullable (SQLite DEFAULT NULL)
 
-  **Must NOT do**:
-  - Do NOT persist color/icon to Tauri store separately — they're part of the Workspace object
-  - Do NOT create a separate "settings" object — fields live directly on Workspace
+**Migration SQL**:
+```sql
+-- Migration: Add workspace settings columns
+-- Version: 2
 
-  **Recommended Agent Profile**:
-  - **Category**: `quick`
-  - **Skills**: []
-  - **Skills Evaluated but Omitted**: N/A — straightforward store extension
+-- Add settings columns to workspaces table
+ALTER TABLE workspaces ADD COLUMN color TEXT;
+ALTER TABLE workspaces ADD COLUMN icon TEXT;
+ALTER TABLE workspaces ADD COLUMN working_directory TEXT;
+ALTER TABLE workspaces ADD COLUMN subtitle TEXT;
 
-  **Parallelization**:
-  - **Can Run In Parallel**: YES
-  - **Parallel Group**: Wave 1 (with Tasks 1, 3)
-  - **Blocks**: Tasks 4, 5, 13
-  - **Blocked By**: Task 1 (needs type definitions)
+-- Index for color-based queries
+CREATE INDEX idx_workspaces_color ON workspaces(color);
 
-  **References**:
-  - `src/state/workspace.ts:50-117` — WorkspaceState interface (add new action signature)
-  - `src/state/workspace.ts:413-420` — Example pattern for setActiveWorkspace action
-  - `src/state/workspace.ts:380-399` — Example of createWorkspace action with Immer draft mutation
-  - `src/state/workspace.ts:680-710` — resetState function to update
+-- Migration tracking
+INSERT INTO _migrations (version, name) VALUES (2, '002_workspace_settings');
+```
 
-  **Acceptance Criteria**:
-  - [ ] `updateWorkspaceSettings` action exists in WorkspaceState interface
-  - [ ] Action implements partial update pattern (only provided fields are updated)
-  - [ ] Subtitle validation: truncated to 50 chars
-  - [ ] Action persists via existing Tauri store adapter (auto via partialize)
-  - [ ] `bun test src/state/workspace.test.ts` passes
+**Must NOT do**:
+- Don't create a separate settings table
+- Don't make columns NOT NULL
 
-  **QA Scenarios**:
-  ```
-  Scenario: Update workspace color
-    Tool: Bash (vitest)
-    Preconditions: Store initialized
-    Steps:
-      1. Call updateWorkspaceSettings(wsId, { color: "#ff0000" })
-      2. Assert workspace.color === "#ff0000"
-    Expected Result: Color updated, persisted
-    Evidence: .sisyphus/evidence/task-2-store-test.txt
+**Recommended Agent Profile**:
+- **Category**: `quick`
+- **Skills**: []
 
-  Scenario: Update subtitle with truncation
-    Tool: Bash (vitest)
-    Preconditions: Store initialized
-    Steps:
-      1. Call updateWorkspaceSettings(wsId, { subtitle: "A".repeat(100) })
-      2. Assert workspace.subtitle.length === 50
-    Expected Result: Subtitle truncated to 50 chars
-    Evidence: .sisyphus/evidence/task-2-subtitle-truncate.txt
-  ```
+**Parallelization**:
+- **Can Run In Parallel**: YES (with Task 1, 3)
+- **Blocks**: Tasks 4, 5, 6
+- **Blocked By**: None
 
-  **Commit**: YES
-  - Message: `feat(store): add updateWorkspaceSettings action`
-  - Files: `src/state/workspace.ts`
-  - Pre-commit: `bun test src/state/workspace.test.ts`
+**References**:
+- `ymir-core/migrations/001_initial_schema.sql` - Pattern to follow
+- `ymir-core/src/db/migrations.rs` - Migration runner
 
----
+**Acceptance Criteria**:
+- [ ] Migration file exists
+- [ ] SQL applies without errors
+- [ ] Columns are nullable
 
-- [ ] 3. Install @tauri-apps/plugin-dialog
+**QA Scenarios**:
+```
+Scenario: Migration applies successfully
+Tool: Bash
+Steps:
+1. turso db shell test-db < 002_workspace_settings.sql
+2. Verify no errors
+Expected: Migration applies cleanly
+Evidence: .sisyphus/evidence/task-2-migration.txt
+```
 
-  **What to do**:
-  - Install `@tauri-apps/plugin-dialog` via npm/bun
-  - Verify the plugin is listed in `src-tauri/capabilities/default.json` (or create the permission entry if needed)
-  - Import and verify the dialog module is accessible: `import { open } from '@tauri-apps/plugin-dialog'`
-
-  **Must NOT do**:
-  - Do NOT implement the directory browser logic yet (that's Task 8)
-  - Do NOT modify Cargo.toml (Tauri plugins use JS-only install for v2)
-
-  **Recommended Agent Profile**:
-  - **Category**: `quick`
-  - **Skills**: []
-  - **Skills Evaluated but Omitted**: N/A — simple dependency install
-
-  **Parallelization**:
-  - **Can Run In Parallel**: YES
-  - **Parallel Group**: Wave 1 (with Tasks 1, 2)
-  - **Blocks**: Task 8
-  - **Blocked By**: None
-
-  **References**:
-  - `package.json` — Add dependency here
-  - `src-tauri/capabilities/default.json` — May need dialog permission
-
-  **Acceptance Criteria**:
-  - [ ] `@tauri-apps/plugin-dialog` listed in package.json dependencies
-  - [ ] `bun install` succeeds
-  - [ ] Import of `open` from dialog module works (verified by tsc)
-
-  **QA Scenarios**:
-  ```
-  Scenario: Plugin installed and importable
-    Tool: Bash
-    Preconditions: None
-    Steps:
-      1. Run `bun install`
-      2. Run `npx tsc --noEmit` (no import errors)
-    Expected Result: Clean install, no type errors
-    Evidence: .sisyphus/evidence/task-3-install.txt
-  ```
-
-  **Commit**: YES
-  - Message: `chore(deps): install @tauri-apps/plugin-dialog`
-  - Files: `package.json`, `bun.lock`
-  - Pre-commit: `bun install`
+**Commit**: YES (groups with Task 1)
+- Message: `feat(core): add workspace settings database migration`
+- Files: `ymir-core/migrations/002_workspace_settings.sql`
 
 ---
 
-- [ ] 4. Create WorkspaceSettingsDialog Component
+- [ ] **3. Implement YAML Serialization for Settings**
 
-  **What to do**:
-  - Create new file `src/components/WorkspaceSettingsDialog.tsx`
-  - Component receives props: `open: boolean`, `onOpenChange: (open: boolean) => void`, `workspaceId: string`
-  - Uses existing Base-UI Dialog wrappers (`DialogRoot`, `DialogPortal`, `DialogPopup`, `DialogTitle`, `DialogDescription`, `DialogClose`)
-  - Contains 5 sections:
-    1. **Name/Label**: Editable text input with Enter-to-save behavior (no save button)
-    2. **Subtitle**: Editable text input, max 50 chars, shows character count
-    3. **Color Picker**: Grid of 10 colored boxes from `WORKSPACE_COLORS` constant
-    4. **Icon Picker**: Grid of icons from `WORKSPACE_ICONS` constant, hover shows pencil overlay
-    5. **Working Directory**: Text input + "Browse" button that opens Tauri dialog
-    6. **Hotkey Display**: Read-only display showing Cmd+1-8 based on workspace index
-  - On any field change, calls `updateWorkspaceSettings` from the store
-  - Dialog has standard close button (X) and no explicit save button (changes are applied immediately)
-  - Import icon components from `lucide-react` dynamically based on icon name
+**What to do**:
+- Create `ymir-core/src/settings/` directory
+- Create `ymir-core/src/settings/yaml.rs` for YAML handling
+- Define struct for YAML file format:
+```rust
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct WorkspaceSettingsFile {
+    pub workspaces: HashMap<String, WorkspaceSettings>,
+}
 
-  **Must NOT do**:
-  - Do NOT create a form with submit/save button — changes apply immediately on change
-  - Do NOT create custom hook or context — direct store usage
-  - Do NOT implement file browser logic (delegate to Task 8 via a callback or inline import)
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct WorkspaceSettings {
+    pub color: Option<String>,
+    pub icon: Option<String>,
+    pub working_directory: Option<String>,
+    pub subtitle: Option<String>,
+}
+```
+- Implement load function: read `.ymir/workspace-settings.yaml`
+- Implement save function: write to `.ymir/workspace-settings.yaml`
+- Add `serde_yaml` dependency to ymir-core/Cargo.toml
 
-  **Recommended Agent Profile**:
-  - **Category**: `deep`
-  - **Skills**: [`playwright`, `frontend-ui-ux`]
-  - `playwright`: For testing the dialog UI interactions
-  - `frontend-ui-ux`: For styling the dialog sections and ensuring good UX
-  - **Skills Evaluated but Omitted**:
-    - `ultrabrain`: Not needed — this is a UI composition task, not complex logic
+**Must NOT do**:
+- Don't use synchronous file I/O in async contexts
+- Don't create the file if it doesn't exist
 
-  **Parallelization**:
-  - **Can Run In Parallel**: NO
-  - **Parallel Group**: Wave 2 (sequential within this wave, but wave depends on Wave 1)
-  - **Blocks**: Tasks 5, 14
-  - **Blocked By**: Tasks 1, 2, 6, 7, 8
+**Recommended Agent Profile**:
+- **Category**: `quick`
+- **Skills**: []
 
-  **References**:
-  - `src/components/ui/Dialog.tsx:5-87` — Dialog wrapper components to use
-  - `src/components/WorkspaceSidebar.tsx:143-195` — Context menu pattern with Base-UI Menu
-  - `src/state/workspace.ts` — updateWorkspaceSettings action to call
-  - `src/state/types.ts` — WORKSPACE_COLORS and WORKSPACE_ICONS constants
-  - `src/components/ui/Button.tsx` — Button component for Browse button
+**Parallelization**:
+- **Can Run In Parallel**: YES (with Task 1, 2)
+- **Blocks**: Tasks 5, 6
+- **Blocked By**: None
 
-  **Acceptance Criteria**:
-  - [ ] Dialog opens/closes correctly with `open`/`onOpenChange` props
-  - [ ] All 5 sections render (name, subtitle, color picker, icon picker, working directory)
-  - [ ] Color picker shows 10 colored boxes, highlights selected one
-  - [ ] Icon picker shows icons with hover pencil overlay
-  - [ ] Browse button opens Tauri directory picker
-  - [ ] Hotkey display shows correct Cmd+1-8 text
-  - [ ] `npx tsc --noEmit` passes
+**References**:
+- `ymir-core/Cargo.toml` - Add serde_yaml dependency
 
-  **QA Scenarios**:
-  ```
-  Scenario: Dialog renders all sections
-    Tool: Playwright
-    Preconditions: Dialog open with workspaceId
-    Steps:
-      1. Open dialog
-      2. Assert name input exists
-      3. Assert subtitle input exists
-      4. Assert 10 color boxes exist
-      5. Assert icon grid exists
-      6. Assert working directory input exists
-      7. Assert hotkey display shows "⌘1" or similar
-    Expected Result: All sections visible
-    Evidence: .sisyphus/evidence/task-4-dialog-render.png
+**Acceptance Criteria**:
+- [ ] serde_yaml added to dependencies
+- [ ] WorkspaceSettingsFile struct defined
+- [ ] Load/save functions implemented
+- [ ] Unit tests for serialization
 
-  Scenario: Color selection updates workspace
-    Tool: Playwright
-    Preconditions: Dialog open, color picker visible
-    Steps:
-      1. Click on the 3rd color box
-      2. Assert the 3rd color box has a selected ring/indicator
-      3. Assert store workspace.color matches the clicked color
-    Expected Result: Color selected and persisted
-    Evidence: .sisyphus/evidence/task-4-color-select.png
-  ```
+**QA Scenarios**:
+```
+Scenario: YAML serialization roundtrip
+Tool: Bash (Rust test)
+Steps:
+1. cd ymir-core && cargo test settings::yaml::tests
+Expected: Roundtrip serialization works
+Evidence: .sisyphus/evidence/task-3-yaml-test.txt
+```
 
-  **Commit**: YES
-  - Message: `feat(ui): create WorkspaceSettingsDialog component`
-  - Files: `src/components/WorkspaceSettingsDialog.tsx`
-  - Pre-commit: `npx tsc --noEmit`
+**Commit**: YES (groups with Task 1)
+- Message: `feat(core): add YAML settings file serialization`
+- Files: `ymir-core/src/settings/yaml.rs`, `ymir-core/src/settings/mod.rs`
+- Pre-commit: `cargo test -p ymir-core settings::`
 
 ---
 
-- [ ] 5. Add Settings Context Menu Item
+### Wave 2: Core Service (Handlers + Storage)
 
-  **What to do**:
-  - In `src/components/WorkspaceSidebar.tsx`, add a "Settings" `MenuItem` to the existing context menu (after the separator at line 184, before "Close Workspace")
-  - Import and render `WorkspaceSettingsDialog` component
-  - Add state: `const [settingsOpen, setSettingsOpen] = useState(false)` and `const [settingsWorkspaceId, setSettingsWorkspaceId] = useState<string | null>(null)`
-  - Clicking "Settings" sets `settingsWorkspaceId` to `contextMenuAnchor.workspaceId` and opens the dialog
-  - Render `<WorkspaceSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} workspaceId={settingsWorkspaceId ?? ''} />` at end of WorkspaceList component
+- [ ] **4. Add Workspace Settings WebSocket Handlers**
 
-  **Must NOT do**:
-  - Do NOT modify the existing menu items (New Workspace Below, Move Up, Move Down, Close Workspace)
-  - Do NOT add a new context menu — add to the existing one
+**What to do**:
+- Create `ymir-core/src/handlers/workspace_settings.rs`
+- Implement handlers:
+  - `workspace.getSettings` - returns settings for workspace_id
+  - `workspace.updateSettings` - updates settings, saves to DB and YAML
+- Add to `ymir-core/src/handlers/mod.rs` exports
+- Integrate with existing workspace handlers
+- Update database client to support settings columns
 
-  **Recommended Agent Profile**:
-  - **Category**: `quick`
-  - **Skills**: []
-  - **Skills Evaluated but Omitted**: N/A — small addition to existing pattern
+**Handler signatures**:
+```rust
+pub async fn get_settings(
+    db: &DatabaseClient,
+    workspace_id: String,
+) -> Result<WorkspaceSettings>;
 
-  **Parallelization**:
-  - **Can Run In Parallel**: NO
-  - **Parallel Group**: Wave 2 (depends on Task 4)
-  - **Blocks**: Task 12
-  - **Blocked By**: Task 4 (needs WorkspaceSettingsDialog component)
+pub async fn update_settings(
+    db: &DatabaseClient,
+    yaml_path: &Path,
+    workspace_id: String,
+    updates: WorkspaceSettings,
+) -> Result<WorkspaceSettings>;
+```
 
-  **References**:
-  - `src/components/WorkspaceSidebar.tsx:166-192` — Existing context menu items (add Settings before separator)
-  - `src/components/WorkspaceSidebar.tsx:184` — Separator line where to insert
-  - `src/components/WorkspaceSidebar.tsx:33-38` — Existing state for context menu
+**Must NOT do**:
+- Don't use Zustand patterns
+- Don't return the full Workspace (just settings)
 
-  **Acceptance Criteria**:
-  - [ ] "Settings" menu item appears in context menu
-  - [ ] Clicking "Settings" opens the WorkspaceSettingsDialog
-  - [ ] Dialog is scoped to the right-clicked workspace
-  - [ ] `npx tsc --noEmit` passes
+**Recommended Agent Profile**:
+- **Category**: `unspecified-high`
+- **Skills**: []
 
-  **QA Scenarios**:
-  ```
-  Scenario: Settings menu item opens dialog
-    Tool: Playwright
-    Preconditions: Sidebar visible with workspaces
-    Steps:
-      1. Right-click on workspace tab
-      2. Assert "Settings" item appears in menu
-      3. Click "Settings"
-      4. Assert dialog opens with correct workspace context
-    Expected Result: Dialog opens for the right-clicked workspace
-    Evidence: .sisyphus/evidence/task-5-context-menu.png
-  ```
+**Parallelization**:
+- **Can Run In Parallel**: NO (Wave 2 starter)
+- **Blocks**: Tasks 8, 12
+- **Blocked By**: Tasks 1, 2
 
-  **Commit**: YES
-  - Message: `feat(ui): add Settings menu item to workspace context menu`
-  - Files: `src/components/WorkspaceSidebar.tsx`
-  - Pre-commit: `npx tsc --noEmit`
+**References**:
+- `ymir-core/src/handlers/workspace.rs` - Existing workspace handlers
+- `ymir-core/src/db/client.rs` - Database client
 
----
+**Acceptance Criteria**:
+- [ ] Handlers implemented
+- [ ] Database queries work
+- [ ] JSON-RPC protocol integration
 
-- [ ] 6. Create Color Picker Subcomponent
+**QA Scenarios**:
+```
+Scenario: Settings handler responds
+Tool: Bash (wscat)
+Steps:
+1. Start server
+2. Send: {"jsonrpc":"2.0","method":"workspace.getSettings","params":{"workspaceId":"ws-1"},"id":1}
+3. Verify response contains settings fields
+Expected: Valid JSON-RPC response
+Evidence: .sisyphus/evidence/task-4-settings-handler.txt
+```
 
-  **What to do**:
-  - Create a `ColorPicker` component (can be inline in WorkspaceSettingsDialog.tsx or separate file)
-  - Props: `value: string | undefined`, `onChange: (color: string) => void`
-  - Renders a horizontal/vertical row of 10 colored squares (24x24px each)
-  - Uses `WORKSPACE_COLORS` constant from types.ts
-  - Selected color gets a 2px white ring/outline (or highlight border)
-  - Each color box has a hover effect (slight scale/brightness)
-  - Clicking a color calls `onChange(color)`
-  - Include a "none" option (first item, transparent with X icon) to clear color
-
-  **Must NOT do**:
-  - Do NOT create a custom color picker with hex input
-  - Do NOT use any external color picker library
-
-  **Recommended Agent Profile**:
-  - **Category**: `quick`
-  - **Skills**: []
-  - **Skills Evaluated but Omitted**: N/A — simple UI component
-
-  **Parallelization**:
-  - **Can Run In Parallel**: YES
-  - **Parallel Group**: Wave 2 (with Task 7, 8)
-  - **Blocks**: Task 4 (integrated into dialog)
-  - **Blocked By**: Task 1 (needs WORKSPACE_COLORS constant)
-
-  **References**:
-  - `src/state/types.ts` — WORKSPACE_COLORS constant
-
-  **Acceptance Criteria**:
-  - [ ] 10 colored boxes + 1 "none" option rendered
-  - [ ] Selected color has visible ring/outline
-  - [ ] Clicking a color triggers onChange with hex string
-  - [ ] Hover effect visible on each box
-
-  **QA Scenarios**:
-  ```
-  Scenario: Color picker renders correctly
-    Tool: Playwright
-    Preconditions: ColorPicker rendered
-    Steps:
-      1. Assert 11 color boxes exist (10 colors + none)
-      2. Click color at index 3
-      3. Assert that color has a ring indicator
-    Expected Result: Color picker interactive and visual
-    Evidence: .sisyphus/evidence/task-6-color-picker.png
-  ```
-
-  **Commit**: NO (part of Task 4 commit)
+**Commit**: YES
+- Message: `feat(core): add workspace settings WebSocket handlers`
+- Files: `ymir-core/src/handlers/workspace_settings.rs`
+- Pre-commit: `cargo check -p ymir-core`
 
 ---
 
-- [ ] 7. Create Icon Picker Subcomponent
+- [ ] **5. Implement YAML File Load on Startup**
 
-  **What to do**:
-  - Create an `IconPicker` component (can be inline in WorkspaceSettingsDialog.tsx or separate file)
-  - Props: `value: string | undefined`, `onChange: (icon: string) => void`
-  - Renders a grid of Lucide icons from `WORKSPACE_ICONS` constant
-  - Each icon rendered using `lucide-react` — dynamically import icon by name using a lookup map
-  - Hover effect: show small pencil/edit icon overlay on the top-right corner
-  - Selected icon gets a highlight background
-  - Include a "none" option (first item, empty/X icon)
-  - Icon size: 20x20px, grid spacing with Tailwind `gap-2`
+**What to do**:
+- Add YAML loading to server initialization
+- In `ymir-server/src/main.rs`:
+  - Create `.ymir/` directory if not exists
+  - Load `workspace-settings.yaml` if exists
+  - Apply settings to database (merge strategy)
+- Handle missing file gracefully
 
-  **Must NOT do**:
-  - Do NOT allow uploading custom icons
-  - Do NOT use any icon library other than lucide-react
+**Merge strategy**:
+- YAML file wins over DB on startup
+- After startup, DB is source of truth
+- Save to YAML on every settings change
 
-  **Recommended Agent Profile**:
-  - **Category**: `quick`
-  - **Skills**: []
-  - **Skills Evaluated but Omitted**: N/A — simple UI component
+**Must NOT do**:
+- Don't fail to start if YAML is malformed
+- Don't require YAML file to exist
 
-  **Parallelization**:
-  - **Can Run In Parallel**: YES
-  - **Parallel Group**: Wave 2 (with Task 6, 8)
-  - **Blocks**: Task 4 (integrated into dialog)
-  - **Blocked By**: Task 1 (needs WORKSPACE_ICONS constant)
+**Recommended Agent Profile**:
+- **Category**: `unspecified-high`
+- **Skills**: []
 
-  **References**:
-  - `src/state/types.ts` — WORKSPACE_ICONS constant
-  - `lucide-react` — Icon component library (already installed)
+**Parallelization**:
+- **Can Run In Parallel**: YES (with Task 6)
+- **Blocks**: Task 15
+- **Blocked By**: Tasks 2, 3, 4
 
-  **Acceptance Criteria**:
-  - [ ] Grid of Lucide icons rendered from WORKSPACE_ICONS
-  - [ ] Hover shows pencil overlay icon
-  - [ ] Selected icon has highlight
-  - [ ] Clicking an icon triggers onChange with icon name string
+**References**:
+- `ymir-server/src/main.rs` - Server startup
+- `ymir-core/src/settings/yaml.rs` - Load function
 
-  **QA Scenarios**:
-  ```
-  Scenario: Icon picker renders and allows selection
-    Tool: Playwright
-    Preconditions: IconPicker rendered
-    Steps:
-      1. Assert icon grid exists with expected count
-      2. Hover over an icon
-      3. Assert pencil overlay appears
-      4. Click the icon
-      5. Assert selected highlight appears
-    Expected Result: Interactive icon picker
-    Evidence: .sisyphus/evidence/task-7-icon-picker.png
-  ```
+**Acceptance Criteria**:
+- [ ] Server creates `.ymir/` directory
+- [ ] YAML file loads if exists
+- [ ] Settings applied to database
 
-  **Commit**: NO (part of Task 4 commit)
+**QA Scenarios**:
+```
+Scenario: YAML loads on startup
+Tool: Bash
+Steps:
+1. Create test YAML file
+2. Start server
+3. Query settings via WebSocket
+4. Verify YAML values loaded
+Expected: Settings from YAML available
+Evidence: .sisyphus/evidence/task-5-yaml-load.txt
+```
 
----
-
-- [ ] 8. Add Directory Browser Integration
-
-  **What to do**:
-  - In the Working Directory section of WorkspaceSettingsDialog, implement the "Browse" button
-  - On click, call `open({ directory: true, multiple: false })` from `@tauri-apps/plugin-dialog`
-  - If a directory is selected, update the text input and call `updateWorkspaceSettings` with the new `workingDirectory`
-  - Text input is also editable — user can type a path directly and press Enter to save
-  - Handle error case: dialog cancelled (no-op)
-  - Show current directory path as placeholder or value in the text input
-
-  **Must NOT do**:
-  - Do NOT validate that the directory exists (let OS/Tauri handle it)
-  - Do NOT browse file contents within the directory picker
-
-  **Recommended Agent Profile**:
-  - **Category**: `quick`
-  - **Skills**: []
-  - **Skills Evaluated but Omitted**: N/A — straightforward integration
-
-  **Parallelization**:
-  - **Can Run In Parallel**: YES
-  - **Parallel Group**: Wave 2 (with Task 6, 7)
-  - **Blocks**: Task 4 (integrated into dialog)
-  - **Blocked By**: Task 3 (needs dialog plugin installed)
-
-  **References**:
-  - `@tauri-apps/plugin-dialog` — `open()` function for directory picker
-  - `src/state/workspace.ts` — updateWorkspaceSettings action
-
-  **Acceptance Criteria**:
-  - [ ] "Browse" button triggers native directory picker
-  - [ ] Selected directory path populates the text input
-  - [ ] Text input is editable and Enter-to-save works
-  - [ ] `workingDirectory` is updated in the store
-
-  **QA Scenarios**:
-  ```
-  Scenario: Browse button opens directory picker
-    Tool: Playwright
-    Preconditions: Dialog open, Browse button visible
-    Steps:
-      1. Click "Browse" button
-      2. (Tauri native dialog opens — skip in automated test, manual verify)
-      3. Assert text input can be typed into
-      4. Type "/home/user/test" and press Enter
-      5. Assert store workspace.workingDirectory === "/home/user/test"
-    Expected Result: Directory path updated
-    Evidence: .sisyphus/evidence/task-8-dir-picker.txt
-  ```
-
-  **Commit**: NO (part of Task 4 commit)
+**Commit**: YES
+- Message: `feat(server): load workspace settings from YAML on startup`
+- Files: `ymir-server/src/main.rs`
 
 ---
 
-- [ ] 9. Add Accent Line CSS and Rendering
+- [ ] **6. Implement YAML File Save on Settings Change**
 
-  **What to do**:
-  - Create `src/components/WorkspaceSidebar.css` (new CSS file) for workspace-specific styles
-  - Add CSS class `.workspace-accent-line`:
-    - 3px left border using `border-left: 3px solid var(--workspace-color)`
-    - When color is not set, border is transparent or uses default `var(--primary)`
-  - Add CSS class `.workspace-tab-with-accent` for tabs that have a color set
-  - Update `WorkspaceList` component to:
-    - Read `workspace.color` from store
-    - Apply accent line class if color is set
-    - Set CSS custom property `--workspace-color: {color}` on the tab element
-  - Update `CollapsedWorkspaceList` to also show accent line (3px left border on collapsed tab)
+**What to do**:
+- Update `workspace.updateSettings` handler to save to YAML after DB update
+- Trigger save for all workspaces on graceful shutdown
+- Ensure atomic write (write to temp file, then rename)
+- Handle file write errors gracefully
 
-  **Must NOT do**:
-  - Do NOT change the existing workspace tab layout/structure beyond adding the accent
-  - Do NOT use inline styles for the accent — use CSS classes
+**Save logic**:
+```rust
+// After DB update
+let settings_file = WorkspaceSettingsFile {
+    workspaces: load_all_workspace_settings(db).await?,
+};
+settings::yaml::save(yaml_path, &settings_file).await?;
+```
 
-  **Recommended Agent Profile**:
-  - **Category**: `quick`
-  - **Skills**: []
-  - **Skills Evaluated but Omitted**: N/A — CSS addition
+**Must NOT do**:
+- Don't block WebSocket response on file write
+- Don't lose settings if file write fails
 
-  **Parallelization**:
-  - **Can Run In Parallel**: YES
-  - **Parallel Group**: Wave 3 (with Task 10, 11)
-  - **Blocks**: Task 12
-  - **Blocked By**: Task 1 (needs color field on type)
+**Recommended Agent Profile**:
+- **Category**: `unspecified-high`
+- **Skills**: []
 
-  **References**:
-  - `src/components/WorkspaceSidebar.tsx:96-122` — WorkspaceList tabs to add accent to
-  - `src/components/WorkspaceSidebar.tsx:200-230` — CollapsedWorkspaceList to add accent to
+**Parallelization**:
+- **Can Run In Parallel**: YES (with Task 5)
+- **Blocks**: Task 15
+- **Blocked By**: Tasks 2, 3, 4
 
-  **Acceptance Criteria**:
-  - [ ] CSS file created with `.workspace-accent-line` class
-  - [ ] Workspace tab shows 3px left border when color is set
-  - [ ] Accent line color matches workspace.color
-  - [ ] Collapsed view also shows accent line
+**References**:
+- `ymir-core/src/handlers/workspace_settings.rs` - Update handler
+- `ymir-core/src/settings/yaml.rs` - Save function
 
-  **QA Scenarios**:
-  ```
-  Scenario: Accent line renders with workspace color
-    Tool: Playwright
-    Preconditions: Workspace has color "#ff5733" set
-    Steps:
-      1. Set workspace color via store
-      2. Assert workspace tab has 3px left border
-      3. Assert border color is "#ff5733"
-    Expected Result: Visible colored accent line
-    Evidence: .sisyphus/evidence/task-9-accent-line.png
-  ```
+**Acceptance Criteria**:
+- [ ] Settings save to YAML on change
+- [ ] File is valid YAML
+- [ ] Atomic write (no corruption)
 
-  **Commit**: NO (part of Task 12 commit)
+**QA Scenarios**:
+```
+Scenario: Settings save to YAML
+Tool: Bash
+Steps:
+1. Update settings via WebSocket
+2. Verify YAML file updated
+3. Verify content is valid YAML
+Expected: File reflects changes
+Evidence: .sisyphus/evidence/task-6-yaml-save.txt
+```
 
----
-
-- [ ] 10. Add Icon Display to Workspace Tabs
-
-  **What to do**:
-  - In `WorkspaceList` component, read `workspace.icon` from store
-  - If icon is set, render the Lucide icon (20x20px) before the workspace name
-  - Use the same dynamic icon lookup as the icon picker (icon name → Lucide component)
-  - Position icon to the left of the workspace name in the tab content area
-  - In collapsed view, show the icon in place of or next to the number badge
-
-  **Must NOT do**:
-  - Do NOT show the icon picker in the tab — just display the selected icon
-  - Do NOT animate the icon (keep it static)
-
-  **Recommended Agent Profile**:
-  - **Category**: `quick`
-  - **Skills**: []
-  - **Skills Evaluated but Omitted**: N/A — simple conditional rendering
-
-  **Parallelization**:
-  - **Can Run In Parallel**: YES
-  - **Parallel Group**: Wave 3 (with Task 9, 11)
-  - **Blocks**: Task 12
-  - **Blocked By**: Task 1 (needs icon field on type)
-
-  **References**:
-  - `src/components/WorkspaceSidebar.tsx:105-112` — workspace-tab-content area to add icon to
-  - `lucide-react` — Dynamic icon rendering pattern
-
-  **Acceptance Criteria**:
-  - [ ] Icon renders in workspace tab when workspace.icon is set
-  - [ ] Icon is 20x20px, positioned before workspace name
-  - [ ] Collapsed view also shows icon
-  - [ ] No icon shown when workspace.icon is undefined
-
-  **QA Scenarios**:
-  ```
-  Scenario: Icon displays on workspace tab
-    Tool: Playwright
-    Preconditions: Workspace has icon "Terminal" set
-    Steps:
-      1. Set workspace icon via store
-      2. Assert Lucide Terminal icon is visible in tab
-      3. Assert icon is before the workspace name
-    Expected Result: Icon visible in tab
-    Evidence: .sisyphus/evidence/task-10-icon-display.png
-  ```
-
-  **Commit**: NO (part of Task 12 commit)
+**Commit**: YES
+- Message: `feat(core): save workspace settings to YAML on change`
+- Files: `ymir-core/src/handlers/workspace_settings.rs`
 
 ---
 
-- [ ] 11. Add Subtitle Display to Workspace Tabs
+- [ ] **7. Add workspace.updateSettings to Protocol**
 
-  **What to do**:
-  - In `WorkspaceList` component, read `workspace.subtitle` from store
-  - If subtitle is set and not empty, render it below the workspace name in smaller text
-  - Apply CSS class `.workspace-subtitle` with:
-    - Smaller font size (11px)
-    - Muted color (`var(--foreground-muted)`)
-    - Single line with ellipsis overflow (`text-overflow: ellipsis`, `overflow: hidden`, `white-space: nowrap`)
-    - Max width constrained to parent
-  - In collapsed view, subtitle is NOT shown (it would overflow)
-  - When subtitle is empty/undefined, no subtitle element is rendered (no extra height)
+**What to do**:
+- Update `ymir-core/src/protocol.rs` to include new methods:
+  - `workspace.getSettings`
+  - `workspace.updateSettings`
+- Add to protocol router/handler dispatch
+- Add TypeScript type definitions
 
-  **Must NOT do**:
-  - Do NOT allow multi-line subtitles
-  - Do NOT show subtitle in collapsed view
+**Protocol additions**:
+```rust
+pub enum WorkspaceMethod {
+    // ... existing methods
+    GetSettings,
+    UpdateSettings,
+}
+```
 
-  **Recommended Agent Profile**:
-  - **Category**: `quick`
-  - **Skills**: []
-  - **Skills Evaluated but Omitted**: N/A — simple conditional rendering
+**Must NOT do**:
+- Don't break existing protocol methods
+- Don't use different naming
 
-  **Parallelization**:
-  - **Can Run In Parallel**: YES
-  - **Parallel Group**: Wave 3 (with Task 9, 10)
-  - **Blocks**: Task 12
-  - **Blocked By**: Task 1 (needs subtitle field on type)
+**Recommended Agent Profile**:
+- **Category**: `quick`
+- **Skills**: []
 
-  **References**:
-  - `src/components/WorkspaceSidebar.tsx:105-112` — workspace-tab-content area
-  - CSS class `.workspace-subtitle` to add to new WorkspaceSidebar.css
+**Parallelization**:
+- **Can Run In Parallel**: YES (with Task 4)
+- **Blocks**: Task 4
+- **Blocked By**: None
 
-  **Acceptance Criteria**:
-  - [ ] Subtitle renders below workspace name when set
-  - [ ] Subtitle is truncated with ellipsis if too long
-  - [ ] No subtitle element when workspace.subtitle is undefined
-  - [ ] Subtitle NOT shown in collapsed view
+**References**:
+- `ymir-core/src/protocol.rs`
+- `websocket-core-refactor.md` - Task 10
 
-  **QA Scenarios**:
-  ```
-  Scenario: Subtitle displays correctly
-    Tool: Playwright
-    Preconditions: Workspace has subtitle "My Dev Environment"
-    Steps:
-      1. Set workspace subtitle via store
-      2. Assert subtitle text "My Dev Environment" visible below name
-      3. Assert subtitle font is smaller and muted
-    Expected Result: Subtitle visible with correct styling
-    Evidence: .sisyphus/evidence/task-11-subtitle.png
+**Acceptance Criteria**:
+- [ ] Protocol methods defined
+- [ ] Router dispatches to handlers
+- [ ] TypeScript types created
 
-  Scenario: Long subtitle is truncated
-    Tool: Playwright
-    Preconditions: Workspace has very long subtitle (100 chars)
-    Steps:
-      1. Set long subtitle via store
-      2. Assert subtitle is visible
-      3. Assert subtitle ends with ellipsis "..."
-    Expected Result: Truncated display
-    Evidence: .sisyphus/evidence/task-11-subtitle-truncated.png
-  ```
+**QA Scenarios**:
+```
+Scenario: Protocol accepts settings methods
+Tool: Bash (wscat)
+Steps:
+1. Send workspace.getSettings request
+2. Verify valid JSON-RPC response
+3. Send workspace.updateSettings request
+4. Verify success response
+Expected: Both methods work
+Evidence: .sisyphus/evidence/task-7-protocol.txt
+```
 
-  **Commit**: NO (part of Task 12 commit)
+**Commit**: YES (groups with Task 4)
+- Message: `feat(core): add settings methods to WebSocket protocol`
+- Files: `ymir-core/src/protocol.rs`
 
 ---
 
-- [ ] 12. Update WorkspaceList to Integrate All Visual Elements
+### Wave 3: React Client (Hooks + UI)
 
-  **What to do**:
-  - Ensure all visual enhancements from Tasks 9, 10, 11 are properly integrated into both `WorkspaceList` and `CollapsedWorkspaceList`
-  - Import the new CSS file (`import './WorkspaceSidebar.css'`)
-  - Apply conditional classes based on workspace properties:
-    - `workspace-accent-line` + `--workspace-color` custom property when color is set
-    - Icon rendering when icon is set
-    - Subtitle rendering when subtitle is set (expanded view only)
-  - Test that the tab layout remains correct with/without accent line, icon, and subtitle
-  - Ensure notification dot and shortcut key still display correctly alongside new elements
+- [ ] **8. Create useWorkspaceSettings WebSocket Hook**
 
-  **Must NOT do**:
-  - Do NOT change the overall tab layout/structure
-  - Do NOT break existing notification dot or shortcut display
+**What to do**:
+- Create `src/hooks/useWorkspaceSettings.ts`
+- Implement hook for WebSocket-based settings:
+```typescript
+export function useWorkspaceSettings(workspaceId: string) {
+  const [settings, setSettings] = useState<WorkspaceSettings | null>(null);
+  const [loading, setLoading] = useState(true);
+  
+  // Subscribe to settings changes via WebSocket
+  // Load initial settings on mount
+  // Update when server pushes changes
+  
+  const updateSettings = async (updates: Partial<WorkspaceSettings>) => {
+    // Send workspace.updateSettings via WebSocket
+  };
+  
+  return { settings, loading, updateSettings };
+}
+```
+- Integrate with WebSocket client service
+- Handle reconnection
 
-  **Recommended Agent Profile**:
-  - **Category**: `quick`
-  - **Skills**: []
-  - **Skills Evaluated but Omitted**: N/A — integration of existing pieces
+**Must NOT do**:
+- Don't use Zustand
+- Don't call Tauri invoke
 
-  **Parallelization**:
-  - **Can Run In Parallel**: NO
-  - **Parallel Group**: Wave 3 (final task in wave)
-  - **Blocks**: Task 14 (E2E tests)
-  - **Blocked By**: Tasks 9, 10, 11
+**Recommended Agent Profile**:
+- **Category**: `unspecified-high`
+- **Skills**: []
 
-  **References**:
-  - `src/components/WorkspaceSidebar.tsx` — Both WorkspaceList and CollapsedWorkspaceList
-  - `src/components/WorkspaceSidebar.css` — New CSS file from Task 9
+**Parallelization**:
+- **Can Run In Parallel**: NO (Wave 3 starter)
+- **Blocks**: Tasks 9, 10, 13
+- **Blocked By**: Task 4
 
-  **Acceptance Criteria**:
-  - [ ] CSS file imported
-  - [ ] All visual elements (accent, icon, subtitle) render correctly
-  - [ ] No layout issues with notification dot and shortcut
-  - [ ] Both expanded and collapsed views work
+**References**:
+- `websocket-core-refactor.md` - Task 23
+- `src/services/websocket.ts`
 
-  **QA Scenarios**:
-  ```
-  Scenario: Full visual integration with all features
-    Tool: Playwright
-    Preconditions: Workspace with color, icon, and subtitle set
-    Steps:
-      1. Assert accent line is visible (3px border)
-      2. Assert icon is visible before name
-      3. Assert subtitle is visible below name
-      4. Assert notification dot still works
-      5. Assert shortcut key still displays
-    Expected Result: All elements coexist correctly
-    Evidence: .sisyphus/evidence/task-12-full-integration.png
-  ```
+**Acceptance Criteria**:
+- [ ] Hook loads settings via WebSocket
+- [ ] Hook provides updateSettings function
+- [ ] Hook subscribes to changes
+- [ ] Reconnection handling works
 
-  **Commit**: YES
-  - Message: `feat(ui): integrate accent line, icon, and subtitle into workspace tabs`
-  - Files: `src/components/WorkspaceSidebar.tsx`, `src/components/WorkspaceSidebar.css`
-  - Pre-commit: `npx tsc --noEmit`
+**QA Scenarios**:
+```
+Scenario: Hook loads settings
+Tool: Playwright
+Steps:
+1. Mount component with useWorkspaceSettings
+2. Verify settings loaded
+3. Verify updateSettings callable
+Expected: Settings available
+Evidence: .sisyphus/evidence/task-8-hook-load.png
+```
 
----
-
-- [ ] 13. Add Store Unit Tests
-
-  **What to do**:
-  - Add test suite to `src/state/workspace.test.ts` for the new `updateWorkspaceSettings` action
-  - Tests to add:
-    1. Update workspace color — set color, verify it persists
-    2. Update workspace icon — set icon name, verify it persists
-    3. Update workspace workingDirectory — set path, verify it persists
-    4. Update workspace subtitle — set text, verify it persists
-    5. Partial update — update only color, verify other fields unchanged
-    6. Subtitle truncation — set 100-char subtitle, verify truncated to 50
-    7. Clear fields — set color to undefined, verify cleared
-    8. Persistence — verify new fields survive prepareStateForPersistence
-  - Follow existing test patterns: use `beforeEach` reset, direct store access
-
-  **Must NOT do**:
-  - Do NOT test UI components (that's Task 14)
-  - Do NOT test dialog behavior
-
-  **Recommended Agent Profile**:
-  - **Category**: `quick`
-  - **Skills**: []
-  - **Skills Evaluated but Omitted**: N/A — straightforward test additions
-
-  **Parallelization**:
-  - **Can Run In Parallel**: YES
-  - **Parallel Group**: Wave 4 (with Task 14)
-  - **Blocks**: Task 15
-  - **Blocked By**: Task 2 (needs store action)
-
-  **References**:
-  - `src/state/workspace.test.ts` — Existing test file to add to
-  - `src/state/workspace.test.ts:34-105` — Initialization and workspace actions tests (pattern to follow)
-
-  **Acceptance Criteria**:
-  - [ ] 8 new test cases added for updateWorkspaceSettings
-  - [ ] All tests pass: `bun test src/state/workspace.test.ts`
-  - [ ] Tests cover partial updates, truncation, clearing, persistence
-
-  **QA Scenarios**:
-  ```
-  Scenario: All store tests pass
-    Tool: Bash
-    Preconditions: Tests written
-    Steps:
-      1. Run `bun test src/state/workspace.test.ts`
-      2. Assert all tests pass (exit code 0)
-    Expected Result: All 8 new tests pass
-    Evidence: .sisyphus/evidence/task-13-test-results.txt
-  ```
-
-  **Commit**: YES
-  - Message: `test(store): add unit tests for updateWorkspaceSettings`
-  - Files: `src/state/workspace.test.ts`
-  - Pre-commit: `bun test src/state/workspace.test.ts`
+**Commit**: YES
+- Message: `feat(react): add useWorkspaceSettings WebSocket hook`
+- Files: `src/hooks/useWorkspaceSettings.ts`
+- Pre-commit: `npx tsc --noEmit`
 
 ---
 
-- [ ] 14. Add Dialog E2E Tests
+- [ ] **9. Update WorkspaceSettingsDialog for WebSocket**
 
-  **What to do**:
-  - Create or extend E2E test file for workspace settings dialog
-  - Test scenarios using Playwright:
-    1. Context menu "Settings" item opens dialog
-    2. Dialog shows correct workspace data (name, color, icon, subtitle, cwd)
-    3. Changing name via Enter saves and closes edit mode
-    4. Clicking a color updates the accent line on the workspace tab
-    5. Clicking an icon updates the icon display on the workspace tab
-    6. Typing in working directory input and pressing Enter saves
-    7. Dialog close button works
-    8. Changes persist after page reload (check Tauri store)
-  - Tests should use page object pattern or direct selectors matching actual DOM structure
+**What to do**:
+- Create `src/components/WorkspaceSettingsDialog.tsx`
+- Adapt from original plan but use WebSocket hooks:
+  - Use `useWorkspaceSettings(workspaceId)` instead of Zustand
+  - Call `updateSettings` from hook instead of store action
+  - Immediate-save pattern
+  - Color picker with 10 colors
+  - Icon picker with Lucide icons
+  - Directory browser (Tauri dialog)
+- Use Base-UI Dialog components
 
-  **Must NOT do**:
-  - Do NOT test the native directory picker (can't automate Tauri native dialogs)
-  - Do NOT test store internals (that's Task 13)
+**Props**:
+```typescript
+interface WorkspaceSettingsDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  workspaceId: string;
+}
+```
 
-  **Recommended Agent Profile**:
-  - **Category**: `unspecified-high`
-  - **Skills**: [`playwright`]
-  - `playwright`: Required for E2E browser automation testing
-  - **Skills Evaluated but Omitted**:
-    - `ultrabrain`: Not needed — structured E2E test writing
+**Must NOT do**:
+- Don't import from `src/state/workspace.ts` (being removed)
+- Don't use Zustand patterns
 
-  **Parallelization**:
-  - **Can Run In Parallel**: NO
-  - **Parallel Group**: Wave 4 (depends on Task 12)
-  - **Blocks**: Task 15
-  - **Blocked By**: Task 12 (needs integrated UI)
+**Recommended Agent Profile**:
+- **Category**: `deep`
+- **Skills**: [`frontend-ui-ux`]
 
-  **References**:
-  - `playwright` skill — For Playwright test patterns
-  - `src/components/WorkspaceSidebar.tsx` — DOM structure to query
-  - `src/components/WorkspaceSettingsDialog.tsx` — Dialog structure to query
+**Parallelization**:
+- **Can Run In Parallel**: YES (with Task 10, after Task 8)
+- **Blocks**: Task 14
+- **Blocked By**: Task 8
 
-  **Acceptance Criteria**:
-  - [ ] E2E test file created with 8 test scenarios
-  - [ ] All E2E tests pass: `bun test` or `npx playwright test`
-  - [ ] Tests verify both UI state and store state
+**References**:
+- `src/components/ui/Dialog.tsx` - Base-UI wrappers
+- `websocket-core-refactor.md` - Task 25
+- Original `workspace-settings.md` - Task 4
 
-  **QA Scenarios**:
-  ```
-  Scenario: Full E2E test suite passes
-    Tool: Bash
-    Preconditions: App running, E2E tests written
-    Steps:
-      1. Run E2E test suite
-      2. Assert all 8 tests pass
-    Expected Result: Full E2E coverage
-    Evidence: .sisyphus/evidence/task-14-e2e-results.txt
-  ```
+**Acceptance Criteria**:
+- [ ] Dialog opens/closes
+- [ ] All 5 sections render
+- [ ] Settings load via WebSocket
+- [ ] Changes save via WebSocket
+- [ ] Color picker works
+- [ ] Icon picker works
 
-  **Commit**: YES
-  - Message: `test(e2e): add Playwright tests for workspace settings dialog`
-  - Files: `src/tests/workspace-settings.test.ts` (new)
-  - Pre-commit: `bun test`
+**QA Scenarios**:
+```
+Scenario: Dialog works with WebSocket
+Tool: Playwright
+Steps:
+1. Open dialog
+2. Change color
+3. Verify WebSocket message sent
+4. Verify settings updated
+Expected: Full dialog workflow
+Evidence: .sisyphus/evidence/task-9-dialog-ws.png
+```
 
----
-
-- [ ] 15. Final QA Pass
-
-  **What to do**:
-  - Run full verification suite:
-    1. `npx tsc --noEmit` — No TypeScript errors
-    2. `bun test` — All unit tests pass
-    3. Manual verification of all acceptance criteria from Definition of Done
-  - Check for AI slop patterns:
-    - No excessive comments
-    - No over-abstraction
-    - No generic names (data, result, item, temp)
-  - Verify no `as any` or `@ts-ignore` in new code
-  - Verify no console.log in new code
-  - Verify all files follow existing patterns and conventions
-  - Verify no scope creep (no changes beyond the planned scope)
-
-  **Must NOT do**:
-  - Do NOT make additional changes during QA — only verify and report
-  - Do NOT skip any verification step
-
-  **Recommended Agent Profile**:
-  - **Category**: `unspecified-high`
-  - **Skills**: [`playwright`]
-  - `playwright`: For final manual QA scenarios
-  - **Skills Evaluated but Omitted**:
-    - N/A — this is a verification/review task
-
-  **Parallelization**:
-  - **Can Run In Parallel**: NO
-  - **Parallel Group**: Wave FINAL (after all tasks)
-  - **Blocks**: None (final)
-  - **Blocked By**: Tasks 13, 14
-
-  **References**:
-  - `package.json` — Build/test commands
-  - `src/state/workspace.test.ts` — Unit test results
-  - `src/components/WorkspaceSidebar.tsx` — Visual verification
-
-  **Acceptance Criteria**:
-  - [ ] `npx tsc --noEmit` — PASS
-  - [ ] `bun test` — All tests pass
-  - [ ] No AI slop patterns in new code
-  - [ ] No `as any` or `@ts-ignore` in new code
-  - [ ] All Definition of Done items verified
-
-  **QA Scenarios**:
-  ```
-  Scenario: Full build and test verification
-    Tool: Bash
-    Preconditions: All implementation complete
-    Steps:
-      1. Run `npx tsc --noEmit`
-      2. Run `bun test`
-      3. Assert both commands exit with 0
-    Expected Result: Clean build and all tests pass
-    Evidence: .sisyphus/evidence/task-15-verification.txt
-
-  Scenario: Visual QA - all features working
-    Tool: Playwright
-    Preconditions: App running with workspace settings configured
-    Steps:
-      1. Open app
-      2. Verify accent line on workspace with color
-      3. Verify icon on workspace with icon
-      4. Verify subtitle on workspace with subtitle
-      5. Right-click → Settings opens dialog
-      6. Dialog shows all current values
-      7. Change color → accent updates live
-    Expected Result: All features working end-to-end
-    Evidence: .sisyphus/evidence/task-15-visual-qa.png
-  ```
-
-  **Commit**: NO (verification only)
+**Commit**: YES
+- Message: `feat(ui): create WorkspaceSettingsDialog with WebSocket integration`
+- Files: `src/components/WorkspaceSettingsDialog.tsx`
+- Pre-commit: `npx tsc --noEmit`
 
 ---
 
-## Final Verification Wave (MANDATORY)
+- [ ] **10. Integrate Settings into WorkspaceSidebar**
 
-- [ ] F1. **Plan Compliance Audit** — `oracle`
-  Verify all Must Have implemented, no Must NOT Have present.
-  Output: `Must Have [5/5] | Must NOT Have [0 violations] | VERDICT: APPROVE/REJECT`
+**What to do**:
+- Update `src/components/WorkspaceSidebar.tsx`:
+  - Add Settings context menu item
+  - Add state for settings dialog
+  - Render `<WorkspaceSettingsDialog />`
+- Remove old Zustand-based code
+- Use WebSocket-based hooks
 
-- [ ] F2. **Code Quality Review** — `unspecified-high`
-  Run `tsc --noEmit` + `bun test` + linter.
-  Output: `Build [PASS/FAIL] | Tests [N pass] | VERDICT`
+**Must NOT do**:
+- Don't modify existing workspace actions
+- Don't break existing sidebar functionality
 
-- [ ] F3. **Real Manual QA** — `playwright`
-  Execute all QA scenarios, test cross-task integration.
-  Output: `Scenarios [N/N pass] | VERDICT`
+**Recommended Agent Profile**:
+- **Category**: `quick`
+- **Skills**: []
 
-- [ ] F4. **Scope Fidelity Check** — `deep`
-  Verify no scope creep, all tasks implemented as specified.
-  Output: `Tasks [N/N compliant] | Contamination [CLEAN] | VERDICT`
+**Parallelization**:
+- **Can Run In Parallel**: YES (with Task 9, after Task 8)
+- **Blocks**: Task 11, 14
+- **Blocked By**: Task 8
+
+**References**:
+- `src/components/WorkspaceSidebar.tsx`
+- `websocket-core-refactor.md` - Task 25
+
+**Acceptance Criteria**:
+- [ ] Settings menu item appears
+- [ ] Click opens dialog for correct workspace
+- [ ] Dialog scoped to right-clicked workspace
+
+**QA Scenarios**:
+```
+Scenario: Settings menu opens dialog
+Tool: Playwright
+Steps:
+1. Right-click workspace tab
+2. Click Settings
+3. Verify dialog opens
+4. Verify correct workspace loaded
+Expected: Dialog opens correctly
+Evidence: .sisyphus/evidence/task-10-menu.png
+```
+
+**Commit**: YES
+- Message: `feat(ui): add Settings menu item to workspace sidebar`
+- Files: `src/components/WorkspaceSidebar.tsx`
+
+---
+
+- [ ] **11. Add Accent Line, Icon, Subtitle Rendering**
+
+**What to do**:
+- Update `src/components/WorkspaceSidebar.tsx`:
+  - Read settings from workspace (via WebSocket state)
+  - Add 3px left border with workspace color
+  - Add icon display before workspace name
+  - Add subtitle below workspace name
+- Create `src/components/WorkspaceSidebar.css` for styling
+- Update both expanded and collapsed views
+
+**CSS classes**:
+```css
+.workspace-accent-line { border-left: 3px solid var(--workspace-color); }
+.workspace-icon { /* 20x20px icon */ }
+.workspace-subtitle { /* 11px, muted, ellipsis */ }
+```
+
+**Must NOT do**:
+- Don't use inline styles
+- Don't show subtitle in collapsed view
+
+**Recommended Agent Profile**:
+- **Category**: `quick`
+- **Skills**: []
+
+**Parallelization**:
+- **Can Run In Parallel**: YES (with Task 9, 10)
+- **Blocks**: Task 14
+- **Blocked By**: Task 10
+
+**References**:
+- Original `workspace-settings.md` - Tasks 9, 10, 11
+- `websocket-core-refactor.md` - Task 25
+
+**Acceptance Criteria**:
+- [ ] Accent line renders with color
+- [ ] Icon renders before name
+- [ ] Subtitle renders below name
+- [ ] Collapsed view shows icon/accent
+
+**QA Scenarios**:
+```
+Scenario: Visual elements render
+Tool: Playwright
+Steps:
+1. Set workspace color, icon, subtitle
+2. Verify accent line visible
+3. Verify icon visible
+4. Verify subtitle visible
+Expected: All visual elements present
+Evidence: .sisyphus/evidence/task-11-visual.png
+```
+
+**Commit**: YES
+- Message: `feat(ui): add accent line, icon, subtitle to workspace tabs`
+- Files: `src/components/WorkspaceSidebar.tsx`, `src/components/WorkspaceSidebar.css`
+- Pre-commit: `npx tsc --noEmit`
+
+---
+
+### Wave 4: Verification
+
+- [ ] **12. Add WebSocket Handler Tests**
+
+**What to do**:
+- Add Rust tests in `ymir-core/src/handlers/workspace_settings.rs`:
+  - Test get_settings returns correct data
+  - Test update_settings updates DB and YAML
+  - Test partial updates
+- Add integration test
+
+**Test scenarios**:
+- Get settings for existing workspace
+- Get settings for non-existent workspace
+- Update color only
+- Update all fields
+- Verify YAML file updated
+
+**Must NOT do**:
+- Don't mock WebSocket layer
+
+**Recommended Agent Profile**:
+- **Category**: `quick`
+- **Skills**: []
+
+**Parallelization**:
+- **Can Run In Parallel**: YES
+- **Blocks**: Task 15
+- **Blocked By**: Task 4
+
+**References**:
+- `ymir-core/src/handlers/` - Handler test patterns
+
+**Acceptance Criteria**:
+- [ ] 5+ test cases pass
+- [ ] Tests cover happy path and errors
+
+**QA Scenarios**:
+```
+Scenario: Handler tests pass
+Tool: Bash
+Steps:
+1. cd ymir-core && cargo test workspace_settings
+2. Verify all tests pass
+Expected: 5 tests pass
+Evidence: .sisyphus/evidence/task-12-handler-tests.txt
+```
+
+**Commit**: YES
+- Message: `test(core): add WebSocket handler tests for settings`
+- Files: `ymir-core/src/handlers/workspace_settings.rs`
+- Pre-commit: `cargo test -p ymir-core workspace_settings`
+
+---
+
+- [ ] **13. Add React Hook Tests**
+
+**What to do**:
+- Add tests in `src/hooks/useWorkspaceSettings.test.ts`:
+  - Test hook loads settings on mount
+  - Test hook calls WebSocket correctly
+  - Test hook handles errors
+  - Test hook updates local state
+- Mock WebSocket service
+
+**Must NOT do**:
+- Don't test WebSocket service itself
+
+**Recommended Agent Profile**:
+- **Category**: `quick`
+- **Skills**: []
+
+**Parallelization**:
+- **Can Run In Parallel**: YES
+- **Blocks**: Task 15
+- **Blocked By**: Task 8
+
+**References**:
+- `src/hooks/` - Existing hook test patterns
+- Vitest documentation
+
+**Acceptance Criteria**:
+- [ ] 4+ test cases pass
+- [ ] WebSocket calls mocked and verified
+
+**QA Scenarios**:
+```
+Scenario: Hook tests pass
+Tool: Bash
+Steps:
+1. bun test src/hooks/useWorkspaceSettings.test.ts
+2. Verify all tests pass
+Expected: 4 tests pass
+Evidence: .sisyphus/evidence/task-13-hook-tests.txt
+```
+
+**Commit**: YES
+- Message: `test(react): add useWorkspaceSettings hook tests`
+- Files: `src/hooks/useWorkspaceSettings.test.ts`
+- Pre-commit: `bun test src/hooks/useWorkspaceSettings.test.ts`
+
+---
+
+- [ ] **14. Add E2E Tests for Settings Dialog**
+
+**What to do**:
+- Create `src/tests/workspace-settings.e2e.test.ts`:
+  - Test dialog opens from context menu
+  - Test color selection updates accent line
+  - Test icon selection displays icon
+  - Test subtitle input shows subtitle
+  - Test settings persist after reload (YAML verification)
+- Use Playwright
+
+**Must NOT do**:
+- Don't test directory picker
+
+**Recommended Agent Profile**:
+- **Category**: `unspecified-high`
+- **Skills**: [`playwright`]
+
+**Parallelization**:
+- **Can Run In Parallel**: YES
+- **Blocks**: Task 15
+- **Blocked By**: Tasks 9, 10, 11
+
+**References**:
+- `playwright.config.ts`
+- Original `workspace-settings.md` - Task 14
+
+**Acceptance Criteria**:
+- [ ] 6+ E2E test scenarios
+- [ ] All tests pass in CI
+- [ ] Screenshots captured
+
+**QA Scenarios**:
+```
+Scenario: Full E2E test suite
+Tool: Bash
+Steps:
+1. npx playwright test workspace-settings
+2. Verify all tests pass
+Expected: 6+ tests pass
+Evidence: .sisyphus/evidence/task-14-e2e-results.txt
+```
+
+**Commit**: YES
+- Message: `test(e2e): add Playwright tests for workspace settings`
+- Files: `src/tests/workspace-settings.e2e.test.ts`
+- Pre-commit: `npx playwright test`
+
+---
+
+- [ ] **15. Final QA Pass**
+
+**What to do**:
+- Run full verification:
+  1. `cargo check --workspace` - No Rust errors
+  2. `cargo test -p ymir-core` - All Rust tests pass
+  3. `npx tsc --noEmit` - No TypeScript errors
+  4. `bun test` - All unit tests pass
+  5. `npx playwright test` - All E2E tests pass
+- Manual verification:
+  - Start server
+  - Create workspace
+  - Open settings dialog
+  - Change color, icon, subtitle
+  - Verify YAML file updated
+  - Restart server
+  - Verify settings loaded from YAML
+- Check for AI slop patterns
+
+**Must NOT do**:
+- Don't skip any verification step
+- Don't make changes during QA (only verify)
+
+**Recommended Agent Profile**:
+- **Category**: `unspecified-high`
+- **Skills**: [`playwright`]
+
+**Parallelization**:
+- **Can Run In Parallel**: NO
+- **Blocks**: None (final)
+- **Blocked By**: Tasks 5, 6, 12, 13, 14
+
+**References**:
+- All previous tasks
+
+**Acceptance Criteria**:
+- [ ] All builds pass
+- [ ] All tests pass
+- [ ] YAML persistence verified
+- [ ] WebSocket communication verified
+- [ ] No AI slop patterns
+
+**QA Scenarios**:
+```
+Scenario: Full verification
+Tool: Bash + Playwright
+Steps:
+1. Run all builds
+2. Run all tests
+3. Manual verification of YAML persistence
+Expected: All checks pass
+Evidence: .sisyphus/evidence/task-15-final-qa.txt
+```
+
+**Commit**: NO (verification only)
+
+---
+
+## Final Verification Wave
+
+- [ ] F1. **Plan Compliance Audit** - `oracle`
+Verify all Must Have implemented, no Must NOT Have present.
+Output: `Must Have [8/8] | Must NOT Have [0 violations] | VERDICT`
+
+- [ ] F2. **Code Quality Review** - `unspecified-high`
+Run `cargo check/test` + `tsc --noEmit` + `bun test` + linter.
+Output: `Build [PASS/FAIL] | Tests [N pass] | VERDICT`
+
+- [ ] F3. **Real Manual QA** - `playwright`
+Execute all QA scenarios, test cross-task integration.
+Output: `Scenarios [N/N pass] | VERDICT`
+
+- [ ] F4. **Scope Fidelity Check** - `deep`
+Verify no scope creep, all tasks implemented as specified.
+Output: `Tasks [N/N compliant] | Contamination [CLEAN] | VERDICT`
+
+---
+
+## Integration with WebSocket Refactor
+
+### Prerequisites from WebSocket Plan
+Before this plan can execute, the following must be complete:
+- Task 1-4: ✅ Cargo workspace, types, schema, migrations
+- Task 9-10: ✅ WebSocket server, protocol
+- Task 11-12: ✅ Workspace/pane handlers
+- Task 21: ⏳ WebSocket client service (React) - **Target for Wave 3**
+
+### Dependency Graph
+```
+WebSocket Plan (Tasks 1-20) ─┬─> This Plan Task 1-7 (Rust)
+                              │
+                              ├─> This Plan Task 8-15 (React)
+                              │   (requires Task 21 from WebSocket plan)
+                              │
+                              └─> Final verification
+```
+
+### Execution Order
+1. Complete WebSocket plan Tasks 1-20 (mostly done)
+2. Complete WebSocket plan Task 21 (WebSocket client service)
+3. Execute this plan (Tasks 1-15)
+4. Complete WebSocket plan Tasks 22-31
 
 ---
 
 ## Commit Strategy
 
-- **1**: `feat(workspace): add color, icon, workingDirectory, subtitle fields` — types.ts
-- **2**: `feat(store): add updateWorkspaceSettings action` — workspace.ts
-- **3**: `chore(deps): install @tauri-apps/plugin-dialog` — package.json
-- **4-8**: `feat(ui): create WorkspaceSettingsDialog with subcomponents` — WorkspaceSettingsDialog.tsx
-- **9-11**: `feat(ui): add accent line, icon, subtitle to workspace tabs` — WorkspaceSidebar.tsx/css
-- **12**: `feat(ui): update WorkspaceList rendering` — WorkspaceSidebar.tsx
-- **13-14**: `test: add unit and E2E tests for workspace settings` — workspace.test.ts, e2e
+- **1-3**: `feat(core): add workspace settings foundation (types, schema, YAML)`
+- **4-7**: `feat(core): add settings WebSocket handlers and YAML storage`
+- **8**: `feat(react): add useWorkspaceSettings WebSocket hook`
+- **9**: `feat(ui): create WorkspaceSettingsDialog with WebSocket`
+- **10**: `feat(ui): integrate settings into workspace sidebar`
+- **11**: `feat(ui): add accent line, icon, subtitle to workspace tabs`
+- **12-13**: `test: add handler and hook tests`
+- **14**: `test(e2e): add Playwright tests for workspace settings`
 
 ---
 
@@ -1128,21 +1134,32 @@ Max Concurrent: 7 (Waves 1 & 2)
 
 ### Verification Commands
 ```bash
-npx tsc --noEmit  # No type errors
-bun test          # All unit tests pass
-bun run dev       # App starts, settings dialog opens
+# Rust
+cd ymir-core && cargo test
+
+# TypeScript
+npx tsc --noEmit
+bun test
+
+# E2E
+npx playwright test workspace-settings
+
+# Manual
+cat .ymir/workspace-settings.yaml  # Verify file exists and is valid YAML
 ```
 
 ### Final Checklist
-- [ ] Workspace type has 5 new optional fields (color, icon, workingDirectory, subtitle, name via existing)
-- [ ] updateWorkspaceSettings action persists via Tauri Store
-- [ ] Settings dialog opens from right-click context menu
-- [ ] Color picker shows 10 preset colors with ring indicator
-- [ ] Icon picker shows Lucide icons with hover pencil overlay
-- [ ] Directory picker opens native Tauri dialog
+- [ ] Workspace type has settings fields (Rust + TypeScript)
+- [ ] Database schema has settings columns
+- [ ] YAML file storage works (load on startup, save on change)
+- [ ] WebSocket handlers for settings CRUD
+- [ ] React hook for settings subscription
+- [ ] Settings dialog opens from context menu
+- [ ] Color picker with 10 preset colors
+- [ ] Icon picker with Lucide icons
+- [ ] Directory picker (Tauri mode)
 - [ ] Workspace tab shows 3px left border with selected color
 - [ ] Workspace tab shows icon when set
 - [ ] Subtitle appears below name, hidden when empty
-- [ ] New tabs in workspace use workingDirectory as cwd
-- [ ] All tests pass (vitest + playwright)
-- [ ] No Must NOT Have violations
+- [ ] Settings persist across server restarts
+- [ ] All tests pass (Rust + TypeScript + E2E)
