@@ -763,7 +763,7 @@ Evidence: .sisyphus/evidence/task-8-hook-works.txt
 
 ---
 
-- [ ] **Task 9: Update Terminal tests**
+- [x] **Task 9: Update Terminal tests**
 
 **What to do**:
 Update all Terminal component tests in `src/components/__tests__/Terminal.test.tsx`:
@@ -803,7 +803,7 @@ Evidence: .sisyphus/evidence/task-9-tests-pass.txt
 
 ---
 
-- [ ] **Task 10: Verify PTY integration**
+- [x] **Task 10: Verify PTY integration**
 
 **What to do**:
 Test that PTY commands still work correctly:
@@ -857,7 +857,7 @@ Evidence: .sisyphus/evidence/task-10-resize-works.png
 
 ---
 
-- [ ] **Task 11: Test theme switching**
+- [x] **Task 11: Test theme switching**
 
 **What to do**:
 Verify theme changes apply correctly to ghostty-web terminal.
@@ -887,7 +887,7 @@ Evidence: .sisyphus/evidence/task-11-theme-switches.png
 
 ---
 
-- [ ] **Task 12: Performance verification**
+- [x] **Task 12: Performance verification**
 
 **What to do**:
 Compare performance metrics before/after migration:
@@ -922,7 +922,7 @@ Evidence: .sisyphus/evidence/task-12-performance.json
 
 ---
 
-- [ ] **Task 13: Full regression test**
+- [x] **Task 13: Full regression test**
 
 **What to do**:
 Run complete test suite and manual verification:
@@ -964,7 +964,7 @@ Evidence: .sisyphus/evidence/task-13-regression.txt
 
 ---
 
-- [ ] **Task 14: Documentation update**
+- [x] **Task 14: Documentation update**
 
 **What to do**:
 Update documentation to reflect:
@@ -1005,19 +1005,19 @@ Evidence: .sisyphus/evidence/task-14-docs-updated.txt
 
 ## Final Verification Wave
 
-- [ ] **F1: Plan Compliance Audit** - `oracle`
+- [x] **F1: Plan Compliance Audit** - `oracle`
 Read plan end-to-end. Verify:
 - All "Must Have" items implemented
 - No "Must NOT Have" violations
 - All tasks completed
 
-- [ ] **F2: Code Quality Review** - `unspecified-high`
+- [x] **F2: Code Quality Review** - `unspecified-high`
 - Run `npx tsc --noEmit` (no errors)
 - Run `npm test` (all pass)
 - Check for console.log in production code
 - Check for unused imports
 
-- [ ] **F3: Real Manual QA** - `unspecified-high`
+- [x] **F3: Real Manual QA** - `unspecified-high`
 Start from clean state. Execute:
 1. Create new workspace
 2. Open terminal
@@ -1028,7 +1028,7 @@ Start from clean state. Execute:
 7. Test notifications
 8. Close all tabs/panes
 
-- [ ] **F4: Scope Fidelity Check** - `deep`
+- [x] **F4: Scope Fidelity Check** - `deep`
 Verify:
 - Only Terminal component changed (not PTY backend)
 - Search feature removed (not broken)
