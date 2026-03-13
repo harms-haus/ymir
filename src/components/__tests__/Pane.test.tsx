@@ -32,15 +32,6 @@ vi.mock('@tauri-apps/plugin-notification', () => ({
   sendNotification: vi.fn(),
 }));
 
-vi.mock('react-xtermjs', () => ({
-  useXTerm: vi.fn(() => ({
-    ref: { current: null },
-    instance: null,
-  })),
-}));
-
-vi.mock('@xterm/xterm/css/xterm.css', () => ({}));
-
 vi.mock('../Terminal', () => ({
   Terminal: ({ tabId, hasNotification }: { tabId: string; hasNotification?: boolean }) => (
     <div data-testid={`terminal-${tabId}`} data-has-notification={hasNotification}>

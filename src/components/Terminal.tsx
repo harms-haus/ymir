@@ -1,8 +1,5 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { useXTerm } from 'react-xtermjs';
-import { FitAddon } from '@xterm/addon-fit';
-import { WebLinksAddon } from '@xterm/addon-web-links';
-import { SearchAddon } from '@xterm/addon-search';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { Terminal as GhosttyTerminal, FitAddon } from 'ghostty-web';
 import { invoke, Channel } from '@tauri-apps/api/core';
 import { sendNotification } from '@tauri-apps/plugin-notification';
 import useWorkspaceStore from '../state/workspace';
@@ -30,6 +27,11 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
   const onNotificationRef = useRef<((message: string) => void) | undefined>(onNotification);
   const resizeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Ghostty-web refs
+  const containerRef = useRef<HTMLDivElement>(null);
+  const terminalRef = useRef<GhosttyTerminal | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
+
   useEffect(() => {
     onNotificationRef.current = onNotification;
   }, [onNotification]);
@@ -40,54 +42,65 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
     }
 
     resizeTimeoutRef.current = setTimeout(() => {
-        const correlationId = generateUUID();
-        invoke('resize_pty', { sessionId, cols, rows, correlationId }).catch((error) => {
-          logger.warn('Failed to resize PTY', { error, sessionId, cols, rows });
-        });
-      }, 100);
+      const correlationId = generateUUID();
+      invoke('resize_pty', { sessionId, cols, rows, correlationId }).catch((error) => {
+        logger.warn('Failed to resize PTY', { error, sessionId, cols, rows });
+      });
+    }, 100);
   }, []);
 
-  const fitAddon = useMemo(() => new FitAddon(), []);
-  const webLinksAddon = useMemo(() => new WebLinksAddon(), []);
-  const searchAddon = useMemo(() => new SearchAddon(), []);
-
-  // Memoize options to prevent infinite re-renders
-  const options = useMemo(() => ({
-    ...terminalTheme,
-    cursorBlink: true,
-    fontSize,
-    fontFamily: '"JetBrains Mono", "NerdFontSymbols", "monospace"',
-  }), [fontSize]);
-
-  // Memoize addons array to prevent infinite re-renders
-  const addons = useMemo(() => [
-    fitAddon,
-    webLinksAddon,
-    searchAddon
-  ], [fitAddon, webLinksAddon, searchAddon]);
-
-  // Memoize onData callback to prevent infinite re-renders
-  const onData = useCallback((data: string) => {
-    if (currentSessionIdRef.current) {
-      invoke('write_pty', { sessionId: currentSessionIdRef.current, data });
-    }
-  }, []);
-
-  // Memoize listeners object to prevent infinite re-renders
-  const listeners = useMemo(() => ({
-    onData,
-  }), [onData]);
-
-  const { ref, instance } = useXTerm({
-    options,
-    addons,
-    listeners,
-  });
-
+  // Initialize ghostty-web terminal
   useEffect(() => {
-    if (!instance) return;
+    if (!containerRef.current) return;
 
-    async function connectToPty(sid: string | undefined, term: NonNullable<typeof instance>) {
+    // Dispose existing terminal if fontSize changed
+    if (terminalRef.current) {
+      terminalRef.current.dispose();
+      terminalRef.current = null;
+      fitAddonRef.current = null;
+    }
+
+    const term = new GhosttyTerminal({
+      fontSize,
+      fontFamily: '"JetBrains Mono", "NerdFontSymbols", "monospace"',
+      cursorBlink: true,
+      theme: terminalTheme,
+    });
+
+    term.open(containerRef.current);
+
+    const fitAddon = new FitAddon();
+    term.loadAddon(fitAddon);
+    fitAddon.fit();
+
+    terminalRef.current = term;
+    fitAddonRef.current = fitAddon;
+
+    return () => {
+      term.dispose();
+    };
+  }, [fontSize]);
+
+  // Handle data input from terminal
+  useEffect(() => {
+    const term = terminalRef.current;
+    if (!term) return;
+
+    const disposable = term.onData((data: string) => {
+      if (currentSessionIdRef.current) {
+        invoke('write_pty', { sessionId: currentSessionIdRef.current, data });
+      }
+    });
+
+    return () => disposable.dispose();
+  }, []);
+
+  // Connect to PTY
+  useEffect(() => {
+    const term = terminalRef.current;
+    if (!term) return;
+
+    async function connectToPty(sid: string | undefined, term: GhosttyTerminal) {
       if (isConnectingRef.current) return;
       if (currentSessionIdRef.current) {
         setIsReady(true);
@@ -159,34 +172,32 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
       }
     }
 
-    connectToPty(sessionId, instance);
-  }, [instance, paneId, tabId, sessionId]);
+    connectToPty(sessionId, term);
+  }, [paneId, tabId, sessionId]);
 
   // Handle resize with ResizeObserver
   useEffect(() => {
-    if (!ref.current || !fitAddon || !instance) return;
+    const container = containerRef.current;
+    const fitAddon = fitAddonRef.current;
+    const term = terminalRef.current;
+    if (!container || !fitAddon || !term) return;
 
     const resizeObserver = new ResizeObserver(() => {
       try {
         fitAddon.fit();
+        // Notify PTY of resize
+        if (currentSessionIdRef.current && isReady) {
+          const { cols, rows } = term;
+          debounceResize(cols, rows, currentSessionIdRef.current);
+        }
       } catch (error) {
         // Silently ignore fit errors during initialization
       }
     });
-    resizeObserver.observe(ref.current);
 
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, [fitAddon, ref, instance]);
-
-  // Handle PTY resize
-  useEffect(() => {
-    if (!isReady || !currentSessionIdRef.current || !instance) return;
-
-    const { cols, rows } = instance;
-    debounceResize(cols, rows, currentSessionIdRef.current);
-  }, [isReady, instance, debounceResize]);
+    resizeObserver.observe(container);
+    return () => resizeObserver.disconnect();
+  }, [isReady, debounceResize]);
 
   // Handle ctrl+scroll zoom
   useEffect(() => {
@@ -202,39 +213,38 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
       }
     };
 
-    const terminalElement = ref.current;
+    const terminalElement = containerRef.current;
     terminalElement?.addEventListener('wheel', handleWheel, { passive: false });
     return () => terminalElement?.removeEventListener('wheel', handleWheel);
-  }, [ref]);
+  }, []);
 
-  // Listen for xterm title changes and update tab title
+  // Listen for title changes and update tab title
   useEffect(() => {
-    if (!instance) return;
+    const term = terminalRef.current;
+    if (!term) return;
 
-    const disposable = instance.onTitleChange((newTitle: string) => {
+    const disposable = term.onTitleChange((newTitle: string) => {
       if (newTitle && newTitle.trim()) {
         useWorkspaceStore.getState().updateTabTitle(paneId, tabId, newTitle.trim());
       }
     });
 
-    return () => {
-      disposable.dispose();
-    };
-  }, [instance, paneId, tabId]);
+    return () => disposable.dispose();
+  }, [paneId, tabId]);
 
   return (
     <ErrorBoundary>
-    <div
-      ref={ref as React.RefObject<HTMLDivElement>}
-      style={{
-        width: '100%',
-        height: '100%',
-        backgroundColor: 'var(--background-hex)',
-        boxShadow: hasNotification ? '0 0 0 2px var(--notification)' : 'none',
-        transition: 'box-shadow 0.2s ease',
-        opacity: isReady ? 1 : 0.7,
-      }}
-    />
+      <div
+        ref={containerRef}
+        style={{
+          width: '100%',
+          height: '100%',
+          backgroundColor: 'var(--background-hex)',
+          boxShadow: hasNotification ? '0 0 0 2px var(--notification)' : 'none',
+          transition: 'box-shadow 0.2s ease',
+          opacity: isReady ? 1 : 0.7,
+        }}
+      />
     </ErrorBoundary>
   );
 }

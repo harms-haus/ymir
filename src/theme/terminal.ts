@@ -1,6 +1,4 @@
-import { ITerminalOptions } from '@xterm/xterm';
-
-export const terminalTheme: ITerminalOptions['theme'] = {
+export const terminalTheme = {
   background: '#1e1e1e',
   foreground: '#d4d4d4',
   cursor: '#d4d4d4',

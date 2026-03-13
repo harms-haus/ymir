@@ -1,9 +1,10 @@
 {
-  "active_plan": "/home/blake/Documents/software/ymir/.sisyphus/plans/codebase-audit.md",
-  "started_at": "2026-03-12T20:57:38.320Z",
+  "active_plan": "/home/blake/Documents/software/ymir/.sisyphus/plans/ghostty-web-migration.md",
+  "started_at": "2026-03-13T00:44:21.817Z",
   "session_ids": [
-    "ses_31c6eca9bffeAg4A5dNixRd40W"
+    "ses_31b593680ffeMTMJdvvGS6UQ13"
   ],
-  "plan_name": "codebase-audit",
-  "agent": "atlas"
+  "plan_name": "ghostty-web-migration",
+  "agent": "atlas",
+  "worktree_path": "/home/blake/Documents/software/ymir"
 }
