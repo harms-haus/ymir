@@ -224,7 +224,7 @@ Max Concurrent: 4-7 tasks per wave
 
 ### Wave 1: Foundation
 
-- [ ] **1. Cargo Workspace Structure**
+- [x] **1. Cargo Workspace Structure**
 
 **What to do**:
 - Create new Cargo workspace at project root
@@ -275,7 +275,7 @@ Evidence: .sisyphus/evidence/task-1-workspace-compile.txt
 
 ---
 
-- [ ] **2. Core Types and Protocol**
+- [x] **2. Core Types and Protocol**
 
 **What to do**:
 - Define shared types in `ymir-core/src/types.rs`:
@@ -337,7 +337,7 @@ Evidence: .sisyphus/evidence/task-2-protocol-test.txt
 
 ---
 
-- [ ] **3. Turso Database Schema**
+- [x] **3. Turso Database Schema**
 
 **What to do**:
 - Create SQL migration files in `ymir-core/migrations/`:
@@ -480,7 +480,7 @@ Evidence: .sisyphus/evidence/task-3-schema-load.txt
 
 ---
 
-- [ ] **4. Migration Scripts**
+- [x] **4. Migration Scripts**
 
 **What to do**:
 - Create `ymir-core/src/db/migrations.rs` module
@@ -528,7 +528,7 @@ Evidence: .sisyphus/evidence/task-4-migrations-test.txt
 
 ### Wave 2: Core Service - Database + PTY
 
-- [ ] **5. Database Client and Connection Pooling**
+- [x] **5. Database Client and Connection Pooling**
 
 **What to do**:
 - Add `libsql` crate to `ymir-core`
@@ -579,7 +579,7 @@ Evidence: .sisyphus/evidence/task-5-db-client-test.txt
 
 ---
 
-- [ ] **6. PTY Session Manager**
+- [x] **6. PTY Session Manager**
 
 **What to do**:
 - Port existing PTY logic from `src-tauri/src/commands.rs`
@@ -630,7 +630,7 @@ Evidence: .sisyphus/evidence/task-6-pty-manager-test.txt
 
 ---
 
-- [ ] **7. Scrollback Batching Service**
+- [x] **7. Scrollback Batching Service**
 
 **What to do**:
 - Create `ymir-core/src/scrollback/service.rs`
@@ -676,7 +676,7 @@ Evidence: .sisyphus/evidence/task-7-scrollback-test.txt
 
 ---
 
-- [ ] **8. Git Service**
+- [x] **8. Git Service**
 
 **What to do**:
 - Port existing git logic from `src-tauri/src/git.rs`
@@ -728,7 +728,7 @@ Evidence: .sisyphus/evidence/task-8-git-service-test.txt
 
 ### Wave 3: WebSocket Server
 
-- [ ] **9. WebSocket Server Setup**
+- [x] **9. WebSocket Server Setup**
 
 **What to do**:
 - Add `axum` and `tokio-tungstenite` to `ymir-core`
@@ -775,7 +775,7 @@ Evidence: .sisyphus/evidence/task-9-server-connect.txt
 
 ---
 
-- [ ] **10. Message Protocol (JSON-RPC 2.0)**
+- [x] **10. Message Protocol (JSON-RPC 2.0)**
 
 **What to do**:
 - Implement JSON-RPC 2.0 message parsing
@@ -821,7 +821,7 @@ Evidence: .sisyphus/evidence/task-10-protocol-roundtrip.txt
 
 ---
 
-- [ ] **11. Workspace Handlers**
+- [x] **11. Workspace Handlers**
 
 **What to do**:
 - Implement `workspace.create` handler
@@ -868,7 +868,7 @@ Evidence: .sisyphus/evidence/task-11-workspace-handlers.txt
 
 ---
 
-- [ ] **12. Pane Handlers**
+- [x] **12. Pane Handlers**
 
 **What to do**:
 - Implement `pane.create` handler (simplified, no splits)
