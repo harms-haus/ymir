@@ -1,64 +1,150 @@
-import { describe, it, expect, beforeEach, vi, beforeAll, afterAll } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from 'vitest';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
+import type React from 'react';
 import { Terminal as TerminalComponent } from '../Terminal';
 import useWorkspaceStore from '../../state/workspace';
 
 const originalResizeObserver = globalThis.ResizeObserver;
 
+type MockResizeObserverInstance = {
+  trigger: () => void;
+  observe: ReturnType<typeof vi.fn>;
+  disconnect: ReturnType<typeof vi.fn>;
+};
+
+const resizeObserverInstances: MockResizeObserverInstance[] = [];
+
 class MockResizeObserver {
+  private callback: ResizeObserverCallback;
   observe = vi.fn();
-  unobserve = vi.fn();
   disconnect = vi.fn();
+
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback;
+    resizeObserverInstances.push({
+      trigger: () => this.callback([], this as unknown as ResizeObserver),
+      observe: this.observe,
+      disconnect: this.disconnect,
+    });
+  }
 }
 
-beforeAll(() => {
-  globalThis.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
+type WebSocketListener = (message: unknown) => void;
+const hoisted = vi.hoisted(() => {
+  const websocketListeners: WebSocketListener[] = [];
+  const requestMock = vi.fn();
+  const connectMock = vi.fn();
+  const isConnectedMock = vi.fn();
+  const onMessageMock = vi.fn((listener: WebSocketListener) => {
+    websocketListeners.push(listener);
+    return () => {
+      const index = websocketListeners.indexOf(listener);
+      if (index >= 0) {
+        websocketListeners.splice(index, 1);
+      }
+    };
+  });
+
+  const sendNotificationMock = vi.fn();
+
+  return {
+    websocketListeners,
+    requestMock,
+    connectMock,
+    isConnectedMock,
+    onMessageMock,
+    sendNotificationMock,
+    terminalInstances: [] as MockGhosttyTerminal[],
+  };
 });
 
-afterAll(() => {
-  globalThis.ResizeObserver = originalResizeObserver;
-});
+const websocketServiceMock = {
+  connect: hoisted.connectMock,
+  isConnected: hoisted.isConnectedMock,
+  request: hoisted.requestMock,
+  onMessage: hoisted.onMessageMock,
+};
 
-let capturedChannel: { onmessage: ((msg: unknown) => void) | null } | null = null;
-
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn(),
-  Channel: class {
-    onmessage: ((msg: unknown) => void) | null = null;
-    constructor() {
-      capturedChannel = this;
-    }
-  },
+vi.mock('../../services/websocket', () => ({
+  getWebSocketService: () => websocketServiceMock,
 }));
 
 vi.mock('@tauri-apps/plugin-notification', () => ({
-  sendNotification: vi.fn(),
+  sendNotification: hoisted.sendNotificationMock,
 }));
 
+class MockGhosttyTerminal {
+  open = vi.fn();
+  write = vi.fn();
+  dispose = vi.fn();
+  loadAddon = vi.fn();
+  cols = 80;
+  rows = 24;
+
+  private dataHandler: ((data: string) => void) | null = null;
+  private titleHandler: ((title: string) => void) | null = null;
+
+  onData = vi.fn((handler: (data: string) => void) => {
+    this.dataHandler = handler;
+    return { dispose: vi.fn() };
+  });
+
+  onTitleChange = vi.fn((handler: (title: string) => void) => {
+    this.titleHandler = handler;
+    return { dispose: vi.fn() };
+  });
+
+  emitData(data: string) {
+    this.dataHandler?.(data);
+  }
+
+  emitTitle(title: string) {
+    this.titleHandler?.(title);
+  }
+}
+
 vi.mock('ghostty-web', () => ({
-  Terminal: function Terminal(this: any) {
-    return {
-      open: vi.fn(),
-      write: vi.fn(),
-      dispose: vi.fn(),
-      onData: vi.fn(() => ({ dispose: vi.fn() })),
-      onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-      loadAddon: vi.fn(),
-      cols: 80,
-      rows: 24,
-    };
+  Terminal: class {
+    open = vi.fn();
+    write = vi.fn();
+    dispose = vi.fn();
+    loadAddon = vi.fn();
+    cols = 80;
+    rows = 24;
+    private dataHandler: ((data: string) => void) | null = null;
+    private titleHandler: ((title: string) => void) | null = null;
+
+    constructor() {
+      const instance = this as unknown as MockGhosttyTerminal;
+      hoisted.terminalInstances.push(instance);
+    }
+
+    onData = vi.fn((handler: (data: string) => void) => {
+      this.dataHandler = handler;
+      return { dispose: vi.fn() };
+    });
+
+    onTitleChange = vi.fn((handler: (title: string) => void) => {
+      this.titleHandler = handler;
+      return { dispose: vi.fn() };
+    });
+
+    emitData(data: string) {
+      this.dataHandler?.(data);
+    }
+
+    emitTitle(title: string) {
+      this.titleHandler?.(title);
+    }
   },
-  FitAddon: function FitAddon(this: any) {
-    return {
-      fit: vi.fn(),
-    };
+  FitAddon: class {
+    fit = vi.fn();
   },
-  UrlRegexProvider: vi.fn(),
 }));
 
 vi.mock('../ErrorBoundary', () => ({
-  ErrorBoundary: ({ children }: { children: React.ReactNode }) => <div data-testid="error-boundary">{children}</div>
+  ErrorBoundary: ({ children }: { children: React.ReactNode }) => <div data-testid="error-boundary">{children}</div>,
 }));
 
 vi.mock('../../lib/logger', () => ({
@@ -70,1065 +156,205 @@ vi.mock('../../lib/logger', () => ({
   },
 }));
 
-const { invoke, Channel } = await import('@tauri-apps/api/core');
-const { Terminal, FitAddon } = await import('ghostty-web');
-const { sendNotification } = await import('@tauri-apps/plugin-notification');
+function setupRequestDefaults() {
+  hoisted.connectMock.mockResolvedValue(undefined);
+  hoisted.isConnectedMock.mockReturnValue(false);
 
-describe('Terminal Component (react-xtermjs migration)', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    capturedChannel = null;
-
-    const { resetState } = useWorkspaceStore.getState();
-    if (resetState) {
-      resetState();
+  hoisted.requestMock.mockImplementation((method: string) => {
+    if (method === 'pty.connect') {
+      return Promise.resolve({ connected: true, tabId: 'tab-1' });
     }
 
-    (invoke as ReturnType<typeof vi.fn>).mockResolvedValue('test-session-id');
+    if (method === 'tab.list') {
+      return Promise.resolve({ tabs: [] });
+    }
+
+    if (method === 'pty.write' || method === 'pty.resize') {
+      return Promise.resolve({});
+    }
+
+    return Promise.resolve({});
+  });
+}
+
+describe('Terminal WebSocket adapter', () => {
+  beforeAll(() => {
+    globalThis.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
   });
 
-  describe('Rendering', () => {
-    it('should render without errors', () => {
-      render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-        />
-      );
-
-      expect(screen.getByTestId('error-boundary')).toBeInTheDocument();
-    });
-
-    it('should render with required props', () => {
-      render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-        />
-      );
-
-      expect(screen.getByTestId('error-boundary')).toBeInTheDocument();
-    });
-
-    it('should render without sessionId prop', () => {
-      render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-        />
-      );
-
-      expect(screen.getByTestId('error-boundary')).toBeInTheDocument();
-    });
-
-    it('should render with onNotification callback', () => {
-      const onNotification = vi.fn();
-
-      render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-          onNotification={onNotification}
-        />
-      );
-
-      expect(screen.getByTestId('error-boundary')).toBeInTheDocument();
-    });
-
-    it('should render with hasNotification flag', () => {
-      render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-          hasNotification={true}
-        />
-      );
-
-      expect(screen.getByTestId('error-boundary')).toBeInTheDocument();
-    });
+  afterAll(() => {
+    globalThis.ResizeObserver = originalResizeObserver;
   });
 
+  beforeEach(() => {
+    vi.clearAllMocks();
+    hoisted.websocketListeners.length = 0;
+    resizeObserverInstances.length = 0;
+    hoisted.terminalInstances.length = 0;
+    setupRequestDefaults();
 
+    const { resetState } = useWorkspaceStore.getState();
+    resetState?.();
+  });
 
-  describe('Cleanup', () => {
-    it('should disconnect resize observer on unmount', async () => {
-      const mockDisconnect = vi.fn();
-      const mockTerminal = {
-        open: vi.fn(),
-        write: vi.fn(),
-        dispose: vi.fn(),
-        onData: vi.fn(() => ({ dispose: vi.fn() })),
-        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-        loadAddon: vi.fn(),
-        cols: 80,
-        rows: 24,
-      };
-
-      class TestResizeObserver {
-        observe = vi.fn();
-        unobserve = vi.fn();
-        disconnect = mockDisconnect;
+  it('connects to PTY and loads tab scrollback over WebSocket', async () => {
+    hoisted.requestMock.mockImplementation((method: string) => {
+      if (method === 'pty.connect') {
+        return Promise.resolve({ connected: true, tabId: 'tab-1' });
       }
 
-      const originalRO = globalThis.ResizeObserver;
-      globalThis.ResizeObserver = TestResizeObserver as unknown as typeof ResizeObserver;
+      if (method === 'tab.list') {
+        return Promise.resolve({
+          tabs: [{ id: 'tab-1', scrollback: [{ text: 'line 1' }, { text: 'line 2' }] }],
+        });
+      }
 
-      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
+      return Promise.resolve({});
+    });
 
-      const { unmount } = render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-        />
-      );
+    render(<TerminalComponent tabId="tab-1" paneId="pane-1" />);
 
-      unmount();
+    expect(screen.getByTestId('error-boundary')).toBeInTheDocument();
 
-      expect(mockDisconnect).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(hoisted.connectMock).toHaveBeenCalledWith('ws://127.0.0.1:7139/ws');
+      expect(hoisted.requestMock).toHaveBeenCalledWith('pty.connect', { tabId: 'tab-1' });
+      expect(hoisted.requestMock).toHaveBeenCalledWith('tab.list', { paneId: 'pane-1' });
+    });
 
-      globalThis.ResizeObserver = originalRO;
+    expect(hoisted.terminalInstances[0]?.write).toHaveBeenCalledWith('line 1\r\nline 2\r\n');
+  });
+
+  it('uses sessionId as PTY target when provided', async () => {
+    render(<TerminalComponent tabId="tab-1" paneId="pane-1" sessionId="session-123" />);
+
+    await waitFor(() => {
+      expect(hoisted.connectMock).toHaveBeenCalledWith('ws://127.0.0.1:7139/ws');
+      expect(hoisted.requestMock).toHaveBeenCalledWith('pty.connect', { tabId: 'session-123' });
     });
   });
 
-  describe('Channel Message Handling', () => {
-    it('should handle output event with string data', async () => {
-      const mockWrite = vi.fn();
-      const mockTerminal = {
-        open: vi.fn(),
-        write: mockWrite,
-        dispose: vi.fn(),
-        onData: vi.fn(() => ({ dispose: vi.fn() })),
-        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-        loadAddon: vi.fn(),
-        cols: 80,
-        rows: 24,
-      };
+  it('does not reconnect when transport is already connected', async () => {
+    hoisted.isConnectedMock.mockReturnValue(true);
 
-      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
+    render(<TerminalComponent tabId="tab-1" paneId="pane-1" />);
 
-      render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-        />
-      );
-
-      await waitFor(() => expect(capturedChannel).not.toBeNull());
-
-      capturedChannel?.onmessage?.({ event: 'output', data: { data: 'hello world' } });
-
-      await waitFor(() => expect(mockWrite).toHaveBeenCalledWith('hello world'));
+    await waitFor(() => {
+      expect(hoisted.requestMock).toHaveBeenCalledWith('pty.connect', { tabId: 'tab-1' });
     });
 
-    it('should handle output event with non-string data', async () => {
-      const mockWrite = vi.fn();
-      const mockTerminal = {
-        open: vi.fn(),
-        write: mockWrite,
-        dispose: vi.fn(),
-        onData: vi.fn(() => ({ dispose: vi.fn() })),
-        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-        loadAddon: vi.fn(),
-        cols: 80,
-        rows: 24,
-      };
-
-      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
-
-      render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-        />
-      );
-
-      await waitFor(() => expect(capturedChannel).not.toBeNull());
-
-      capturedChannel?.onmessage?.({ event: 'output', data: { data: 12345 } });
-
-      await waitFor(() => expect(mockWrite).toHaveBeenCalledWith('12345'));
-    });
-
-    it('should handle output event with direct data property', async () => {
-      const mockWrite = vi.fn();
-      const mockTerminal = {
-        open: vi.fn(),
-        write: mockWrite,
-        dispose: vi.fn(),
-        onData: vi.fn(() => ({ dispose: vi.fn() })),
-        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-        loadAddon: vi.fn(),
-        cols: 80,
-        rows: 24,
-      };
-
-      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
-
-      render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-        />
-      );
-
-      await waitFor(() => expect(capturedChannel).not.toBeNull());
-
-      capturedChannel?.onmessage?.({ event: 'output', data: 'direct data' });
-
-      await waitFor(() => expect(mockWrite).toHaveBeenCalledWith('direct data'));
-    });
-
-    it('should handle notification event', async () => {
-      const onNotification = vi.fn();
-      const mockTerminal = {
-        open: vi.fn(),
-        write: vi.fn(),
-        dispose: vi.fn(),
-        onData: vi.fn(() => ({ dispose: vi.fn() })),
-        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-        loadAddon: vi.fn(),
-        cols: 80,
-        rows: 24,
-      };
-
-      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
-
-      render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-          onNotification={onNotification}
-        />
-      );
-
-      await waitFor(() => expect(capturedChannel).not.toBeNull());
-
-      capturedChannel?.onmessage?.({ event: 'notification', data: { message: 'Test notification' } });
-
-      await waitFor(() => {
-        expect(onNotification).toHaveBeenCalledWith('Test notification');
-        expect(sendNotification).toHaveBeenCalledWith({ title: 'Ymir', body: 'Test notification' });
-      });
-    });
-
-    it('should handle notification event with non-string message', async () => {
-      const onNotification = vi.fn();
-      const mockTerminal = {
-        open: vi.fn(),
-        write: vi.fn(),
-        dispose: vi.fn(),
-        onData: vi.fn(() => ({ dispose: vi.fn() })),
-        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-        loadAddon: vi.fn(),
-        cols: 80,
-        rows: 24,
-      };
-
-      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
-
-      render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-          onNotification={onNotification}
-        />
-      );
-
-      await waitFor(() => expect(capturedChannel).not.toBeNull());
-
-      capturedChannel?.onmessage?.({ event: 'notification', data: { message: 42 } });
-
-      await waitFor(() => {
-        expect(onNotification).toHaveBeenCalledWith('42');
-        expect(sendNotification).toHaveBeenCalledWith({ title: 'Ymir', body: '42' });
-      });
-    });
-
-    it('should handle exit event', async () => {
-      const mockWrite = vi.fn();
-      const mockTerminal = {
-        open: vi.fn(),
-        write: mockWrite,
-        dispose: vi.fn(),
-        onData: vi.fn(() => ({ dispose: vi.fn() })),
-        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-        loadAddon: vi.fn(),
-        cols: 80,
-        rows: 24,
-      };
-
-      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
-
-      render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-        />
-      );
-
-      await waitFor(() => expect(capturedChannel).not.toBeNull());
-
-      capturedChannel?.onmessage?.({ event: 'exit' });
-
-      await waitFor(() => expect(mockWrite).toHaveBeenCalledWith('\r\n[Process exited]\r\n'));
-    });
-
-    it('should ignore invalid messages', async () => {
-      const mockWrite = vi.fn();
-      const mockTerminal = {
-        open: vi.fn(),
-        write: mockWrite,
-        dispose: vi.fn(),
-        onData: vi.fn(() => ({ dispose: vi.fn() })),
-        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-        loadAddon: vi.fn(),
-        cols: 80,
-        rows: 24,
-      };
-
-      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
-
-      render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-        />
-      );
-
-      await waitFor(() => expect(capturedChannel).not.toBeNull());
-
-      capturedChannel?.onmessage?.(null);
-      capturedChannel?.onmessage?.('string message');
-      capturedChannel?.onmessage?.(123);
-
-      expect(mockWrite).not.toHaveBeenCalled();
-    });
-
-    it('should ignore unknown event types', async () => {
-      const mockWrite = vi.fn();
-      const mockTerminal = {
-        open: vi.fn(),
-        write: mockWrite,
-        dispose: vi.fn(),
-        onData: vi.fn(() => ({ dispose: vi.fn() })),
-        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-        loadAddon: vi.fn(),
-        cols: 80,
-        rows: 24,
-      };
-
-      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
-
-      render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-        />
-      );
-
-      await waitFor(() => expect(capturedChannel).not.toBeNull());
-
-      capturedChannel?.onmessage?.({ event: 'unknown_event', data: 'test' });
-
-      expect(mockWrite).not.toHaveBeenCalled();
-    });
-
-    it('should skip output when data is undefined', async () => {
-      const mockWrite = vi.fn();
-      const mockTerminal = {
-        open: vi.fn(),
-        write: mockWrite,
-        dispose: vi.fn(),
-        onData: vi.fn(() => ({ dispose: vi.fn() })),
-        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-        loadAddon: vi.fn(),
-        cols: 80,
-        rows: 24,
-      };
-
-      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
-
-      render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-        />
-      );
-
-      await waitFor(() => expect(capturedChannel).not.toBeNull());
-
-      capturedChannel?.onmessage?.({ event: 'output', data: undefined });
-
-      expect(mockWrite).not.toHaveBeenCalled();
-    });
-
-    it('should skip notification when data is undefined', async () => {
-      const onNotification = vi.fn();
-      const mockTerminal = {
-        open: vi.fn(),
-        write: vi.fn(),
-        dispose: vi.fn(),
-        onData: vi.fn(() => ({ dispose: vi.fn() })),
-        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-        loadAddon: vi.fn(),
-        cols: 80,
-        rows: 24,
-      };
-
-      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
-
-      render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-          onNotification={onNotification}
-        />
-      );
-
-      await waitFor(() => expect(capturedChannel).not.toBeNull());
-
-      capturedChannel?.onmessage?.({ event: 'notification', data: undefined });
-
-      expect(onNotification).not.toHaveBeenCalled();
-      expect(sendNotification).not.toHaveBeenCalled();
-    });
+    expect(hoisted.connectMock).not.toHaveBeenCalled();
   });
 
-  describe('Session Attach', () => {
-    it('should attach to existing session when is_pty_alive returns true', async () => {
-      const mockTerminal = {
-        open: vi.fn(),
-        write: vi.fn(),
-        dispose: vi.fn(),
-        onData: vi.fn(() => ({ dispose: vi.fn() })),
-        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-        loadAddon: vi.fn(),
-        cols: 80,
-        rows: 24,
-      };
+  it('forwards terminal input through pty.write', async () => {
+    render(<TerminalComponent tabId="tab-1" paneId="pane-1" />);
 
-      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
-
-      (invoke as ReturnType<typeof vi.fn>)
-        .mockResolvedValueOnce(true)
-        .mockResolvedValueOnce(undefined);
-
-      render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="existing-session"
-        />
-      );
-
-      await waitFor(() => {
-        expect(invoke).toHaveBeenCalledWith('is_pty_alive', expect.objectContaining({
-          sessionId: 'existing-session',
-        }));
-      });
-
-      await waitFor(() => {
-        expect(invoke).toHaveBeenCalledWith('attach_pty_channel', expect.objectContaining({
-          sessionId: 'existing-session',
-        }));
-      });
+    await waitFor(() => {
+      expect(hoisted.requestMock).toHaveBeenCalledWith('pty.connect', { tabId: 'tab-1' });
     });
 
-    it('should spawn new session when is_pty_alive returns false', async () => {
-      const mockTerminal = {
-        open: vi.fn(),
-        write: vi.fn(),
-        dispose: vi.fn(),
-        onData: vi.fn(() => ({ dispose: vi.fn() })),
-        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-        loadAddon: vi.fn(),
-        cols: 80,
-        rows: 24,
-      };
+    hoisted.terminalInstances[0]?.emitData('echo hello\n');
 
-      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
-
-      (invoke as ReturnType<typeof vi.fn>)
-        .mockResolvedValueOnce(false)
-        .mockResolvedValueOnce('new-session-id');
-
-      render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="dead-session"
-        />
-      );
-
-      await waitFor(() => {
-        expect(invoke).toHaveBeenCalledWith('is_pty_alive', expect.anything());
-      });
-
-      await waitFor(() => {
-        expect(invoke).toHaveBeenCalledWith('spawn_pty', expect.anything());
-      });
-    });
-
-    it('should spawn new session when attach fails', async () => {
-      const mockTerminal = {
-        open: vi.fn(),
-        write: vi.fn(),
-        dispose: vi.fn(),
-        onData: vi.fn(() => ({ dispose: vi.fn() })),
-        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-        loadAddon: vi.fn(),
-        cols: 80,
-        rows: 24,
-      };
-
-      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
-
-      (invoke as ReturnType<typeof vi.fn>)
-        .mockRejectedValueOnce(new Error('Attach failed'))
-        .mockResolvedValueOnce('fallback-session-id');
-
-      render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="failing-session"
-        />
-      );
-
-      await waitFor(() => {
-        expect(invoke).toHaveBeenCalledWith('spawn_pty', expect.anything());
+    await waitFor(() => {
+      expect(hoisted.requestMock).toHaveBeenCalledWith('pty.write', {
+        tabId: 'tab-1',
+        data: 'echo hello\n',
       });
     });
   });
 
-  describe('PTY Spawn', () => {
-    it('should handle spawn success', async () => {
-      const mockTerminal = {
-        open: vi.fn(),
-        write: vi.fn(),
-        dispose: vi.fn(),
-        onData: vi.fn(() => ({ dispose: vi.fn() })),
-        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-        loadAddon: vi.fn(),
-        cols: 80,
-        rows: 24,
-      };
+  it('streams PTY output notifications for the active tab', async () => {
+    render(<TerminalComponent tabId="tab-1" paneId="pane-1" />);
 
-      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
+    await waitFor(() => {
+      expect(hoisted.websocketListeners.length).toBeGreaterThan(0);
+    });
 
-      (invoke as ReturnType<typeof vi.fn>).mockResolvedValue('spawned-session-id');
-
-      render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-        />
-      );
-
-      await waitFor(() => {
-        expect(invoke).toHaveBeenCalledWith('spawn_pty', expect.anything());
+    act(() => {
+      hoisted.websocketListeners[0]?.({
+        jsonrpc: '2.0',
+        method: 'pty.output',
+        params: {
+          type: 'output',
+          tabId: 'tab-1',
+          data: 'hello from pty',
+        },
       });
     });
 
-    it('should handle spawn failure', async () => {
-      const mockWrite = vi.fn();
-      const mockTerminal = {
-        open: vi.fn(),
-        write: mockWrite,
-        dispose: vi.fn(),
-        onData: vi.fn(() => ({ dispose: vi.fn() })),
-        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-        loadAddon: vi.fn(),
-        cols: 80,
-        rows: 24,
-      };
-
-      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
-
-      (invoke as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Spawn failed'));
-
-      render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-        />
-      );
-
-      await waitFor(() => {
-        expect(mockWrite).toHaveBeenCalledWith('\r\n[Error: Failed to spawn PTY]\r\n');
-      });
-    });
+    expect(hoisted.terminalInstances[0]?.write).toHaveBeenCalledWith('hello from pty');
   });
 
-  describe('PTY Resize', () => {
-    it('should resize PTY when ready', async () => {
-      const mockTerminal = {
-        open: vi.fn(),
-        write: vi.fn(),
-        dispose: vi.fn(),
-        onData: vi.fn(() => ({ dispose: vi.fn() })),
-        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-        loadAddon: vi.fn(),
-        cols: 100,
-        rows: 30,
-      };
+  it('handles PTY notification payloads and desktop notifications', async () => {
+    const onNotification = vi.fn();
+    render(<TerminalComponent tabId="tab-1" paneId="pane-1" onNotification={onNotification} />);
 
-      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
+    await waitFor(() => {
+      expect(hoisted.websocketListeners.length).toBeGreaterThan(0);
+    });
 
-      (invoke as ReturnType<typeof vi.fn>).mockResolvedValue('session-id');
-
-      render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-        />
-      );
-
-      await waitFor(() => {
-        expect(invoke).toHaveBeenCalledWith('resize_pty', expect.objectContaining({
-          sessionId: 'session-123',
-          cols: 100,
-          rows: 30,
-        }));
+    act(() => {
+      hoisted.websocketListeners[0]?.({
+        jsonrpc: '2.0',
+        method: 'pty.output',
+        params: {
+          type: 'notification',
+          tabId: 'tab-1',
+          message: 'Build finished',
+        },
       });
     });
+
+    expect(onNotification).toHaveBeenCalledWith('Build finished');
+    expect(hoisted.sendNotificationMock).toHaveBeenCalledWith({ title: 'Ymir', body: 'Build finished' });
   });
 
-  describe('Scroll Zoom', () => {
-    it('should zoom in on ctrl+scroll up', async () => {
-      const zoomIn = vi.fn();
-      const zoomOut = vi.fn();
+  it('ignores PTY output notifications for other tabs', async () => {
+    render(<TerminalComponent tabId="tab-1" paneId="pane-1" />);
 
-      useWorkspaceStore.setState({ zoomIn, zoomOut, fontSize: 14 });
-
-      const mockTerminal = {
-        open: vi.fn(),
-        write: vi.fn(),
-        dispose: vi.fn(),
-        onData: vi.fn(() => ({ dispose: vi.fn() })),
-        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-        loadAddon: vi.fn(),
-        cols: 80,
-        rows: 24,
-      };
-
-      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
-
-      const { container } = render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-        />
-      );
-
-      const element = container.querySelector('[style*="background-color"]');
-      element?.dispatchEvent(new WheelEvent('wheel', {
-        deltaY: -100,
-        ctrlKey: true,
-        bubbles: true,
-      }));
-
-      await waitFor(() => expect(zoomIn).toHaveBeenCalled());
-      expect(zoomOut).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(hoisted.websocketListeners.length).toBeGreaterThan(0);
     });
 
-    it('should zoom out on ctrl+scroll down', async () => {
-      const zoomIn = vi.fn();
-      const zoomOut = vi.fn();
-
-      useWorkspaceStore.setState({ zoomIn, zoomOut, fontSize: 14 });
-
-      const mockTerminal = {
-        open: vi.fn(),
-        write: vi.fn(),
-        dispose: vi.fn(),
-        onData: vi.fn(() => ({ dispose: vi.fn() })),
-        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-        loadAddon: vi.fn(),
-        cols: 80,
-        rows: 24,
-      };
-
-      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
-
-      const { container } = render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-        />
-      );
-
-      const element = container.querySelector('[style*="background-color"]');
-      element?.dispatchEvent(new WheelEvent('wheel', {
-        deltaY: 100,
-        ctrlKey: true,
-        bubbles: true,
-      }));
-
-      await waitFor(() => expect(zoomOut).toHaveBeenCalled());
-      expect(zoomIn).not.toHaveBeenCalled();
-    });
-
-    it('should zoom with metaKey modifier', async () => {
-      const zoomIn = vi.fn();
-      const zoomOut = vi.fn();
-
-      useWorkspaceStore.setState({ zoomIn, zoomOut, fontSize: 14 });
-
-      const mockTerminal = {
-        open: vi.fn(),
-        write: vi.fn(),
-        dispose: vi.fn(),
-        onData: vi.fn(() => ({ dispose: vi.fn() })),
-        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-        loadAddon: vi.fn(),
-        cols: 80,
-        rows: 24,
-      };
-
-      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
-
-      const { container } = render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-        />
-      );
-
-      const element = container.querySelector('[style*="background-color"]');
-      element?.dispatchEvent(new WheelEvent('wheel', {
-        deltaY: -100,
-        metaKey: true,
-        bubbles: true,
-      }));
-
-      await waitFor(() => expect(zoomIn).toHaveBeenCalled());
-    });
-
-    it('should not zoom without ctrl or meta key', async () => {
-      const zoomIn = vi.fn();
-      const zoomOut = vi.fn();
-
-      useWorkspaceStore.setState({ zoomIn, zoomOut, fontSize: 14 });
-
-      const mockTerminal = {
-        open: vi.fn(),
-        write: vi.fn(),
-        dispose: vi.fn(),
-        onData: vi.fn(() => ({ dispose: vi.fn() })),
-        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-        loadAddon: vi.fn(),
-        cols: 80,
-        rows: 24,
-      };
-
-      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
-
-      const { container } = render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-        />
-      );
-
-      const element = container.querySelector('[style*="background-color"]');
-      element?.dispatchEvent(new WheelEvent('wheel', {
-        deltaY: -100,
-        ctrlKey: false,
-        metaKey: false,
-        bubbles: true,
-      }));
-
-      expect(zoomIn).not.toHaveBeenCalled();
-      expect(zoomOut).not.toHaveBeenCalled();
-    });
-
-    it('should handle multiple zoom in events', async () => {
-      const zoomIn = vi.fn();
-      const zoomOut = vi.fn();
-
-      useWorkspaceStore.setState({ zoomIn, zoomOut, fontSize: 14 });
-
-      const mockTerminal = {
-        open: vi.fn(),
-        write: vi.fn(),
-        dispose: vi.fn(),
-        onData: vi.fn(() => ({ dispose: vi.fn() })),
-        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-        loadAddon: vi.fn(),
-        cols: 80,
-        rows: 24,
-      };
-
-      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
-
-      const { container } = render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-        />
-      );
-
-      const element = container.querySelector('[style*="background-color"]');
-
-      element?.dispatchEvent(new WheelEvent('wheel', {
-        deltaY: -100,
-        ctrlKey: true,
-        bubbles: true,
-      }));
-
-      element?.dispatchEvent(new WheelEvent('wheel', {
-        deltaY: -50,
-        ctrlKey: true,
-        bubbles: true,
-      }));
-
-      await waitFor(() => expect(zoomIn).toHaveBeenCalledTimes(2));
-      expect(zoomOut).not.toHaveBeenCalled();
-    });
-
-    it('should handle multiple zoom out events', async () => {
-      const zoomIn = vi.fn();
-      const zoomOut = vi.fn();
-
-      useWorkspaceStore.setState({ zoomIn, zoomOut, fontSize: 14 });
-
-      const mockTerminal = {
-        open: vi.fn(),
-        write: vi.fn(),
-        dispose: vi.fn(),
-        onData: vi.fn(() => ({ dispose: vi.fn() })),
-        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-        loadAddon: vi.fn(),
-        cols: 80,
-        rows: 24,
-      };
-
-      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
-
-      const { container } = render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-        />
-      );
-
-      const element = container.querySelector('[style*="background-color"]');
-
-      element?.dispatchEvent(new WheelEvent('wheel', {
-        deltaY: 100,
-        ctrlKey: true,
-        bubbles: true,
-      }));
-
-      element?.dispatchEvent(new WheelEvent('wheel', {
-        deltaY: 200,
-        ctrlKey: true,
-        bubbles: true,
-      }));
-
-      await waitFor(() => expect(zoomOut).toHaveBeenCalledTimes(2));
-      expect(zoomIn).not.toHaveBeenCalled();
-    });
-
-    it('should handle alternating zoom in and out events', async () => {
-      const zoomIn = vi.fn();
-      const zoomOut = vi.fn();
-
-      useWorkspaceStore.setState({ zoomIn, zoomOut, fontSize: 14 });
-
-      const mockTerminal = {
-        open: vi.fn(),
-        write: vi.fn(),
-        dispose: vi.fn(),
-        onData: vi.fn(() => ({ dispose: vi.fn() })),
-        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-        loadAddon: vi.fn(),
-        cols: 80,
-        rows: 24,
-      };
-
-      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
-
-      const { container } = render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-        />
-      );
-
-      const element = container.querySelector('[style*="background-color"]');
-
-      element?.dispatchEvent(new WheelEvent('wheel', {
-        deltaY: -100,
-        ctrlKey: true,
-        bubbles: true,
-      }));
-
-      element?.dispatchEvent(new WheelEvent('wheel', {
-        deltaY: 100,
-        ctrlKey: true,
-        bubbles: true,
-      }));
-
-      element?.dispatchEvent(new WheelEvent('wheel', {
-        deltaY: -50,
-        ctrlKey: true,
-        bubbles: true,
-      }));
-
-      await waitFor(() => {
-        expect(zoomIn).toHaveBeenCalledTimes(2);
-        expect(zoomOut).toHaveBeenCalledTimes(1);
+    act(() => {
+      hoisted.websocketListeners[0]?.({
+        jsonrpc: '2.0',
+        method: 'pty.output',
+        params: {
+          type: 'output',
+          tabId: 'tab-2',
+          data: 'should be ignored',
+        },
       });
     });
 
-    it('should handle meta key for zoom in', async () => {
-      const zoomIn = vi.fn();
-      const zoomOut = vi.fn();
+    expect(hoisted.terminalInstances[0]?.write).not.toHaveBeenCalledWith('should be ignored');
+  });
 
-      useWorkspaceStore.setState({ zoomIn, zoomOut, fontSize: 14 });
+  it('sends debounced resize through pty.resize', async () => {
+    const { container } = render(<TerminalComponent tabId="tab-1" paneId="pane-1" />);
 
-      const mockTerminal = {
-        open: vi.fn(),
-        write: vi.fn(),
-        dispose: vi.fn(),
-        onData: vi.fn(() => ({ dispose: vi.fn() })),
-        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-        loadAddon: vi.fn(),
-        cols: 80,
-        rows: 24,
-      };
-
-      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
-
-      const { container } = render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-        />
-      );
-
-      const element = container.querySelector('[style*="background-color"]');
-      element?.dispatchEvent(new WheelEvent('wheel', {
-        deltaY: -100,
-        metaKey: true,
-        bubbles: true,
-      }));
-
-      await waitFor(() => expect(zoomIn).toHaveBeenCalled());
-      expect(zoomOut).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(hoisted.requestMock).toHaveBeenCalledWith('pty.connect', { tabId: 'tab-1' });
+      expect(resizeObserverInstances.length).toBeGreaterThan(0);
     });
 
-    it('should handle meta key for zoom out', async () => {
-      const zoomIn = vi.fn();
-      const zoomOut = vi.fn();
-
-      useWorkspaceStore.setState({ zoomIn, zoomOut, fontSize: 14 });
-
-      const mockTerminal = {
-        open: vi.fn(),
-        write: vi.fn(),
-        dispose: vi.fn(),
-        onData: vi.fn(() => ({ dispose: vi.fn() })),
-        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-        loadAddon: vi.fn(),
-        cols: 80,
-        rows: 24,
-      };
-
-      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
-
-      const { container } = render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-        />
-      );
-
-      const element = container.querySelector('[style*="background-color"]');
-      element?.dispatchEvent(new WheelEvent('wheel', {
-        deltaY: 100,
-        metaKey: true,
-        bubbles: true,
-      }));
-
-      await waitFor(() => expect(zoomOut).toHaveBeenCalled());
-      expect(zoomIn).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(container.querySelector('[style*="opacity: 1"]')).not.toBeNull();
     });
 
-    it('should cleanup wheel event listener on unmount', async () => {
-      const zoomIn = vi.fn();
-      const zoomOut = vi.fn();
+    act(() => {
+      resizeObserverInstances[resizeObserverInstances.length - 1]?.trigger();
+    });
 
-      useWorkspaceStore.setState({ zoomIn, zoomOut, fontSize: 14 });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    });
 
-      const mockTerminal = {
-        open: vi.fn(),
-        write: vi.fn(),
-        dispose: vi.fn(),
-        onData: vi.fn(() => ({ dispose: vi.fn() })),
-        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-        loadAddon: vi.fn(),
-        cols: 80,
-        rows: 24,
-      };
-
-      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
-
-      const { container, unmount } = render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-        />
-      );
-
-      const element = container.querySelector('[style*="background-color"]');
-
-      element?.dispatchEvent(new WheelEvent('wheel', {
-        deltaY: -100,
-        ctrlKey: true,
-        bubbles: true,
-      }));
-
-      await waitFor(() => expect(zoomIn).toHaveBeenCalled());
-
-      unmount();
-
-      element?.dispatchEvent(new WheelEvent('wheel', {
-        deltaY: 100,
-        ctrlKey: true,
-        bubbles: true,
-      }));
-
-      expect(zoomIn).toHaveBeenCalledTimes(1);
-      expect(zoomOut).not.toHaveBeenCalled();
+    expect(hoisted.requestMock).toHaveBeenCalledWith('pty.resize', {
+      tabId: 'tab-1',
+      cols: 80,
+      rows: 24,
     });
   });
 });

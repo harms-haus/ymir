@@ -18,11 +18,93 @@ use axum::routing::get;
 use axum::Router;
 use dashmap::DashMap;
 use futures::{SinkExt, StreamExt};
+use serde_json::Value;
 use tokio::sync::{broadcast, mpsc, RwLock};
 use tokio::time::interval;
 use uuid::Uuid;
 
-use crate::handlers::{AuthConfig, AuthHandler, AuthMiddleware, AuthRpcHandler};
+use crate::db::{DatabaseClient, DbConfig, MigrationRunner};
+use crate::handlers::{
+    AuthConfig, AuthHandler, AuthMiddleware, AuthRpcHandler, GitRpcHandler, PaneRpcHandler,
+    PtyRpcHandler, TabRpcHandler, WorkspaceRpcHandler,
+};
+use crate::pty::manager::PtyManager;
+use crate::scrollback::service::ScrollbackService;
+
+struct WorkspaceRequestHandler {
+    inner: WorkspaceRpcHandler,
+}
+
+#[async_trait::async_trait]
+impl crate::server::protocol::RequestHandler for WorkspaceRequestHandler {
+    async fn handle(
+        &self,
+        method: &str,
+        params: Option<Value>,
+    ) -> Result<Value, crate::server::protocol::ProtocolError> {
+        self.inner.handle(method, params).await
+    }
+}
+
+struct PaneRequestHandler {
+    inner: PaneRpcHandler,
+}
+
+#[async_trait::async_trait]
+impl crate::server::protocol::RequestHandler for PaneRequestHandler {
+    async fn handle(
+        &self,
+        method: &str,
+        params: Option<Value>,
+    ) -> Result<Value, crate::server::protocol::ProtocolError> {
+        self.inner.handle(method, params).await
+    }
+}
+
+struct TabRequestHandler {
+    inner: TabRpcHandler,
+}
+
+#[async_trait::async_trait]
+impl crate::server::protocol::RequestHandler for TabRequestHandler {
+    async fn handle(
+        &self,
+        method: &str,
+        params: Option<Value>,
+    ) -> Result<Value, crate::server::protocol::ProtocolError> {
+        self.inner.handle(method, params).await
+    }
+}
+
+struct PtyRequestHandler {
+    inner: PtyRpcHandler,
+}
+
+#[async_trait::async_trait]
+impl crate::server::protocol::RequestHandler for PtyRequestHandler {
+    async fn handle(
+        &self,
+        method: &str,
+        params: Option<Value>,
+    ) -> Result<Value, crate::server::protocol::ProtocolError> {
+        self.inner.handle(method, params).await
+    }
+}
+
+struct GitRequestHandler {
+    inner: GitRpcHandler,
+}
+
+#[async_trait::async_trait]
+impl crate::server::protocol::RequestHandler for GitRequestHandler {
+    async fn handle(
+        &self,
+        method: &str,
+        params: Option<Value>,
+    ) -> Result<Value, crate::server::protocol::ProtocolError> {
+        tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(self.inner.handle(method, params)))
+    }
+}
 
 pub mod protocol;
 pub mod websocket;
@@ -217,6 +299,144 @@ impl ServerState {
             auth_middleware,
             request_router,
         })
+    }
+
+    pub async fn register_runtime_handlers(&self) -> Result<(), crate::CoreError> {
+        let db = Arc::new(DatabaseClient::new(DbConfig::for_user_state()).await?);
+
+        {
+            let connection = db.connection().await;
+            MigrationRunner::apply_migrations(&connection).await?;
+        }
+
+        let pty_manager = Arc::new(PtyManager::new());
+        let scrollback_service = Arc::new(ScrollbackService::new());
+
+        let workspace_handler = WorkspaceRequestHandler {
+            inner: WorkspaceRpcHandler::new(db.clone()),
+        };
+        self.request_router
+            .register("workspace.create".to_string(), workspace_handler);
+        let workspace_handler = WorkspaceRequestHandler {
+            inner: WorkspaceRpcHandler::new(db.clone()),
+        };
+        self.request_router
+            .register("workspace.list".to_string(), workspace_handler);
+        let workspace_handler = WorkspaceRequestHandler {
+            inner: WorkspaceRpcHandler::new(db.clone()),
+        };
+        self.request_router
+            .register("workspace.delete".to_string(), workspace_handler);
+        let workspace_handler = WorkspaceRequestHandler {
+            inner: WorkspaceRpcHandler::new(db.clone()),
+        };
+        self.request_router
+            .register("workspace.rename".to_string(), workspace_handler);
+
+        let pane_handler = PaneRequestHandler {
+            inner: PaneRpcHandler::new(db.clone()),
+        };
+        self.request_router
+            .register("pane.create".to_string(), pane_handler);
+        let pane_handler = PaneRequestHandler {
+            inner: PaneRpcHandler::new(db.clone()),
+        };
+        self.request_router
+            .register("pane.list".to_string(), pane_handler);
+        let pane_handler = PaneRequestHandler {
+            inner: PaneRpcHandler::new(db.clone()),
+        };
+        self.request_router
+            .register("pane.delete".to_string(), pane_handler);
+
+        let tab_handler = TabRequestHandler {
+            inner: TabRpcHandler::new(
+                db.clone(),
+                pty_manager.clone(),
+                scrollback_service.clone(),
+            ),
+        };
+        self.request_router
+            .register("tab.create".to_string(), tab_handler);
+        let tab_handler = TabRequestHandler {
+            inner: TabRpcHandler::new(
+                db.clone(),
+                pty_manager.clone(),
+                scrollback_service.clone(),
+            ),
+        };
+        self.request_router
+            .register("tab.list".to_string(), tab_handler);
+        let tab_handler = TabRequestHandler {
+            inner: TabRpcHandler::new(
+                db.clone(),
+                pty_manager.clone(),
+                scrollback_service.clone(),
+            ),
+        };
+        self.request_router
+            .register("tab.close".to_string(), tab_handler);
+
+        let pty_handler = PtyRequestHandler {
+            inner: PtyRpcHandler::new(
+                db.clone(),
+                pty_manager.clone(),
+                scrollback_service.clone(),
+            ),
+        };
+        self.request_router
+            .register("pty.connect".to_string(), pty_handler);
+        let pty_handler = PtyRequestHandler {
+            inner: PtyRpcHandler::new(
+                db.clone(),
+                pty_manager.clone(),
+                scrollback_service.clone(),
+            ),
+        };
+        self.request_router
+            .register("pty.write".to_string(), pty_handler);
+        let pty_handler = PtyRequestHandler {
+            inner: PtyRpcHandler::new(
+                db.clone(),
+                pty_manager.clone(),
+                scrollback_service.clone(),
+            ),
+        };
+        self.request_router
+            .register("pty.resize".to_string(), pty_handler);
+
+        let git_handler = GitRequestHandler {
+            inner: GitRpcHandler::with_db(db.clone()),
+        };
+        self.request_router
+            .register("git.status".to_string(), git_handler);
+        let git_handler = GitRequestHandler {
+            inner: GitRpcHandler::with_db(db.clone()),
+        };
+        self.request_router
+            .register("git.stage".to_string(), git_handler);
+        let git_handler = GitRequestHandler {
+            inner: GitRpcHandler::with_db(db.clone()),
+        };
+        self.request_router
+            .register("git.unstage".to_string(), git_handler);
+        let git_handler = GitRequestHandler {
+            inner: GitRpcHandler::with_db(db.clone()),
+        };
+        self.request_router
+            .register("git.commit".to_string(), git_handler);
+        let git_handler = GitRequestHandler {
+            inner: GitRpcHandler::with_db(db.clone()),
+        };
+        self.request_router
+            .register("git.branches".to_string(), git_handler);
+        let git_handler = GitRequestHandler {
+            inner: GitRpcHandler::with_db(db),
+        };
+        self.request_router
+            .register("git.checkout".to_string(), git_handler);
+
+        Ok(())
     }
 
     /// Get the number of active connections
@@ -534,6 +754,7 @@ pub async fn start_server(
 config: ServerConfig,
 ) -> Result<ServerHandle, Box<dyn std::error::Error>> {
 let state = ServerState::new(config.clone());
+state.register_runtime_handlers().await?;
 let app = create_router(state);
 
 let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
@@ -542,7 +763,7 @@ let listener = tokio::net::TcpListener::bind(&addr).await?;
 let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
 
 let task_handle = tokio::spawn(async move {
-let server = axum::serve(listener, app);
+let server = axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>());
 
 // Run server with graceful shutdown
 let server_with_shutdown = server.with_graceful_shutdown(async move {

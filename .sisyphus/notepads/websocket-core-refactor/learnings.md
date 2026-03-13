@@ -56,3 +56,25 @@ cargo check --workspace
 # Build ymir-tauri (requires sidecar binary)
 cargo build -p ymir-tauri
 ```
+
+## Task 17 Repair (current session)
+
+- Replaced `ymir-tauri/src/app.rs` scaffold with the active Tauri app flow.
+- Embedded sidecar startup now runs during `setup` via `tauri_plugin_shell` with `ymir-server web --host 127.0.0.1 --port 7139`.
+- Added idempotent shutdown cleanup on `CloseRequested`, `Destroyed`, `ExitRequested`, and `Exit` events by storing `CommandChild` in managed state and calling `kill()` once.
+- Simplified `ymir-tauri/src/lib.rs` to only initialize logging and delegate to `app::run()`, removing the broken state extraction pattern.
+- Normalized `ymir-tauri/build.rs` call shape so `tauri_build::try_build(...)` is well-formed and stable.
+- Verification: `cargo check -p ymir-tauri` and `cargo check --workspace` both pass from worktree root (existing warnings remain in `ymir-core`).
+
+## Task 17 externalBin regression fix
+
+- Restored `bundle.externalBin` in `ymir-tauri/tauri.conf.json` with Tauri v2 string-array shape: `["binaries/ymir-server"]`.
+- `cargo check -p ymir-tauri` initially failed because `binaries/ymir-server-x86_64-unknown-linux-gnu` was missing; added that sidecar source binary under `ymir-tauri/binaries/` from existing `target/debug/ymir-server` so tauri-build can resolve/copy sidecar.
+- After restoring config and sidecar source file, both required checks pass again from workspace root.
+- `timeout 45s ./scripts/tauri-dev.sh dev` does not fail on Tauri config parsing; it fails earlier on legacy `src-tauri/Cargo.toml` workspace-metadata mismatch (outside this Task 17 config-only fix scope).
+
+## Task 17 dev startup path fix
+
+- Updated `scripts/tauri-dev.sh` to `cd` into `ymir-tauri/` before running `npx tauri`, so CLI resolution uses the new Tauri crate path instead of legacy `src-tauri` defaults.
+- Verified `timeout 45s ./scripts/tauri-dev.sh dev` now gets past the previous `src-tauri/Cargo.toml` workspace mismatch and launches the app process.
+- Runtime log confirms embedded service startup: `Embedded service sidecar started host="127.0.0.1" port=7139`.

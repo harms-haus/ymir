@@ -41,4 +41,9 @@ else
 fi
 
 # Execute tauri command
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+WORKTREE_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+
+cd "$WORKTREE_ROOT/ymir-tauri"
+
 exec npx tauri "$@"

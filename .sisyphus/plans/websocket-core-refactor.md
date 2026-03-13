@@ -1125,7 +1125,7 @@ Evidence: .sisyphus/evidence/task-16-standalone-server.txt
 
 ---
 
-- [ ] **17. Tauri Embedded Service**
+- [x] **17. Tauri Embedded Service**
 
 **What to do**:
 - Move existing Tauri code to `ymir-tauri`
@@ -1306,7 +1306,7 @@ Evidence: .sisyphus/evidence/task-20-sidecar-config.txt
 
 ### Wave 5: React Client
 
-- [ ] **21. WebSocket Client Service**
+- [x] **21. WebSocket Client Service**
 
 **What to do**:
 - Create `src/services/websocket.ts`
@@ -1358,7 +1358,7 @@ Evidence: .sisyphus/evidence/task-21-ws-client-connect.png
 
 ---
 
-- [ ] **22. Reconnection Logic**
+- [x] **22. Reconnection Logic**
 
 **What to do**:
 - Implement exponential backoff reconnection
@@ -1407,7 +1407,7 @@ Evidence: .sisyphus/evidence/task-22-reconnection.mp4
 
 ---
 
-- [ ] **23. State Subscription Hooks**
+- [x] **23. State Subscription Hooks**
 
 **What to do**:
 - Create React hooks for WebSocket state:
@@ -1462,7 +1462,7 @@ Evidence: .sisyphus/evidence/task-23-subscriptions.png
 
 ---
 
-- [ ] **24. Terminal Adapter**
+- [x] **24. Terminal Adapter**
 
 **What to do**:
 - Adapt `src/components/Terminal.tsx` to use WebSocket
@@ -1520,7 +1520,7 @@ Evidence: .sisyphus/evidence/task-24-terminal-websocket.png
 
 ---
 
-- [ ] **25. Workspace Sidebar Integration**
+- [x] **25. Workspace Sidebar Integration**
 
 **What to do**:
 - Update `src/components/WorkspaceSidebar.tsx`
@@ -1569,7 +1569,7 @@ Evidence: .sisyphus/evidence/task-25-sidebar-websocket.png
 
 ---
 
-- [ ] **26. Git Panel Integration**
+- [x] **26. Git Panel Integration**
 
 **What to do**:
 - Update `src/components/GitPanel.tsx`
@@ -1619,7 +1619,7 @@ Evidence: .sisyphus/evidence/task-26-git-panel-websocket.png
 
 ### Wave 6: Cleanup
 
-- [ ] **27. Remove Tauri Pane Commands**
+- [x] **27. Remove Tauri Pane Commands**
 
 **What to do**:
 - Remove `create_pane_in_workspace` from commands.rs
@@ -1749,7 +1749,7 @@ Evidence: .sisyphus/evidence/task-29-storage-adapter-removed.txt
 
 ---
 
-- [ ] **30. Remove Browser Tab Support**
+- [x] **30. Remove Browser Tab Support**
 
 **What to do**:
 - Remove browser tab type from types

@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import useWorkspaceStore, {
   getTotalNotificationCount,
+  type WorkspaceWithPanes,
 } from '../state/workspace';
 import { PanelDefinition, SidebarTab } from '../state/types';
+import { useWorkspaces } from '../hooks/useWorkspaces';
+import { getWebSocketService } from '../services/websocket';
 import { TabHeaderPanel } from './TabHeaderPanel';
 import { gitPanelDefinition } from './GitPanel';
 import { TabsRoot, TabsList, TabsTab } from './ui/Tabs';
@@ -18,28 +21,179 @@ interface WorkspaceListProps {
   collapsed: boolean;
 }
 
+interface CreateWorkspaceOutput {
+  workspace?: {
+    id: string;
+  };
+}
+
+function createFallbackWorkspace(workspaceId: string, workspaceName: string, hasNotification: boolean): WorkspaceWithPanes {
+  const paneId = `pane-${workspaceId}`;
+  const tabId = `tab-${workspaceId}`;
+
+  return {
+    id: workspaceId,
+    name: workspaceName,
+    root: {
+      type: 'leaf',
+      paneId,
+    },
+    activePaneId: paneId,
+    hasNotification,
+    panes: {
+      [paneId]: {
+        id: paneId,
+        flexRatio: 1,
+        activeTabId: tabId,
+        hasNotification: false,
+        tabs: [
+          {
+            id: tabId,
+            type: 'terminal',
+            title: 'bash',
+            cwd: '~',
+            sessionId: '',
+            hasNotification: false,
+            notificationCount: 0,
+            scrollback: [],
+          },
+        ],
+      },
+    },
+  };
+}
+
+function getErrorMessage(error: unknown): string {
+  if (!error || typeof error !== 'object') {
+    return String(error);
+  }
+
+  const errorCandidate = error as { message?: unknown };
+  if (typeof errorCandidate.message === 'string' && errorCandidate.message.length > 0) {
+    return errorCandidate.message;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return 'Workspace action failed';
+  }
+}
+
 function WorkspaceList({ collapsed }: WorkspaceListProps) {
-  const {
-    workspaces,
-    activeWorkspaceId,
-    setActiveWorkspace,
-    createWorkspace,
-    createWorkspaceAfter,
-    moveWorkspaceUp,
-    moveWorkspaceDown,
-    closeWorkspace,
-  } = useWorkspaceStore();
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
+  const storeWorkspaceSignature = useWorkspaceStore((state) =>
+    state.workspaces
+      .map((workspace) => `${workspace.id}:${workspace.name}:${workspace.hasNotification ? '1' : '0'}`)
+      .join('|'),
+  );
+  const { workspaces, isLoading, error, refetch } = useWorkspaces();
+  const websocketService = useMemo(() => getWebSocketService(), []);
 
   const visibleWorkspaces = useMemo(() => workspaces.slice(0, 8), [workspaces]);
 
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const [contextMenuAnchor, setContextMenuAnchor] = useState<{ workspaceId: string; index: number } | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [pendingActiveWorkspaceId, setPendingActiveWorkspaceId] = useState<string | null>(null);
 
-  const handleCreateWorkspace = useCallback(() => {
+  const reconcileStoreWorkspaces = useCallback((serverWorkspaces: typeof workspaces) => {
+    const storeState = useWorkspaceStore.getState();
+    const existingById = new Map(storeState.workspaces.map((workspace) => [workspace.id, workspace]));
+
+    const nextWorkspaces = serverWorkspaces.map((workspace) => {
+      const existing = existingById.get(workspace.id);
+      if (!existing) {
+        return createFallbackWorkspace(workspace.id, workspace.name, workspace.hasNotification);
+      }
+
+      if (existing.name === workspace.name && existing.hasNotification === workspace.hasNotification) {
+        return existing;
+      }
+
+      return {
+        ...existing,
+        name: workspace.name,
+        hasNotification: workspace.hasNotification,
+      };
+    });
+
+    let nextActiveWorkspaceId = storeState.activeWorkspaceId;
+    if (
+      nextWorkspaces.length > 0 &&
+      !nextWorkspaces.some((workspace) => workspace.id === nextActiveWorkspaceId)
+    ) {
+      nextActiveWorkspaceId = nextWorkspaces[0].id;
+    }
+
+    const hasWorkspaceShapeChanges =
+      nextWorkspaces.length !== storeState.workspaces.length ||
+      nextWorkspaces.some((workspace, index) => workspace !== storeState.workspaces[index]);
+
+    if (!hasWorkspaceShapeChanges && nextActiveWorkspaceId === storeState.activeWorkspaceId) {
+      return;
+    }
+
+    useWorkspaceStore.setState({
+      workspaces: nextWorkspaces,
+      activeWorkspaceId: nextActiveWorkspaceId,
+    });
+  }, []);
+
+  const updateActiveWorkspace = useCallback((workspaceId: string) => {
+    setActiveWorkspace(workspaceId);
+  }, [setActiveWorkspace]);
+
+  useEffect(() => {
+    if (isLoading) {
+      return;
+    }
+
+    void storeWorkspaceSignature;
+    reconcileStoreWorkspaces(workspaces);
+  }, [isLoading, reconcileStoreWorkspaces, storeWorkspaceSignature, workspaces]);
+
+  useEffect(() => {
+    if (!pendingActiveWorkspaceId) {
+      return;
+    }
+
+    const hasPendingWorkspace = workspaces.some(
+      (workspace) => workspace.id === pendingActiveWorkspaceId,
+    );
+
+    if (!hasPendingWorkspace) {
+      return;
+    }
+
+    updateActiveWorkspace(pendingActiveWorkspaceId);
+    setPendingActiveWorkspaceId(null);
+  }, [pendingActiveWorkspaceId, updateActiveWorkspace, workspaces]);
+
+  const handleCreateWorkspace = useCallback(async () => {
+    if (workspaces.length >= 8) {
+      return;
+    }
+
     const nextNumber = workspaces.length + 1;
-    createWorkspace(`Workspace ${nextNumber}`);
-  }, [workspaces.length, createWorkspace]);
+    setActionError(null);
+
+    try {
+      const result = await websocketService.request<CreateWorkspaceOutput>('workspace.create', {
+        name: `Workspace ${nextNumber}`,
+      });
+
+      if (result.workspace?.id) {
+        setPendingActiveWorkspaceId(result.workspace.id);
+      }
+
+      await refetch();
+    } catch (requestError) {
+      setActionError(getErrorMessage(requestError));
+    }
+  }, [refetch, websocketService, workspaces.length]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, workspaceId: string, index: number) => {
     e.preventDefault();
@@ -48,47 +202,116 @@ function WorkspaceList({ collapsed }: WorkspaceListProps) {
     setContextMenuOpen(true);
   }, []);
 
-  const handleNewWorkspaceBelow = useCallback(() => {
-    if (contextMenuAnchor) {
-      const nextNumber = workspaces.length + 1;
-      createWorkspaceAfter(contextMenuAnchor.workspaceId, `Workspace ${nextNumber}`);
+  const handleRenameWorkspace = useCallback(async () => {
+    if (!contextMenuAnchor) {
+      return;
+    }
+
+    const targetWorkspace = workspaces.find(
+      (workspace) => workspace.id === contextMenuAnchor.workspaceId,
+    );
+    if (!targetWorkspace) {
+      setContextMenuOpen(false);
+      return;
+    }
+
+    const nextName = window.prompt('Rename workspace', targetWorkspace.name)?.trim();
+    if (!nextName || nextName === targetWorkspace.name) {
+      setContextMenuOpen(false);
+      return;
+    }
+
+    setActionError(null);
+
+    try {
+      await websocketService.request('workspace.rename', {
+        id: targetWorkspace.id,
+        name: nextName,
+      });
+      await refetch();
+    } catch (requestError) {
+      setActionError(getErrorMessage(requestError));
+    } finally {
       setContextMenuOpen(false);
     }
-  }, [contextMenuAnchor, workspaces.length, createWorkspaceAfter]);
+  }, [contextMenuAnchor, refetch, websocketService, workspaces]);
 
-  const handleMoveUp = useCallback(() => {
-    if (contextMenuAnchor && contextMenuAnchor.index > 0) {
-      moveWorkspaceUp(contextMenuAnchor.workspaceId);
+  const handleDeleteWorkspace = useCallback(async () => {
+    if (!contextMenuAnchor || workspaces.length <= 1) {
+      return;
+    }
+
+    const targetWorkspace = workspaces.find(
+      (workspace) => workspace.id === contextMenuAnchor.workspaceId,
+    );
+    if (!targetWorkspace) {
+      setContextMenuOpen(false);
+      return;
+    }
+
+    const shouldDelete = window.confirm(
+      `Delete workspace \"${targetWorkspace.name}\"?`,
+    );
+    if (!shouldDelete) {
+      setContextMenuOpen(false);
+      return;
+    }
+
+    setActionError(null);
+
+    try {
+      await websocketService.request('workspace.delete', {
+        id: targetWorkspace.id,
+      });
+
+      if (targetWorkspace.id === activeWorkspaceId) {
+        const fallbackWorkspace = visibleWorkspaces.find(
+          (workspace) => workspace.id !== targetWorkspace.id,
+        );
+        if (fallbackWorkspace) {
+          updateActiveWorkspace(fallbackWorkspace.id);
+        }
+      }
+
+      await refetch();
+    } catch (requestError) {
+      setActionError(getErrorMessage(requestError));
+    } finally {
       setContextMenuOpen(false);
     }
-  }, [contextMenuAnchor, moveWorkspaceUp]);
+  }, [
+    activeWorkspaceId,
+    contextMenuAnchor,
+    refetch,
+    updateActiveWorkspace,
+    visibleWorkspaces,
+    websocketService,
+    workspaces,
+  ]);
 
-  const handleMoveDown = useCallback(() => {
-    if (contextMenuAnchor && contextMenuAnchor.index < workspaces.length - 1) {
-      moveWorkspaceDown(contextMenuAnchor.workspaceId);
+  const handleSwitchWorkspace = useCallback((workspaceId: string) => {
+    updateActiveWorkspace(workspaceId);
+  }, [updateActiveWorkspace]);
+
+  useEffect(() => {
+    if (contextMenuAnchor && !workspaces.some((workspace) => workspace.id === contextMenuAnchor.workspaceId)) {
       setContextMenuOpen(false);
+      setContextMenuAnchor(null);
     }
-  }, [contextMenuAnchor, workspaces.length, moveWorkspaceDown]);
+  }, [contextMenuAnchor, workspaces]);
 
-  const handleCloseWorkspace = useCallback(() => {
-    if (contextMenuAnchor && workspaces.length > 1) {
-      closeWorkspace(contextMenuAnchor.workspaceId);
-      setContextMenuOpen(false);
-    }
-  }, [contextMenuAnchor, workspaces.length, closeWorkspace]);
-
-  const isFirst = contextMenuAnchor ? contextMenuAnchor.index === 0 : false;
-  const isLast = contextMenuAnchor ? contextMenuAnchor.index === workspaces.length - 1 : false;
   const isOnly = workspaces.length === 1;
 
   return (
     <TabsRoot
       value={activeWorkspaceId}
-      onValueChange={(value) => setActiveWorkspace(value as string)}
+      onValueChange={(value) => handleSwitchWorkspace(value as string)}
       className="workspace-tabs-root"
     >
       <TabsList className="workspace-tabs-list">
-        {visibleWorkspaces.length === 0 ? (
+        {isLoading ? (
+          <div className="workspace-empty-state">Loading workspaces...</div>
+        ) : visibleWorkspaces.length === 0 ? (
           <div className="workspace-empty-state">
             No workspaces
           </div>
@@ -122,6 +345,12 @@ function WorkspaceList({ collapsed }: WorkspaceListProps) {
           ))
         )}
       </TabsList>
+
+      {(error || actionError) && (
+        <div className="workspace-empty-state" style={{ color: 'var(--status-deleted)' }}>
+          {actionError ?? error}
+        </div>
+      )}
 
       {!collapsed && (
         <div className="workspace-new-button-container">
@@ -164,30 +393,32 @@ function WorkspaceList({ collapsed }: WorkspaceListProps) {
             sideOffset={0}
           >
             <MenuPopup className="context-menu">
-              <MenuItem className="context-menu-item" onClick={handleNewWorkspaceBelow}>
-                New Workspace Below
+              <MenuItem
+                className="context-menu-item"
+                onClick={() => {
+                  void handleCreateWorkspace();
+                  setContextMenuOpen(false);
+                }}
+              >
+                New Workspace
               </MenuItem>
               <MenuItem
-                className={`context-menu-item ${isFirst ? 'disabled' : ''}`}
-                onClick={handleMoveUp}
-                disabled={isFirst}
+                className="context-menu-item"
+                onClick={() => {
+                  void handleRenameWorkspace();
+                }}
               >
-                Move Up
-              </MenuItem>
-              <MenuItem
-                className={`context-menu-item ${isLast ? 'disabled' : ''}`}
-                onClick={handleMoveDown}
-                disabled={isLast}
-              >
-                Move Down
+                Rename Workspace
               </MenuItem>
               <div className="context-menu-separator" />
               <MenuItem
                 className={`context-menu-item context-menu-item-danger ${isOnly ? 'disabled' : ''}`}
-                onClick={handleCloseWorkspace}
+                onClick={() => {
+                  void handleDeleteWorkspace();
+                }}
                 disabled={isOnly}
               >
-                Close Workspace
+                Delete Workspace
               </MenuItem>
             </MenuPopup>
           </MenuPositioner>
@@ -198,16 +429,23 @@ function WorkspaceList({ collapsed }: WorkspaceListProps) {
 }
 
 function CollapsedWorkspaceList() {
-  const { workspaces, activeWorkspaceId, setActiveWorkspace } = useWorkspaceStore();
+  const { workspaces, isLoading } = useWorkspaces();
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
   const visibleWorkspaces = useMemo(() => workspaces.slice(0, 8), [workspaces]);
+
+  const handleSwitchWorkspace = useCallback((workspaceId: string) => {
+    setActiveWorkspace(workspaceId);
+  }, [setActiveWorkspace]);
 
   return (
     <TabsRoot
       value={activeWorkspaceId}
-      onValueChange={(value) => setActiveWorkspace(value as string)}
+      onValueChange={(value) => handleSwitchWorkspace(value as string)}
       className="workspace-tabs-collapsed"
     >
       <TabsList className="workspace-tabs-collapsed-list">
+        {isLoading && <div className="workspace-empty-state">...</div>}
         {visibleWorkspaces.map((workspace, index) => (
           <Tooltip
             key={workspace.id}
@@ -309,6 +547,7 @@ const WorkspacesIcon = React.memo(function WorkspacesIcon() {
       strokeLinecap="round"
       strokeLinejoin="round"
     >
+      <title>Workspaces</title>
       <rect x="3" y="3" width="7" height="7" />
       <rect x="14" y="3" width="7" height="7" />
       <rect x="14" y="14" width="7" height="7" />
@@ -329,6 +568,7 @@ const BellIcon = React.memo(function BellIcon() {
       strokeLinecap="round"
       strokeLinejoin="round"
     >
+      <title>Notifications</title>
       <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
       <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
     </svg>
@@ -347,6 +587,7 @@ const FolderIcon = React.memo(function FolderIcon() {
       strokeLinecap="round"
       strokeLinejoin="round"
     >
+      <title>Project</title>
       <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
     </svg>
   );

@@ -1,11 +1,12 @@
 use crate::db::client::DatabaseClient;
-use crate::pty::manager::{PtyConfig, PtyManager};
+use crate::pty::manager::{PtyConfig, PtyManager, PtyOutput};
 use crate::scrollback::service::ScrollbackService;
 use crate::server::protocol::{OutgoingMessage, ProtocolError};
-use crate::types::{CoreError, Result, Tab, TabType};
+use crate::types::{CoreError, Result, ScrollbackLine, Tab, TabType};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
+use tokio::sync::broadcast;
 
 fn escape_sql(value: &str) -> String {
     value.replace("'", "''")
@@ -128,6 +129,39 @@ impl TabHandler {
         
         self.pty_manager.spawn(&tab_id, pty_config).await?;
 
+        let mut output_rx = self.pty_manager.subscribe(&tab_id)?;
+        let scrollback_service = self.scrollback_service.clone();
+        let output_tab_id = tab_id.clone();
+        tokio::spawn(async move {
+            loop {
+                match output_rx.recv().await {
+                    Ok(PtyOutput::Output { data }) => {
+                        let lines: Vec<ScrollbackLine> = data
+                            .lines()
+                            .map(|line| ScrollbackLine {
+                                text: line.to_string(),
+                                ansi: None,
+                                timestamp: Some(
+                                    std::time::SystemTime::now()
+                                        .duration_since(std::time::UNIX_EPOCH)
+                                        .unwrap_or_default()
+                                        .as_secs(),
+                                ),
+                            })
+                            .collect();
+
+                        if !lines.is_empty() {
+                            scrollback_service.add_lines(output_tab_id.clone(), lines);
+                        }
+                    }
+                    Ok(PtyOutput::Notification { .. }) => {}
+                    Ok(PtyOutput::Exit { .. }) => break,
+                    Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(broadcast::error::RecvError::Closed) => break,
+                }
+            }
+        });
+
         // Create pty_sessions record
         let sql = format!(
             "INSERT INTO pty_sessions (id, tab_id, cwd) VALUES ('{}', '{}', '{}')",
@@ -179,6 +213,7 @@ impl TabHandler {
             let id: String = row.get(0).map_err(|e| CoreError::Database(e.to_string()))?;
             let title: String = row.get(1).map_err(|e| CoreError::Database(e.to_string()))?;
             let cwd: String = row.get(2).map_err(|e| CoreError::Database(e.to_string()))?;
+            let scrollback = self.scrollback_service.get_scrollback(&id).await;
 
             let tab = Tab {
                 id: id.clone(),
@@ -190,7 +225,7 @@ impl TabHandler {
                 has_notification: false,
                 notification_count: 0,
                 notification_text: None,
-                scrollback: vec![],
+                scrollback,
             };
 
             tabs.push(tab);
@@ -541,6 +576,67 @@ async fn test_create_tab() {
         // Cleanup PTYs
         let _ = pty_manager.kill("tab-1").await;
         let _ = pty_manager.kill("tab-2").await;
+    }
+
+    #[tokio::test]
+    async fn test_list_tabs_includes_scrollback_data() {
+        let db = setup_test_db().await;
+        let pty_manager = Arc::new(PtyManager::new());
+        let scrollback_service = Arc::new(ScrollbackService::new());
+        let handler = TabHandler::new(db.clone(), pty_manager.clone(), scrollback_service.clone());
+
+        create_test_workspace(&db, "ws-scrollback", "Scrollback Workspace").await;
+        create_test_pane(&db, "pane-scrollback", "ws-scrollback").await;
+
+        handler
+            .create(CreateTabInput {
+                workspace_id: "ws-scrollback".to_string(),
+                pane_id: "pane-scrollback".to_string(),
+                id: Some("tab-scrollback".to_string()),
+                title: Some("Scrollback Tab".to_string()),
+                cwd: None,
+            })
+            .await
+            .unwrap();
+
+        pty_manager
+            .write("tab-scrollback", "echo restored-line\n")
+            .await
+            .unwrap();
+
+        let mut attempts = 0;
+        loop {
+            let current = scrollback_service.get_scrollback("tab-scrollback").await;
+            if current.iter().any(|line| line.text.contains("restored-line")) {
+                break;
+            }
+
+            attempts += 1;
+            assert!(attempts < 40, "expected PTY output to reach scrollback service");
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+        }
+
+        let output = handler
+            .list(ListTabsInput {
+                pane_id: "pane-scrollback".to_string(),
+            })
+            .await
+            .unwrap();
+
+        let tab = output
+            .tabs
+            .iter()
+            .find(|candidate| candidate.id == "tab-scrollback")
+            .expect("tab-scrollback missing from tab.list output");
+
+        assert!(
+            tab.scrollback
+                .iter()
+                .any(|line| line.text.contains("restored-line")),
+            "tab.list should include persisted PTY output scrollback"
+        );
+
+        let _ = pty_manager.kill("tab-scrollback").await;
     }
 
     #[tokio::test]

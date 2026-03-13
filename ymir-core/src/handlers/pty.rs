@@ -113,7 +113,6 @@ impl PtyHandler {
             )));
         }
 
-        // Subscribe to PTY output (returns broadcast receiver)
         let _receiver = self.pty_manager.subscribe(tab_id)?;
 
         Ok(ConnectPtyOutput {

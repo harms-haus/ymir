@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { PanelDefinition, GitFile, GitRepo } from '../state/types';
 import useWorkspaceStore, { getAllGitRepos, getGitChangesCount, getGitError } from '../state/workspace';
 import gitService from '../lib/git-service';
 import logger from '../lib/logger';
 import { invoke } from '@tauri-apps/api/core';
 import { useExpandCollapse } from '../hooks/useExpandCollapse';
+import { useGit } from '../hooks/useGit';
+import { getWebSocketService } from '../services/websocket';
 import { Button } from './ui/Button';
 import { Checkbox, Input } from './ui/Input';
 import { Tooltip } from './ui/Tooltip';
@@ -515,68 +517,74 @@ function getRepoFolderName(repoPath: string): string {
 const RepoSection: React.FC<{
   repoPath: string;
   repo: GitRepo;
-}> = ({ repoPath, repo }) => {
-  const { updateGitFile } = useWorkspaceStore();
+  refetch: () => Promise<void>;
+}> = ({ repoPath, repo, refetch }) => {
+  const websocketService = useMemo(() => getWebSocketService(), []);
+  const displayStaged = repo?.staged ?? [];
+  const displayUnstaged = repo?.unstaged ?? [];
 
   const handleStage = async (path: string) => {
-    updateGitFile(repoPath, path, true);
-    try { await gitService.stageFile(repoPath, path); } catch (error) { updateGitFile(repoPath, path, false); }
+    try {
+      await websocketService.request('git.stage', { repoPath, filePath: path });
+      await refetch();
+    } catch (error) {
+      logger.error('Stage failed', { repoPath, path, error });
+    }
   };
 
   const handleUnstage = async (path: string) => {
-    updateGitFile(repoPath, path, false);
-    try { await gitService.unstageFile(repoPath, path); } catch (error) { updateGitFile(repoPath, path, true); }
+    try {
+      await websocketService.request('git.unstage', { repoPath, filePath: path });
+      await refetch();
+    } catch (error) {
+      logger.error('Unstage failed', { repoPath, path, error });
+    }
   };
 
   const handleCommit = async (message: string) => {
     try {
-      await gitService.commit(repoPath, message);
-      const updatedRepo = await gitService.getGitStatus(repoPath);
-      useWorkspaceStore.getState().setGitRepo(repoPath, updatedRepo);
-    } catch (error) { logger.error('Commit failed', { repoPath, error }); }
+      await websocketService.request('git.commit', { repoPath, message });
+      await refetch();
+    } catch (error) {
+      logger.error('Commit failed', { repoPath, error });
+    }
   };
 
   const handleDiscard = async (path: string) => {
     try {
       await gitService.discardChanges(repoPath, path);
-      const updatedRepo = await gitService.getGitStatus(repoPath);
-      useWorkspaceStore.getState().setGitRepo(repoPath, updatedRepo);
-    } catch (error) { logger.error('Discard failed', { repoPath, path, error }); }
-  };
-
-  const handleRefresh = async () => {
-    try {
-      const updatedRepo = await gitService.getGitStatus(repoPath);
-      useWorkspaceStore.getState().setGitRepo(repoPath, updatedRepo);
-    } catch (error) { logger.error('Refresh failed', { repoPath, error }); }
+      await refetch();
+    } catch (error) {
+      logger.error('Discard failed', { repoPath, path, error });
+    }
   };
 
   const handleStageAll = async () => {
-    const unstagedFiles = repo.unstaged;
+    const unstagedFiles = displayUnstaged;
     await Promise.all(
       unstagedFiles.map(file =>
-        gitService.stageFile(repoPath, file.path).catch(error => {
+        websocketService.request('git.stage', { repoPath, filePath: file.path }).catch(error => {
           logger.error('Failed to stage file', { repoPath, path: file.path, error });
         })
       )
     );
-    await handleRefresh();
+    await refetch();
   };
 
   const handleUnstageAll = async () => {
-    const stagedFiles = repo.staged;
+    const stagedFiles = displayStaged;
     await Promise.all(
       stagedFiles.map(file =>
-        gitService.unstageFile(repoPath, file.path).catch(error => {
+        websocketService.request('git.unstage', { repoPath, filePath: file.path }).catch(error => {
           logger.error('Failed to unstage file', { repoPath, path: file.path, error });
         })
       )
     );
-    await handleRefresh();
+    await refetch();
   };
 
   const handleDiscardAll = async () => {
-    const unstagedFiles = repo.unstaged;
+    const unstagedFiles = displayUnstaged;
     await Promise.all(
       unstagedFiles.map(file =>
         gitService.discardChanges(repoPath, file.path).catch(error => {
@@ -584,11 +592,8 @@ const RepoSection: React.FC<{
         })
       )
     );
-    await handleRefresh();
+    await refetch();
   };
-
-  const displayStaged = repo?.staged || [];
-  const displayUnstaged = repo?.unstaged || [];
 
   return (
     <div className="git-repo-section">
@@ -612,12 +617,15 @@ const RefreshIcon: React.FC<{ className?: string }> = ({ className }) => (
 );
 
 const RepoAccordionTrigger: React.FC<{
+  repoPath: string;
   repo: GitRepo;
   onRefresh: () => Promise<void>;
   onShowToast: (message: string, type?: 'error' | 'success') => void;
   isExpanded?: boolean;
-}> = ({ repo, onRefresh, onShowToast, isExpanded }) => {
+}> = ({ repoPath, repo, onRefresh, onShowToast, isExpanded }) => {
   const [branches, setBranches] = useState<string[]>([]);
+  const websocketService = useMemo(() => getWebSocketService(), []);
+
   const handleRefresh = async (e: React.MouseEvent) => {
     e.stopPropagation();
     await onRefresh();
@@ -629,9 +637,8 @@ const RepoAccordionTrigger: React.FC<{
 
   const handleSelectBranch = async (branch: string) => {
     try {
-      await gitService.checkoutBranch(repo.path, branch);
-      const updatedRepo = await gitService.getGitStatus(repo.path);
-      useWorkspaceStore.getState().setGitRepo(repo.path, updatedRepo);
+      await websocketService.request('git.checkout', { repoPath, branch });
+      await onRefresh();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       if (errorMessage.includes('uncommitted') || errorMessage.includes('changes')) {
@@ -645,10 +652,9 @@ const RepoAccordionTrigger: React.FC<{
 
   const handleCreateBranch = async (branchName: string) => {
     try {
-      await gitService.createBranch(repo.path, branchName);
-      await gitService.checkoutBranch(repo.path, branchName);
-      const updatedRepo = await gitService.getGitStatus(repo.path);
-      useWorkspaceStore.getState().setGitRepo(repo.path, updatedRepo);
+      await gitService.createBranch(repoPath, branchName);
+      await websocketService.request('git.checkout', { repoPath, branch: branchName });
+      await onRefresh();
       onShowToast(`Created and switched to branch '${branchName}'`, 'success');
     } catch (error) {
       onShowToast('Failed to create branch', 'error');
@@ -658,9 +664,8 @@ const RepoAccordionTrigger: React.FC<{
 
   const handleDeleteBranch = async (branchName: string) => {
     try {
-      await gitService.deleteBranch(repo.path, branchName);
-      const updatedRepo = await gitService.getGitStatus(repo.path);
-      useWorkspaceStore.getState().setGitRepo(repo.path, updatedRepo);
+      await gitService.deleteBranch(repoPath, branchName);
+      await onRefresh();
       onShowToast(`Deleted branch '${branchName}'`, 'success');
     } catch (error) {
       onShowToast('Failed to delete branch', 'error');
@@ -671,20 +676,20 @@ const RepoAccordionTrigger: React.FC<{
   useEffect(() => {
     const fetchBranches = async () => {
       try {
-        const branchInfo = await gitService.getBranches(repo.path);
-        setBranches(branchInfo.map(b => b.name));
+        const result = await websocketService.request<{ branches: Array<{ name: string }> }>('git.branches', { repoPath });
+        setBranches(result.branches.map((branch) => branch.name));
       } catch (error) {
-        logger.error('Failed to fetch branches', { repoPath: repo.path, error });
+        logger.error('Failed to fetch branches', { repoPath, error });
       }
     };
 
     fetchBranches();
-  }, [repo.path]);
+  }, [repoPath, websocketService]);
 
   return (
     <div className="repo-accordion-trigger-content">
       <AccordionChevronIcon className="repo-accordion-chevron" expanded={isExpanded} />
-      <span className="git-repo-name">{getRepoFolderName(repo.path)}</span>
+      <span className="git-repo-name">{getRepoFolderName(repoPath)}</span>
       <Tooltip content="Refresh">
         <Button type="button" className="git-repo-refresh-button" onClick={handleRefresh} variant="ghost" size="sm">
           <RefreshIcon />
@@ -719,6 +724,7 @@ const GitPanelFull = (): React.ReactNode => {
   const gitError = getGitError();
   const { discoverAndRegisterRepos } = useWorkspaceStore();
   const allRepos = getAllGitRepos();
+  const repoPaths = allRepos.map((repo) => repo.path);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const toastTimeoutRefs = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
@@ -754,7 +760,7 @@ const GitPanelFull = (): React.ReactNode => {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  if (allRepos.length === 0 || gitError) {
+  if (repoPaths.length === 0 || gitError) {
     return (
       <div className="git-panel">
         <NotAGitRepo />
@@ -762,32 +768,18 @@ const GitPanelFull = (): React.ReactNode => {
     );
   }
 
-  const reposToDisplay = allRepos;
-
-  const defaultExpandedValues = reposToDisplay.map(repo => repo.path);
+  const defaultExpandedValues = repoPaths;
 
   return (
     <ToastProvider>
       <div className="git-panel">
         <AccordionRoot className="git-repos-accordion" multiple defaultValue={defaultExpandedValues}>
-          {reposToDisplay.map((repo) => (
-            <AccordionItem key={repo.path} value={repo.path} className="git-repo-accordion-item">
-              <AccordionHeader className="git-repo-accordion-header">
-                <AccordionTrigger className="git-repo-accordion-trigger">
-                  <RepoAccordionTrigger
-                    repo={repo}
-                    onRefresh={async () => {
-                      const updatedRepo = await gitService.getGitStatus(repo.path);
-                      useWorkspaceStore.getState().setGitRepo(repo.path, updatedRepo);
-                    }}
-                    onShowToast={showToast}
-                  />
-                </AccordionTrigger>
-              </AccordionHeader>
-              <AccordionPanel className="git-repo-accordion-panel">
-                <RepoSection repoPath={repo.path} repo={repo} />
-              </AccordionPanel>
-            </AccordionItem>
+          {repoPaths.map((repoPath) => (
+            <RepoAccordionItem
+              key={repoPath}
+              repoPath={repoPath}
+              onShowToast={showToast}
+            />
           ))}
         </AccordionRoot>
       </div>
@@ -826,6 +818,49 @@ const GitPanelFull = (): React.ReactNode => {
   );
 };
 
+const RepoAccordionItem: React.FC<{
+  repoPath: string;
+  onShowToast: (message: string, type?: 'error' | 'success') => void;
+}> = ({ repoPath, onShowToast }) => {
+  const { repo, isLoading, error, refetch } = useGit(repoPath);
+
+  if (isLoading && !repo) {
+    return (
+      <AccordionItem value={repoPath} className="git-repo-accordion-item">
+        <AccordionHeader className="git-repo-accordion-header">
+          <AccordionTrigger className="git-repo-accordion-trigger">
+            <div className="repo-accordion-trigger-content">
+              <span className="git-repo-name">{getRepoFolderName(repoPath)}</span>
+            </div>
+          </AccordionTrigger>
+        </AccordionHeader>
+      </AccordionItem>
+    );
+  }
+
+  if (error || !repo) {
+    return null;
+  }
+
+  return (
+    <AccordionItem key={repo.path} value={repo.path} className="git-repo-accordion-item">
+              <AccordionHeader className="git-repo-accordion-header">
+                <AccordionTrigger className="git-repo-accordion-trigger">
+                  <RepoAccordionTrigger
+                    repoPath={repo.path}
+                    repo={repo}
+                    onRefresh={refetch}
+                    onShowToast={onShowToast}
+                  />
+                </AccordionTrigger>
+              </AccordionHeader>
+              <AccordionPanel className="git-repo-accordion-panel">
+                <RepoSection repoPath={repo.path} repo={repo} refetch={refetch} />
+              </AccordionPanel>
+    </AccordionItem>
+  );
+};
+
 export const gitPanelDefinition: PanelDefinition = {
   id: 'git',
   title: 'Git',
@@ -833,5 +868,3 @@ export const gitPanelDefinition: PanelDefinition = {
   badge: GitPanelBadge,
   fullRender: GitPanelFull,
 };
-
-

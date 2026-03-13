@@ -242,11 +242,9 @@ function calculateGitCounts(repos: Record<string, GitRepo>): { staged: number; u
 }
 
 function createDefaultTab(cwd: string = '~', type: TabType = 'terminal'): Tab {
-  const title = type === 'browser' ? 'Browser' : 'bash';
-
-  const terminalTab = {
+  return {
     id: generateUUID(),
-    title,
+    title: 'bash',
     type,
     cwd,
     sessionId: '', // Empty until PTY is spawned
@@ -254,15 +252,6 @@ function createDefaultTab(cwd: string = '~', type: TabType = 'terminal'): Tab {
     hasNotification: false,
     notificationCount: 0,
   };
-
-  const browserTab = {
-    ...terminalTab,
-    url: 'about:blank',
-    history: ['about:blank'],
-    historyIndex: 0,
-  };
-
-  return type === 'browser' ? browserTab : terminalTab;
 }
 
 function createDefaultPane(): Pane {

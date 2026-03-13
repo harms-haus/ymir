@@ -14,7 +14,6 @@ import {
   MenuPopup,
   MenuItem,
 } from './ui/Menu';
-import { Globe } from 'lucide-react';
 
 interface TabBarProps {
   paneId: string;
@@ -25,7 +24,6 @@ interface TabBarProps {
   onSelectTab: (paneId: string, tabId: string) => void;
   onSplitPane?: (paneId: string, direction: 'horizontal' | 'vertical') => void;
   onCreateTabRight?: (paneId: string, tabId: string) => void;
-  onCreateBrowserTab?: () => void;
   windowControlsPosition?: 'left' | 'right';
   isTopmost?: boolean;
 }
@@ -39,7 +37,6 @@ export function TabBar({
     onSelectTab,
     onSplitPane,
     onCreateTabRight,
-    onCreateBrowserTab,
     windowControlsPosition,
     isTopmost,
 }: TabBarProps) {
@@ -173,13 +170,9 @@ export function TabBar({
           className={`tab-item ${tab.hasNotification ? 'has-notification' : ''}`}
           onContextMenu={(e) => handleContextMenu(e, tab)}
           title={tab.title}
-        >
+          >
           {/* Tab icon */}
-          {tab.type === 'browser' ? (
-            <Globe className="tab-icon-svg" size={14} />
-          ) : (
-            <span className="tab-icon">$</span>
-          )}
+          <span className="tab-icon">$</span>
 
           {/* Tab title */}
           <span className="tab-title">{tab.title}</span>
@@ -226,13 +219,9 @@ export function TabBar({
                         tab.id === activeTabId ? 'active' : ''
                       } ${tab.hasNotification ? 'has-notification' : ''}`}
                       onClick={() => handleOverflowTabSelect(tab.id)}
-                    >
+                      >
                       <span className="overflow-menu-icon">
-                        {tab.type === 'browser' ? (
-                          <Globe size={14} />
-                        ) : (
-                          '$'
-                        )}
+                        $
                       </span>
                       <span className="overflow-menu-title">{tab.title}</span>
                       {tab.hasNotification && tab.notificationCount && tab.notificationCount > 0 && (
@@ -247,20 +236,7 @@ export function TabBar({
             </MenuPortal>
           </MenuRoot>
         </div>
-      )}
-
-            {/* Browser tab button */}
-            <Tooltip content="New browser tab">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="tab-bar-browser-button"
-                onClick={onCreateBrowserTab}
-                aria-label="New browser tab"
-              >
-                <Globe size={18} />
-              </Button>
-            </Tooltip>
+       )}
 
             {/* New tab button */}
             <Tooltip content="New tab">

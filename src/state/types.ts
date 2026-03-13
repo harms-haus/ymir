@@ -48,7 +48,7 @@ export interface ScrollbackLine {
 // Tab Types
 // ============================================================================
 
-export type TabType = 'terminal' | 'browser';
+export type TabType = 'terminal';
 
 export interface Tab {
   /** Unique identifier for this tab */
@@ -71,12 +71,6 @@ export interface Tab {
   notificationText?: string;
   /** Terminal scrollback history (circular buffer) */
   scrollback: ScrollbackLine[];
-  /** Browser URL (only for browser tabs) */
-  url?: string;
-  /** Navigation history (only for browser tabs) */
-  history?: string[];
-  /** Current position in history (only for browser tabs) */
-  historyIndex?: number;
 }
 
 // ============================================================================

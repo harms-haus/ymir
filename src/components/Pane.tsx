@@ -1,8 +1,6 @@
 import { useCallback, useMemo } from 'react';
-import useWorkspaceStore from '../state/workspace';
-import { shallow } from 'zustand/shallow';
+import { useWorkspaceState, workspaceStateStore } from '../state/workspace-state';
 import { Terminal } from './Terminal';
-import { Browser } from './Browser';
 import { TabBar } from './TabBar';
 import { ErrorBoundary } from './ErrorBoundary';
 
@@ -14,13 +12,10 @@ interface PaneProps {
 }
 
 export function Pane({ paneId, workspaceId, windowControlsPosition, isTopmost }: PaneProps) {
-  const pane = useWorkspaceStore(
-    (state) => {
-      const workspace = state.workspaces.find((ws) => ws.id === workspaceId);
-      return workspace?.panes[paneId] || null;
-    },
-    shallow
-  );
+  const pane = useWorkspaceState((state) => {
+    const workspace = state.workspaces.find((ws) => ws.id === workspaceId);
+    return workspace?.panes[paneId] || null;
+  });
 
   if (!pane) {
     return (
@@ -41,23 +36,19 @@ export function Pane({ paneId, workspaceId, windowControlsPosition, isTopmost }:
   }
 
   const handleCreateTab = useCallback(() => {
-    useWorkspaceStore.getState().createTab(paneId);
-  }, [paneId]);
-
-  const handleCreateBrowserTab = useCallback(() => {
-    useWorkspaceStore.getState().createTab(paneId, undefined, 'browser');
+    workspaceStateStore.getState().createTab(paneId);
   }, [paneId]);
 
   const handleCloseTab = useCallback(
     (_paneId: string, tabId: string) => {
-      useWorkspaceStore.getState().closeTab(_paneId, tabId);
+      workspaceStateStore.getState().closeTab(_paneId, tabId);
     },
     []
   );
 
   const handleSelectTab = useCallback(
     (_paneId: string, tabId: string) => {
-      useWorkspaceStore.getState().setActiveTab(_paneId, tabId);
+      workspaceStateStore.getState().setActiveTab(_paneId, tabId);
     },
     []
   );
@@ -68,7 +59,7 @@ export function Pane({ paneId, workspaceId, windowControlsPosition, isTopmost }:
       // 'horizontal' split creates panes side by side -> 'right'
       // 'vertical' split creates panes stacked -> 'down'
       const storeDirection = direction === 'horizontal' ? 'right' : 'down';
-      useWorkspaceStore.getState().splitPane(_paneId, storeDirection);
+      workspaceStateStore.getState().splitPane(_paneId, storeDirection);
     },
     []
   );
@@ -77,7 +68,7 @@ export function Pane({ paneId, workspaceId, windowControlsPosition, isTopmost }:
     const handlers: Record<string, (message: string) => void> = {};
     pane.tabs.forEach((tab) => {
       handlers[tab.id] = (message: string) => {
-        const { markNotification } = useWorkspaceStore.getState();
+        const { markNotification } = workspaceStateStore.getState();
         markNotification(tab.id, message);
       };
     });
@@ -102,7 +93,6 @@ export function Pane({ paneId, workspaceId, windowControlsPosition, isTopmost }:
           tabs={pane.tabs}
           activeTabId={pane.activeTabId}
           onCreateTab={handleCreateTab}
-          onCreateBrowserTab={handleCreateBrowserTab}
           onCloseTab={handleCloseTab}
           onSelectTab={handleSelectTab}
           onSplitPane={handleSplitPane}
@@ -130,21 +120,13 @@ export function Pane({ paneId, workspaceId, windowControlsPosition, isTopmost }:
                 height: '100%',
               }}
             >
-              {tab.type === 'browser' ? (
-                <Browser
-                  tabId={tab.id}
-                  url={tab.url || 'about:blank'}
-                  paneId={paneId}
-                />
-              ) : (
-                <Terminal
-                  sessionId={tab.sessionId}
-                  tabId={tab.id}
-                  paneId={paneId}
-                  onNotification={tabNotificationHandlers[tab.id]}
-                  hasNotification={tab.hasNotification}
-                />
-              )}
+              <Terminal
+                sessionId={tab.sessionId}
+                tabId={tab.id}
+                paneId={paneId}
+                onNotification={tabNotificationHandlers[tab.id]}
+                hasNotification={tab.hasNotification}
+              />
             </div>
           ))}
         </div>
