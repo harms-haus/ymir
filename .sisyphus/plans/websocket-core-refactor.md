@@ -915,7 +915,7 @@ Evidence: .sisyphus/evidence/task-12-pane-handlers.txt
 
 ---
 
-- [ ] **13. Tab/PTY Handlers (Auto-Spawn)**
+- [x] **13. Tab/PTY Handlers (Auto-Spawn)**
 
 **What to do**:
 - Implement `tab.create` handler that AUTO-SPAWNS PTY:
@@ -976,7 +976,7 @@ Evidence: .sisyphus/evidence/task-13-tab-pty-lifecycle.txt
 
 ---
 
-- [ ] **14. Git Handlers**
+- [x] **14. Git Handlers**
 
 **What to do**:
 - Implement `git.status` handler
@@ -1026,7 +1026,7 @@ Evidence: .sisyphus/evidence/task-14-git-handlers.txt
 
 ---
 
-- [ ] **15. Authentication Middleware**
+- [x] **15. Authentication Middleware**
 
 **What to do**:
 - Implement password-based auth
@@ -1077,7 +1077,7 @@ Evidence: .sisyphus/evidence/task-15-auth-flow.txt
 
 ### Wave 4: Execution Modes
 
-- [ ] **16. Standalone Server Binary**
+- [x] **16. Standalone Server Binary**
 
 **What to do**:
 - Create `ymir-server/src/main.rs`
@@ -1173,7 +1173,7 @@ Evidence: .sisyphus/evidence/task-17-tauri-embedded.txt
 
 ---
 
-- [ ] **18. CLI Argument Parsing**
+- [x] **18. CLI Argument Parsing**
 
 **What to do**:
 - Add `clap` dependency
@@ -1218,7 +1218,7 @@ Evidence: .sisyphus/evidence/task-18-cli-parsing.txt
 
 ---
 
-- [ ] **19. Browser Spawning**
+- [x] **19. Browser Spawning**
 
 **What to do**:
 - Add `webbrowser` crate
@@ -1261,7 +1261,7 @@ Evidence: .sisyphus/evidence/task-19-browser-spawn.txt
 
 ---
 
-- [ ] **20. Sidecar Configuration**
+- [x] **20. Sidecar Configuration**
 
 **What to do**:
 - Configure Tauri for sidecar binary
