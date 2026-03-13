@@ -233,6 +233,14 @@ function countPanes(workspaces: WorkspaceWithPanes[]): number {
   return count;
 }
 
+function calculateGitCounts(repos: Record<string, GitRepo>): { staged: number; unstaged: number } {
+  const repoList = Object.values(repos);
+  return {
+    staged: repoList.reduce((sum, r) => sum + r.staged.length, 0),
+    unstaged: repoList.reduce((sum, r) => sum + r.unstaged.length, 0),
+  };
+}
+
 function createDefaultTab(cwd: string = '~', type: TabType = 'terminal'): Tab {
   const title = type === 'browser' ? 'Browser' : 'bash';
 
@@ -748,14 +756,9 @@ const useWorkspaceStore = create<WorkspaceState>()(
   setGitRepo: (repoPath: string, repo: GitRepo) =>
     set((state) => {
       state.gitRepos[repoPath] = repo;
-      state.gitStagedCount = Object.values(state.gitRepos).reduce(
-        (sum, r) => sum + r.staged.length,
-        0
-      );
-      state.gitChangesCount = Object.values(state.gitRepos).reduce(
-        (sum, r) => sum + r.unstaged.length,
-        0
-      );
+      const counts = calculateGitCounts(state.gitRepos);
+      state.gitStagedCount = counts.staged;
+      state.gitChangesCount = counts.unstaged;
     }),
 
   setActiveRepo: (repoPath: string) =>
@@ -788,14 +791,9 @@ const useWorkspaceStore = create<WorkspaceState>()(
         repo.staged = repo.staged.filter((f) => f.path !== filePath);
       }
 
-      state.gitStagedCount = Object.values(state.gitRepos).reduce(
-        (sum, r) => sum + r.staged.length,
-        0
-      );
-      state.gitChangesCount = Object.values(state.gitRepos).reduce(
-        (sum, r) => sum + r.unstaged.length,
-        0
-      );
+      const counts = calculateGitCounts(state.gitRepos);
+      state.gitStagedCount = counts.staged;
+      state.gitChangesCount = counts.unstaged;
     }),
 
   removeGitRepo: (repoPath: string) =>
@@ -805,14 +803,9 @@ const useWorkspaceStore = create<WorkspaceState>()(
         const remainingRepos = Object.keys(state.gitRepos);
         state.activeRepoPath = remainingRepos.length > 0 ? remainingRepos[0] : null;
       }
-      state.gitStagedCount = Object.values(state.gitRepos).reduce(
-        (sum, r) => sum + r.staged.length,
-        0
-      );
-      state.gitChangesCount = Object.values(state.gitRepos).reduce(
-        (sum, r) => sum + r.unstaged.length,
-        0
-      );
+      const counts = calculateGitCounts(state.gitRepos);
+      state.gitStagedCount = counts.staged;
+      state.gitChangesCount = counts.unstaged;
     }),
 
   setGitLoading: (loading: boolean) =>
@@ -841,14 +834,9 @@ const useWorkspaceStore = create<WorkspaceState>()(
         const repo = await gitService.getGitStatus(repoPath);
         set((state) => {
           state.gitRepos[repoPath] = repo;
-          state.gitStagedCount = Object.values(state.gitRepos).reduce(
-            (sum, r) => sum + r.staged.length,
-            0
-          );
-          state.gitChangesCount = Object.values(state.gitRepos).reduce(
-            (sum, r) => sum + r.unstaged.length,
-            0
-          );
+          const counts = calculateGitCounts(state.gitRepos);
+          state.gitStagedCount = counts.staged;
+          state.gitChangesCount = counts.unstaged;
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -879,14 +867,9 @@ logger.error('Git polling failed', { repoPath, error: message });
         const repo = await gitService.getGitStatus(repoPath);
         set((state) => {
           state.gitRepos[repoPath] = repo;
-          state.gitStagedCount = Object.values(state.gitRepos).reduce(
-            (sum, r) => sum + r.staged.length,
-            0
-          );
-          state.gitChangesCount = Object.values(state.gitRepos).reduce(
-            (sum, r) => sum + r.unstaged.length,
-            0
-          );
+          const counts = calculateGitCounts(state.gitRepos);
+          state.gitStagedCount = counts.staged;
+          state.gitChangesCount = counts.unstaged;
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -959,11 +942,6 @@ export const getGitChangesCount = () => {
 export const getAllGitRepos = () => {
   const { gitRepos } = useWorkspaceStore.getState();
   return Object.values(gitRepos);
-};
-
-export const getGitLoading = () => {
-  const { isGitLoading } = useWorkspaceStore.getState();
-  return isGitLoading;
 };
 
 export const getGitError = () => {

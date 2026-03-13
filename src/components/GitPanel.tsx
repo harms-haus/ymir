@@ -720,6 +720,15 @@ const GitPanelFull = (): React.ReactNode => {
   const { discoverAndRegisterRepos } = useWorkspaceStore();
   const allRepos = getAllGitRepos();
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const toastTimeoutRefs = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+
+  // Cleanup all toast timeouts on unmount
+  useEffect(() => {
+    return () => {
+      toastTimeoutRefs.current.forEach((id) => clearTimeout(id));
+      toastTimeoutRefs.current.clear();
+    };
+  }, []);
 
   useEffect(() => {
     invoke<string>('get_app_cwd').then((cwd) => {
@@ -734,9 +743,11 @@ const GitPanelFull = (): React.ReactNode => {
   const showToast = useCallback((message: string, type: 'error' | 'success' = 'error') => {
     const id = Math.random().toString(36).substring(2, 9);
     setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
+      toastTimeoutRefs.current.delete(timeoutId);
     }, 5000);
+    toastTimeoutRefs.current.add(timeoutId);
   }, []);
 
   const removeToast = useCallback((id: string) => {
