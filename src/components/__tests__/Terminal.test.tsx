@@ -36,14 +36,22 @@ vi.mock('@tauri-apps/plugin-notification', () => ({
   sendNotification: vi.fn(),
 }));
 
-vi.mock('react-xtermjs', () => ({
-  useXTerm: vi.fn(() => ({
-    ref: { current: null },
-    instance: null,
+vi.mock('ghostty-web', () => ({
+  Terminal: vi.fn(() => ({
+    open: vi.fn(),
+    write: vi.fn(),
+    dispose: vi.fn(),
+    onData: vi.fn(() => ({ dispose: vi.fn() })),
+    onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+    loadAddon: vi.fn(),
+    cols: 80,
+    rows: 24,
   })),
+  FitAddon: vi.fn(() => ({
+    fit: vi.fn(),
+  })),
+  UrlRegexProvider: vi.fn(),
 }));
-
-vi.mock('@xterm/xterm/css/xterm.css', () => ({}));
 
 vi.mock('../ErrorBoundary', () => ({
   ErrorBoundary: ({ children }: { children: React.ReactNode }) => <div data-testid="error-boundary">{children}</div>
@@ -59,7 +67,7 @@ vi.mock('../../lib/logger', () => ({
 }));
 
 const { invoke, Channel } = await import('@tauri-apps/api/core');
-const { useXTerm } = await import('react-xtermjs');
+const { Terminal, FitAddon } = await import('ghostty-web');
 const { sendNotification } = await import('@tauri-apps/plugin-notification');
 
 describe('Terminal Component (react-xtermjs migration)', () => {
@@ -140,86 +148,21 @@ describe('Terminal Component (react-xtermjs migration)', () => {
     });
   });
 
-  describe('useXTerm Hook Options', () => {
-    it('should pass terminal theme to useXTerm', () => {
-      let capturedOptions: { options?: object } = {};
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockImplementation((opts: object) => {
-        capturedOptions = opts;
-        return {
-          ref: { current: null },
-          instance: null,
-        };
-      });
-
-      render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-        />
-      );
-
-      expect(capturedOptions.options).toBeDefined();
-      const options = capturedOptions.options as {
-        background?: string;
-        cursorBlink?: boolean;
-        fontSize?: number;
-      };
-      expect(options.background).toBe('#1e1e1e');
-      expect(options.cursorBlink).toBe(true);
-      expect(options.fontSize).toBe(14);
-    });
-
-    it('should pass FitAddon in addons array', () => {
-      let capturedOptions: { addons?: unknown[] } = {};
-
-      (useXTerm as ReturnType<typeof vi.fn>).mockImplementation((opts: object) => {
-        capturedOptions = opts;
-        return {
-          ref: { current: null },
-          instance: null,
-        };
-      });
-
-      render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-        />
-      );
-
-      expect(capturedOptions.addons).toBeDefined();
-      expect(capturedOptions.addons?.length).toBeGreaterThan(0);
-    });
-
-    it('should set up onData listener for write_pty', () => {
-      let capturedOptions: { listeners?: { onData?: (data: string) => void } } = {};
-
-      (useXTerm as ReturnType<typeof vi.fn>).mockImplementation((opts: object) => {
-        capturedOptions = opts;
-        return {
-          ref: { current: null },
-          instance: null,
-        };
-      });
-
-      render(
-        <TerminalComponent
-          tabId="tab-1"
-          paneId="pane-1"
-          sessionId="session-123"
-        />
-      );
-
-      expect(capturedOptions.listeners?.onData).toBeDefined();
-    });
-  });
 
   describe('Cleanup', () => {
     it('should disconnect resize observer on unmount', async () => {
       const mockDisconnect = vi.fn();
+      const mockTerminal = {
+        open: vi.fn(),
+        write: vi.fn(),
+        dispose: vi.fn(),
+        onData: vi.fn(() => ({ dispose: vi.fn() })),
+        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+        loadAddon: vi.fn(),
+        cols: 80,
+        rows: 24,
+      };
 
       class TestResizeObserver {
         observe = vi.fn();
@@ -230,10 +173,7 @@ describe('Terminal Component (react-xtermjs migration)', () => {
       const originalRO = globalThis.ResizeObserver;
       globalThis.ResizeObserver = TestResizeObserver as unknown as typeof ResizeObserver;
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockReturnValue({
-        ref: { current: null },
-        instance: null,
-      });
+      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
 
       const { unmount } = render(
         <TerminalComponent
@@ -254,12 +194,18 @@ describe('Terminal Component (react-xtermjs migration)', () => {
   describe('Channel Message Handling', () => {
     it('should handle output event with string data', async () => {
       const mockWrite = vi.fn();
-      const mockTerm = { write: mockWrite, cols: 80, rows: 24 };
+      const mockTerminal = {
+        open: vi.fn(),
+        write: mockWrite,
+        dispose: vi.fn(),
+        onData: vi.fn(() => ({ dispose: vi.fn() })),
+        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+        loadAddon: vi.fn(),
+        cols: 80,
+        rows: 24,
+      };
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockReturnValue({
-        ref: { current: document.createElement('div') },
-        instance: mockTerm,
-      });
+      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
 
       render(
         <TerminalComponent
@@ -278,12 +224,18 @@ describe('Terminal Component (react-xtermjs migration)', () => {
 
     it('should handle output event with non-string data', async () => {
       const mockWrite = vi.fn();
-      const mockTerm = { write: mockWrite, cols: 80, rows: 24 };
+      const mockTerminal = {
+        open: vi.fn(),
+        write: mockWrite,
+        dispose: vi.fn(),
+        onData: vi.fn(() => ({ dispose: vi.fn() })),
+        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+        loadAddon: vi.fn(),
+        cols: 80,
+        rows: 24,
+      };
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockReturnValue({
-        ref: { current: document.createElement('div') },
-        instance: mockTerm,
-      });
+      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
 
       render(
         <TerminalComponent
@@ -302,12 +254,18 @@ describe('Terminal Component (react-xtermjs migration)', () => {
 
     it('should handle output event with direct data property', async () => {
       const mockWrite = vi.fn();
-      const mockTerm = { write: mockWrite, cols: 80, rows: 24 };
+      const mockTerminal = {
+        open: vi.fn(),
+        write: mockWrite,
+        dispose: vi.fn(),
+        onData: vi.fn(() => ({ dispose: vi.fn() })),
+        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+        loadAddon: vi.fn(),
+        cols: 80,
+        rows: 24,
+      };
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockReturnValue({
-        ref: { current: document.createElement('div') },
-        instance: mockTerm,
-      });
+      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
 
       render(
         <TerminalComponent
@@ -326,12 +284,18 @@ describe('Terminal Component (react-xtermjs migration)', () => {
 
     it('should handle notification event', async () => {
       const onNotification = vi.fn();
-      const mockTerm = { write: vi.fn(), cols: 80, rows: 24 };
+      const mockTerminal = {
+        open: vi.fn(),
+        write: vi.fn(),
+        dispose: vi.fn(),
+        onData: vi.fn(() => ({ dispose: vi.fn() })),
+        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+        loadAddon: vi.fn(),
+        cols: 80,
+        rows: 24,
+      };
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockReturnValue({
-        ref: { current: document.createElement('div') },
-        instance: mockTerm,
-      });
+      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
 
       render(
         <TerminalComponent
@@ -354,12 +318,18 @@ describe('Terminal Component (react-xtermjs migration)', () => {
 
     it('should handle notification event with non-string message', async () => {
       const onNotification = vi.fn();
-      const mockTerm = { write: vi.fn(), cols: 80, rows: 24 };
+      const mockTerminal = {
+        open: vi.fn(),
+        write: vi.fn(),
+        dispose: vi.fn(),
+        onData: vi.fn(() => ({ dispose: vi.fn() })),
+        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+        loadAddon: vi.fn(),
+        cols: 80,
+        rows: 24,
+      };
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockReturnValue({
-        ref: { current: document.createElement('div') },
-        instance: mockTerm,
-      });
+      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
 
       render(
         <TerminalComponent
@@ -382,12 +352,18 @@ describe('Terminal Component (react-xtermjs migration)', () => {
 
     it('should handle exit event', async () => {
       const mockWrite = vi.fn();
-      const mockTerm = { write: mockWrite, cols: 80, rows: 24 };
+      const mockTerminal = {
+        open: vi.fn(),
+        write: mockWrite,
+        dispose: vi.fn(),
+        onData: vi.fn(() => ({ dispose: vi.fn() })),
+        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+        loadAddon: vi.fn(),
+        cols: 80,
+        rows: 24,
+      };
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockReturnValue({
-        ref: { current: document.createElement('div') },
-        instance: mockTerm,
-      });
+      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
 
       render(
         <TerminalComponent
@@ -406,12 +382,18 @@ describe('Terminal Component (react-xtermjs migration)', () => {
 
     it('should ignore invalid messages', async () => {
       const mockWrite = vi.fn();
-      const mockTerm = { write: mockWrite, cols: 80, rows: 24 };
+      const mockTerminal = {
+        open: vi.fn(),
+        write: mockWrite,
+        dispose: vi.fn(),
+        onData: vi.fn(() => ({ dispose: vi.fn() })),
+        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+        loadAddon: vi.fn(),
+        cols: 80,
+        rows: 24,
+      };
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockReturnValue({
-        ref: { current: document.createElement('div') },
-        instance: mockTerm,
-      });
+      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
 
       render(
         <TerminalComponent
@@ -432,12 +414,18 @@ describe('Terminal Component (react-xtermjs migration)', () => {
 
     it('should ignore unknown event types', async () => {
       const mockWrite = vi.fn();
-      const mockTerm = { write: mockWrite, cols: 80, rows: 24 };
+      const mockTerminal = {
+        open: vi.fn(),
+        write: mockWrite,
+        dispose: vi.fn(),
+        onData: vi.fn(() => ({ dispose: vi.fn() })),
+        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+        loadAddon: vi.fn(),
+        cols: 80,
+        rows: 24,
+      };
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockReturnValue({
-        ref: { current: document.createElement('div') },
-        instance: mockTerm,
-      });
+      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
 
       render(
         <TerminalComponent
@@ -456,12 +444,18 @@ describe('Terminal Component (react-xtermjs migration)', () => {
 
     it('should skip output when data is undefined', async () => {
       const mockWrite = vi.fn();
-      const mockTerm = { write: mockWrite, cols: 80, rows: 24 };
+      const mockTerminal = {
+        open: vi.fn(),
+        write: mockWrite,
+        dispose: vi.fn(),
+        onData: vi.fn(() => ({ dispose: vi.fn() })),
+        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+        loadAddon: vi.fn(),
+        cols: 80,
+        rows: 24,
+      };
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockReturnValue({
-        ref: { current: document.createElement('div') },
-        instance: mockTerm,
-      });
+      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
 
       render(
         <TerminalComponent
@@ -480,12 +474,18 @@ describe('Terminal Component (react-xtermjs migration)', () => {
 
     it('should skip notification when data is undefined', async () => {
       const onNotification = vi.fn();
-      const mockTerm = { write: vi.fn(), cols: 80, rows: 24 };
+      const mockTerminal = {
+        open: vi.fn(),
+        write: vi.fn(),
+        dispose: vi.fn(),
+        onData: vi.fn(() => ({ dispose: vi.fn() })),
+        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+        loadAddon: vi.fn(),
+        cols: 80,
+        rows: 24,
+      };
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockReturnValue({
-        ref: { current: document.createElement('div') },
-        instance: mockTerm,
-      });
+      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
 
       render(
         <TerminalComponent
@@ -507,12 +507,18 @@ describe('Terminal Component (react-xtermjs migration)', () => {
 
   describe('Session Attach', () => {
     it('should attach to existing session when is_pty_alive returns true', async () => {
-      const mockTerm = { write: vi.fn(), cols: 80, rows: 24 };
+      const mockTerminal = {
+        open: vi.fn(),
+        write: vi.fn(),
+        dispose: vi.fn(),
+        onData: vi.fn(() => ({ dispose: vi.fn() })),
+        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+        loadAddon: vi.fn(),
+        cols: 80,
+        rows: 24,
+      };
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockReturnValue({
-        ref: { current: document.createElement('div') },
-        instance: mockTerm,
-      });
+      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
 
       (invoke as ReturnType<typeof vi.fn>)
         .mockResolvedValueOnce(true)
@@ -540,12 +546,18 @@ describe('Terminal Component (react-xtermjs migration)', () => {
     });
 
     it('should spawn new session when is_pty_alive returns false', async () => {
-      const mockTerm = { write: vi.fn(), cols: 80, rows: 24 };
+      const mockTerminal = {
+        open: vi.fn(),
+        write: vi.fn(),
+        dispose: vi.fn(),
+        onData: vi.fn(() => ({ dispose: vi.fn() })),
+        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+        loadAddon: vi.fn(),
+        cols: 80,
+        rows: 24,
+      };
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockReturnValue({
-        ref: { current: document.createElement('div') },
-        instance: mockTerm,
-      });
+      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
 
       (invoke as ReturnType<typeof vi.fn>)
         .mockResolvedValueOnce(false)
@@ -569,12 +581,18 @@ describe('Terminal Component (react-xtermjs migration)', () => {
     });
 
     it('should spawn new session when attach fails', async () => {
-      const mockTerm = { write: vi.fn(), cols: 80, rows: 24 };
+      const mockTerminal = {
+        open: vi.fn(),
+        write: vi.fn(),
+        dispose: vi.fn(),
+        onData: vi.fn(() => ({ dispose: vi.fn() })),
+        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+        loadAddon: vi.fn(),
+        cols: 80,
+        rows: 24,
+      };
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockReturnValue({
-        ref: { current: document.createElement('div') },
-        instance: mockTerm,
-      });
+      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
 
       (invoke as ReturnType<typeof vi.fn>)
         .mockRejectedValueOnce(new Error('Attach failed'))
@@ -596,12 +614,18 @@ describe('Terminal Component (react-xtermjs migration)', () => {
 
   describe('PTY Spawn', () => {
     it('should handle spawn success', async () => {
-      const mockTerm = { write: vi.fn(), cols: 80, rows: 24 };
+      const mockTerminal = {
+        open: vi.fn(),
+        write: vi.fn(),
+        dispose: vi.fn(),
+        onData: vi.fn(() => ({ dispose: vi.fn() })),
+        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+        loadAddon: vi.fn(),
+        cols: 80,
+        rows: 24,
+      };
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockReturnValue({
-        ref: { current: document.createElement('div') },
-        instance: mockTerm,
-      });
+      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
 
       (invoke as ReturnType<typeof vi.fn>).mockResolvedValue('spawned-session-id');
 
@@ -619,12 +643,18 @@ describe('Terminal Component (react-xtermjs migration)', () => {
 
     it('should handle spawn failure', async () => {
       const mockWrite = vi.fn();
-      const mockTerm = { write: mockWrite, cols: 80, rows: 24 };
+      const mockTerminal = {
+        open: vi.fn(),
+        write: mockWrite,
+        dispose: vi.fn(),
+        onData: vi.fn(() => ({ dispose: vi.fn() })),
+        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+        loadAddon: vi.fn(),
+        cols: 80,
+        rows: 24,
+      };
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockReturnValue({
-        ref: { current: document.createElement('div') },
-        instance: mockTerm,
-      });
+      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
 
       (invoke as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Spawn failed'));
 
@@ -643,12 +673,18 @@ describe('Terminal Component (react-xtermjs migration)', () => {
 
   describe('PTY Resize', () => {
     it('should resize PTY when ready', async () => {
-      const mockTerm = { write: vi.fn(), cols: 100, rows: 30 };
+      const mockTerminal = {
+        open: vi.fn(),
+        write: vi.fn(),
+        dispose: vi.fn(),
+        onData: vi.fn(() => ({ dispose: vi.fn() })),
+        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+        loadAddon: vi.fn(),
+        cols: 100,
+        rows: 30,
+      };
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockReturnValue({
-        ref: { current: document.createElement('div') },
-        instance: mockTerm,
-      });
+      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
 
       (invoke as ReturnType<typeof vi.fn>).mockResolvedValue('session-id');
 
@@ -677,13 +713,18 @@ describe('Terminal Component (react-xtermjs migration)', () => {
 
       useWorkspaceStore.setState({ zoomIn, zoomOut, fontSize: 14 });
 
-      const div = document.createElement('div');
-      const mockTerm = { write: vi.fn(), cols: 80, rows: 24 };
+      const mockTerminal = {
+        open: vi.fn(),
+        write: vi.fn(),
+        dispose: vi.fn(),
+        onData: vi.fn(() => ({ dispose: vi.fn() })),
+        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+        loadAddon: vi.fn(),
+        cols: 80,
+        rows: 24,
+      };
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockReturnValue({
-        ref: { current: div },
-        instance: mockTerm,
-      });
+      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
 
       const { container } = render(
         <TerminalComponent
@@ -710,13 +751,18 @@ describe('Terminal Component (react-xtermjs migration)', () => {
 
       useWorkspaceStore.setState({ zoomIn, zoomOut, fontSize: 14 });
 
-      const div = document.createElement('div');
-      const mockTerm = { write: vi.fn(), cols: 80, rows: 24 };
+      const mockTerminal = {
+        open: vi.fn(),
+        write: vi.fn(),
+        dispose: vi.fn(),
+        onData: vi.fn(() => ({ dispose: vi.fn() })),
+        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+        loadAddon: vi.fn(),
+        cols: 80,
+        rows: 24,
+      };
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockReturnValue({
-        ref: { current: div },
-        instance: mockTerm,
-      });
+      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
 
       const { container } = render(
         <TerminalComponent
@@ -743,13 +789,18 @@ describe('Terminal Component (react-xtermjs migration)', () => {
 
       useWorkspaceStore.setState({ zoomIn, zoomOut, fontSize: 14 });
 
-      const div = document.createElement('div');
-      const mockTerm = { write: vi.fn(), cols: 80, rows: 24 };
+      const mockTerminal = {
+        open: vi.fn(),
+        write: vi.fn(),
+        dispose: vi.fn(),
+        onData: vi.fn(() => ({ dispose: vi.fn() })),
+        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+        loadAddon: vi.fn(),
+        cols: 80,
+        rows: 24,
+      };
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockReturnValue({
-        ref: { current: div },
-        instance: mockTerm,
-      });
+      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
 
       const { container } = render(
         <TerminalComponent
@@ -775,13 +826,18 @@ describe('Terminal Component (react-xtermjs migration)', () => {
 
       useWorkspaceStore.setState({ zoomIn, zoomOut, fontSize: 14 });
 
-      const div = document.createElement('div');
-      const mockTerm = { write: vi.fn(), cols: 80, rows: 24 };
+      const mockTerminal = {
+        open: vi.fn(),
+        write: vi.fn(),
+        dispose: vi.fn(),
+        onData: vi.fn(() => ({ dispose: vi.fn() })),
+        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+        loadAddon: vi.fn(),
+        cols: 80,
+        rows: 24,
+      };
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockReturnValue({
-        ref: { current: div },
-        instance: mockTerm,
-      });
+      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
 
       const { container } = render(
         <TerminalComponent
@@ -809,13 +865,18 @@ describe('Terminal Component (react-xtermjs migration)', () => {
 
       useWorkspaceStore.setState({ zoomIn, zoomOut, fontSize: 14 });
 
-      const div = document.createElement('div');
-      const mockTerm = { write: vi.fn(), cols: 80, rows: 24 };
+      const mockTerminal = {
+        open: vi.fn(),
+        write: vi.fn(),
+        dispose: vi.fn(),
+        onData: vi.fn(() => ({ dispose: vi.fn() })),
+        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+        loadAddon: vi.fn(),
+        cols: 80,
+        rows: 24,
+      };
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockReturnValue({
-        ref: { current: div },
-        instance: mockTerm,
-      });
+      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
 
       const { container } = render(
         <TerminalComponent
@@ -849,13 +910,18 @@ describe('Terminal Component (react-xtermjs migration)', () => {
 
       useWorkspaceStore.setState({ zoomIn, zoomOut, fontSize: 14 });
 
-      const div = document.createElement('div');
-      const mockTerm = { write: vi.fn(), cols: 80, rows: 24 };
+      const mockTerminal = {
+        open: vi.fn(),
+        write: vi.fn(),
+        dispose: vi.fn(),
+        onData: vi.fn(() => ({ dispose: vi.fn() })),
+        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+        loadAddon: vi.fn(),
+        cols: 80,
+        rows: 24,
+      };
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockReturnValue({
-        ref: { current: div },
-        instance: mockTerm,
-      });
+      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
 
       const { container } = render(
         <TerminalComponent
@@ -889,13 +955,18 @@ describe('Terminal Component (react-xtermjs migration)', () => {
 
       useWorkspaceStore.setState({ zoomIn, zoomOut, fontSize: 14 });
 
-      const div = document.createElement('div');
-      const mockTerm = { write: vi.fn(), cols: 80, rows: 24 };
+      const mockTerminal = {
+        open: vi.fn(),
+        write: vi.fn(),
+        dispose: vi.fn(),
+        onData: vi.fn(() => ({ dispose: vi.fn() })),
+        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+        loadAddon: vi.fn(),
+        cols: 80,
+        rows: 24,
+      };
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockReturnValue({
-        ref: { current: div },
-        instance: mockTerm,
-      });
+      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
 
       const { container } = render(
         <TerminalComponent
@@ -937,13 +1008,18 @@ describe('Terminal Component (react-xtermjs migration)', () => {
 
       useWorkspaceStore.setState({ zoomIn, zoomOut, fontSize: 14 });
 
-      const div = document.createElement('div');
-      const mockTerm = { write: vi.fn(), cols: 80, rows: 24 };
+      const mockTerminal = {
+        open: vi.fn(),
+        write: vi.fn(),
+        dispose: vi.fn(),
+        onData: vi.fn(() => ({ dispose: vi.fn() })),
+        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+        loadAddon: vi.fn(),
+        cols: 80,
+        rows: 24,
+      };
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockReturnValue({
-        ref: { current: div },
-        instance: mockTerm,
-      });
+      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
 
       const { container } = render(
         <TerminalComponent
@@ -970,13 +1046,18 @@ describe('Terminal Component (react-xtermjs migration)', () => {
 
       useWorkspaceStore.setState({ zoomIn, zoomOut, fontSize: 14 });
 
-      const div = document.createElement('div');
-      const mockTerm = { write: vi.fn(), cols: 80, rows: 24 };
+      const mockTerminal = {
+        open: vi.fn(),
+        write: vi.fn(),
+        dispose: vi.fn(),
+        onData: vi.fn(() => ({ dispose: vi.fn() })),
+        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+        loadAddon: vi.fn(),
+        cols: 80,
+        rows: 24,
+      };
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockReturnValue({
-        ref: { current: div },
-        instance: mockTerm,
-      });
+      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
 
       const { container } = render(
         <TerminalComponent
@@ -1003,13 +1084,18 @@ describe('Terminal Component (react-xtermjs migration)', () => {
 
       useWorkspaceStore.setState({ zoomIn, zoomOut, fontSize: 14 });
 
-      const div = document.createElement('div');
-      const mockTerm = { write: vi.fn(), cols: 80, rows: 24 };
+      const mockTerminal = {
+        open: vi.fn(),
+        write: vi.fn(),
+        dispose: vi.fn(),
+        onData: vi.fn(() => ({ dispose: vi.fn() })),
+        onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+        loadAddon: vi.fn(),
+        cols: 80,
+        rows: 24,
+      };
 
-      (useXTerm as ReturnType<typeof vi.fn>).mockReturnValue({
-        ref: { current: div },
-        instance: mockTerm,
-      });
+      (Terminal as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => mockTerminal);
 
       const { container, unmount } = render(
         <TerminalComponent
