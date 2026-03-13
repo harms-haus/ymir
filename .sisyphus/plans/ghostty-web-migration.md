@@ -531,7 +531,7 @@ Evidence: .sisyphus/evidence/task-5-resize-works.png
 
 ---
 
-- [ ] **Task 6: Update terminal theme compatibility**
+- [x] **Task 6: Update terminal theme compatibility**
 
 **What to do**:
 Check and update src/theme/terminal.ts to ensure theme object is compatible with ghostty-web's theme format.
@@ -580,7 +580,7 @@ Evidence: .sisyphus/evidence/task-6-theme-applied.png
 
 ---
 
-- [ ] **Task 7: Add WASM initialization to App.tsx**
+- [x] **Task 7: Add WASM initialization to App.tsx**
 
 **What to do**:
 Add ghostty-web's `init()` call to initialize WASM before any Terminal components are rendered.
