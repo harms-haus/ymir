@@ -9,64 +9,10 @@ import {
   GitFileStatus,
   GitRepo,
 } from '../state/types';
-
-// ============================================================================
-// Rust Response Types (matching src-tauri/src/git.rs structs)
-// ============================================================================
-
-/**
- * Rust FileStatus enum serialized as string
- * See git.rs FileStatus enum for all variants
- */
-type RustFileStatus =
-  | 'Added'
-  | 'StagedModified'
-  | 'StagedDeleted'
-  | 'StagedRenamed'
-  | 'Modified'
-  | 'Deleted'
-  | 'Untracked'
-  | 'Ignored'
-  | 'Conflicted'
-  | 'Clean';
-
-/**
- * Rust GitFile struct (serde camelCase)
- */
-interface RustGitFile {
-  path: string;
-  status: RustFileStatus;
-  secondaryStatus?: RustFileStatus | null;
-}
-
-/**
- * Rust GitStatus struct (serde camelCase)
- */
-interface RustGitStatus {
-  repoPath: string;
-  currentBranch: string;
-  files: RustGitFile[];
-  stagedCount: number;
-  modifiedCount: number;
-  untrackedCount: number;
-  conflictedCount: number;
-  aheadCount: number;
-  behindCount: number;
-}
-
-/**
- * Rust BranchInfo struct (serde camelCase)
- */
-interface RustBranchInfo {
-  name: string;
-  isHead: boolean;
-  isRemote: boolean;
-  upstream?: string | null;
-}
-
-// ============================================================================
-// Type Transformations (Rust to TypeScript)
-// ============================================================================
+import {
+  RustGitStatus,
+  RustBranchInfo,
+} from '../types/tauri';
 
 function transformGitStatus(rustStatus: RustGitStatus): GitRepo {
   const { repoPath, currentBranch, files, aheadCount, behindCount } = rustStatus;
@@ -78,7 +24,6 @@ function transformGitStatus(rustStatus: RustGitStatus): GitRepo {
     const primaryStatus = file.status;
     const secondaryStatus = file.secondaryStatus;
 
-    // Check if file has staged status
     if (primaryStatus === 'Added' || primaryStatus === 'StagedModified' ||
         primaryStatus === 'StagedDeleted' || primaryStatus === 'StagedRenamed') {
       staged.push({
@@ -88,7 +33,6 @@ function transformGitStatus(rustStatus: RustGitStatus): GitRepo {
       });
     }
 
-    // Check if file has unstaged status (either primary or secondary)
     const hasUnstaged =
       primaryStatus === 'Modified' || primaryStatus === 'Deleted' ||
       primaryStatus === 'Untracked' || primaryStatus === 'Conflicted' ||
@@ -96,11 +40,7 @@ function transformGitStatus(rustStatus: RustGitStatus): GitRepo {
       secondaryStatus === 'Untracked' || secondaryStatus === 'Conflicted';
 
     if (hasUnstaged) {
-      // Use secondary status if available (for files with both staged and unstaged changes)
       const unstagedStatus = secondaryStatus || primaryStatus;
-      // Always create a NEW object — files with both staged/unstaged changes
-      // appear in both arrays, and they must be independent so mutating one
-      // (e.g. via updateGitFile) doesn't corrupt the other
       unstaged.push({
         path: file.path,
         status: mapFileStatus(unstagedStatus),
@@ -119,9 +59,6 @@ function transformGitStatus(rustStatus: RustGitStatus): GitRepo {
   };
 }
 
-/**
- * Map Rust FileStatus to TypeScript GitFileStatus
- */
 function mapFileStatus(rustStatus: string): GitFileStatus {
   switch (rustStatus) {
     case 'Added':
@@ -139,7 +76,7 @@ function mapFileStatus(rustStatus: string): GitFileStatus {
     case 'Conflicted':
       return 'conflict';
     default:
-      return 'modified'; // Default fallback
+      return 'modified';
   }
 }
 
@@ -152,15 +89,6 @@ function transformBranch(rustBranch: RustBranchInfo): GitBranch {
   };
 }
 
-// ============================================================================
-// Service Functions
-// ============================================================================
-
-/**
- * Get git status for a repository
- * @param repoPath - Path to the git repository
- * @returns Promise<GitRepo> - Repository status with staged/unstaged files
- */
 export async function getGitStatus(repoPath: string): Promise<GitRepo> {
   try {
     logger.debug('Getting git status', { repoPath });
@@ -180,11 +108,6 @@ export async function getGitStatus(repoPath: string): Promise<GitRepo> {
   }
 }
 
-/**
- * Stage a file for commit
- * @param repoPath - Path to the git repository
- * @param filePath - Path to the file to stage (relative to repo root)
- */
 export async function stageFile(repoPath: string, filePath: string): Promise<void> {
   try {
     logger.debug('Staging file', { repoPath, filePath });
@@ -197,11 +120,6 @@ export async function stageFile(repoPath: string, filePath: string): Promise<voi
   }
 }
 
-/**
- * Unstage a file (remove from index, keep working tree changes)
- * @param repoPath - Path to the git repository
- * @param filePath - Path to the file to unstage (relative to repo root)
- */
 export async function unstageFile(repoPath: string, filePath: string): Promise<void> {
   try {
     logger.debug('Unstaging file', { repoPath, filePath });
@@ -214,11 +132,6 @@ export async function unstageFile(repoPath: string, filePath: string): Promise<v
   }
 }
 
-/**
- * Discard changes to a file (reset to last committed version)
- * @param repoPath - Path to the git repository
- * @param filePath - Path to the file to discard changes for (relative to repo root)
- */
 export async function discardChanges(repoPath: string, filePath: string): Promise<void> {
   try {
     logger.debug('Discarding changes', { repoPath, filePath });
@@ -231,12 +144,6 @@ export async function discardChanges(repoPath: string, filePath: string): Promis
   }
 }
 
-/**
- * Create a commit with staged changes
- * @param repoPath - Path to the git repository
- * @param message - Commit message
- * @returns Promise<string> - Commit hash/ID
- */
 export async function commit(repoPath: string, message: string): Promise<string> {
   try {
     logger.debug('Creating commit', { repoPath, message });
@@ -250,11 +157,6 @@ export async function commit(repoPath: string, message: string): Promise<string>
   }
 }
 
-/**
- * Get list of all branches in the repository
- * @param repoPath - Path to the git repository
- * @returns Promise<GitBranch[]> - Array of branch information
- */
 export async function getBranches(repoPath: string): Promise<GitBranch[]> {
   try {
     logger.debug('Getting branches', { repoPath });
@@ -269,11 +171,6 @@ export async function getBranches(repoPath: string): Promise<GitBranch[]> {
   }
 }
 
-/**
- * Create a new branch from current HEAD
- * @param repoPath - Path to the git repository
- * @param name - Name for the new branch
- */
 export async function createBranch(repoPath: string, name: string): Promise<void> {
   try {
     logger.debug('Creating branch', { repoPath, name });
@@ -286,11 +183,6 @@ export async function createBranch(repoPath: string, name: string): Promise<void
   }
 }
 
-/**
- * Delete a branch
- * @param repoPath - Path to the git repository
- * @param name - Name of the branch to delete
- */
 export async function deleteBranch(repoPath: string, name: string): Promise<void> {
   try {
     logger.debug('Deleting branch', { repoPath, name });
@@ -303,11 +195,6 @@ export async function deleteBranch(repoPath: string, name: string): Promise<void
   }
 }
 
-/**
- * Checkout/switch to a branch
- * @param repoPath - Path to the git repository
- * @param name - Name of the branch to checkout
- */
 export async function checkoutBranch(repoPath: string, name: string): Promise<void> {
   try {
     logger.debug('Checking out branch', { repoPath, name });
@@ -319,10 +206,6 @@ export async function checkoutBranch(repoPath: string, name: string): Promise<vo
     throw new Error(message);
   }
 }
-
-// ============================================================================
-// Service Export
-// ============================================================================
 
 const gitService = {
   getGitStatus,

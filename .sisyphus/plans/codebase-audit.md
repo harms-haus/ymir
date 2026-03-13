@@ -140,7 +140,7 @@ Wave 6 — RUST BACKEND ISSUES (found 15 issues)
 
 ## TODOs
 
-- [ ] 1. Dead Code: Delete unused files (WorkspacesPanel.tsx, logger-config.ts, ui/index.ts)
+- [x] 1. Dead Code: Delete unused files (WorkspacesPanel.tsx, logger-config.ts, ui/index.ts)
 
   **What to do**:
   - Delete `src/components/WorkspacesPanel.tsx` — never imported anywhere
@@ -188,7 +188,7 @@ Wave 6 — RUST BACKEND ISSUES (found 15 issues)
 
 ---
 
-- [ ] 2. Dead Code: Remove 35+ unused exports
+- [x] 2. Dead Code: Remove 35+ unused exports
 
   **What to do**:
   - Remove from `src/state/types.ts`: PaneMap (224), TabMap (227), LayoutSnapshot (184-192), PanelSize (194-200), ResizeEvent (202-212), GitState (283)
@@ -237,7 +237,7 @@ Wave 6 — RUST BACKEND ISSUES (found 15 issues)
 
 ---
 
-- [ ] 3. Code Smell: Fix duplicate generateUUID function
+- [x] 3. Code Smell: Fix duplicate generateUUID function
 
   **What to do**:
   - Create shared utility in `src/lib/utils.ts`:
@@ -296,7 +296,7 @@ Wave 6 — RUST BACKEND ISSUES (found 15 issues)
 
 ---
 
-- [ ] 4. Code Smell: Remove duplicate getRepoFolderName in GitPanel.tsx
+- [x] 4. Code Smell: Remove duplicate getRepoFolderName in GitPanel.tsx
 
   **What to do**:
   - Remove `getRepoFolderNameOld` function at lines 850-854
@@ -343,7 +343,7 @@ Wave 6 — RUST BACKEND ISSUES (found 15 issues)
 
 ---
 
-- [ ] 5. Type Safety: Fix critical `as any` assertion in git-service.ts
+- [x] 5. Type Safety: Fix critical `as any` assertion in git-service.ts
 
   **What to do**:
   - Replace `as any[]` at line 216 with proper type assertion:
@@ -402,7 +402,7 @@ Wave 6 — RUST BACKEND ISSUES (found 15 issues)
 
 ---
 
-- [ ] 6. Performance: Add missing memoization to WorkspaceSidebar components
+- [x] 6. Performance: Add missing memoization to WorkspaceSidebar components
 
   **What to do**:
   - Wrap icon components with React.memo:
@@ -459,7 +459,7 @@ Wave 6 — RUST BACKEND ISSUES (found 15 issues)
 
 ---
 
-- [ ] 7. Performance: Add debouncing to Terminal resize handler
+- [x] 7. Performance: Add debouncing to Terminal resize handler
 
   **What to do**:
   - Add debouncing to PTY resize invoke:
@@ -520,7 +520,7 @@ Wave 6 — RUST BACKEND ISSUES (found 15 issues)
 
 ---
 
-- [ ] 8. Type Safety: Add error logging to empty catch block in Browser.tsx
+- [x] 8. Type Safety: Add error logging to empty catch block in Browser.tsx
 
   **What to do**:
   - Replace empty catch at line 200:
@@ -573,7 +573,7 @@ Wave 6 — RUST BACKEND ISSUES (found 15 issues)
 
 ---
 
-- [ ] 9. Test Coverage: Add tests for CLI commands (commands.ts)
+- [x] 9. Test Coverage: Add tests for CLI commands (commands.ts)
 
   **What to do**:
   - Create test file `src/cli/commands.test.ts`
@@ -625,7 +625,7 @@ Wave 6 — RUST BACKEND ISSUES (found 15 issues)
 
 ---
 
-- [ ] 10. Test Coverage: Add tests for git-service.ts
+- [x] 10. Test Coverage: Add tests for git-service.ts
 
   **What to do**:
   - Create test file `src/lib/git-service.test.ts`
@@ -675,7 +675,7 @@ Wave 6 — RUST BACKEND ISSUES (found 15 issues)
 
 ---
 
-- [ ] 11. Rust Backend: Replace panicking unwrap() calls in git.rs
+- [x] 11. Rust Backend: Replace panicking unwrap() calls in git.rs
 
   **What to do**:
   - Replace line 625: `.find_commit(treeish.target().unwrap())` with proper error handling:
@@ -734,7 +734,7 @@ Wave 6 — RUST BACKEND ISSUES (found 15 issues)
 
 ---
 
-- [ ] 12. CRITICAL: Fix empty catch block silently swallowing errors in workspace.ts
+- [x] 12. CRITICAL: Fix empty catch block silently swallowing errors in workspace.ts
 
   **What to do**:
   - Replace empty catch at lines 554-556 with error logging:
@@ -777,7 +777,7 @@ Wave 6 — RUST BACKEND ISSUES (found 15 issues)
 
 ---
 
-- [ ] 13. Code Smell: Replace console.log/warn/error with logger calls in production
+- [x] 13. Code Smell: Replace console.log/warn/error with logger calls in production
 
   **What to do**:
   - Replace `console.log` in `src/cli/commands.ts:188` with `logger.info()`
@@ -818,7 +818,7 @@ Wave 6 — RUST BACKEND ISSUES (found 15 issues)
 
 ---
 
-- [ ] 14. Code Smell: Extract magic numbers to constants
+- [x] 14. Code Smell: Extract magic numbers to constants
 
   **What to do**:
   - In `src/state/types.ts` or new `src/lib/constants.ts`, add:
@@ -866,7 +866,7 @@ Wave 6 — RUST BACKEND ISSUES (found 15 issues)
 
 ---
 
-- [ ] 15. Code Smell: Extract repeated git count calculation to helper function
+- [x] 15. Code Smell: Extract repeated git count calculation to helper function
 
   **What to do**:
   - Create helper in `src/state/workspace.ts`:
@@ -914,7 +914,7 @@ Wave 6 — RUST BACKEND ISSUES (found 15 issues)
 
 ---
 
-- [ ] 16. Code Smell: Move dummy data constants to test utilities
+- [x] 16. Code Smell: Move dummy data constants to test utilities
 
   **What to do**:
   - Move from `src/components/GitPanel.tsx:43-69`:
@@ -954,7 +954,7 @@ Wave 6 — RUST BACKEND ISSUES (found 15 issues)
 
 ---
 
-- [ ] 17. Code Smell: Extract duplicate toggleExpand/toggleCollapsed to shared hook
+- [x] 17. Code Smell: Extract duplicate toggleExpand/toggleCollapsed to shared hook
 
   **What to do**:
   - Create `src/hooks/useExpandCollapse.ts`:
@@ -1007,7 +1007,7 @@ Wave 6 — RUST BACKEND ISSUES (found 15 issues)
 
 ---
 
-- [ ] 18. Performance: Add missing React.memo for frequently rendered list items
+- [x] 18. Performance: Add missing React.memo for frequently rendered list items
 
   **What to do**:
   - Wrap with React.memo:
@@ -1048,7 +1048,7 @@ Wave 6 — RUST BACKEND ISSUES (found 15 issues)
 
 ---
 
-- [ ] 19. Performance: Memoize expensive computations in NotificationsPanel
+- [x] 19. Performance: Memoize expensive computations in NotificationsPanel
 
   **What to do**:
   - Wrap `getNotificationTabs()` in `src/components/NotificationsPanel.tsx:118-137` with useMemo:
@@ -1091,7 +1091,7 @@ Wave 6 — RUST BACKEND ISSUES (found 15 issues)
 
 ---
 
-- [ ] 20. Performance: Fix Pane selector returning new object every render
+- [x] 20. Performance: Fix Pane selector returning new object every render
 
   **What to do**:
   - In `src/components/Pane.tsx:16-26`, replace object-returning selector with individual property selection or use shallow comparison:
@@ -1135,7 +1135,7 @@ Wave 6 — RUST BACKEND ISSUES (found 15 issues)
 
 ---
 
-- [ ] 21. Performance: Add cleanup to setTimeout in GitPanel toast handler
+- [x] 21. Performance: Add cleanup to setTimeout in GitPanel toast handler
 
   **What to do**:
   - In `src/components/GitPanel.tsx:759-761`, add cleanup:
@@ -1183,7 +1183,7 @@ Wave 6 — RUST BACKEND ISSUES (found 15 issues)
 
 ---
 
-- [ ] 22. Performance: Parallelize Git staging operations with Promise.all
+- [x] 22. Performance: Parallelize Git staging operations with Promise.all
 
   **What to do**:
   - In `src/components/GitPanel.tsx:602-608`, change sequential loop to parallel:
@@ -1230,7 +1230,7 @@ Wave 6 — RUST BACKEND ISSUES (found 15 issues)
 
 ---
 
-- [ ] 23. Type Safety: Create TypeScript interfaces for Rust backend responses
+- [x] 23. Type Safety: Create TypeScript interfaces for Rust backend responses
 
   **What to do**:
   - Create `src/types/tauri.ts` with interfaces:
@@ -1283,7 +1283,7 @@ Wave 6 — RUST BACKEND ISSUES (found 15 issues)
 
 ---
 
-- [ ] 24. Type Safety: Replace unsafe e.target casts with type guards
+- [x] 24. Type Safety: Replace unsafe e.target casts with type guards
 
   **What to do**:
   - In `src/components/SplitPane.tsx:144,148`:
