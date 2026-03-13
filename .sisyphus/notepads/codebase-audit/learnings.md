@@ -314,3 +314,44 @@ const debounceResize = useCallback((cols: number, rows: number, sessionId: strin
 - Maintains responsiveness while reducing load
 
 
+
+## 2026-03-12: SplitPane.tsx Type Safety Fix
+- Replaced `e.target as HTMLElement` with `if (e.target instanceof HTMLElement)` guard
+- This pattern is safer because it handles edge cases where target might be a text node or SVG element
+- Used for `onMouseEnter`/`onMouseLeave` handlers on Separator resize handles
+## Task 15: Extract duplicate git staged/changes count calculation into helper
+
+### Pattern
+Repeated git count calculation pattern:
+```typescript
+gitStagedCount = Object.values(state.gitRepos).reduce(
+  (sum, r) => sum + r.staged.length,
+  0
+);
+gitChangesCount = Object.values(state.gitRepos).reduce(
+  (sum, r) => sum + r.unstaged.length,
+  0
+);
+```
+
+Appears in 5 places:
+1. `setGitRepo` - sets both counts when adding/updating a repo
+2. `updateGitFile` - updates counts after moving files between staged/unstaged
+3. `removeGitRepo` - updates counts after removing a repo
+4. `startGitPolling` - updates counts after polling updates
+5. `discoverAndRegisterRepos` - updates counts after discovering new repos
+
+### Helper Function
+```typescript
+function calculateGitCounts(repos: Record<string, GitRepo>): { staged: number; unstaged: number } {
+  return {
+    staged: repos.reduce((sum, r) => sum + r.staged.length, 0),
+    unstaged: repos.reduce((sum, r) => sum + r.unstaged.length, 0),
+  };
+}
+```
+
+### Benefits
+- Reduces code duplication from ~45 lines to 5 occurrences
+- Single source of truth for git count calculations
+- Easier to maintain and modify logic in one place
