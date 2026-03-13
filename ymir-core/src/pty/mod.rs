@@ -9,4 +9,4 @@
 
 pub mod manager;
 
-pub use manager::{PtyManager, PtySession, PtyOutput};
+pub use manager::{PtyManager, PtyOutput, PtySession};

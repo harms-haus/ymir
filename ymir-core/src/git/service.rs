@@ -76,7 +76,7 @@ impl GitService {
             .find_branch(head.shorthand().unwrap_or("HEAD"), BranchType::Local)
             .map_err(GitError::from)?;
 
-        if let Some(upstream) = branch.upstream().ok() {
+        if let Ok(upstream) = branch.upstream() {
             if let Some(upstream_ref) = upstream.get().target() {
                 let ahead_behind = repo
                     .graph_ahead_behind(local_oid, upstream_ref)
@@ -90,7 +90,6 @@ impl GitService {
 
     /// Get the status of a repository
     pub async fn get_repo_status(&self, repo_path: &str) -> Result<GitStatus, GitError> {
-
         let repo = Self::open_repository(repo_path)?;
         let current_branch =
             Self::get_current_branch(&repo).unwrap_or_else(|_| "(no branch)".to_string());
@@ -136,7 +135,7 @@ impl GitService {
                 let unstaged = file_statuses.iter().find(|s| s.has_changes()).cloned();
                 (staged.unwrap_or(FileStatus::Clean), unstaged)
             } else {
-                (file_statuses[0].clone(), None)
+                (file_statuses[0], None)
             };
 
             files.push(GitFile {
@@ -218,9 +217,9 @@ impl GitService {
 
         // Delete old file records for this repo
         let delete_sql = format!("DELETE FROM git_files WHERE repo_id = {}", repo_id);
-        db.execute(&delete_sql, ())
-            .await
-            .map_err(|e| crate::CoreError::Database(format!("Failed to delete old files: {}", e)))?;
+        db.execute(&delete_sql, ()).await.map_err(|e| {
+            crate::CoreError::Database(format!("Failed to delete old files: {}", e))
+        })?;
 
         // Insert new file records
         for file in &status.files {
@@ -249,7 +248,6 @@ impl GitService {
 
     /// Stage a file (add to index)
     pub async fn stage_file(&self, repo_path: &str, file_path: &str) -> Result<(), GitError> {
-
         let repo = Self::open_repository(repo_path)?;
         let mut index = repo.index().map_err(GitError::from)?;
 
@@ -262,7 +260,6 @@ impl GitService {
 
     /// Unstage a file (remove from index, keep working tree changes)
     pub async fn unstage_file(&self, repo_path: &str, file_path: &str) -> Result<(), GitError> {
-
         let repo = Self::open_repository(repo_path)?;
         let mut index = repo.index().map_err(GitError::from)?;
 
@@ -309,7 +306,6 @@ impl GitService {
 
     /// Discard changes in working tree (checkout file from index)
     pub async fn discard_changes(&self, repo_path: &str, file_path: &str) -> Result<(), GitError> {
-
         let repo = Self::open_repository(repo_path)?;
 
         let index = repo.index().map_err(GitError::from)?;
@@ -331,9 +327,9 @@ impl GitService {
                         .await
                         .map_err(|e| GitError::Other(format!("Failed to remove file: {}", e)))?;
                 } else if full_path.is_dir() {
-                    tokio::fs::remove_dir_all(&full_path)
-                        .await
-                        .map_err(|e| GitError::Other(format!("Failed to remove directory: {}", e)))?;
+                    tokio::fs::remove_dir_all(&full_path).await.map_err(|e| {
+                        GitError::Other(format!("Failed to remove directory: {}", e))
+                    })?;
                 }
             }
         }
@@ -343,7 +339,6 @@ impl GitService {
 
     /// Create a commit with the given message
     pub async fn commit(&self, repo_path: &str, message: &str) -> Result<String, GitError> {
-
         let repo = Self::open_repository(repo_path)?;
 
         let sig = repo
@@ -378,7 +373,6 @@ impl GitService {
 
     /// Get list of all branches
     pub async fn get_branches(&self, repo_path: &str) -> Result<Vec<BranchInfo>, GitError> {
-
         let repo = Self::open_repository(repo_path)?;
         let branches = repo.branches(None).map_err(GitError::from)?;
 
@@ -418,7 +412,6 @@ impl GitService {
 
     /// Create a new branch from the current HEAD
     pub async fn create_branch(&self, repo_path: &str, name: &str) -> Result<(), GitError> {
-
         let repo = Self::open_repository(repo_path)?;
 
         let head = repo.head().map_err(GitError::from)?;
@@ -429,15 +422,14 @@ impl GitService {
                 GitError::Conflict(format!("Branch '{}' already exists", name))
             } else {
                 GitError::from(e)
-         }
-         })?;
+            }
+        })?;
 
-         Ok(())
+        Ok(())
     }
 
     /// Delete a branch
     pub async fn delete_branch(&self, repo_path: &str, name: &str) -> Result<(), GitError> {
-
         let repo = Self::open_repository(repo_path)?;
 
         let head = repo.head().map_err(GitError::from)?;
@@ -458,14 +450,13 @@ impl GitService {
             }
         })?;
 
-         branch.delete().map_err(GitError::from)?;
+        branch.delete().map_err(GitError::from)?;
 
-         Ok(())
+        Ok(())
     }
 
     /// Checkout/switch to a branch
     pub async fn checkout_branch(&self, repo_path: &str, name: &str) -> Result<(), GitError> {
-
         let repo = Self::open_repository(repo_path)?;
 
         let branch = repo.find_branch(name, BranchType::Local).map_err(|e| {
@@ -493,29 +484,27 @@ impl GitService {
 
         let ref_name = reference
             .name()
-             .ok_or_else(|| GitError::Other("Reference has no name".to_string()))?;
-         repo.set_head(ref_name).map_err(GitError::from)?;
+            .ok_or_else(|| GitError::Other("Reference has no name".to_string()))?;
+        repo.set_head(ref_name).map_err(GitError::from)?;
 
-         Ok(())
+        Ok(())
     }
 
     /// Stage all changes (git add -A)
     pub async fn stage_all(&self, repo_path: &str) -> Result<(), GitError> {
-
         let repo = Self::open_repository(repo_path)?;
         let mut index = repo.index().map_err(GitError::from)?;
 
-         index
-             .add_all(["*"].iter(), IndexAddOption::DEFAULT, None)
-             .map_err(GitError::from)?;
-         index.write().map_err(GitError::from)?;
+        index
+            .add_all(["*"].iter(), IndexAddOption::DEFAULT, None)
+            .map_err(GitError::from)?;
+        index.write().map_err(GitError::from)?;
 
-         Ok(())
+        Ok(())
     }
 
     /// Unstage all changes (git reset HEAD)
     pub async fn unstage_all(&self, repo_path: &str) -> Result<(), GitError> {
-
         let repo = Self::open_repository(repo_path)?;
         let mut index = repo.index().map_err(GitError::from)?;
 
@@ -529,10 +518,10 @@ impl GitService {
 
         let head_tree = head.peel_to_tree().map_err(GitError::from)?;
 
-         index.read_tree(&head_tree).map_err(GitError::from)?;
-         index.write().map_err(GitError::from)?;
+        index.read_tree(&head_tree).map_err(GitError::from)?;
+        index.write().map_err(GitError::from)?;
 
-         Ok(())
+        Ok(())
     }
 
     /// Get repository info from database (if persistence is enabled)
@@ -553,35 +542,49 @@ impl GitService {
             .await
             .map_err(|e| crate::CoreError::Database(format!("Failed to query repo: {}", e)))?;
 
-    if let Some(row) = rows
-        .next()
-        .await
-        .map_err(|e| crate::CoreError::Database(format!("Failed to get row: {}", e)))?
-    {
-        let id: i64 = row.get(0).map_err(|e| crate::CoreError::Database(format!("Failed to get id: {}", e)))?;
-        let path: String = row.get(1).map_err(|e| crate::CoreError::Database(format!("Failed to get path: {}", e)))?;
-        let current_branch: String = row.get(2).map_err(|e| crate::CoreError::Database(format!("Failed to get branch: {}", e)))?;
-        let staged_count_i64: i64 = row.get(3).map_err(|e| crate::CoreError::Database(format!("Failed to get staged_count: {}", e)))?;
-        let modified_count_i64: i64 = row.get(4).map_err(|e| crate::CoreError::Database(format!("Failed to get modified_count: {}", e)))?;
-        let untracked_count_i64: i64 = row.get(5).map_err(|e| crate::CoreError::Database(format!("Failed to get untracked_count: {}", e)))?;
-        let conflicted_count_i64: i64 = row.get(6).map_err(|e| crate::CoreError::Database(format!("Failed to get conflicted_count: {}", e)))?;
-        let last_poll_at: Option<String> = row.get(7).ok();
+        if let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| crate::CoreError::Database(format!("Failed to get row: {}", e)))?
+        {
+            let id: i64 = row
+                .get(0)
+                .map_err(|e| crate::CoreError::Database(format!("Failed to get id: {}", e)))?;
+            let path: String = row
+                .get(1)
+                .map_err(|e| crate::CoreError::Database(format!("Failed to get path: {}", e)))?;
+            let current_branch: String = row
+                .get(2)
+                .map_err(|e| crate::CoreError::Database(format!("Failed to get branch: {}", e)))?;
+            let staged_count_i64: i64 = row.get(3).map_err(|e| {
+                crate::CoreError::Database(format!("Failed to get staged_count: {}", e))
+            })?;
+            let modified_count_i64: i64 = row.get(4).map_err(|e| {
+                crate::CoreError::Database(format!("Failed to get modified_count: {}", e))
+            })?;
+            let untracked_count_i64: i64 = row.get(5).map_err(|e| {
+                crate::CoreError::Database(format!("Failed to get untracked_count: {}", e))
+            })?;
+            let conflicted_count_i64: i64 = row.get(6).map_err(|e| {
+                crate::CoreError::Database(format!("Failed to get conflicted_count: {}", e))
+            })?;
+            let last_poll_at: Option<String> = row.get(7).ok();
 
-        let repo_info = RepoInfo {
-            id,
-            path,
-            current_branch,
-            staged_count: staged_count_i64 as usize,
-            modified_count: modified_count_i64 as usize,
-            untracked_count: untracked_count_i64 as usize,
-            conflicted_count: conflicted_count_i64 as usize,
-            last_poll_at,
-        };
-        Ok(Some(repo_info))
-    } else {
-        Ok(None)
+            let repo_info = RepoInfo {
+                id,
+                path,
+                current_branch,
+                staged_count: staged_count_i64 as usize,
+                modified_count: modified_count_i64 as usize,
+                untracked_count: untracked_count_i64 as usize,
+                conflicted_count: conflicted_count_i64 as usize,
+                last_poll_at,
+            };
+            Ok(Some(repo_info))
+        } else {
+            Ok(None)
+        }
     }
-}
 
     /// Get files for a repository from database
     pub async fn get_files_from_db(&self, repo_id: i64) -> crate::Result<Vec<RepoFileInfo>> {
@@ -608,11 +611,21 @@ impl GitService {
             .map_err(|e| crate::CoreError::Database(format!("Failed to get row: {}", e)))?
         {
             files.push(RepoFileInfo {
-                id: row.get(0).map_err(|e| crate::CoreError::Database(format!("Failed to get id: {}", e)))?,
-                repo_id: row.get(1).map_err(|e| crate::CoreError::Database(format!("Failed to get repo_id: {}", e)))?,
-                path: row.get(2).map_err(|e| crate::CoreError::Database(format!("Failed to get path: {}", e)))?,
-                status: row.get(3).map_err(|e| crate::CoreError::Database(format!("Failed to get status: {}", e)))?,
-                file_status: row.get(4).map_err(|e| crate::CoreError::Database(format!("Failed to get file_status: {}", e)))?,
+                id: row
+                    .get(0)
+                    .map_err(|e| crate::CoreError::Database(format!("Failed to get id: {}", e)))?,
+                repo_id: row.get(1).map_err(|e| {
+                    crate::CoreError::Database(format!("Failed to get repo_id: {}", e))
+                })?,
+                path: row.get(2).map_err(|e| {
+                    crate::CoreError::Database(format!("Failed to get path: {}", e))
+                })?,
+                status: row.get(3).map_err(|e| {
+                    crate::CoreError::Database(format!("Failed to get status: {}", e))
+                })?,
+                file_status: row.get(4).map_err(|e| {
+                    crate::CoreError::Database(format!("Failed to get file_status: {}", e))
+                })?,
             });
         }
 
@@ -735,7 +748,10 @@ mod tests {
         let status = service.get_repo_status(&repo_path).await.unwrap();
         assert_eq!(status.files[0].status, FileStatus::Modified);
 
-        service.discard_changes(&repo_path, "initial.txt").await.unwrap();
+        service
+            .discard_changes(&repo_path, "initial.txt")
+            .await
+            .unwrap();
 
         let status = service.get_repo_status(&repo_path).await.unwrap();
         assert_eq!(status.files.len(), 0);
@@ -751,7 +767,10 @@ mod tests {
 
         let service = GitService::new();
 
-        service.create_branch(&repo_path, "feature-branch").await.unwrap();
+        service
+            .create_branch(&repo_path, "feature-branch")
+            .await
+            .unwrap();
 
         let branches = service.get_branches(&repo_path).await.unwrap();
         assert_eq!(branches.len(), 2);
@@ -762,7 +781,10 @@ mod tests {
             .unwrap();
         assert!(!feature.is_head);
 
-        service.checkout_branch(&repo_path, "feature-branch").await.unwrap();
+        service
+            .checkout_branch(&repo_path, "feature-branch")
+            .await
+            .unwrap();
 
         let branches = service.get_branches(&repo_path).await.unwrap();
         let feature = branches
@@ -775,9 +797,15 @@ mod tests {
             .iter()
             .find(|b| b.name != "feature-branch")
             .unwrap();
-        service.checkout_branch(&repo_path, &main_branch.name).await.unwrap();
+        service
+            .checkout_branch(&repo_path, &main_branch.name)
+            .await
+            .unwrap();
 
-        service.delete_branch(&repo_path, "feature-branch").await.unwrap();
+        service
+            .delete_branch(&repo_path, "feature-branch")
+            .await
+            .unwrap();
 
         let branches = service.get_branches(&repo_path).await.unwrap();
         assert_eq!(branches.len(), 1);
@@ -830,7 +858,9 @@ mod tests {
         create_initial_commit(&repo_path);
 
         let service = GitService::new();
-        let result = service.checkout_branch(&repo_path, "nonexistent-branch").await;
+        let result = service
+            .checkout_branch(&repo_path, "nonexistent-branch")
+            .await;
         assert!(matches!(result, Err(GitError::NotFound(_))));
     }
 
@@ -840,7 +870,10 @@ mod tests {
         create_initial_commit(&repo_path);
 
         let service = GitService::new();
-        service.create_branch(&repo_path, "duplicate").await.unwrap();
+        service
+            .create_branch(&repo_path, "duplicate")
+            .await
+            .unwrap();
         let result = service.create_branch(&repo_path, "duplicate").await;
         assert!(matches!(result, Err(GitError::Conflict(_))));
     }

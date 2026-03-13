@@ -4,7 +4,7 @@ mod cli;
 use clap::Parser;
 use cli::{Cli, Commands};
 use tracing::{info, warn};
-use ymir_core::server::{ServerConfig, start_server};
+use ymir_core::server::{start_server, ServerConfig};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -25,7 +25,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             info!("Host: {}", web_args.host);
             info!("Port: {}", web_args.port);
             info!("Bind address: {}", web_args.bind_address());
-            
+
             if web_args.password.is_some() {
                 info!("Password: [set]");
             } else {
@@ -52,15 +52,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             info!("Starting server...");
             let server_handle = start_server(config).await?;
-            
+
             info!("Server running. Press Ctrl+C to shutdown.");
-            
+
             tokio::signal::ctrl_c().await?;
             info!("Shutdown signal received, stopping server...");
-            
+
             server_handle.shutdown().await?;
             info!("Server stopped gracefully");
-            
+
             Ok(())
         }
         None => {

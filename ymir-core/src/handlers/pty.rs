@@ -55,18 +55,9 @@ pub struct ResizePtyOutput {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum PtyNotification {
-    Output {
-        tab_id: String,
-        data: String,
-    },
-    Notification {
-        tab_id: String,
-        message: String,
-    },
-    Exit {
-        tab_id: String,
-        code: Option<u32>,
-    },
+    Output { tab_id: String, data: String },
+    Notification { tab_id: String, message: String },
+    Exit { tab_id: String, code: Option<u32> },
 }
 
 #[derive(Clone)]
@@ -98,7 +89,12 @@ impl PtyHandler {
         let sql = format!("SELECT id FROM tabs WHERE id = '{}'", tab_id_escaped);
         let mut rows = self.db.query(&sql, ()).await?;
 
-        if rows.next().await.map_err(|e| CoreError::Database(e.to_string()))?.is_none() {
+        if rows
+            .next()
+            .await
+            .map_err(|e| CoreError::Database(e.to_string()))?
+            .is_none()
+        {
             return Err(CoreError::InvalidTabId(format!(
                 "Tab not found: {}",
                 tab_id
@@ -130,7 +126,12 @@ impl PtyHandler {
         let sql = format!("SELECT id FROM tabs WHERE id = '{}'", tab_id_escaped);
         let mut rows = self.db.query(&sql, ()).await?;
 
-        if rows.next().await.map_err(|e| CoreError::Database(e.to_string()))?.is_none() {
+        if rows
+            .next()
+            .await
+            .map_err(|e| CoreError::Database(e.to_string()))?
+            .is_none()
+        {
             return Err(CoreError::InvalidTabId(format!(
                 "Tab not found: {}",
                 tab_id
@@ -163,7 +164,12 @@ impl PtyHandler {
         let sql = format!("SELECT id FROM tabs WHERE id = '{}'", tab_id_escaped);
         let mut rows = self.db.query(&sql, ()).await?;
 
-        if rows.next().await.map_err(|e| CoreError::Database(e.to_string()))?.is_none() {
+        if rows
+            .next()
+            .await
+            .map_err(|e| CoreError::Database(e.to_string()))?
+            .is_none()
+        {
             return Err(CoreError::InvalidTabId(format!(
                 "Tab not found: {}",
                 tab_id
@@ -179,7 +185,9 @@ impl PtyHandler {
         }
 
         // Resize PTY
-        self.pty_manager.resize(tab_id, input.cols, input.rows).await?;
+        self.pty_manager
+            .resize(tab_id, input.cols, input.rows)
+            .await?;
 
         Ok(ResizePtyOutput {
             tab_id: tab_id.clone(),
@@ -249,40 +257,62 @@ impl PtyRpcHandler {
         }
     }
 
-    pub async fn handle(&self, method: &str, params: Option<Value>) -> std::result::Result<Value, ProtocolError> {
+    pub async fn handle(
+        &self,
+        method: &str,
+        params: Option<Value>,
+    ) -> std::result::Result<Value, ProtocolError> {
         match method {
             "pty.connect" => {
                 let input: ConnectPtyInput = params
-                    .map(|p| serde_json::from_value(p).map_err(|e| ProtocolError::InvalidParams(e.to_string())))
-                    .unwrap_or(Err(ProtocolError::InvalidParams("Missing params".to_string())))?;
+                    .map(|p| {
+                        serde_json::from_value(p)
+                            .map_err(|e| ProtocolError::InvalidParams(e.to_string()))
+                    })
+                    .unwrap_or(Err(ProtocolError::InvalidParams(
+                        "Missing params".to_string(),
+                    )))?;
 
                 let output = self.inner.connect(input).await.map_err(|e| {
                     ProtocolError::InternalError(format!("Failed to connect to PTY: {}", e))
                 })?;
 
-                serde_json::to_value(output).map_err(|e| ProtocolError::InternalError(e.to_string()))
+                serde_json::to_value(output)
+                    .map_err(|e| ProtocolError::InternalError(e.to_string()))
             }
             "pty.write" => {
                 let input: WritePtyInput = params
-                    .map(|p| serde_json::from_value(p).map_err(|e| ProtocolError::InvalidParams(e.to_string())))
-                    .unwrap_or(Err(ProtocolError::InvalidParams("Missing params".to_string())))?;
+                    .map(|p| {
+                        serde_json::from_value(p)
+                            .map_err(|e| ProtocolError::InvalidParams(e.to_string()))
+                    })
+                    .unwrap_or(Err(ProtocolError::InvalidParams(
+                        "Missing params".to_string(),
+                    )))?;
 
                 let output = self.inner.write(input).await.map_err(|e| {
                     ProtocolError::InternalError(format!("Failed to write to PTY: {}", e))
                 })?;
 
-                serde_json::to_value(output).map_err(|e| ProtocolError::InternalError(e.to_string()))
+                serde_json::to_value(output)
+                    .map_err(|e| ProtocolError::InternalError(e.to_string()))
             }
             "pty.resize" => {
                 let input: ResizePtyInput = params
-                    .map(|p| serde_json::from_value(p).map_err(|e| ProtocolError::InvalidParams(e.to_string())))
-                    .unwrap_or(Err(ProtocolError::InvalidParams("Missing params".to_string())))?;
+                    .map(|p| {
+                        serde_json::from_value(p)
+                            .map_err(|e| ProtocolError::InvalidParams(e.to_string()))
+                    })
+                    .unwrap_or(Err(ProtocolError::InvalidParams(
+                        "Missing params".to_string(),
+                    )))?;
 
                 let output = self.inner.resize(input).await.map_err(|e| {
                     ProtocolError::InternalError(format!("Failed to resize PTY: {}", e))
                 })?;
 
-                serde_json::to_value(output).map_err(|e| ProtocolError::InternalError(e.to_string()))
+                serde_json::to_value(output)
+                    .map_err(|e| ProtocolError::InternalError(e.to_string()))
             }
             _ => Err(ProtocolError::MethodNotFound(method.to_string())),
         }
@@ -515,7 +545,9 @@ mod tests {
         let scrollback_service = Arc::new(ScrollbackService::new());
         let handler = PtyHandler::new(db, pty_manager, scrollback_service.clone());
 
-        handler.process_output("tab-process", "line 1\nline 2\nline 3").await;
+        handler
+            .process_output("tab-process", "line 1\nline 2\nline 3")
+            .await;
 
         // Wait for async processing
         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
@@ -686,7 +718,9 @@ mod tests {
         assert_eq!(resize_output.rows, 50);
 
         // 5. Process output
-        handler.process_output("tab-lifecycle", "output line 1\noutput line 2").await;
+        handler
+            .process_output("tab-lifecycle", "output line 1\noutput line 2")
+            .await;
         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
         let scrollback = scrollback_service.get_scrollback("tab-lifecycle").await;

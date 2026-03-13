@@ -185,3 +185,4 @@ The order matters:
 - `cargo test -p ymir-core`: 176 passed (full suite, parallel execution)
 - No `--test-threads=1` workaround needed
 
+Task 29 - Remove Tauri Storage Adapter - COMPLETED

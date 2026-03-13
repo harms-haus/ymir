@@ -86,7 +86,12 @@ impl TabHandler {
         );
         let mut rows = self.db.query(&sql, ()).await?;
 
-        if rows.next().await.map_err(|e| CoreError::Database(e.to_string()))?.is_none() {
+        if rows
+            .next()
+            .await
+            .map_err(|e| CoreError::Database(e.to_string()))?
+            .is_none()
+        {
             return Err(CoreError::InvalidWorkspaceId(format!(
                 "Workspace not found: {}",
                 input.workspace_id
@@ -95,13 +100,15 @@ impl TabHandler {
 
         // Verify pane exists
         let pane_id_escaped = escape_sql(&input.pane_id);
-        let sql = format!(
-            "SELECT id FROM panes WHERE id = '{}'",
-            pane_id_escaped
-        );
+        let sql = format!("SELECT id FROM panes WHERE id = '{}'", pane_id_escaped);
         let mut rows = self.db.query(&sql, ()).await?;
 
-        if rows.next().await.map_err(|e| CoreError::Database(e.to_string()))?.is_none() {
+        if rows
+            .next()
+            .await
+            .map_err(|e| CoreError::Database(e.to_string()))?
+            .is_none()
+        {
             return Err(CoreError::InvalidPaneId(format!(
                 "Pane not found: {}",
                 input.pane_id
@@ -110,7 +117,9 @@ impl TabHandler {
 
         let tab_id = input.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         let title = input.title.unwrap_or_else(|| "bash".to_string());
-        let cwd = input.cwd.unwrap_or_else(|| std::env::var("HOME").unwrap_or_else(|_| "/".to_string()));
+        let cwd = input
+            .cwd
+            .unwrap_or_else(|| std::env::var("HOME").unwrap_or_else(|_| "/".to_string()));
 
         let tab_id_escaped = escape_sql(&tab_id);
         let title_escaped = escape_sql(&title);
@@ -124,9 +133,8 @@ impl TabHandler {
         self.db.execute(&sql, ()).await?;
 
         // Auto-spawn PTY bound to tab_id
-        let pty_config = PtyConfig::new()
-            .with_cwd(&cwd);
-        
+        let pty_config = PtyConfig::new().with_cwd(&cwd);
+
         self.pty_manager.spawn(&tab_id, pty_config).await?;
 
         let mut output_rx = self.pty_manager.subscribe(&tab_id)?;
@@ -188,13 +196,15 @@ impl TabHandler {
     pub async fn list(&self, input: ListTabsInput) -> Result<ListTabsOutput> {
         // Verify pane exists
         let pane_id_escaped = escape_sql(&input.pane_id);
-        let sql = format!(
-            "SELECT id FROM panes WHERE id = '{}'",
-            pane_id_escaped
-        );
+        let sql = format!("SELECT id FROM panes WHERE id = '{}'", pane_id_escaped);
         let mut rows = self.db.query(&sql, ()).await?;
 
-        if rows.next().await.map_err(|e| CoreError::Database(e.to_string()))?.is_none() {
+        if rows
+            .next()
+            .await
+            .map_err(|e| CoreError::Database(e.to_string()))?
+            .is_none()
+        {
             return Err(CoreError::InvalidPaneId(format!(
                 "Pane not found: {}",
                 input.pane_id
@@ -209,7 +219,11 @@ impl TabHandler {
 
         let mut tabs = Vec::new();
 
-        while let Some(row) = rows.next().await.map_err(|e| CoreError::Database(e.to_string()))? {
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| CoreError::Database(e.to_string()))?
+        {
             let id: String = row.get(0).map_err(|e| CoreError::Database(e.to_string()))?;
             let title: String = row.get(1).map_err(|e| CoreError::Database(e.to_string()))?;
             let cwd: String = row.get(2).map_err(|e| CoreError::Database(e.to_string()))?;
@@ -243,7 +257,12 @@ impl TabHandler {
         let sql = format!("SELECT id FROM tabs WHERE id = '{}'", tab_id_escaped);
         let mut rows = self.db.query(&sql, ()).await?;
 
-        if rows.next().await.map_err(|e| CoreError::Database(e.to_string()))?.is_none() {
+        if rows
+            .next()
+            .await
+            .map_err(|e| CoreError::Database(e.to_string()))?
+            .is_none()
+        {
             return Err(CoreError::InvalidTabId(format!(
                 "Tab not found: {}",
                 input.id
@@ -288,40 +307,62 @@ impl TabRpcHandler {
         }
     }
 
-    pub async fn handle(&self, method: &str, params: Option<Value>) -> std::result::Result<Value, ProtocolError> {
+    pub async fn handle(
+        &self,
+        method: &str,
+        params: Option<Value>,
+    ) -> std::result::Result<Value, ProtocolError> {
         match method {
             "tab.create" => {
                 let input: CreateTabInput = params
-                    .map(|p| serde_json::from_value(p).map_err(|e| ProtocolError::InvalidParams(e.to_string())))
-                    .unwrap_or(Err(ProtocolError::InvalidParams("Missing params".to_string())))?;
+                    .map(|p| {
+                        serde_json::from_value(p)
+                            .map_err(|e| ProtocolError::InvalidParams(e.to_string()))
+                    })
+                    .unwrap_or(Err(ProtocolError::InvalidParams(
+                        "Missing params".to_string(),
+                    )))?;
 
                 let output = self.inner.create(input).await.map_err(|e| {
                     ProtocolError::InternalError(format!("Failed to create tab: {}", e))
                 })?;
 
-                serde_json::to_value(output).map_err(|e| ProtocolError::InternalError(e.to_string()))
+                serde_json::to_value(output)
+                    .map_err(|e| ProtocolError::InternalError(e.to_string()))
             }
             "tab.list" => {
                 let input: ListTabsInput = params
-                    .map(|p| serde_json::from_value(p).map_err(|e| ProtocolError::InvalidParams(e.to_string())))
-                    .unwrap_or(Err(ProtocolError::InvalidParams("Missing params".to_string())))?;
+                    .map(|p| {
+                        serde_json::from_value(p)
+                            .map_err(|e| ProtocolError::InvalidParams(e.to_string()))
+                    })
+                    .unwrap_or(Err(ProtocolError::InvalidParams(
+                        "Missing params".to_string(),
+                    )))?;
 
                 let output = self.inner.list(input).await.map_err(|e| {
                     ProtocolError::InternalError(format!("Failed to list tabs: {}", e))
                 })?;
 
-                serde_json::to_value(output).map_err(|e| ProtocolError::InternalError(e.to_string()))
+                serde_json::to_value(output)
+                    .map_err(|e| ProtocolError::InternalError(e.to_string()))
             }
             "tab.close" => {
                 let input: CloseTabInput = params
-                    .map(|p| serde_json::from_value(p).map_err(|e| ProtocolError::InvalidParams(e.to_string())))
-                    .unwrap_or(Err(ProtocolError::InvalidParams("Missing params".to_string())))?;
+                    .map(|p| {
+                        serde_json::from_value(p)
+                            .map_err(|e| ProtocolError::InvalidParams(e.to_string()))
+                    })
+                    .unwrap_or(Err(ProtocolError::InvalidParams(
+                        "Missing params".to_string(),
+                    )))?;
 
                 let output = self.inner.close(input).await.map_err(|e| {
                     ProtocolError::InternalError(format!("Failed to close tab: {}", e))
                 })?;
 
-                serde_json::to_value(output).map_err(|e| ProtocolError::InternalError(e.to_string()))
+                serde_json::to_value(output)
+                    .map_err(|e| ProtocolError::InternalError(e.to_string()))
             }
             _ => Err(ProtocolError::MethodNotFound(method.to_string())),
         }
@@ -421,34 +462,34 @@ mod tests {
         db.execute(&sql, ()).await.unwrap();
     }
 
-#[tokio::test]
-async fn test_create_tab() {
-    let db = setup_test_db().await;
-    let pty_manager = Arc::new(PtyManager::new());
-    let scrollback_service = Arc::new(ScrollbackService::new());
-    let handler = TabHandler::new(db.clone(), pty_manager.clone(), scrollback_service);
+    #[tokio::test]
+    async fn test_create_tab() {
+        let db = setup_test_db().await;
+        let pty_manager = Arc::new(PtyManager::new());
+        let scrollback_service = Arc::new(ScrollbackService::new());
+        let handler = TabHandler::new(db.clone(), pty_manager.clone(), scrollback_service);
 
-    create_test_workspace(&db, "ws-test", "Test Workspace").await;
-    create_test_pane(&db, "pane-test", "ws-test").await;
+        create_test_workspace(&db, "ws-test", "Test Workspace").await;
+        create_test_pane(&db, "pane-test", "ws-test").await;
 
-    let input = CreateTabInput {
-        workspace_id: "ws-test".to_string(),
-        pane_id: "pane-test".to_string(),
-        id: Some("tab-test-123".to_string()),
-        title: Some("Test Tab".to_string()),
-        cwd: Some("/tmp".to_string()),
-    };
+        let input = CreateTabInput {
+            workspace_id: "ws-test".to_string(),
+            pane_id: "pane-test".to_string(),
+            id: Some("tab-test-123".to_string()),
+            title: Some("Test Tab".to_string()),
+            cwd: Some("/tmp".to_string()),
+        };
 
-    let output = handler.create(input).await.unwrap();
+        let output = handler.create(input).await.unwrap();
 
-    assert_eq!(output.tab.id, "tab-test-123");
-    assert_eq!(output.tab.title, "Test Tab");
-    assert_eq!(output.tab.cwd, "/tmp");
-    assert_eq!(output.tab.tab_type, TabType::Terminal);
+        assert_eq!(output.tab.id, "tab-test-123");
+        assert_eq!(output.tab.title, "Test Tab");
+        assert_eq!(output.tab.cwd, "/tmp");
+        assert_eq!(output.tab.tab_type, TabType::Terminal);
 
-    // Cleanup PTY using the same manager instance
-    let _ = pty_manager.kill("tab-test-123").await;
-}
+        // Cleanup PTY using the same manager instance
+        let _ = pty_manager.kill("tab-test-123").await;
+    }
 
     #[tokio::test]
     async fn test_create_tab_generates_id() {
@@ -607,12 +648,18 @@ async fn test_create_tab() {
         let mut attempts = 0;
         loop {
             let current = scrollback_service.get_scrollback("tab-scrollback").await;
-            if current.iter().any(|line| line.text.contains("restored-line")) {
+            if current
+                .iter()
+                .any(|line| line.text.contains("restored-line"))
+            {
                 break;
             }
 
             attempts += 1;
-            assert!(attempts < 40, "expected PTY output to reach scrollback service");
+            assert!(
+                attempts < 40,
+                "expected PTY output to reach scrollback service"
+            );
             tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
         }
 
@@ -661,13 +708,14 @@ async fn test_create_tab() {
             .unwrap();
 
         // Add some scrollback
-        scrollback_service.add_lines("tab-close", vec![
-            crate::types::ScrollbackLine {
+        scrollback_service.add_lines(
+            "tab-close",
+            vec![crate::types::ScrollbackLine {
                 text: "test line".to_string(),
                 ansi: None,
                 timestamp: None,
-            }
-        ]);
+            }],
+        );
 
         let input = CloseTabInput {
             id: "tab-close".to_string(),
@@ -761,32 +809,35 @@ async fn test_create_tab() {
         let _ = pty_manager.kill("tab-rpc-1").await;
     }
 
-#[tokio::test]
-async fn test_rpc_handler_list() {
-    let db = setup_test_db().await;
-    let pty_manager = Arc::new(PtyManager::new());
-    let scrollback_service = Arc::new(ScrollbackService::new());
-    let handler = TabRpcHandler::new(db.clone(), pty_manager.clone(), scrollback_service);
+    #[tokio::test]
+    async fn test_rpc_handler_list() {
+        let db = setup_test_db().await;
+        let pty_manager = Arc::new(PtyManager::new());
+        let scrollback_service = Arc::new(ScrollbackService::new());
+        let handler = TabRpcHandler::new(db.clone(), pty_manager.clone(), scrollback_service);
 
-    create_test_workspace(&db, "ws-list", "List Test Workspace").await;
-    create_test_pane(&db, "pane-list", "ws-list").await;
+        create_test_workspace(&db, "ws-list", "List Test Workspace").await;
+        create_test_pane(&db, "pane-list", "ws-list").await;
 
-    let create_params = serde_json::json!({
-        "workspaceId": "ws-list",
-        "paneId": "pane-list",
-        "id": "tab-list-1"
-    });
-    handler.handle("tab.create", Some(create_params)).await.unwrap();
+        let create_params = serde_json::json!({
+            "workspaceId": "ws-list",
+            "paneId": "pane-list",
+            "id": "tab-list-1"
+        });
+        handler
+            .handle("tab.create", Some(create_params))
+            .await
+            .unwrap();
 
-    let list_params = serde_json::json!({
-        "paneId": "pane-list"
-    });
-    let result = handler.handle("tab.list", Some(list_params)).await;
-    assert!(result.is_ok(), "tab.list failed: {:?}", result);
+        let list_params = serde_json::json!({
+            "paneId": "pane-list"
+        });
+        let result = handler.handle("tab.list", Some(list_params)).await;
+        assert!(result.is_ok(), "tab.list failed: {:?}", result);
 
-    // Cleanup PTY using the same manager instance
-    let _ = pty_manager.kill("tab-list-1").await;
-}
+        // Cleanup PTY using the same manager instance
+        let _ = pty_manager.kill("tab-list-1").await;
+    }
 
     #[tokio::test]
     async fn test_rpc_handler_close() {
@@ -803,7 +854,10 @@ async fn test_rpc_handler_list() {
             "paneId": "pane-close",
             "id": "tab-close-1"
         });
-        handler.handle("tab.create", Some(create_params)).await.unwrap();
+        handler
+            .handle("tab.create", Some(create_params))
+            .await
+            .unwrap();
 
         let close_params = serde_json::json!({
             "id": "tab-close-1"
@@ -859,18 +913,21 @@ async fn test_rpc_handler_list() {
         assert!(pty_manager.is_alive("tab-lifecycle"));
 
         // 2. Add scrollback
-        scrollback_service.add_lines("tab-lifecycle", vec![
-            crate::types::ScrollbackLine {
-                text: "line 1".to_string(),
-                ansi: None,
-                timestamp: None,
-            },
-            crate::types::ScrollbackLine {
-                text: "line 2".to_string(),
-                ansi: None,
-                timestamp: None,
-            },
-        ]);
+        scrollback_service.add_lines(
+            "tab-lifecycle",
+            vec![
+                crate::types::ScrollbackLine {
+                    text: "line 1".to_string(),
+                    ansi: None,
+                    timestamp: None,
+                },
+                crate::types::ScrollbackLine {
+                    text: "line 2".to_string(),
+                    ansi: None,
+                    timestamp: None,
+                },
+            ],
+        );
 
         // 3. Close tab (cascade cleanup)
         let close_input = CloseTabInput {

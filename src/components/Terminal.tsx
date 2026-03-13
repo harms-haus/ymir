@@ -1,40 +1,54 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Terminal as GhosttyTerminal, FitAddon } from 'ghostty-web';
 import { sendNotification } from '@tauri-apps/plugin-notification';
-import useWorkspaceStore from '../state/workspace';
 import { ErrorBoundary } from './ErrorBoundary';
 import logger from '../lib/logger';
 import { terminalTheme } from '../theme/terminal';
-import { getWebSocketService, type JsonRpcIncomingMessage, type JsonRpcNotification } from '../services/websocket';
-
-const DEFAULT_WEBSOCKET_URL = 'ws://127.0.0.1:7139/ws';
-
-function resolveWebSocketUrl(): string {
-  const fromEnv = import.meta.env.VITE_WEBSOCKET_URL ?? import.meta.env.VITE_YMIR_WS_URL;
-  if (typeof fromEnv === 'string' && fromEnv.trim().length > 0) {
-    return fromEnv.trim();
-  }
-
-  return DEFAULT_WEBSOCKET_URL;
-}
+import {
+  getWebSocketService,
+  resolveWebSocketUrl,
+  type JsonRpcIncomingMessage,
+  type JsonRpcNotification,
+} from '../services/websocket';
+import { useRuntimeUiState, zoomRuntimeIn, zoomRuntimeOut } from '../lib/runtime-ui-state';
+import { setActivePaneSelection, setActiveTabSelection } from '../lib/runtime-selection';
 
 interface TerminalProps {
   sessionId?: string;
   tabId: string;
   paneId: string;
+  workspaceId?: string;
   onNotification?: (message: string) => void;
   hasNotification?: boolean;
 }
 
-export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotification }: TerminalProps) {
+function extractErrorMessage(error: unknown): string {
+  if (!error || typeof error !== 'object') {
+    return String(error);
+  }
+
+  const candidate = error as { message?: unknown };
+  if (typeof candidate.message === 'string' && candidate.message.length > 0) {
+    return candidate.message;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return 'Unknown PTY error';
+  }
+}
+
+export function Terminal({ sessionId, tabId, paneId, workspaceId, onNotification, hasNotification }: TerminalProps) {
   const [isReady, setIsReady] = useState(false);
 
-  const fontSize = useWorkspaceStore((state) => state.fontSize);
+  const fontSize = useRuntimeUiState((state) => state.fontSize);
 
   const currentSessionIdRef = useRef<string | null>(null);
   const isConnectingRef = useRef(false);
   const onNotificationRef = useRef<((message: string) => void) | undefined>(onNotification);
   const resizeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recoveredTabIdsRef = useRef<Set<string>>(new Set());
   const websocketService = getWebSocketService();
 
   // Ghostty-web refs
@@ -252,17 +266,36 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
 
         currentSessionIdRef.current = targetTabId;
         setIsReady(true);
-        useWorkspaceStore.getState().updateTabSessionId(paneId, tabId, targetTabId);
       } catch (error) {
-        logger.error('Failed to connect PTY over WebSocket', { error, tabId: targetTabId });
+        const errorMessage = extractErrorMessage(error);
+        if (workspaceId && !recoveredTabIdsRef.current.has(targetTabId)) {
+          recoveredTabIdsRef.current.add(targetTabId);
+          try {
+            const recoveryResult = await websocketService.request<{ tab?: { id?: string } }>('tab.create', {
+              workspaceId,
+              paneId,
+            });
+            const nextTabId = recoveryResult?.tab?.id;
+            if (nextTabId) {
+              setActivePaneSelection(paneId);
+              setActiveTabSelection(nextTabId);
+              void websocketService.request('tab.close', { id: targetTabId }).catch(() => undefined);
+              return;
+            }
+          } catch {
+            recoveredTabIdsRef.current.delete(targetTabId);
+          }
+        }
+
+        logger.warn('Terminal PTY connection failed', { error: errorMessage, tabId: targetTabId });
         term.write('\r\n[Error: Failed to connect PTY]\r\n');
       } finally {
         isConnectingRef.current = false;
       }
     }
 
-    connectToPty(sessionId, term);
-  }, [applyScrollback, paneId, sessionId, tabId, websocketService]);
+    void connectToPty(sessionId, term).catch(() => undefined);
+  }, [applyScrollback, paneId, sessionId, tabId, websocketService, workspaceId]);
 
   // Handle resize with ResizeObserver
   useEffect(() => {
@@ -279,7 +312,7 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
           const { cols, rows } = term;
           debounceResize(cols, rows, currentSessionIdRef.current);
         }
-      } catch (error) {
+      } catch (_error) {
         // Silently ignore fit errors during initialization
       }
     });
@@ -291,13 +324,12 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
   // Handle ctrl+scroll zoom
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        const { zoomIn, zoomOut } = useWorkspaceStore.getState();
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
         if (e.deltaY < 0) {
-          zoomIn();
+          zoomRuntimeIn();
         } else if (e.deltaY > 0) {
-          zoomOut();
+          zoomRuntimeOut();
         }
       }
     };
@@ -317,20 +349,6 @@ export function Terminal({ sessionId, tabId, paneId, onNotification, hasNotifica
       resizeTimeoutRef.current = null;
     };
   }, []);
-
-  // Listen for title changes and update tab title
-  useEffect(() => {
-    const term = terminalRef.current;
-    if (!term) return;
-
-    const disposable = term.onTitleChange((newTitle: string) => {
-      if (newTitle && newTitle.trim()) {
-        useWorkspaceStore.getState().updateTabTitle(paneId, tabId, newTitle.trim());
-      }
-    });
-
-    return () => disposable.dispose();
-  }, [paneId, tabId]);
 
   return (
     <ErrorBoundary>

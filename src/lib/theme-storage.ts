@@ -1,21 +1,13 @@
-import { load } from '@tauri-apps/plugin-store';
 import logger from './logger';
 
-const THEME_STORE_PATH = '.theme.json';
-
-let themeStore: Awaited<ReturnType<typeof load>> | null = null;
-
-async function getStore() {
-  if (!themeStore) {
-    themeStore = await load(THEME_STORE_PATH, { defaults: {}, autoSave: true });
-  }
-  return themeStore;
-}
+const THEME_KEY = 'ymir-theme';
 
 export async function getStoredTheme(): Promise<string | null> {
   try {
-    const store = await getStore();
-    const theme = await store.get<string>('theme');
+    if (typeof localStorage === 'undefined') {
+      return null;
+    }
+    const theme = localStorage.getItem(THEME_KEY);
     return theme || null;
   } catch (error) {
     logger.error('Failed to get stored theme', { error });
@@ -25,8 +17,10 @@ export async function getStoredTheme(): Promise<string | null> {
 
 export async function setStoredTheme(theme: string): Promise<void> {
   try {
-    const store = await getStore();
-    await store.set('theme', theme);
+    if (typeof localStorage === 'undefined') {
+      throw new Error('localStorage is not available');
+    }
+    localStorage.setItem(THEME_KEY, theme);
   } catch (error) {
     logger.error('Failed to save theme', { error });
     throw error;

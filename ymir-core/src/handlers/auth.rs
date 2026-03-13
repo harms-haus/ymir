@@ -110,7 +110,10 @@ pub enum AuthNotification {
     /// User logged in successfully
     LoggedIn { timestamp: u64 },
     /// User logged out
-    LoggedOut { timestamp: u64, reason: Option<String> },
+    LoggedOut {
+        timestamp: u64,
+        reason: Option<String>,
+    },
     /// Authentication failed
     AuthFailed { timestamp: u64, reason: String },
 }
@@ -221,9 +224,15 @@ impl AuthHandler {
     }
 
     /// Get authentication status
-    pub fn get_status(&self, is_authenticated: bool, addr: &std::net::SocketAddr) -> AuthStatusOutput {
+    pub fn get_status(
+        &self,
+        is_authenticated: bool,
+        addr: &std::net::SocketAddr,
+    ) -> AuthStatusOutput {
         AuthStatusOutput {
-            authenticated: is_authenticated || !self.is_auth_required() || self.can_bypass_auth(addr),
+            authenticated: is_authenticated
+                || !self.is_auth_required()
+                || self.can_bypass_auth(addr),
             auth_required: self.is_auth_required(),
             is_localhost: Self::is_localhost(addr),
         }
@@ -275,25 +284,34 @@ impl AuthRpcHandler {
         match method {
             "auth.login" => {
                 let input: LoginInput = params
-                    .map(|p| serde_json::from_value(p).map_err(|e| ProtocolError::InvalidParams(e.to_string())))
-                    .unwrap_or(Err(ProtocolError::InvalidParams("Missing params".to_string())))?;
+                    .map(|p| {
+                        serde_json::from_value(p)
+                            .map_err(|e| ProtocolError::InvalidParams(e.to_string()))
+                    })
+                    .unwrap_or(Err(ProtocolError::InvalidParams(
+                        "Missing params".to_string(),
+                    )))?;
 
-                let output = self.inner.login(input).await.map_err(|e| {
-                    ProtocolError::InternalError(format!("Login failed: {}", e))
-                })?;
+                let output =
+                    self.inner.login(input).await.map_err(|e| {
+                        ProtocolError::InternalError(format!("Login failed: {}", e))
+                    })?;
 
-                serde_json::to_value(output).map_err(|e| ProtocolError::InternalError(e.to_string()))
+                serde_json::to_value(output)
+                    .map_err(|e| ProtocolError::InternalError(e.to_string()))
             }
             "auth.logout" => {
                 let input: LogoutInput = params
                     .map(|p| serde_json::from_value(p).unwrap_or(LogoutInput { reason: None }))
                     .unwrap_or(LogoutInput { reason: None });
 
-                let output = self.inner.logout(input).await.map_err(|e| {
-                    ProtocolError::InternalError(format!("Logout failed: {}", e))
-                })?;
+                let output =
+                    self.inner.logout(input).await.map_err(|e| {
+                        ProtocolError::InternalError(format!("Logout failed: {}", e))
+                    })?;
 
-                serde_json::to_value(output).map_err(|e| ProtocolError::InternalError(e.to_string()))
+                serde_json::to_value(output)
+                    .map_err(|e| ProtocolError::InternalError(e.to_string()))
             }
             "auth.status" => {
                 // This method needs connection context, handled separately
@@ -303,7 +321,8 @@ impl AuthRpcHandler {
                     auth_required: self.inner.is_auth_required(),
                     is_localhost: false,
                 };
-                serde_json::to_value(output).map_err(|e| ProtocolError::InternalError(e.to_string()))
+                serde_json::to_value(output)
+                    .map_err(|e| ProtocolError::InternalError(e.to_string()))
             }
             _ => Err(ProtocolError::MethodNotFound(method.to_string())),
         }
@@ -312,7 +331,11 @@ impl AuthRpcHandler {
 
 #[async_trait::async_trait]
 impl crate::server::protocol::RequestHandler for AuthRpcHandler {
-    async fn handle(&self, method: &str, params: Option<Value>) -> std::result::Result<Value, crate::server::protocol::ProtocolError> {
+    async fn handle(
+        &self,
+        method: &str,
+        params: Option<Value>,
+    ) -> std::result::Result<Value, crate::server::protocol::ProtocolError> {
         self.handle(method, params).await
     }
 }
@@ -364,10 +387,7 @@ impl AuthMiddleware {
     ///
     /// Some methods like auth.login and auth.status are always allowed
     pub fn method_requires_auth(method: &str) -> bool {
-        match method {
-            "auth.login" | "auth.status" => false,
-            _ => true,
-        }
+        !matches!(method, "auth.login" | "auth.status")
     }
 }
 

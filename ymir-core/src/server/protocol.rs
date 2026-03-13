@@ -137,7 +137,9 @@ impl TryFrom<String> for IncomingMessage {
         }
 
         // If both fail, it's a parse error
-        Err(ProtocolError::ParseError("Failed to parse JSON-RPC message".to_string()))
+        Err(ProtocolError::ParseError(
+            "Failed to parse JSON-RPC message".to_string(),
+        ))
     }
 }
 
@@ -158,18 +160,12 @@ impl IncomingMessage {
 
     /// Check if this is a request (expects response)
     pub fn is_request(&self) -> bool {
-        match self {
-            Self::Request { .. } => true,
-            _ => false,
-        }
+        matches!(self, Self::Request { .. })
     }
 
     /// Check if this is a notification
     pub fn is_notification(&self) -> bool {
-        match self {
-            Self::Notification { .. } => true,
-            _ => false,
-        }
+        matches!(self, Self::Notification { .. })
     }
 
     /// Get method name
@@ -446,12 +442,14 @@ mod tests {
         let parsed: JsonRpcResponse = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.error.unwrap().code, -32600);
 
-        let msg = ErrorResponse::method_not_found(correlation_id.clone(), "test_method".to_string());
+        let msg =
+            ErrorResponse::method_not_found(correlation_id.clone(), "test_method".to_string());
         let json = msg.to_json().unwrap();
         let parsed: JsonRpcResponse = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.error.unwrap().code, -32601);
 
-        let msg = ErrorResponse::invalid_params(correlation_id.clone(), "Missing field".to_string());
+        let msg =
+            ErrorResponse::invalid_params(correlation_id.clone(), "Missing field".to_string());
         let json = msg.to_json().unwrap();
         let parsed: JsonRpcResponse = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.error.unwrap().code, -32602);
@@ -468,7 +466,11 @@ mod tests {
         struct TestHandler;
         #[async_trait::async_trait]
         impl RequestHandler for TestHandler {
-            async fn handle(&self, _method: &str, _params: Option<Value>) -> Result<Value, ProtocolError> {
+            async fn handle(
+                &self,
+                _method: &str,
+                _params: Option<Value>,
+            ) -> Result<Value, ProtocolError> {
                 Ok(serde_json::json!({"result":"test"}))
             }
         }

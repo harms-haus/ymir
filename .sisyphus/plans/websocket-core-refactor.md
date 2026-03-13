@@ -1665,7 +1665,7 @@ Evidence: .sisyphus/evidence/task-27-pane-commands-removed.txt
 
 ---
 
-- [ ] **28. Remove Zustand Workspace Store**
+- [x] **28. Remove Zustand Workspace Store**
 
 **What to do**:
 - Remove `src/state/workspace.ts`
@@ -1707,7 +1707,7 @@ Evidence: .sisyphus/evidence/task-28-zustand-removed.txt
 
 ---
 
-- [ ] **29. Remove Tauri Storage Adapter**
+- [x] **29. Remove Tauri Storage Adapter**
 
 **What to do**:
 - Remove Tauri storage adapter code
@@ -1791,7 +1791,7 @@ Evidence: .sisyphus/evidence/task-30-browser-removed.txt
 
 ---
 
-- [ ] **31. Update Documentation**
+- [x] **31. Update Documentation**
 
 **What to do**:
 - Update README.md with new architecture

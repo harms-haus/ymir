@@ -79,7 +79,9 @@ export function createMockBranchNode(
 /**
  * Create a mock Workspace with sensible defaults
  */
-export function createMockWorkspace(overrides?: Partial<Workspace>): Workspace {
+export function createMockWorkspace(
+  overrides?: Partial<Workspace & { panes: Record<string, Pane> }>
+): Workspace & { panes: Record<string, Pane> } {
   const id = overrides?.id ?? generateId('workspace');
   const pane = createMockPane();
   
@@ -92,6 +94,7 @@ export function createMockWorkspace(overrides?: Partial<Workspace>): Workspace {
     },
     activePaneId: pane.id,
     hasNotification: false,
+    panes: { [pane.id]: pane },
     ...overrides,
   };
 }

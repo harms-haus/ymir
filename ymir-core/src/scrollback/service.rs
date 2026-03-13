@@ -112,7 +112,9 @@ impl TabScrollbackState {
     }
 
     fn get_merged_scrollback(&self) -> Vec<ScrollbackLine> {
-        let mut result = Vec::with_capacity(self.total_line_count + self.pending.len() + self.staging_area.len());
+        let mut result = Vec::with_capacity(
+            self.total_line_count + self.pending.len() + self.staging_area.len(),
+        );
 
         for chunk in &self.completed_chunks {
             result.extend(chunk.lines.clone());
@@ -198,7 +200,10 @@ impl ScrollbackService {
 
     pub fn add_lines(&self, tab_id: impl Into<String>, lines: Vec<ScrollbackLine>) {
         let tab_id = tab_id.into();
-        if let Err(_e) = self.command_tx.send(ScrollbackCommand::AddLines { tab_id, lines }) {
+        if let Err(_e) = self
+            .command_tx
+            .send(ScrollbackCommand::AddLines { tab_id, lines })
+        {
             // Silently drop send errors (service may be shutting down)
         }
     }
@@ -417,10 +422,10 @@ mod tests {
         let service = ScrollbackService::new();
         let tab_id = "test-tab-5";
 
-        service.add_lines(tab_id, vec![
-            create_test_line("Line 1"),
-            create_test_line("Line 2"),
-        ]);
+        service.add_lines(
+            tab_id,
+            vec![create_test_line("Line 1"), create_test_line("Line 2")],
+        );
 
         tokio::time::sleep(Duration::from_millis(BATCH_TIMEOUT_MS + 100)).await;
 
@@ -452,7 +457,10 @@ mod tests {
         for (i, line) in scrollback.iter().enumerate() {
             let expected_batch = i / BATCH_SIZE;
             let expected_line = i % BATCH_SIZE;
-            assert_eq!(line.text, format!("Batch {} Line {}", expected_batch, expected_line));
+            assert_eq!(
+                line.text,
+                format!("Batch {} Line {}", expected_batch, expected_line)
+            );
         }
 
         service.shutdown();
@@ -486,10 +494,10 @@ mod tests {
         let service = ScrollbackService::new();
         let tab_id = "test-tab-8";
 
-        service.add_lines(tab_id, vec![
-            create_test_line("Line 1"),
-            create_test_line("Line 2"),
-        ]);
+        service.add_lines(
+            tab_id,
+            vec![create_test_line("Line 1"), create_test_line("Line 2")],
+        );
 
         tokio::time::sleep(Duration::from_millis(10)).await;
 
@@ -577,10 +585,10 @@ mod tests {
         let service = ScrollbackService::new();
         let tab_id = "test-tab-partial";
 
-        service.add_lines(tab_id, vec![
-            create_test_line("Pending 1"),
-            create_test_line("Pending 2"),
-        ]);
+        service.add_lines(
+            tab_id,
+            vec![create_test_line("Pending 1"), create_test_line("Pending 2")],
+        );
 
         tokio::time::sleep(Duration::from_millis(10)).await;
 

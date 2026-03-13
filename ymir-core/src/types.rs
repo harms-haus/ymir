@@ -163,18 +163,22 @@ pub enum SplitNode {
 
 impl SplitNode {
     /// Check if this node is a branch
+    #[allow(clippy::match_like_matches_macro)]
     pub fn is_branch(&self) -> bool {
-        match self {
-            SplitNode::Branch(_) => true,
-            _ => false,
+        if let SplitNode::Branch(_) = self {
+            true
+        } else {
+            false
         }
     }
 
     /// Check if this node is a leaf
+    #[allow(clippy::match_like_matches_macro)]
     pub fn is_leaf(&self) -> bool {
-        match self {
-            SplitNode::Leaf(_) => true,
-            _ => false,
+        if let SplitNode::Leaf(_) = self {
+            true
+        } else {
+            false
         }
     }
 

@@ -66,6 +66,8 @@ interface UseGitResult {
   refetch: () => Promise<void>;
 }
 
+const GIT_NOTIFICATION_METHODS = ['git.state_change'] as const;
+
 function normalizeServerStatus(status: ServerGitFileStatus): CanonicalGitFileStatus {
   switch (status) {
     case 'added':
@@ -188,6 +190,10 @@ function transformGitStatus(status: ServerGitStatus): GitRepo {
   };
 }
 
+function mapGitStatusResult(result: GitStatusResult): GitRepo {
+  return transformGitStatus(result.status);
+}
+
 export function useGit(repoPath: string | null | undefined): UseGitResult {
   const params = useMemo(
     () => (repoPath ? { repoPath } : undefined),
@@ -216,8 +222,8 @@ export function useGit(repoPath: string | null | undefined): UseGitResult {
     params,
     enabled: Boolean(repoPath),
     initialData: null,
-    notificationMethods: ['git.state_change'],
-    mapResult: (result) => transformGitStatus(result.status),
+    notificationMethods: GIT_NOTIFICATION_METHODS,
+    mapResult: mapGitStatusResult,
     shouldRefetchOnNotification,
   });
 

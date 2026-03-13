@@ -13,6 +13,13 @@ interface UseTabsResult {
   refetch: () => Promise<void>;
 }
 
+const TAB_NOTIFICATION_METHODS = ['tab.state_change'] as const;
+const INITIAL_TABS: Tab[] = [];
+
+function mapTabListResult(result: TabListResult): Tab[] {
+  return result.tabs;
+}
+
 export function useTabs(paneId: string | null | undefined): UseTabsResult {
   const params = useMemo(() => (paneId ? { paneId } : undefined), [paneId]);
 
@@ -20,9 +27,9 @@ export function useTabs(paneId: string | null | undefined): UseTabsResult {
     method: 'tab.list',
     params,
     enabled: Boolean(paneId),
-    initialData: [],
-    notificationMethods: ['tab.state_change'],
-    mapResult: (result) => result.tabs,
+    initialData: INITIAL_TABS,
+    notificationMethods: TAB_NOTIFICATION_METHODS,
+    mapResult: mapTabListResult,
   });
 
   return {

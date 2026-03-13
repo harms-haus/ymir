@@ -7,10 +7,5 @@
 pub mod service;
 
 pub use service::{
-    ScrollbackChunk,
-    ScrollbackCommand,
-    ScrollbackService,
-    BATCH_SIZE,
-    BATCH_TIMEOUT_MS,
-    CHUNK_SIZE,
+    ScrollbackChunk, ScrollbackCommand, ScrollbackService, BATCH_SIZE, BATCH_TIMEOUT_MS, CHUNK_SIZE,
 };

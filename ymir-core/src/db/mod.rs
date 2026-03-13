@@ -8,4 +8,4 @@ pub mod client;
 pub mod migrations;
 
 pub use client::{DatabaseClient, DbConfig, Transaction};
-pub use migrations::{MigrationRunner, Migration};
+pub use migrations::{Migration, MigrationRunner};

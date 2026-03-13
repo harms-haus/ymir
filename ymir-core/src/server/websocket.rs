@@ -152,11 +152,7 @@ pub enum CloseCode {
 impl CloseCode {
     /// Check if this is a valid close code
     pub fn is_valid(code: u16) -> bool {
-        match code {
-            1000 | 1001 | 1002 | 1003 | 1004 | 1005 | 1006 | 1007 |
-            1008 | 1009 | 1010 | 1011 | 1012 | 1013 | 1014 | 1015 => true,
-            _ => false,
-        }
+        (1000..=1015).contains(&code)
     }
 
     /// Convert a u16 to a CloseCode if valid

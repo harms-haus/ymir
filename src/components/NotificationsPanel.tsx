@@ -1,9 +1,19 @@
 import React, { useMemo, useCallback } from 'react';
-import useWorkspaceStore from '../state/workspace';
 import { Tab } from '../state/types';
 import { PanelDefinition } from '../state/types';
 import { Button } from './ui/Button';
 import { Tooltip } from './ui/Tooltip';
+import {
+  clearAllNotifications,
+  clearTabNotification,
+  getTotalNotificationCount,
+  useRuntimeNotifications,
+} from '../lib/runtime-notifications';
+import {
+  setActivePaneSelection,
+  setActiveTabSelection,
+  setActiveWorkspaceSelection,
+} from '../lib/runtime-selection';
 import './NotificationsPanel.css';
 
 interface NotificationItemProps {
@@ -21,70 +31,67 @@ const NotificationItem = React.memo(function NotificationItem({
 }: NotificationItemProps) {
   return (
     <div
-      onClick={onClick}
       style={{
         padding: '12px',
-        cursor: 'pointer',
         borderBottom: '1px solid var(--border-hex)',
         backgroundColor: 'transparent',
         transition: 'background-color 0.15s ease',
       }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.backgroundColor = 'var(--background-hover)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.backgroundColor = 'transparent';
-      }}
     >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          gap: '8px',
-        }}
-      >
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
+        <button
+          type="button"
+          onClick={onClick}
           style={{
-            fontSize: '13px',
-            fontWeight: 600,
-            color: 'var(--foreground-active)',
-            marginBottom: '4px',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
+            flex: 1,
+            minWidth: 0,
+            border: 'none',
+            background: 'transparent',
+            textAlign: 'left',
+            cursor: 'pointer',
+            padding: 0,
           }}
         >
-          {tab.title}
-        </div>
-        <div
-          style={{
-            fontSize: '12px',
-            color: 'var(--notification)',
-            marginBottom: '4px',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-            lineHeight: '1.4',
-          }}
-        >
-          {tab.notificationText || 'New notification'}
-        </div>
-        <div
-          style={{
-            fontSize: '11px',
-            color: 'var(--foreground-muted)',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {tab.cwd}
-        </div>
-      </div>
+          <div
+            style={{
+              fontSize: '13px',
+              fontWeight: 600,
+              color: 'var(--foreground-active)',
+              marginBottom: '4px',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {tab.title}
+          </div>
+          <div
+            style={{
+              fontSize: '12px',
+              color: 'var(--notification)',
+              marginBottom: '4px',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              lineHeight: '1.4',
+            }}
+          >
+            {tab.notificationText || 'New notification'}
+          </div>
+          <div
+            style={{
+              fontSize: '11px',
+              color: 'var(--foreground-muted)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {tab.cwd}
+          </div>
+        </button>
         <Button
           variant="ghost"
           size="sm"
@@ -107,57 +114,49 @@ interface NotificationTabInfo {
 }
 
 function NotificationsPanelContent() {
-  const workspaces = useWorkspaceStore((state) => state.workspaces);
-  const activeWorkspaceId = useWorkspaceStore(
-    (state) => state.activeWorkspaceId
-  );
-  const { setActiveWorkspace, setActivePane, setActiveTab, clearNotification } =
-    useWorkspaceStore.getState();
+  const notificationSnapshot = useRuntimeNotifications((snapshot) => snapshot);
 
   // Collect all tabs with notifications across all workspaces
   const notificationTabs = useMemo((): NotificationTabInfo[] => {
-    const notificationTabs: NotificationTabInfo[] = [];
-    for (const ws of workspaces) {
-      for (const paneId of Object.keys(ws.panes)) {
-        const pane = ws.panes[paneId];
-        for (const tab of pane.tabs) {
-          if (tab.hasNotification) {
-            notificationTabs.push({
-              tab,
-              paneId,
-              workspaceId: ws.id,
-            });
-          }
-        }
-      }
-    }
-    return notificationTabs;
-  }, [workspaces]);
+    const entries = Object.values(notificationSnapshot)
+      .filter((entry) => entry.count > 0)
+      .sort((a, b) => b.count - a.count);
+
+    return entries.map((entry) => ({
+      workspaceId: entry.workspaceId,
+      paneId: entry.paneId,
+      tab: {
+        id: entry.tabId,
+        title: entry.title,
+        cwd: entry.cwd,
+        type: 'terminal',
+        sessionId: entry.tabId,
+        hasNotification: true,
+        notificationCount: entry.count,
+        notificationText: entry.text,
+        scrollback: [],
+      },
+    }));
+  }, [notificationSnapshot]);
 
   const handleItemClick = useCallback((
     tabId: string,
     paneId: string,
     workspaceId: string
   ) => {
-    // Switch to workspace containing notification
-    if (workspaceId !== activeWorkspaceId) {
-      setActiveWorkspace(workspaceId);
-    }
-    // Activate pane and tab
-    setActivePane(paneId);
-    setActiveTab(paneId, tabId);
-  }, [activeWorkspaceId, setActiveWorkspace, setActivePane, setActiveTab]);
+    setActiveWorkspaceSelection(workspaceId);
+    setActivePaneSelection(paneId);
+    setActiveTabSelection(tabId);
+    clearTabNotification(tabId);
+  }, []);
 
   const handleClear = useCallback((e: React.MouseEvent, tabId: string) => {
     e.stopPropagation();
-    clearNotification(tabId);
-  }, [clearNotification]);
+    clearTabNotification(tabId);
+  }, []);
 
   const handleClearAll = () => {
-    // Clear all notifications
-    for (const { tab } of notificationTabs) {
-      clearNotification(tab.id);
-    }
+    clearAllNotifications();
   };
 
   const handleJumpToFirstUnread = () => {
@@ -285,27 +284,12 @@ export const notificationsPanelDefinition: PanelDefinition = {
   title: 'Notifications',
   icon: () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <title>Notifications</title>
       <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
       <path d="M13.73 21a2 2 0 0 1-3.46 0" />
     </svg>
   ),
   badge: () => {
-    const getTotalNotificationCount = () => {
-      const store = useWorkspaceStore.getState();
-      let count = 0;
-      for (const ws of store.workspaces) {
-        for (const paneId of Object.keys(ws.panes)) {
-          const pane = ws.panes[paneId];
-          for (const tab of pane.tabs) {
-            if (tab.hasNotification) {
-              count++;
-            }
-          }
-        }
-      }
-      return count;
-    };
-
     const count = getTotalNotificationCount();
     return count > 0 ? { count } : null;
   },

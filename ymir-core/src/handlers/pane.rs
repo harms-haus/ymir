@@ -70,7 +70,12 @@ impl PaneHandler {
         );
         let mut rows = self.db.query(&sql, ()).await?;
 
-        if rows.next().await.map_err(|e| CoreError::Database(e.to_string()))?.is_none() {
+        if rows
+            .next()
+            .await
+            .map_err(|e| CoreError::Database(e.to_string()))?
+            .is_none()
+        {
             return Err(CoreError::InvalidWorkspaceId(format!(
                 "Workspace not found: {}",
                 input.workspace_id
@@ -107,7 +112,12 @@ impl PaneHandler {
         );
         let mut rows = self.db.query(&sql, ()).await?;
 
-        if rows.next().await.map_err(|e| CoreError::Database(e.to_string()))?.is_none() {
+        if rows
+            .next()
+            .await
+            .map_err(|e| CoreError::Database(e.to_string()))?
+            .is_none()
+        {
             return Err(CoreError::InvalidWorkspaceId(format!(
                 "Workspace not found: {}",
                 input.workspace_id
@@ -122,7 +132,11 @@ impl PaneHandler {
 
         let mut panes = Vec::new();
 
-        while let Some(row) = rows.next().await.map_err(|e| CoreError::Database(e.to_string()))? {
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| CoreError::Database(e.to_string()))?
+        {
             let id: String = row.get(0).map_err(|e| CoreError::Database(e.to_string()))?;
             let flex_ratio: f64 = row.get(1).map_err(|e| CoreError::Database(e.to_string()))?;
 
@@ -145,7 +159,12 @@ impl PaneHandler {
         let sql = format!("SELECT id FROM panes WHERE id = '{}'", id_escaped);
         let mut rows = self.db.query(&sql, ()).await?;
 
-        if rows.next().await.map_err(|e| CoreError::Database(e.to_string()))?.is_none() {
+        if rows
+            .next()
+            .await
+            .map_err(|e| CoreError::Database(e.to_string()))?
+            .is_none()
+        {
             return Err(CoreError::InvalidPaneId(format!(
                 "Pane not found: {}",
                 input.id
@@ -179,40 +198,62 @@ impl PaneRpcHandler {
         }
     }
 
-    pub async fn handle(&self, method: &str, params: Option<Value>) -> std::result::Result<Value, ProtocolError> {
+    pub async fn handle(
+        &self,
+        method: &str,
+        params: Option<Value>,
+    ) -> std::result::Result<Value, ProtocolError> {
         match method {
             "pane.create" => {
                 let input: CreatePaneInput = params
-                    .map(|p| serde_json::from_value(p).map_err(|e| ProtocolError::InvalidParams(e.to_string())))
-                    .unwrap_or(Err(ProtocolError::InvalidParams("Missing params".to_string())))?;
+                    .map(|p| {
+                        serde_json::from_value(p)
+                            .map_err(|e| ProtocolError::InvalidParams(e.to_string()))
+                    })
+                    .unwrap_or(Err(ProtocolError::InvalidParams(
+                        "Missing params".to_string(),
+                    )))?;
 
                 let output = self.inner.create(input).await.map_err(|e| {
                     ProtocolError::InternalError(format!("Failed to create pane: {}", e))
                 })?;
 
-                serde_json::to_value(output).map_err(|e| ProtocolError::InternalError(e.to_string()))
+                serde_json::to_value(output)
+                    .map_err(|e| ProtocolError::InternalError(e.to_string()))
             }
             "pane.list" => {
                 let input: ListPanesInput = params
-                    .map(|p| serde_json::from_value(p).map_err(|e| ProtocolError::InvalidParams(e.to_string())))
-                    .unwrap_or(Err(ProtocolError::InvalidParams("Missing params".to_string())))?;
+                    .map(|p| {
+                        serde_json::from_value(p)
+                            .map_err(|e| ProtocolError::InvalidParams(e.to_string()))
+                    })
+                    .unwrap_or(Err(ProtocolError::InvalidParams(
+                        "Missing params".to_string(),
+                    )))?;
 
                 let output = self.inner.list(input).await.map_err(|e| {
                     ProtocolError::InternalError(format!("Failed to list panes: {}", e))
                 })?;
 
-                serde_json::to_value(output).map_err(|e| ProtocolError::InternalError(e.to_string()))
+                serde_json::to_value(output)
+                    .map_err(|e| ProtocolError::InternalError(e.to_string()))
             }
             "pane.delete" => {
                 let input: DeletePaneInput = params
-                    .map(|p| serde_json::from_value(p).map_err(|e| ProtocolError::InvalidParams(e.to_string())))
-                    .unwrap_or(Err(ProtocolError::InvalidParams("Missing params".to_string())))?;
+                    .map(|p| {
+                        serde_json::from_value(p)
+                            .map_err(|e| ProtocolError::InvalidParams(e.to_string()))
+                    })
+                    .unwrap_or(Err(ProtocolError::InvalidParams(
+                        "Missing params".to_string(),
+                    )))?;
 
                 let output = self.inner.delete(input).await.map_err(|e| {
                     ProtocolError::InternalError(format!("Failed to delete pane: {}", e))
                 })?;
 
-                serde_json::to_value(output).map_err(|e| ProtocolError::InternalError(e.to_string()))
+                serde_json::to_value(output)
+                    .map_err(|e| ProtocolError::InternalError(e.to_string()))
             }
             _ => Err(ProtocolError::MethodNotFound(method.to_string())),
         }
@@ -476,7 +517,10 @@ mod tests {
             "workspaceId": "ws-list",
             "id": "pane-list-1"
         });
-        handler.handle("pane.create", Some(create_params)).await.unwrap();
+        handler
+            .handle("pane.create", Some(create_params))
+            .await
+            .unwrap();
 
         let list_params = serde_json::json!({
             "workspaceId": "ws-list"
@@ -496,7 +540,10 @@ mod tests {
             "workspaceId": "ws-delete",
             "id": "pane-delete-1"
         });
-        handler.handle("pane.create", Some(create_params)).await.unwrap();
+        handler
+            .handle("pane.create", Some(create_params))
+            .await
+            .unwrap();
 
         let delete_params = serde_json::json!({
             "id": "pane-delete-1"

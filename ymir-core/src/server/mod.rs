@@ -102,7 +102,9 @@ impl crate::server::protocol::RequestHandler for GitRequestHandler {
         method: &str,
         params: Option<Value>,
     ) -> Result<Value, crate::server::protocol::ProtocolError> {
-        tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(self.inner.handle(method, params)))
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(self.inner.handle(method, params))
+        })
     }
 }
 
@@ -350,57 +352,33 @@ impl ServerState {
             .register("pane.delete".to_string(), pane_handler);
 
         let tab_handler = TabRequestHandler {
-            inner: TabRpcHandler::new(
-                db.clone(),
-                pty_manager.clone(),
-                scrollback_service.clone(),
-            ),
+            inner: TabRpcHandler::new(db.clone(), pty_manager.clone(), scrollback_service.clone()),
         };
         self.request_router
             .register("tab.create".to_string(), tab_handler);
         let tab_handler = TabRequestHandler {
-            inner: TabRpcHandler::new(
-                db.clone(),
-                pty_manager.clone(),
-                scrollback_service.clone(),
-            ),
+            inner: TabRpcHandler::new(db.clone(), pty_manager.clone(), scrollback_service.clone()),
         };
         self.request_router
             .register("tab.list".to_string(), tab_handler);
         let tab_handler = TabRequestHandler {
-            inner: TabRpcHandler::new(
-                db.clone(),
-                pty_manager.clone(),
-                scrollback_service.clone(),
-            ),
+            inner: TabRpcHandler::new(db.clone(), pty_manager.clone(), scrollback_service.clone()),
         };
         self.request_router
             .register("tab.close".to_string(), tab_handler);
 
         let pty_handler = PtyRequestHandler {
-            inner: PtyRpcHandler::new(
-                db.clone(),
-                pty_manager.clone(),
-                scrollback_service.clone(),
-            ),
+            inner: PtyRpcHandler::new(db.clone(), pty_manager.clone(), scrollback_service.clone()),
         };
         self.request_router
             .register("pty.connect".to_string(), pty_handler);
         let pty_handler = PtyRequestHandler {
-            inner: PtyRpcHandler::new(
-                db.clone(),
-                pty_manager.clone(),
-                scrollback_service.clone(),
-            ),
+            inner: PtyRpcHandler::new(db.clone(), pty_manager.clone(), scrollback_service.clone()),
         };
         self.request_router
             .register("pty.write".to_string(), pty_handler);
         let pty_handler = PtyRequestHandler {
-            inner: PtyRpcHandler::new(
-                db.clone(),
-                pty_manager.clone(),
-                scrollback_service.clone(),
-            ),
+            inner: PtyRpcHandler::new(db.clone(), pty_manager.clone(), scrollback_service.clone()),
         };
         self.request_router
             .register("pty.resize".to_string(), pty_handler);
@@ -446,10 +424,7 @@ impl ServerState {
 
     /// Get connection IDs of all connected clients
     pub fn connection_ids(&self) -> Vec<ConnectionId> {
-        self.connections
-            .iter()
-            .map(|entry| entry.key().clone())
-            .collect()
+        self.connections.iter().map(|entry| *entry.key()).collect()
     }
 
     /// Get a connection by ID
@@ -464,24 +439,21 @@ impl ServerState {
 
     /// Broadcast a message to all connected clients
     pub fn broadcast(&self, message: String) -> usize {
-        match self.broadcast_tx.send(message) {
-            Ok(count) => count,
-            Err(_) => 0,
-        }
+        self.broadcast_tx.send(message).unwrap_or_default()
     }
 
-/// Send a message to a specific connection
-pub fn send_to(&self, id: ConnectionId, message: Message) -> Result<(), String> {
-    if let Some(entry) = self.connections.get(&id) {
-        let state = entry.value();
-        state
-            .tx
-            .send(message)
-            .map_err(|_| "Failed to send message".to_string())
-    } else {
-        Err("Connection not found".to_string())
+    /// Send a message to a specific connection
+    pub fn send_to(&self, id: ConnectionId, message: Message) -> Result<(), String> {
+        if let Some(entry) = self.connections.get(&id) {
+            let state = entry.value();
+            state
+                .tx
+                .send(message)
+                .map_err(|_| "Failed to send message".to_string())
+        } else {
+            Err("Connection not found".to_string())
+        }
     }
-}
 }
 
 /// WebSocket server handle for graceful shutdown
@@ -552,17 +524,16 @@ async fn handle_socket(socket: WebSocket, addr: SocketAddr, state: Arc<ServerSta
         loop {
             interval.tick().await;
 
-        // Check if connection has timed out
-        if ping_state.is_timed_out(Duration::from_secs(timeout_secs)).await {
-            break;
-        }
+            // Check if connection has timed out
+            if ping_state
+                .is_timed_out(Duration::from_secs(timeout_secs))
+                .await
+            {
+                break;
+            }
 
             // Send ping
-            if ping_state
-                .tx
-                .send(Message::Ping(vec![]))
-                .is_err()
-            {
+            if ping_state.tx.send(Message::Ping(vec![])).is_err() {
                 break;
             }
         }
@@ -571,41 +542,41 @@ async fn handle_socket(socket: WebSocket, addr: SocketAddr, state: Arc<ServerSta
     // Handle messages
     loop {
         tokio::select! {
-        // Handle incoming WebSocket messages
-        msg = receiver.next() => {
-            if let Some(Ok(msg)) = msg {
-                if !handle_message(msg, &conn_state, &server_state).await {
+            // Handle incoming WebSocket messages
+            msg = receiver.next() => {
+                if let Some(Ok(msg)) = msg {
+                    if !handle_message(msg, &conn_state, &server_state).await {
+                        break;
+                    }
+                } else {
                     break;
                 }
-            } else {
+            }
+
+                // Handle messages from the channel (to send to client)
+                Some(msg) = rx.recv() => {
+                    if sender.send(msg).await.is_err() {
+                        break;
+                    }
+                }
+
+                // Handle broadcast messages
+                Ok(msg) = broadcast_rx.recv() => {
+                    if sender.send(Message::Text(msg)).await.is_err() {
+                        break;
+                    }
+                }
+
+            // Ping task completed (timeout or error)
+            _ = &mut ping_task => {
                 break;
             }
         }
-
-            // Handle messages from the channel (to send to client)
-            Some(msg) = rx.recv() => {
-                if sender.send(msg).await.is_err() {
-                    break;
-                }
-            }
-
-            // Handle broadcast messages
-            Ok(msg) = broadcast_rx.recv() => {
-                if sender.send(Message::Text(msg)).await.is_err() {
-                    break;
-                }
-            }
-
-        // Ping task completed (timeout or error)
-        _ = &mut ping_task => {
-            break;
-        }
     }
-}
 
-// Cleanup
-ping_task.abort();
-state.remove_connection(connection_id);
+    // Cleanup
+    ping_task.abort();
+    state.remove_connection(connection_id);
 }
 
 /// Handle a single WebSocket message
@@ -633,13 +604,14 @@ async fn handle_message(
                                 .auth_middleware
                                 .check_auth(is_authenticated, &conn_state.addr)
                             {
-                            // Send auth error response
-                            if let Some(correlation_id) = incoming.correlation_id() {
-                                let protocol_err: crate::server::protocol::ProtocolError = auth_err.into();
-                                let error_response = OutgoingMessage::error(
-                                    correlation_id.clone(),
-                                    protocol_err.to_jsonrpc_error(),
-                                );
+                                // Send auth error response
+                                if let Some(correlation_id) = incoming.correlation_id() {
+                                    let protocol_err: crate::server::protocol::ProtocolError =
+                                        auth_err.into();
+                                    let error_response = OutgoingMessage::error(
+                                        correlation_id.clone(),
+                                        protocol_err.to_jsonrpc_error(),
+                                    );
                                     if let Ok(json) = error_response.to_json() {
                                         let _ = conn_state.tx.send(Message::Text(json));
                                     }
@@ -650,24 +622,41 @@ async fn handle_message(
 
                         // Handle auth.login specially to mark connection as authenticated
                         if method == "auth.login" {
-                            if let IncomingMessage::Request { params, correlation_id, .. } = incoming {
-                                match server_state.request_router.route("auth.login", params).await {
+                            if let IncomingMessage::Request {
+                                params,
+                                correlation_id,
+                                ..
+                            } = incoming
+                            {
+                                match server_state
+                                    .request_router
+                                    .route("auth.login", params)
+                                    .await
+                                {
                                     Ok(result) => {
                                         // Check if login was successful
-                                        if let Ok(output) = serde_json::from_value::<crate::handlers::LoginOutput>(result.clone()) {
+                                        if let Ok(output) =
+                                            serde_json::from_value::<crate::handlers::LoginOutput>(
+                                                result.clone(),
+                                            )
+                                        {
                                             if output.success {
                                                 // Mark connection as authenticated
                                                 conn_state.set_authenticated(true).await;
                                             }
                                         }
                                         // Send success response
-                                        let response = OutgoingMessage::success(correlation_id, result);
+                                        let response =
+                                            OutgoingMessage::success(correlation_id, result);
                                         if let Ok(json) = response.to_json() {
                                             let _ = conn_state.tx.send(Message::Text(json));
                                         }
                                     }
                                     Err(e) => {
-                                        let error_response = OutgoingMessage::error(correlation_id, e.to_jsonrpc_error());
+                                        let error_response = OutgoingMessage::error(
+                                            correlation_id,
+                                            e.to_jsonrpc_error(),
+                                        );
                                         if let Ok(json) = error_response.to_json() {
                                             let _ = conn_state.tx.send(Message::Text(json));
                                         }
@@ -681,7 +670,9 @@ async fn handle_message(
                         if method == "auth.status" {
                             if let IncomingMessage::Request { correlation_id, .. } = incoming {
                                 let is_authenticated = conn_state.is_authenticated().await;
-                                let status = server_state.auth_handler.get_status(is_authenticated, &conn_state.addr);
+                                let status = server_state
+                                    .auth_handler
+                                    .get_status(is_authenticated, &conn_state.addr);
                                 if let Ok(result) = serde_json::to_value(status) {
                                     let response = OutgoingMessage::success(correlation_id, result);
                                     if let Ok(json) = response.to_json() {
@@ -693,7 +684,12 @@ async fn handle_message(
                         }
 
                         // Route other methods
-                        if let IncomingMessage::Request { method, params, correlation_id } = incoming {
+                        if let IncomingMessage::Request {
+                            method,
+                            params,
+                            correlation_id,
+                        } = incoming
+                        {
                             match server_state.request_router.route(&method, params).await {
                                 Ok(result) => {
                                     let response = OutgoingMessage::success(correlation_id, result);
@@ -702,7 +698,10 @@ async fn handle_message(
                                     }
                                 }
                                 Err(e) => {
-                                    let error_response = OutgoingMessage::error(correlation_id, e.to_jsonrpc_error());
+                                    let error_response = OutgoingMessage::error(
+                                        correlation_id,
+                                        e.to_jsonrpc_error(),
+                                    );
                                     if let Ok(json) = error_response.to_json() {
                                         let _ = conn_state.tx.send(Message::Text(json));
                                     }
@@ -713,7 +712,8 @@ async fn handle_message(
                 }
                 Err(e) => {
                     // Send parse error response
-                    let error_response = OutgoingMessage::error("0".to_string(), e.to_jsonrpc_error());
+                    let error_response =
+                        OutgoingMessage::error("0".to_string(), e.to_jsonrpc_error());
                     if let Ok(json) = error_response.to_json() {
                         let _ = conn_state.tx.send(Message::Text(json));
                     }
@@ -736,42 +736,43 @@ async fn handle_message(
             conn_state.update_activity().await;
             true
         }
-        Message::Close(_) => {
-            false
-        }
+        Message::Close(_) => false,
     }
 }
 
 /// Create the axum router with WebSocket route
 pub fn create_router(state: Arc<ServerState>) -> Router {
-Router::new()
-.route("/ws", get(ws_handler))
-.with_state(state)
+    Router::new()
+        .route("/ws", get(ws_handler))
+        .with_state(state)
 }
 
 /// Start the WebSocket server
 pub async fn start_server(
-config: ServerConfig,
+    config: ServerConfig,
 ) -> Result<ServerHandle, Box<dyn std::error::Error>> {
-let state = ServerState::new(config.clone());
-state.register_runtime_handlers().await?;
-let app = create_router(state);
+    let state = ServerState::new(config.clone());
+    state.register_runtime_handlers().await?;
+    let app = create_router(state);
 
-let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
-let listener = tokio::net::TcpListener::bind(&addr).await?;
+    let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
 
-let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
+    let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
 
-let task_handle = tokio::spawn(async move {
-let server = axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>());
+    let task_handle = tokio::spawn(async move {
+        let server = axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        );
 
-// Run server with graceful shutdown
-let server_with_shutdown = server.with_graceful_shutdown(async move {
-    shutdown_rx.recv().await;
-});
+        // Run server with graceful shutdown
+        let server_with_shutdown = server.with_graceful_shutdown(async move {
+            shutdown_rx.recv().await;
+        });
 
-let _ = server_with_shutdown.await;
-});
+        let _ = server_with_shutdown.await;
+    });
 
     Ok(ServerHandle {
         shutdown_tx,
@@ -800,7 +801,10 @@ mod tests {
         let config = ServerConfig::default();
         assert_eq!(config.port, DEFAULT_PORT);
         assert_eq!(config.ping_interval_secs, DEFAULT_PING_INTERVAL_SECS);
-        assert_eq!(config.connection_timeout_secs, DEFAULT_CONNECTION_TIMEOUT_SECS);
+        assert_eq!(
+            config.connection_timeout_secs,
+            DEFAULT_CONNECTION_TIMEOUT_SECS
+        );
         assert!(!config.require_auth);
         assert!(config.password.is_none());
         assert!(config.allow_localhost_bypass);
@@ -942,154 +946,155 @@ mod tests {
         assert_eq!(result.unwrap_err(), "Connection not found");
     }
 
-#[test]
-fn test_create_router() {
-    let config = ServerConfig::default();
-    let state = ServerState::new(config);
-    let _router = create_router(state);
-    // Router created successfully
-}
-
-#[tokio::test]
-async fn test_auth_middleware_blocks_protected_methods() {
-    let config = ServerConfig::with_password("secret".to_string());
-    let state = ServerState::new(config);
-
-    let (tx, mut rx) = mpsc::unbounded_channel();
-    let addr = SocketAddr::from(([192, 168, 1, 1], 12345));
-    let conn_id = ConnectionId::new();
-    let conn_state = Arc::new(ConnectionState::new(conn_id, addr, tx));
-
-    state.connections.insert(conn_id, conn_state.clone());
-
-    let request = r#"{"jsonrpc":"2.0","id":"req-1","method":"workspace.list","params":{}}"#;
-    let msg = Message::Text(request.to_string());
-
-    let result = handle_message(msg, &conn_state, &state).await;
-    assert!(result);
-
-    let response = rx.recv().await.unwrap();
-    if let Message::Text(text) = response {
-        assert!(text.contains("error"));
-        assert!(text.contains("Authentication required"));
-    } else {
-        panic!("Expected text message");
+    #[test]
+    fn test_create_router() {
+        let config = ServerConfig::default();
+        let state = ServerState::new(config);
+        let _router = create_router(state);
+        // Router created successfully
     }
-}
 
-#[tokio::test]
-async fn test_auth_login_marks_connection_authenticated() {
-    let config = ServerConfig::with_password("secret".to_string());
-    let state = ServerState::new(config);
+    #[tokio::test]
+    async fn test_auth_middleware_blocks_protected_methods() {
+        let config = ServerConfig::with_password("secret".to_string());
+        let state = ServerState::new(config);
 
-    let (tx, mut rx) = mpsc::unbounded_channel();
-    let addr = SocketAddr::from(([192, 168, 1, 1], 12345));
-    let conn_id = ConnectionId::new();
-    let conn_state = Arc::new(ConnectionState::new(conn_id, addr, tx));
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let addr = SocketAddr::from(([192, 168, 1, 1], 12345));
+        let conn_id = ConnectionId::new();
+        let conn_state = Arc::new(ConnectionState::new(conn_id, addr, tx));
 
-    state.connections.insert(conn_id, conn_state.clone());
+        state.connections.insert(conn_id, conn_state.clone());
 
-    assert!(!conn_state.is_authenticated().await);
+        let request = r#"{"jsonrpc":"2.0","id":"req-1","method":"workspace.list","params":{}}"#;
+        let msg = Message::Text(request.to_string());
 
-    let request = r#"{"jsonrpc":"2.0","id":"req-1","method":"auth.login","params":{"password":"secret"}}"#;
-    let msg = Message::Text(request.to_string());
+        let result = handle_message(msg, &conn_state, &state).await;
+        assert!(result);
 
-    let result = handle_message(msg, &conn_state, &state).await;
-    assert!(result);
-
-    assert!(conn_state.is_authenticated().await);
-
-    let response = rx.recv().await.unwrap();
-    if let Message::Text(text) = response {
-        assert!(text.contains("success"));
-        assert!(text.contains("true"));
-    } else {
-        panic!("Expected text message");
+        let response = rx.recv().await.unwrap();
+        if let Message::Text(text) = response {
+            assert!(text.contains("error"));
+            assert!(text.contains("Authentication required"));
+        } else {
+            panic!("Expected text message");
+        }
     }
-}
 
-#[tokio::test]
-async fn test_auth_login_wrong_password_fails() {
-    let config = ServerConfig::with_password("secret".to_string());
-    let state = ServerState::new(config);
+    #[tokio::test]
+    async fn test_auth_login_marks_connection_authenticated() {
+        let config = ServerConfig::with_password("secret".to_string());
+        let state = ServerState::new(config);
 
-    let (tx, mut rx) = mpsc::unbounded_channel();
-    let addr = SocketAddr::from(([192, 168, 1, 1], 12345));
-    let conn_id = ConnectionId::new();
-    let conn_state = Arc::new(ConnectionState::new(conn_id, addr, tx));
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let addr = SocketAddr::from(([192, 168, 1, 1], 12345));
+        let conn_id = ConnectionId::new();
+        let conn_state = Arc::new(ConnectionState::new(conn_id, addr, tx));
 
-    state.connections.insert(conn_id, conn_state.clone());
+        state.connections.insert(conn_id, conn_state.clone());
 
-    let request = r#"{"jsonrpc":"2.0","id":"req-1","method":"auth.login","params":{"password":"wrong"}}"#;
-    let msg = Message::Text(request.to_string());
+        assert!(!conn_state.is_authenticated().await);
 
-    let result = handle_message(msg, &conn_state, &state).await;
-    assert!(result);
+        let request = r#"{"jsonrpc":"2.0","id":"req-1","method":"auth.login","params":{"password":"secret"}}"#;
+        let msg = Message::Text(request.to_string());
 
-    assert!(!conn_state.is_authenticated().await);
+        let result = handle_message(msg, &conn_state, &state).await;
+        assert!(result);
 
-    let response = rx.recv().await.unwrap();
-    if let Message::Text(text) = response {
-        assert!(text.contains("success"));
-        assert!(text.contains("false"));
-    } else {
-        panic!("Expected text message");
+        assert!(conn_state.is_authenticated().await);
+
+        let response = rx.recv().await.unwrap();
+        if let Message::Text(text) = response {
+            assert!(text.contains("success"));
+            assert!(text.contains("true"));
+        } else {
+            panic!("Expected text message");
+        }
     }
-}
 
-#[tokio::test]
-async fn test_localhost_bypass_allows_protected_methods() {
-    let config = ServerConfig::with_password("secret".to_string());
-    let state = ServerState::new(config);
+    #[tokio::test]
+    async fn test_auth_login_wrong_password_fails() {
+        let config = ServerConfig::with_password("secret".to_string());
+        let state = ServerState::new(config);
 
-    let (tx, mut rx) = mpsc::unbounded_channel();
-    let addr = SocketAddr::from(([127, 0, 0, 1], 12345));
-    let conn_id = ConnectionId::new();
-    let conn_state = Arc::new(ConnectionState::new(conn_id, addr, tx));
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let addr = SocketAddr::from(([192, 168, 1, 1], 12345));
+        let conn_id = ConnectionId::new();
+        let conn_state = Arc::new(ConnectionState::new(conn_id, addr, tx));
 
-    state.connections.insert(conn_id, conn_state.clone());
+        state.connections.insert(conn_id, conn_state.clone());
 
-    let request = r#"{"jsonrpc":"2.0","id":"req-1","method":"workspace.list","params":{}}"#;
-    let msg = Message::Text(request.to_string());
+        let request =
+            r#"{"jsonrpc":"2.0","id":"req-1","method":"auth.login","params":{"password":"wrong"}}"#;
+        let msg = Message::Text(request.to_string());
 
-    let result = handle_message(msg, &conn_state, &state).await;
-    assert!(result);
+        let result = handle_message(msg, &conn_state, &state).await;
+        assert!(result);
 
-    let response = rx.recv().await.unwrap();
-    if let Message::Text(text) = response {
-        assert!(text.contains("error"));
-        assert!(text.contains("Method not found"));
-        assert!(!text.contains("Authentication required"));
-    } else {
-        panic!("Expected text message");
+        assert!(!conn_state.is_authenticated().await);
+
+        let response = rx.recv().await.unwrap();
+        if let Message::Text(text) = response {
+            assert!(text.contains("success"));
+            assert!(text.contains("false"));
+        } else {
+            panic!("Expected text message");
+        }
     }
-}
 
-#[tokio::test]
-async fn test_auth_status_returns_connection_context() {
-    let config = ServerConfig::with_password("secret".to_string());
-    let state = ServerState::new(config);
+    #[tokio::test]
+    async fn test_localhost_bypass_allows_protected_methods() {
+        let config = ServerConfig::with_password("secret".to_string());
+        let state = ServerState::new(config);
 
-    let (tx, mut rx) = mpsc::unbounded_channel();
-    let addr = SocketAddr::from(([127, 0, 0, 1], 12345));
-    let conn_id = ConnectionId::new();
-    let conn_state = Arc::new(ConnectionState::new(conn_id, addr, tx));
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let addr = SocketAddr::from(([127, 0, 0, 1], 12345));
+        let conn_id = ConnectionId::new();
+        let conn_state = Arc::new(ConnectionState::new(conn_id, addr, tx));
 
-    state.connections.insert(conn_id, conn_state.clone());
+        state.connections.insert(conn_id, conn_state.clone());
 
-    let request = r#"{"jsonrpc":"2.0","id":"req-1","method":"auth.status"}"#;
-    let msg = Message::Text(request.to_string());
+        let request = r#"{"jsonrpc":"2.0","id":"req-1","method":"workspace.list","params":{}}"#;
+        let msg = Message::Text(request.to_string());
 
-    let result = handle_message(msg, &conn_state, &state).await;
-    assert!(result);
+        let result = handle_message(msg, &conn_state, &state).await;
+        assert!(result);
 
-    let response = rx.recv().await.unwrap();
-    if let Message::Text(text) = response {
-        assert!(text.contains("authenticated"));
-        assert!(text.contains("auth_required"));
-        assert!(text.contains("is_localhost"));
-    } else {
-        panic!("Expected text message");
+        let response = rx.recv().await.unwrap();
+        if let Message::Text(text) = response {
+            assert!(text.contains("error"));
+            assert!(text.contains("Method not found"));
+            assert!(!text.contains("Authentication required"));
+        } else {
+            panic!("Expected text message");
+        }
     }
-}
+
+    #[tokio::test]
+    async fn test_auth_status_returns_connection_context() {
+        let config = ServerConfig::with_password("secret".to_string());
+        let state = ServerState::new(config);
+
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let addr = SocketAddr::from(([127, 0, 0, 1], 12345));
+        let conn_id = ConnectionId::new();
+        let conn_state = Arc::new(ConnectionState::new(conn_id, addr, tx));
+
+        state.connections.insert(conn_id, conn_state.clone());
+
+        let request = r#"{"jsonrpc":"2.0","id":"req-1","method":"auth.status"}"#;
+        let msg = Message::Text(request.to_string());
+
+        let result = handle_message(msg, &conn_state, &state).await;
+        assert!(result);
+
+        let response = rx.recv().await.unwrap();
+        if let Message::Text(text) = response {
+            assert!(text.contains("authenticated"));
+            assert!(text.contains("auth_required"));
+            assert!(text.contains("is_localhost"));
+        } else {
+            panic!("Expected text message");
+        }
+    }
 }

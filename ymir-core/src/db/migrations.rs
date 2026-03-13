@@ -64,10 +64,7 @@ impl MigrationRunner {
         }
 
         let mut rows = db
-            .query(
-                "SELECT COALESCE(MAX(version), 0) FROM _migrations",
-                (),
-            )
+            .query("SELECT COALESCE(MAX(version), 0) FROM _migrations", ())
             .await
             .map_err(|e| {
                 crate::CoreError::Database(format!("Failed to get current version: {}", e))
@@ -86,13 +83,11 @@ impl MigrationRunner {
     /// Discover all embedded migrations
     fn discover_migrations() -> Result<Vec<Migration>> {
         // Return migrations in version order (ordered list)
-        let migrations = vec![
-            Migration {
-                version: 1,
-                name: "001_initial_schema".to_string(),
-                sql: MIGRATION_001.to_string(),
-            },
-        ];
+        let migrations = vec![Migration {
+            version: 1,
+            name: "001_initial_schema".to_string(),
+            sql: MIGRATION_001.to_string(),
+        }];
 
         if migrations.is_empty() {
             return Err(crate::CoreError::Database(
@@ -121,14 +116,12 @@ impl MigrationRunner {
         for statement in cleaned_sql.split(';') {
             let stmt = statement.trim();
             if !stmt.is_empty() {
-                db.execute(stmt, ())
-                    .await
-                    .map_err(|e| {
-                        crate::CoreError::Database(format!(
-                            "Failed to apply migration {}: {}",
-                            migration.name, e
-                        ))
-                    })?;
+                db.execute(stmt, ()).await.map_err(|e| {
+                    crate::CoreError::Database(format!(
+                        "Failed to apply migration {}: {}",
+                        migration.name, e
+                    ))
+                })?;
             }
         }
 

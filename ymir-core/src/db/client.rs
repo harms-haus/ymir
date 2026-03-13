@@ -94,7 +94,9 @@ impl DatabaseClient {
             connection
                 .execute("PRAGMA foreign_keys = ON;", ())
                 .await
-                .map_err(|e| CoreError::Database(format!("Failed to enable foreign keys: {}", e)))?;
+                .map_err(|e| {
+                    CoreError::Database(format!("Failed to enable foreign keys: {}", e))
+                })?;
         }
 
         Ok(Self {
@@ -108,7 +110,9 @@ impl DatabaseClient {
         let db = libsql::Builder::new_local(":memory:")
             .build()
             .await
-            .map_err(|e| CoreError::Database(format!("Failed to build in-memory database: {}", e)))?;
+            .map_err(|e| {
+                CoreError::Database(format!("Failed to build in-memory database: {}", e))
+            })?;
 
         let connection = db
             .connect()
@@ -262,7 +266,10 @@ mod tests {
             .unwrap();
 
         // Query
-        let mut rows = client.query("SELECT name FROM test WHERE id = 1", ()).await.unwrap();
+        let mut rows = client
+            .query("SELECT name FROM test WHERE id = 1", ())
+            .await
+            .unwrap();
         let row = rows.next().await.unwrap().unwrap();
         let name: String = row.get(0).unwrap();
         assert_eq!(name, "hello");
@@ -274,10 +281,7 @@ mod tests {
 
         // Create tables with foreign key
         client
-            .execute(
-                "CREATE TABLE parent (id TEXT PRIMARY KEY)",
-                (),
-            )
+            .execute("CREATE TABLE parent (id TEXT PRIMARY KEY)", ())
             .await
             .unwrap();
         client
@@ -296,7 +300,10 @@ mod tests {
 
         // Insert child
         client
-            .execute("INSERT INTO child (id, parent_id) VALUES ('child-1', 'parent-1')", ())
+            .execute(
+                "INSERT INTO child (id, parent_id) VALUES ('child-1', 'parent-1')",
+                (),
+            )
             .await
             .unwrap();
 
@@ -389,10 +396,16 @@ mod tests {
         let client2 = client.clone();
 
         // Insert from first client
-        client.execute("INSERT INTO test DEFAULT VALUES", ()).await.unwrap();
+        client
+            .execute("INSERT INTO test DEFAULT VALUES", ())
+            .await
+            .unwrap();
 
         // Query from second client (same underlying connection)
-        let mut rows = client2.query("SELECT COUNT(*) FROM test", ()).await.unwrap();
+        let mut rows = client2
+            .query("SELECT COUNT(*) FROM test", ())
+            .await
+            .unwrap();
         let count: i64 = rows.next().await.unwrap().unwrap().get(0).unwrap();
         assert_eq!(count, 1, "Both clients should see the same data");
     }

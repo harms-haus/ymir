@@ -13,6 +13,13 @@ interface UsePanesResult {
   refetch: () => Promise<void>;
 }
 
+const PANE_NOTIFICATION_METHODS = ['pane.state_change'] as const;
+const INITIAL_PANES: Pane[] = [];
+
+function mapPaneListResult(result: PaneListResult): Pane[] {
+  return result.panes;
+}
+
 export function usePanes(workspaceId: string | null | undefined): UsePanesResult {
   const params = useMemo(
     () => (workspaceId ? { workspaceId } : undefined),
@@ -23,9 +30,9 @@ export function usePanes(workspaceId: string | null | undefined): UsePanesResult
     method: 'pane.list',
     params,
     enabled: Boolean(workspaceId),
-    initialData: [],
-    notificationMethods: ['pane.state_change'],
-    mapResult: (result) => result.panes,
+    initialData: INITIAL_PANES,
+    notificationMethods: PANE_NOTIFICATION_METHODS,
+    mapResult: mapPaneListResult,
   });
 
   return {

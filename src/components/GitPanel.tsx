@@ -1,11 +1,18 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { PanelDefinition, GitFile, GitRepo } from '../state/types';
-import useWorkspaceStore, { getAllGitRepos, getGitChangesCount, getGitError } from '../state/workspace';
 import gitService from '../lib/git-service';
 import logger from '../lib/logger';
 import { invoke } from '@tauri-apps/api/core';
 import { useExpandCollapse } from '../hooks/useExpandCollapse';
 import { useGit } from '../hooks/useGit';
+import { discoverGitRepos } from '../lib/git-discovery';
+import {
+  getRuntimeGitChangesCount,
+  setRuntimeGitChanges,
+  setRuntimeGitError,
+  setRuntimeGitRepos,
+  useRuntimeGitState,
+} from '../lib/runtime-git-state';
 import { getWebSocketService } from '../services/websocket';
 import { Button } from './ui/Button';
 import { Checkbox, Input } from './ui/Input';
@@ -137,7 +144,7 @@ const BranchSelector: React.FC<{
     try {
       await onSelect(branch);
       setOpen(false);
-    } catch (error) {
+    } catch (_error) {
       onShowToast('Cannot switch branches: You have uncommitted changes', 'error');
     }
   };
@@ -159,7 +166,7 @@ const BranchSelector: React.FC<{
         setIsCreatingInline(false);
         setNewBranchName('');
         setOpen(false);
-      } catch (error) {
+      } catch (_error) {
         onShowToast('Failed to create branch', 'error');
       }
     }
@@ -186,7 +193,7 @@ const BranchSelector: React.FC<{
         await onDeleteBranch(branchToDelete);
         setBranchToDelete(null);
         setOpen(false);
-      } catch (error) {
+      } catch (_error) {
         onShowToast('Failed to delete branch', 'error');
       }
     }
@@ -503,7 +510,7 @@ const GitPanelIcon = (): React.ReactNode => (
 );
 
 const GitPanelBadge = (): import('../state/types').TabBadge | null => {
-  const count = getGitChangesCount();
+  const count = getRuntimeGitChangesCount();
   if (count === 0) return null;
   return { count, color: 'var(--notification)' };
 };
@@ -721,10 +728,8 @@ interface ToastItem {
 }
 
 const GitPanelFull = (): React.ReactNode => {
-  const gitError = getGitError();
-  const { discoverAndRegisterRepos } = useWorkspaceStore();
-  const allRepos = getAllGitRepos();
-  const repoPaths = allRepos.map((repo) => repo.path);
+  const gitError = useRuntimeGitState((state) => state.error);
+  const repoPaths = useRuntimeGitState((state) => state.repoPaths);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const toastTimeoutRefs = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
@@ -739,12 +744,18 @@ const GitPanelFull = (): React.ReactNode => {
   useEffect(() => {
     invoke<string>('get_app_cwd').then((cwd) => {
       logger.info('[GitPanel] get_app_cwd returned', { cwd });
-      discoverAndRegisterRepos(cwd);
+      void discoverGitRepos(cwd).then((repos) => {
+        setRuntimeGitRepos(repos);
+        setRuntimeGitError(null);
+      });
     }).catch((err) => {
       logger.info('[GitPanel] get_app_cwd failed, using fallback', { err });
-      discoverAndRegisterRepos('.');
+      void discoverGitRepos('.').then((repos) => {
+        setRuntimeGitRepos(repos);
+        setRuntimeGitError(repos.length === 0 ? 'No git repositories discovered' : null);
+      });
     });
-  }, [discoverAndRegisterRepos]);
+  }, []);
 
   const showToast = useCallback((message: string, type: 'error' | 'success' = 'error') => {
     const id = Math.random().toString(36).substring(2, 9);
@@ -823,6 +834,15 @@ const RepoAccordionItem: React.FC<{
   onShowToast: (message: string, type?: 'error' | 'success') => void;
 }> = ({ repoPath, onShowToast }) => {
   const { repo, isLoading, error, refetch } = useGit(repoPath);
+
+  useEffect(() => {
+    if (!repo) {
+      setRuntimeGitChanges(repoPath, 0);
+      return;
+    }
+
+    setRuntimeGitChanges(repoPath, repo.staged.length + repo.unstaged.length);
+  }, [repo, repoPath]);
 
   if (isLoading && !repo) {
     return (

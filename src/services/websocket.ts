@@ -72,6 +72,7 @@ const DEFAULT_RECONNECT_BASE_DELAY_MS = 500;
 const DEFAULT_RECONNECT_MAX_DELAY_MS = 10_000;
 const DEFAULT_RECONNECT_BACKOFF_FACTOR = 2;
 const JSONRPC_INTERNAL_ERROR = -32603;
+const DEFAULT_WEBSOCKET_URL = 'ws://127.0.0.1:7144/ws';
 
 type MessageListener = (message: JsonRpcIncomingMessage) => void;
 type ConnectionListener = (status: ConnectionStatus) => void;
@@ -534,6 +535,20 @@ export function getWebSocketService(): WebSocketService {
     instance = new WebSocketService();
   }
   return instance;
+}
+
+export function resolveWebSocketUrl(): string {
+  const fromEnv = import.meta.env.VITE_WEBSOCKET_URL ?? import.meta.env.VITE_YMIR_WS_URL;
+  if (typeof fromEnv === 'string' && fromEnv.trim().length > 0) {
+    return fromEnv.trim();
+  }
+
+  return DEFAULT_WEBSOCKET_URL;
+}
+
+export async function ensureWebSocketConnected(): Promise<void> {
+  const service = getWebSocketService();
+  await service.connect(resolveWebSocketUrl());
 }
 
 export async function resetWebSocketService(): Promise<void> {

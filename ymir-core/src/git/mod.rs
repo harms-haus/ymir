@@ -149,7 +149,10 @@ impl FileStatus {
     pub fn has_changes(&self) -> bool {
         matches!(
             self,
-            FileStatus::Modified | FileStatus::Deleted | FileStatus::Untracked | FileStatus::Conflicted
+            FileStatus::Modified
+                | FileStatus::Deleted
+                | FileStatus::Untracked
+                | FileStatus::Conflicted
         )
     }
 }

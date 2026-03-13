@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   type JsonRpcIncomingMessage,
   type JsonRpcNotification,
+  ensureWebSocketConnected,
   getWebSocketService,
 } from '../services/websocket';
 
@@ -76,6 +77,9 @@ export function useWebSocketSubscriptionState<TData, TResult>(
     setError(null);
 
     try {
+      if (!websocketService.isConnected()) {
+        await ensureWebSocketConnected();
+      }
       const result = await websocketService.request<TResult>(method, params);
       if (requestGenerationRef.current !== generation) {
         return;

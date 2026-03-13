@@ -12,13 +12,12 @@
 
 use crate::db::client::DatabaseClient;
 use crate::git::service::GitService;
-use crate::git::{BranchInfo, FileStatus, GitStatus};
+use crate::git::{BranchInfo, GitStatus};
 use crate::server::protocol::{OutgoingMessage, ProtocolError};
 use crate::types::{CoreError, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -196,7 +195,6 @@ pub enum GitNotification {
 #[derive(Clone)]
 pub struct GitHandler {
     git_service: GitService,
-    db: Option<Arc<DatabaseClient>>,
     /// Map of repo paths to their last known status (for change detection)
     last_status: Arc<RwLock<HashMap<String, GitStatus>>>,
 }
@@ -206,7 +204,6 @@ impl GitHandler {
     pub fn new() -> Self {
         Self {
             git_service: GitService::new(),
-            db: None,
             last_status: Arc::new(RwLock::new(HashMap::new())),
         }
     }
@@ -215,7 +212,6 @@ impl GitHandler {
     pub fn with_db(db: Arc<DatabaseClient>) -> Self {
         Self {
             git_service: GitService::with_db(db.as_ref().clone()),
-            db: Some(db),
             last_status: Arc::new(RwLock::new(HashMap::new())),
         }
     }
@@ -373,69 +369,105 @@ impl GitRpcHandler {
         match method {
             "git.status" => {
                 let input: GitStatusInput = params
-                    .map(|p| serde_json::from_value(p).map_err(|e| ProtocolError::InvalidParams(e.to_string())))
-                    .unwrap_or(Err(ProtocolError::InvalidParams("Missing params".to_string())))?;
+                    .map(|p| {
+                        serde_json::from_value(p)
+                            .map_err(|e| ProtocolError::InvalidParams(e.to_string()))
+                    })
+                    .unwrap_or(Err(ProtocolError::InvalidParams(
+                        "Missing params".to_string(),
+                    )))?;
 
                 let output = self.inner.status(input).await.map_err(|e| {
                     ProtocolError::InternalError(format!("Failed to get git status: {}", e))
                 })?;
 
-                serde_json::to_value(output).map_err(|e| ProtocolError::InternalError(e.to_string()))
+                serde_json::to_value(output)
+                    .map_err(|e| ProtocolError::InternalError(e.to_string()))
             }
             "git.stage" => {
                 let input: GitStageInput = params
-                    .map(|p| serde_json::from_value(p).map_err(|e| ProtocolError::InvalidParams(e.to_string())))
-                    .unwrap_or(Err(ProtocolError::InvalidParams("Missing params".to_string())))?;
+                    .map(|p| {
+                        serde_json::from_value(p)
+                            .map_err(|e| ProtocolError::InvalidParams(e.to_string()))
+                    })
+                    .unwrap_or(Err(ProtocolError::InvalidParams(
+                        "Missing params".to_string(),
+                    )))?;
 
                 let output = self.inner.stage(input).await.map_err(|e| {
                     ProtocolError::InternalError(format!("Failed to stage file: {}", e))
                 })?;
 
-                serde_json::to_value(output).map_err(|e| ProtocolError::InternalError(e.to_string()))
+                serde_json::to_value(output)
+                    .map_err(|e| ProtocolError::InternalError(e.to_string()))
             }
             "git.unstage" => {
                 let input: GitUnstageInput = params
-                    .map(|p| serde_json::from_value(p).map_err(|e| ProtocolError::InvalidParams(e.to_string())))
-                    .unwrap_or(Err(ProtocolError::InvalidParams("Missing params".to_string())))?;
+                    .map(|p| {
+                        serde_json::from_value(p)
+                            .map_err(|e| ProtocolError::InvalidParams(e.to_string()))
+                    })
+                    .unwrap_or(Err(ProtocolError::InvalidParams(
+                        "Missing params".to_string(),
+                    )))?;
 
                 let output = self.inner.unstage(input).await.map_err(|e| {
                     ProtocolError::InternalError(format!("Failed to unstage file: {}", e))
                 })?;
 
-                serde_json::to_value(output).map_err(|e| ProtocolError::InternalError(e.to_string()))
+                serde_json::to_value(output)
+                    .map_err(|e| ProtocolError::InternalError(e.to_string()))
             }
             "git.commit" => {
                 let input: GitCommitInput = params
-                    .map(|p| serde_json::from_value(p).map_err(|e| ProtocolError::InvalidParams(e.to_string())))
-                    .unwrap_or(Err(ProtocolError::InvalidParams("Missing params".to_string())))?;
+                    .map(|p| {
+                        serde_json::from_value(p)
+                            .map_err(|e| ProtocolError::InvalidParams(e.to_string()))
+                    })
+                    .unwrap_or(Err(ProtocolError::InvalidParams(
+                        "Missing params".to_string(),
+                    )))?;
 
                 let output = self.inner.commit(input).await.map_err(|e| {
                     ProtocolError::InternalError(format!("Failed to create commit: {}", e))
                 })?;
 
-                serde_json::to_value(output).map_err(|e| ProtocolError::InternalError(e.to_string()))
+                serde_json::to_value(output)
+                    .map_err(|e| ProtocolError::InternalError(e.to_string()))
             }
             "git.branches" => {
                 let input: GitBranchesInput = params
-                    .map(|p| serde_json::from_value(p).map_err(|e| ProtocolError::InvalidParams(e.to_string())))
-                    .unwrap_or(Err(ProtocolError::InvalidParams("Missing params".to_string())))?;
+                    .map(|p| {
+                        serde_json::from_value(p)
+                            .map_err(|e| ProtocolError::InvalidParams(e.to_string()))
+                    })
+                    .unwrap_or(Err(ProtocolError::InvalidParams(
+                        "Missing params".to_string(),
+                    )))?;
 
                 let output = self.inner.branches(input).await.map_err(|e| {
                     ProtocolError::InternalError(format!("Failed to get branches: {}", e))
                 })?;
 
-                serde_json::to_value(output).map_err(|e| ProtocolError::InternalError(e.to_string()))
+                serde_json::to_value(output)
+                    .map_err(|e| ProtocolError::InternalError(e.to_string()))
             }
             "git.checkout" => {
                 let input: GitCheckoutInput = params
-                    .map(|p| serde_json::from_value(p).map_err(|e| ProtocolError::InvalidParams(e.to_string())))
-                    .unwrap_or(Err(ProtocolError::InvalidParams("Missing params".to_string())))?;
+                    .map(|p| {
+                        serde_json::from_value(p)
+                            .map_err(|e| ProtocolError::InvalidParams(e.to_string()))
+                    })
+                    .unwrap_or(Err(ProtocolError::InvalidParams(
+                        "Missing params".to_string(),
+                    )))?;
 
                 let output = self.inner.checkout(input).await.map_err(|e| {
                     ProtocolError::InternalError(format!("Failed to checkout branch: {}", e))
                 })?;
 
-                serde_json::to_value(output).map_err(|e| ProtocolError::InternalError(e.to_string()))
+                serde_json::to_value(output)
+                    .map_err(|e| ProtocolError::InternalError(e.to_string()))
             }
             _ => Err(ProtocolError::MethodNotFound(method.to_string())),
         }
@@ -496,7 +528,9 @@ impl GitPollingService {
             match self.handler.git_service().get_repo_status(repo_path).await {
                 Ok(status) => {
                     if self.handler.has_status_changed(repo_path, &status).await {
-                        self.handler.update_last_status(repo_path, status.clone()).await;
+                        self.handler
+                            .update_last_status(repo_path, status.clone())
+                            .await;
                         changed.push((repo_path.clone(), status));
                     }
                 }
@@ -534,7 +568,9 @@ impl GitPollingService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::git::FileStatus;
     use std::fs;
+    use std::path::PathBuf;
     use tempfile::TempDir;
 
     fn create_test_repo() -> (TempDir, String) {
@@ -601,7 +637,9 @@ mod tests {
         assert_eq!(stage_output.file_path, "test.txt");
 
         // Check status
-        let status_input = GitStatusInput { repo_path: repo_path.clone() };
+        let status_input = GitStatusInput {
+            repo_path: repo_path.clone(),
+        };
         let status_output = handler.status(status_input).await.unwrap();
         assert_eq!(status_output.status.files.len(), 1);
         assert!(status_output.status.files[0].status.is_staged());
@@ -677,7 +715,9 @@ mod tests {
         create_initial_commit(&repo_path);
         let handler = GitHandler::new();
 
-        let branches_input = GitBranchesInput { repo_path: repo_path.clone() };
+        let branches_input = GitBranchesInput {
+            repo_path: repo_path.clone(),
+        };
         let branches_output = handler.branches(branches_input).await.unwrap();
 
         // Should have at least one branch (main/master)
@@ -866,7 +906,9 @@ mod tests {
         let handler = GitHandler::new();
 
         // Get initial status and store it
-        let input = GitStatusInput { repo_path: repo_path.clone() };
+        let input = GitStatusInput {
+            repo_path: repo_path.clone(),
+        };
         let output = handler.status(input).await.unwrap();
 
         // Should not have changed (same status)

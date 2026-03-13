@@ -103,7 +103,11 @@ impl WorkspaceHandler {
 
         let mut workspaces = Vec::new();
 
-        while let Some(row) = rows.next().await.map_err(|e| CoreError::Database(e.to_string()))? {
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| CoreError::Database(e.to_string()))?
+        {
             let id: String = row.get(0).map_err(|e| CoreError::Database(e.to_string()))?;
             let name: String = row.get(1).map_err(|e| CoreError::Database(e.to_string()))?;
 
@@ -129,7 +133,12 @@ impl WorkspaceHandler {
         let sql = format!("SELECT id FROM workspaces WHERE id = '{}'", id_escaped);
         let mut rows = self.db.query(&sql, ()).await?;
 
-        if rows.next().await.map_err(|e| CoreError::Database(e.to_string()))?.is_none() {
+        if rows
+            .next()
+            .await
+            .map_err(|e| CoreError::Database(e.to_string()))?
+            .is_none()
+        {
             return Err(CoreError::InvalidWorkspaceId(format!(
                 "Workspace not found: {}",
                 input.id
@@ -147,10 +156,17 @@ impl WorkspaceHandler {
 
     pub async fn rename(&self, input: RenameWorkspaceInput) -> Result<RenameWorkspaceOutput> {
         let id_escaped = escape_sql(&input.id);
-        let sql = format!("SELECT id, name FROM workspaces WHERE id = '{}'", id_escaped);
+        let sql = format!(
+            "SELECT id, name FROM workspaces WHERE id = '{}'",
+            id_escaped
+        );
         let mut rows = self.db.query(&sql, ()).await?;
 
-        let (id, _old_name) = match rows.next().await.map_err(|e| CoreError::Database(e.to_string()))? {
+        let (id, _old_name) = match rows
+            .next()
+            .await
+            .map_err(|e| CoreError::Database(e.to_string()))?
+        {
             Some(row) => {
                 let id: String = row.get(0).map_err(|e| CoreError::Database(e.to_string()))?;
                 let name: String = row.get(1).map_err(|e| CoreError::Database(e.to_string()))?;
@@ -203,51 +219,76 @@ impl WorkspaceRpcHandler {
         }
     }
 
-    pub async fn handle(&self, method: &str, params: Option<Value>) -> std::result::Result<Value, ProtocolError> {
+    pub async fn handle(
+        &self,
+        method: &str,
+        params: Option<Value>,
+    ) -> std::result::Result<Value, ProtocolError> {
         match method {
             "workspace.create" => {
                 let input: CreateWorkspaceInput = params
-                    .map(|p| serde_json::from_value(p).map_err(|e| ProtocolError::InvalidParams(e.to_string())))
-                    .unwrap_or(Err(ProtocolError::InvalidParams("Missing params".to_string())))?;
+                    .map(|p| {
+                        serde_json::from_value(p)
+                            .map_err(|e| ProtocolError::InvalidParams(e.to_string()))
+                    })
+                    .unwrap_or(Err(ProtocolError::InvalidParams(
+                        "Missing params".to_string(),
+                    )))?;
 
                 let output = self.inner.create(input).await.map_err(|e| {
                     ProtocolError::InternalError(format!("Failed to create workspace: {}", e))
                 })?;
 
-                serde_json::to_value(output).map_err(|e| ProtocolError::InternalError(e.to_string()))
+                serde_json::to_value(output)
+                    .map_err(|e| ProtocolError::InternalError(e.to_string()))
             }
             "workspace.list" => {
                 let input: ListWorkspacesInput = params
-                    .map(|p| serde_json::from_value(p).unwrap_or(ListWorkspacesInput { filter: None }))
+                    .map(|p| {
+                        serde_json::from_value(p).unwrap_or(ListWorkspacesInput { filter: None })
+                    })
                     .unwrap_or(ListWorkspacesInput { filter: None });
 
                 let output = self.inner.list(input).await.map_err(|e| {
                     ProtocolError::InternalError(format!("Failed to list workspaces: {}", e))
                 })?;
 
-                serde_json::to_value(output).map_err(|e| ProtocolError::InternalError(e.to_string()))
+                serde_json::to_value(output)
+                    .map_err(|e| ProtocolError::InternalError(e.to_string()))
             }
             "workspace.delete" => {
                 let input: DeleteWorkspaceInput = params
-                    .map(|p| serde_json::from_value(p).map_err(|e| ProtocolError::InvalidParams(e.to_string())))
-                    .unwrap_or(Err(ProtocolError::InvalidParams("Missing params".to_string())))?;
+                    .map(|p| {
+                        serde_json::from_value(p)
+                            .map_err(|e| ProtocolError::InvalidParams(e.to_string()))
+                    })
+                    .unwrap_or(Err(ProtocolError::InvalidParams(
+                        "Missing params".to_string(),
+                    )))?;
 
                 let output = self.inner.delete(input).await.map_err(|e| {
                     ProtocolError::InternalError(format!("Failed to delete workspace: {}", e))
                 })?;
 
-                serde_json::to_value(output).map_err(|e| ProtocolError::InternalError(e.to_string()))
+                serde_json::to_value(output)
+                    .map_err(|e| ProtocolError::InternalError(e.to_string()))
             }
             "workspace.rename" => {
                 let input: RenameWorkspaceInput = params
-                    .map(|p| serde_json::from_value(p).map_err(|e| ProtocolError::InvalidParams(e.to_string())))
-                    .unwrap_or(Err(ProtocolError::InvalidParams("Missing params".to_string())))?;
+                    .map(|p| {
+                        serde_json::from_value(p)
+                            .map_err(|e| ProtocolError::InvalidParams(e.to_string()))
+                    })
+                    .unwrap_or(Err(ProtocolError::InvalidParams(
+                        "Missing params".to_string(),
+                    )))?;
 
                 let output = self.inner.rename(input).await.map_err(|e| {
                     ProtocolError::InternalError(format!("Failed to rename workspace: {}", e))
                 })?;
 
-                serde_json::to_value(output).map_err(|e| ProtocolError::InternalError(e.to_string()))
+                serde_json::to_value(output)
+                    .map_err(|e| ProtocolError::InternalError(e.to_string()))
             }
             _ => Err(ProtocolError::MethodNotFound(method.to_string())),
         }
@@ -364,7 +405,10 @@ mod tests {
 
         assert!(output.success);
 
-        let list_output = handler.list(ListWorkspacesInput { filter: None }).await.unwrap();
+        let list_output = handler
+            .list(ListWorkspacesInput { filter: None })
+            .await
+            .unwrap();
         assert!(list_output.workspaces.is_empty());
     }
 
@@ -464,7 +508,10 @@ mod tests {
             "name": "List Test",
             "id": "ws-list-1"
         });
-        handler.handle("workspace.create", Some(create_params)).await.unwrap();
+        handler
+            .handle("workspace.create", Some(create_params))
+            .await
+            .unwrap();
 
         let result = handler.handle("workspace.list", None).await;
         assert!(result.is_ok());
@@ -479,12 +526,17 @@ mod tests {
             "name": "Delete Test",
             "id": "ws-delete-1"
         });
-        handler.handle("workspace.create", Some(create_params)).await.unwrap();
+        handler
+            .handle("workspace.create", Some(create_params))
+            .await
+            .unwrap();
 
         let delete_params = serde_json::json!({
             "id": "ws-delete-1"
         });
-        let result = handler.handle("workspace.delete", Some(delete_params)).await;
+        let result = handler
+            .handle("workspace.delete", Some(delete_params))
+            .await;
         assert!(result.is_ok());
     }
 
@@ -497,13 +549,18 @@ mod tests {
             "name": "Rename Test",
             "id": "ws-rename-1"
         });
-        handler.handle("workspace.create", Some(create_params)).await.unwrap();
+        handler
+            .handle("workspace.create", Some(create_params))
+            .await
+            .unwrap();
 
         let rename_params = serde_json::json!({
             "id": "ws-rename-1",
             "name": "Renamed Workspace"
         });
-        let result = handler.handle("workspace.rename", Some(rename_params)).await;
+        let result = handler
+            .handle("workspace.rename", Some(rename_params))
+            .await;
         assert!(result.is_ok());
     }
 

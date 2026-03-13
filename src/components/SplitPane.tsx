@@ -4,7 +4,6 @@
 import React from 'react';
 import { Group, Panel, Separator, type Orientation } from 'react-resizable-panels';
 import { SplitNode, BranchNode, LeafNode, isBranch, isLeaf } from '../state/types';
-import useWorkspaceStore from '../state/workspace';
 import { Pane } from './Pane';
 
 // ============================================================================
@@ -66,30 +65,6 @@ export function findTopmostPanes(node: SplitNode, isAboveSplit: boolean = false)
 const MIN_PANEL_SIZE_PERCENTAGE = 10;
 
 const LeafPane = React.memo(function LeafPane({ node, workspaceId, windowControlsPosition, targetPaneId, isTopmost }: LeafPaneProps) {
-  const workspace = useWorkspaceStore((state) =>
-    state.workspaces.find((ws) => ws.id === workspaceId)
-  );
-  const pane = workspace?.panes[node.paneId];
-
-  if (!pane) {
-    return (
-      <div
-        style={{
-          width: '100%',
-          height: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: 'var(--background-hex)',
-          color: 'var(--foreground-muted)',
-          fontSize: '14px',
-        }}
-      >
-        Pane not found: {node.paneId}
-      </div>
-    );
-  }
-
   const controlsPosition = node.paneId === targetPaneId ? windowControlsPosition : undefined;
 
   return (
