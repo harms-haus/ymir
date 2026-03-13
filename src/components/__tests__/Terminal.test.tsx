@@ -37,19 +37,23 @@ vi.mock('@tauri-apps/plugin-notification', () => ({
 }));
 
 vi.mock('ghostty-web', () => ({
-  Terminal: vi.fn(() => ({
-    open: vi.fn(),
-    write: vi.fn(),
-    dispose: vi.fn(),
-    onData: vi.fn(() => ({ dispose: vi.fn() })),
-    onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
-    loadAddon: vi.fn(),
-    cols: 80,
-    rows: 24,
-  })),
-  FitAddon: vi.fn(() => ({
-    fit: vi.fn(),
-  })),
+  Terminal: function Terminal(this: any) {
+    return {
+      open: vi.fn(),
+      write: vi.fn(),
+      dispose: vi.fn(),
+      onData: vi.fn(() => ({ dispose: vi.fn() })),
+      onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+      loadAddon: vi.fn(),
+      cols: 80,
+      rows: 24,
+    };
+  },
+  FitAddon: function FitAddon(this: any) {
+    return {
+      fit: vi.fn(),
+    };
+  },
   UrlRegexProvider: vi.fn(),
 }));
 
