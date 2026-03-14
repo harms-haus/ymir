@@ -26,7 +26,7 @@ use uuid::Uuid;
 use crate::db::{DatabaseClient, DbConfig, MigrationRunner};
 use crate::handlers::{
     AuthConfig, AuthHandler, AuthMiddleware, AuthRpcHandler, GitRpcHandler, PaneRpcHandler,
-    PtyRpcHandler, TabRpcHandler, WorkspaceRpcHandler,
+    PtyRpcHandler, TabRpcHandler, WorkspaceRpcHandler, WorkspaceSettingsRpcHandler,
 };
 use crate::pty::manager::PtyManager;
 use crate::scrollback::service::ScrollbackService;
@@ -105,6 +105,21 @@ impl crate::server::protocol::RequestHandler for GitRequestHandler {
         tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(self.inner.handle(method, params))
         })
+    }
+}
+
+struct WorkspaceSettingsRequestHandler {
+    inner: WorkspaceSettingsRpcHandler,
+}
+
+#[async_trait::async_trait]
+impl crate::server::protocol::RequestHandler for WorkspaceSettingsRequestHandler {
+    async fn handle(
+        &self,
+        method: &str,
+        params: Option<Value>,
+    ) -> Result<Value, crate::server::protocol::ProtocolError> {
+        self.inner.handle(method, params).await
     }
 }
 
@@ -408,14 +423,78 @@ impl ServerState {
         };
         self.request_router
             .register("git.branches".to_string(), git_handler);
-        let git_handler = GitRequestHandler {
-            inner: GitRpcHandler::with_db(db),
-        };
-        self.request_router
-            .register("git.checkout".to_string(), git_handler);
+    let git_handler = GitRequestHandler {
+        inner: GitRpcHandler::with_db(db.clone()),
+    };
+    self.request_router
+        .register("git.checkout".to_string(), git_handler);
 
-        Ok(())
+    // Register workspace settings handlers
+    let yaml_path = std::path::PathBuf::from(".ymir/workspace-settings.yaml");
+    let workspace_settings_handler = WorkspaceSettingsRequestHandler {
+        inner: WorkspaceSettingsRpcHandler::new(db.clone(), yaml_path.clone()),
+    };
+    self.request_router
+        .register("workspace.getSettings".to_string(), workspace_settings_handler);
+    let workspace_settings_handler = WorkspaceSettingsRequestHandler {
+        inner: WorkspaceSettingsRpcHandler::new(db.clone(), yaml_path.clone()),
+    };
+    self.request_router
+        .register("workspace.updateSettings".to_string(), workspace_settings_handler);
+
+    let ymir_dir = std::path::PathBuf::from(".ymir");
+    if !ymir_dir.exists() {
+        if let Err(e) = tokio::fs::create_dir_all(&ymir_dir).await {
+            eprintln!("Warning: Failed to create .ymir directory: {}", e);
+        }
     }
+
+    if yaml_path.exists() {
+        match crate::settings::yaml::load(&yaml_path).await {
+            Ok(settings_file) => {
+                for (workspace_id, settings) in &settings_file.workspaces {
+                    let mut updates = Vec::new();
+
+                    if let Some(ref color) = settings.color {
+                        updates.push(format!("color = '{}'", color.replace("'", "''")));
+                    }
+                    if let Some(ref icon) = settings.icon {
+                        updates.push(format!("icon = '{}'", icon.replace("'", "''")));
+                    }
+                    if let Some(ref working_directory) = settings.working_directory {
+                        updates.push(format!(
+                            "working_directory = '{}'",
+                            working_directory.replace("'", "''")
+                        ));
+                    }
+                    if let Some(ref subtitle) = settings.subtitle {
+                        updates.push(format!("subtitle = '{}'", subtitle.replace("'", "''")));
+                    }
+
+                    if !updates.is_empty() {
+                        let workspace_id_escaped = workspace_id.replace("'", "''");
+                        let update_sql = format!(
+                            "UPDATE workspaces SET {} WHERE id = '{}'",
+                            updates.join(", "),
+                            workspace_id_escaped
+                        );
+                        if let Err(e) = db.execute(&update_sql, ()).await {
+                            eprintln!(
+                                "Warning: Failed to apply YAML settings for workspace {}: {}",
+                                workspace_id, e
+                            );
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("Warning: Failed to load workspace settings YAML: {}", e);
+            }
+        }
+    }
+
+    Ok(())
+}
 
     /// Get the number of active connections
     pub fn connection_count(&self) -> usize {

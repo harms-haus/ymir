@@ -1,10 +1,9 @@
 {
-  "active_plan": "/home/blake/Documents/software/ymir/.sisyphus/plans/websocket-core-refactor.md",
-  "started_at": "2026-03-13T04:37:52.993Z",
+  "active_plan": "/home/blake/Documents/software/ymir/.sisyphus/plans/workspace-settings.md",
+  "started_at": "2026-03-14T04:43:43.089Z",
   "session_ids": [
-    "ses_31abb1a28ffeov5hw0Gt6I0GdN"
+    "ses_31557b7e8ffe4QGNw4yQK07Qhb"
   ],
-  "plan_name": "websocket-core-refactor",
-  "agent": "atlas",
-  "worktree_path": "/home/blake/Documents/software/ymir/.worktrees/websocket-core-refactor"
+  "plan_name": "workspace-settings",
+  "agent": "atlas"
 }

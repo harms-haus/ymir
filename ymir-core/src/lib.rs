@@ -10,6 +10,7 @@ pub mod protocol;
 pub mod pty;
 pub mod scrollback;
 pub mod server;
+pub mod settings;
 pub mod types;
 
 pub use types::CoreError;

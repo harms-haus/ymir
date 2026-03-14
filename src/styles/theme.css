@@ -192,3 +192,226 @@
 .layout-reversed {
   flex-direction: row-reverse;
 }
+
+/* ========== Dialog Components ========== */
+
+/* Dialog Backdrop - dims the background */
+.ymir-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 100;
+}
+
+/* Dialog Viewport - centers the popup */
+.ymir-dialog-viewport {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 101;
+  padding: 1rem;
+}
+
+/* Dialog Popup - the modal content */
+.ymir-dialog-popup {
+  background-color: var(--background-secondary, #252526);
+  border: 1px solid var(--border-secondary, #3c3c3c);
+  border-radius: var(--radius-lg, 0.75rem);
+  box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.4));
+  max-width: 480px;
+  width: 100%;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+}
+
+/* Workspace Settings specific styles */
+.workspace-settings-dialog {
+  padding: 1.5rem;
+}
+
+.workspace-settings-title {
+  font-size: var(--font-size-3xl, 18px);
+  font-weight: 600;
+  color: var(--foreground-hex, #cccccc);
+  margin: 0 0 0.5rem 0;
+}
+
+.workspace-settings-description {
+  font-size: var(--font-size-md, 11px);
+  color: var(--foreground-muted, #666666);
+  margin: 0 0 1.5rem 0;
+}
+
+/* Workspace Settings Content */
+.workspace-settings-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.workspace-settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.workspace-settings-label {
+  font-size: var(--font-size-sm, 10px);
+  font-weight: 500;
+  color: var(--foreground-secondary, #858585);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Color Grid */
+.workspace-settings-color-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.5rem;
+}
+
+.workspace-settings-color-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.workspace-settings-color-button:hover {
+  transform: scale(1.1);
+}
+
+.workspace-settings-color-button.selected {
+  border-color: var(--foreground-hex, #cccccc);
+  box-shadow: 0 0 0 2px var(--background-secondary, #252526), 0 0 0 4px var(--foreground-hex, #cccccc);
+}
+
+/* Icon Grid */
+.workspace-settings-icon-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.5rem;
+}
+
+.workspace-settings-icon-button {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--background-tertiary, #3c3c3c);
+  border: 1px solid var(--border-secondary, #3c3c3c);
+  border-radius: var(--radius-md, 0.5rem);
+  color: var(--foreground-hex, #cccccc);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.workspace-settings-icon-button:hover {
+  background-color: var(--background-hover, #2a2d2e);
+  border-color: var(--foreground-muted, #666666);
+}
+
+.workspace-settings-icon-button.selected {
+  background-color: var(--primary-hex, #e11d48);
+  border-color: var(--primary-hex, #e11d48);
+  color: white;
+}
+
+/* Directory Row */
+.workspace-settings-directory-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.workspace-settings-directory-path {
+  flex: 1;
+  font-size: var(--font-size-md, 11px);
+  color: var(--foreground-hex, #cccccc);
+  padding: 0.5rem 0.75rem;
+  background-color: var(--background-tertiary, #3c3c3c);
+  border-radius: var(--radius-sm, 0.375rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Input */
+.workspace-settings-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: var(--font-size-md, 11px);
+  color: var(--foreground-hex, #cccccc);
+  background-color: var(--background-tertiary, #3c3c3c);
+  border: 1px solid var(--border-secondary, #3c3c3c);
+  border-radius: var(--radius-sm, 0.375rem);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.workspace-settings-input:focus {
+  border-color: var(--primary-hex, #e11d48);
+}
+
+.workspace-settings-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Footer */
+.workspace-settings-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-secondary, #3c3c3c);
+}
+
+.workspace-settings-close {
+  padding: 0.5rem 1rem;
+  font-size: var(--font-size-md, 11px);
+  font-weight: 500;
+  color: var(--foreground-hex, #cccccc);
+  background-color: var(--background-tertiary, #3c3c3c);
+  border: 1px solid var(--border-secondary, #3c3c3c);
+  border-radius: var(--radius-sm, 0.375rem);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.workspace-settings-close:hover {
+  background-color: var(--background-hover, #2a2d2e);
+  border-color: var(--foreground-muted, #666666);
+}
+
+/* Loading, Error, Saving States */
+.workspace-settings-loading,
+.workspace-settings-error,
+.workspace-settings-saving {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border-radius: var(--radius-sm, 0.375rem);
+  font-size: var(--font-size-md, 11px);
+}
+
+.workspace-settings-loading {
+  color: var(--foreground-secondary, #858585);
+  background-color: var(--background-tertiary, #3c3c3c);
+}
+
+.workspace-settings-error {
+  color: var(--destructive-hex, #c75450);
+  background-color: rgba(199, 84, 80, 0.1);
+}
+
+.workspace-settings-saving {
+  color: var(--foreground-secondary, #858585);
+  background-color: var(--background-tertiary, #3c3c3c);
+}

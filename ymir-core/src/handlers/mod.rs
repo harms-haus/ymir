@@ -20,6 +20,7 @@ pub mod pane;
 pub mod pty;
 pub mod tab;
 pub mod workspace;
+pub mod workspace_settings;
 
 pub use auth::{
     AuthConfig, AuthError, AuthHandler, AuthMiddleware, AuthNotification, AuthRpcHandler,
@@ -46,4 +47,8 @@ pub use workspace::{
     CreateWorkspaceInput, CreateWorkspaceOutput, DeleteWorkspaceInput, DeleteWorkspaceOutput,
     ListWorkspacesInput, ListWorkspacesOutput, RenameWorkspaceInput, RenameWorkspaceOutput,
     WorkspaceHandler, WorkspaceNotification, WorkspaceRpcHandler,
+};
+pub use workspace_settings::{
+    GetSettingsInput, GetSettingsOutput, UpdateSettingsInput, UpdateSettingsOutput,
+    WorkspaceSettingsHandler, WorkspaceSettingsRpcHandler,
 };

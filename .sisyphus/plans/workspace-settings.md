@@ -186,7 +186,7 @@ Max Concurrent: 3-4 tasks per wave
 
 ### Wave 1: Foundation (Rust Types + Schema)
 
-- [ ] **1. Extend Rust Workspace Type with Settings Fields**
+- [x] **1. Extend Rust Workspace Type with Settings Fields**
 
 **What to do**:
 - Update `ymir-core/src/types.rs` Workspace struct (lines 195-209) to add:
@@ -238,7 +238,7 @@ Evidence: .sisyphus/evidence/task-1-types-compile.txt
 
 ---
 
-- [ ] **2. Create Database Migration 002 for Settings Columns**
+- [x] **2. Create Database Migration 002 for Settings Columns**
 
 **What to do**:
 - Create `ymir-core/migrations/002_workspace_settings.sql`
@@ -307,7 +307,7 @@ Evidence: .sisyphus/evidence/task-2-migration.txt
 
 ---
 
-- [ ] **3. Implement YAML Serialization for Settings**
+- [x] **3. Implement YAML Serialization for Settings**
 
 **What to do**:
 - Create `ymir-core/src/settings/` directory
@@ -372,7 +372,7 @@ Evidence: .sisyphus/evidence/task-3-yaml-test.txt
 
 ### Wave 2: Core Service (Handlers + Storage)
 
-- [ ] **4. Add Workspace Settings WebSocket Handlers**
+- [x] **4. Add Workspace Settings WebSocket Handlers**
 
 **What to do**:
 - Create `ymir-core/src/handlers/workspace_settings.rs`
@@ -439,7 +439,7 @@ Evidence: .sisyphus/evidence/task-4-settings-handler.txt
 
 ---
 
-- [ ] **5. Implement YAML File Load on Startup**
+- [x] **5. Implement YAML File Load on Startup**
 
 **What to do**:
 - Add YAML loading to server initialization
@@ -495,7 +495,7 @@ Evidence: .sisyphus/evidence/task-5-yaml-load.txt
 
 ---
 
-- [ ] **6. Implement YAML File Save on Settings Change**
+- [x] **6. Implement YAML File Save on Settings Change**
 
 **What to do**:
 - Update `workspace.updateSettings` handler to save to YAML after DB update
@@ -552,7 +552,7 @@ Evidence: .sisyphus/evidence/task-6-yaml-save.txt
 
 ---
 
-- [ ] **7. Add workspace.updateSettings to Protocol**
+- [x] **7. Add workspace.updateSettings to Protocol**
 
 **What to do**:
 - Update `ymir-core/src/protocol.rs` to include new methods:
@@ -613,7 +613,7 @@ Evidence: .sisyphus/evidence/task-7-protocol.txt
 
 ### Wave 3: React Client (Hooks + UI)
 
-- [ ] **8. Create useWorkspaceSettings WebSocket Hook**
+- [x] **8. Create useWorkspaceSettings WebSocket Hook**
 
 **What to do**:
 - Create `src/hooks/useWorkspaceSettings.ts`
@@ -679,7 +679,7 @@ Evidence: .sisyphus/evidence/task-8-hook-load.png
 
 ---
 
-- [ ] **9. Update WorkspaceSettingsDialog for WebSocket**
+- [x] **9. Update WorkspaceSettingsDialog for WebSocket**
 
 **What to do**:
 - Create `src/components/WorkspaceSettingsDialog.tsx`
@@ -747,7 +747,7 @@ Evidence: .sisyphus/evidence/task-9-dialog-ws.png
 
 ---
 
-- [ ] **10. Integrate Settings into WorkspaceSidebar**
+- [x] **10. Integrate Settings into WorkspaceSidebar**
 
 **What to do**:
 - Update `src/components/WorkspaceSidebar.tsx`:
@@ -798,7 +798,7 @@ Evidence: .sisyphus/evidence/task-10-menu.png
 
 ---
 
-- [ ] **11. Add Accent Line, Icon, Subtitle Rendering**
+- [x] **11. Add Accent Line, Icon, Subtitle Rendering**
 
 **What to do**:
 - Update `src/components/WorkspaceSidebar.tsx`:
@@ -861,7 +861,7 @@ Evidence: .sisyphus/evidence/task-11-visual.png
 
 ### Wave 4: Verification
 
-- [ ] **12. Add WebSocket Handler Tests**
+- [x] **12. Add WebSocket Handler Tests**
 
 **What to do**:
 - Add Rust tests in `ymir-core/src/handlers/workspace_settings.rs`:
@@ -914,7 +914,7 @@ Evidence: .sisyphus/evidence/task-12-handler-tests.txt
 
 ---
 
-- [ ] **13. Add React Hook Tests**
+- [x] **13. Add React Hook Tests**
 
 **What to do**:
 - Add tests in `src/hooks/useWorkspaceSettings.test.ts`:
@@ -962,7 +962,7 @@ Evidence: .sisyphus/evidence/task-13-hook-tests.txt
 
 ---
 
-- [ ] **14. Add E2E Tests for Settings Dialog**
+- [x] **14. Add E2E Tests for Settings Dialog**
 
 **What to do**:
 - Create `src/tests/workspace-settings.e2e.test.ts`:
@@ -1012,7 +1012,7 @@ Evidence: .sisyphus/evidence/task-14-e2e-results.txt
 
 ---
 
-- [ ] **15. Final QA Pass**
+- [x] **15. Final QA Pass**
 
 **What to do**:
 - Run full verification:
@@ -1072,19 +1072,23 @@ Evidence: .sisyphus/evidence/task-15-final-qa.txt
 
 ## Final Verification Wave
 
-- [ ] F1. **Plan Compliance Audit** - `oracle`
+- [x] F1. **Plan Compliance Audit** - `oracle`
+  VERDICT: APPROVE - All Must Have implemented (8/8), no Must NOT Have violations
 Verify all Must Have implemented, no Must NOT Have present.
 Output: `Must Have [8/8] | Must NOT Have [0 violations] | VERDICT`
 
-- [ ] F2. **Code Quality Review** - `unspecified-high`
+- [x] F2. **Code Quality Review** - `unspecified-high`
+  Build [PASS] | Tests [258 pass] | VERDICT: APPROVE
 Run `cargo check/test` + `tsc --noEmit` + `bun test` + linter.
 Output: `Build [PASS/FAIL] | Tests [N pass] | VERDICT`
 
-- [ ] F3. **Real Manual QA** - `playwright`
+- [x] F3. **Real Manual QA** - `playwright`
+  Scenarios [15/15 pass] | VERDICT: APPROVE
 Execute all QA scenarios, test cross-task integration.
 Output: `Scenarios [N/N pass] | VERDICT`
 
-- [ ] F4. **Scope Fidelity Check** - `deep`
+- [x] F4. **Scope Fidelity Check** - `deep`
+  Tasks [15/15 compliant] | Contamination [CLEAN] | VERDICT: APPROVE
 Verify no scope creep, all tasks implemented as specified.
 Output: `Tasks [N/N compliant] | Contamination [CLEAN] | VERDICT`
 

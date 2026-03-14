@@ -10,6 +10,7 @@ crate-type = ["rlib"]
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde_yaml = "0.9"
 libsql = "0.9"
 dirs = "5.0"
 tokio = { version = "1", features = ["rt", "sync", "fs", "time", "signal"] }

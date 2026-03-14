@@ -210,7 +210,52 @@ pub struct Workspace {
     pub active_pane_id: Option<String>,
     /// Notification state for this workspace
     pub has_notification: bool,
+    /// Optional hex color string for workspace styling
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+    /// Optional Lucide icon name for workspace display
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    /// Optional working directory path string
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub working_directory: Option<String>,
+    /// Optional subtitle text for workspace
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subtitle: Option<String>,
 }
+
+// ============================================================================
+// Workspace Constants
+// ============================================================================
+
+/// Preset color palette for workspaces (10 hex colors)
+pub const WORKSPACE_COLORS: [&str; 10] = [
+    "#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#8b5cf6", "#d946ef",
+    "#f43f5e", "#64748b",
+];
+
+/// Common Lucide icon names for workspaces
+pub const WORKSPACE_ICONS: [&str; 19] = [
+    "folder",
+    "terminal",
+    "code",
+    "git-branch",
+    "cpu",
+    "server",
+    "database",
+    "cloud",
+    "layers",
+    "layout",
+    "package",
+    "tool",
+    "wrench",
+    "monitor",
+    "smartphone",
+    "globe",
+    "file",
+    "search",
+    "settings",
+];
 
 // ============================================================================
 // Error Types
@@ -381,6 +426,10 @@ mod tests {
             root,
             active_pane_id: Some("pane-1".to_string()),
             has_notification: false,
+            color: None,
+            icon: None,
+            working_directory: None,
+            subtitle: None,
         };
 
         let json = serde_json::to_string(&workspace).unwrap();

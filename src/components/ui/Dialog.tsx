@@ -86,6 +86,26 @@ export const DialogClose = React.forwardRef<HTMLButtonElement, Dialog.Close.Prop
 
 DialogClose.displayName = 'Dialog.Close';
 
+export const DialogBackdrop = React.forwardRef<HTMLDivElement, Dialog.Backdrop.Props>(
+  ({ className = '', ...props }, ref) => {
+    return (
+      <Dialog.Backdrop ref={ref} className={`ymir-dialog-backdrop ${className}`.trim()} {...props} />
+    );
+  },
+);
+
+DialogBackdrop.displayName = 'Dialog.Backdrop';
+
+export const DialogViewport = React.forwardRef<HTMLDivElement, Dialog.Viewport.Props>(
+  ({ className = '', ...props }, ref) => {
+    return (
+      <Dialog.Viewport ref={ref} className={`ymir-dialog-viewport ${className}`.trim()} {...props} />
+    );
+  },
+);
+
+DialogViewport.displayName = 'Dialog.Viewport';
+
 export const AlertDialogRoot = (props: AlertDialog.Root.Props) => {
   return <AlertDialog.Root {...props} />;
 };

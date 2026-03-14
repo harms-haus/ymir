@@ -90,6 +90,10 @@ impl WorkspaceHandler {
             ))),
             active_pane_id: None,
             has_notification: false,
+            color: None,
+            icon: None,
+            working_directory: None,
+            subtitle: None,
         };
 
         Ok(CreateWorkspaceOutput { workspace })
@@ -120,6 +124,10 @@ impl WorkspaceHandler {
                 ))),
                 active_pane_id: None,
                 has_notification: false,
+                color: None,
+                icon: None,
+                working_directory: None,
+                subtitle: None,
             };
 
             workspaces.push(workspace);
@@ -196,6 +204,10 @@ impl WorkspaceHandler {
             ))),
             active_pane_id: None,
             has_notification: false,
+            color: None,
+            icon: None,
+            working_directory: None,
+            subtitle: None,
         };
 
         Ok(RenameWorkspaceOutput { workspace })
@@ -472,6 +484,10 @@ mod tests {
             root: crate::types::SplitNode::Leaf(crate::types::LeafNode::new("pane-1".to_string())),
             active_pane_id: None,
             has_notification: false,
+            color: None,
+            icon: None,
+            working_directory: None,
+            subtitle: None,
         };
 
         let notification = WorkspaceNotification::Created { workspace };

@@ -1,12 +1,15 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { PanelDefinition, SidebarTab } from '../state/types';
 import { useWorkspaces } from '../hooks/useWorkspaces';
+import { useWorkspaceSettings } from '../hooks/useWorkspaceSettings';
 import {
   type ConnectionStatus,
   getWebSocketService,
 } from '../services/websocket';
 import { TabHeaderPanel } from './TabHeaderPanel';
 import { gitPanelDefinition } from './GitPanel';
+import { WorkspaceSettingsDialog } from './WorkspaceSettingsDialog';
+import './WorkspaceSidebar.css';
 import { TabsRoot, TabsList, TabsTab } from './ui/Tabs';
 import { Button } from './ui/Button';
 import { MenuRoot, MenuPortal, MenuPositioner, MenuPopup, MenuItem } from './ui/Menu';
@@ -27,9 +30,119 @@ import {
   toggleRuntimeSidebar,
   useRuntimeUiState,
 } from '../lib/runtime-ui-state';
+import type { LucideIcon } from 'lucide-react';
+import {
+  Folder,
+  Terminal,
+  Code,
+  GitBranch,
+  Cpu,
+  Server,
+  Database,
+  Cloud,
+  Layers,
+  Layout,
+  Package,
+  Wrench,
+  Monitor,
+  Smartphone,
+  Globe,
+  File,
+  Search,
+  Settings,
+  Hammer,
+} from 'lucide-react';
 
 interface WorkspaceListProps {
   collapsed: boolean;
+}
+
+const iconMap: Record<string, LucideIcon> = {
+  folder: Folder,
+  terminal: Terminal,
+  code: Code,
+  'git-branch': GitBranch,
+  cpu: Cpu,
+  server: Server,
+  database: Database,
+  cloud: Cloud,
+  layers: Layers,
+  layout: Layout,
+  package: Package,
+  wrench: Wrench,
+  monitor: Monitor,
+  smartphone: Smartphone,
+  globe: Globe,
+  file: File,
+  search: Search,
+  settings: Settings,
+  hammer: Hammer,
+};
+
+interface WorkspaceTabContentProps {
+  workspaceId: string;
+  workspaceName: string;
+  workspaceNumber: number;
+  isActive: boolean;
+  hasNotification: boolean;
+  collapsed: boolean;
+  onContextMenu: (e: React.MouseEvent) => void;
+}
+
+function WorkspaceTabContent({
+  workspaceId,
+  workspaceName,
+  workspaceNumber,
+  isActive,
+  hasNotification,
+  collapsed,
+  onContextMenu,
+}: WorkspaceTabContentProps) {
+  const { settings } = useWorkspaceSettings(workspaceId);
+
+  const workspaceColor = settings?.color ?? '#3b82f6';
+  const workspaceIcon = settings?.icon ?? 'folder';
+  const workspaceSubtitle = settings?.subtitle;
+  const IconComponent = iconMap[workspaceIcon] || iconMap.folder;
+
+  if (collapsed) {
+    return (
+      <TabsTab
+        value={workspaceId}
+        className="workspace-tab-collapsed"
+        onContextMenu={onContextMenu}
+      >
+        {workspaceNumber}
+        {hasNotification && <span className="workspace-notification-dot" />}
+      </TabsTab>
+    );
+  }
+
+  return (
+    <TabsTab
+      value={workspaceId}
+      className={`workspace-tab workspace-tab-with-accent ${isActive ? 'active' : ''} ${hasNotification ? 'has-notification' : ''}`}
+      style={{ '--workspace-color': workspaceColor } as React.CSSProperties}
+      onContextMenu={onContextMenu}
+    >
+      <div className="workspace-tab-content">
+        <span className="workspace-number-badge">{workspaceNumber}</span>
+        <div className="workspace-tab-info">
+          <div className="workspace-tab-name-row">
+            <IconComponent className="workspace-tab-icon" size={16} />
+            <span className="workspace-name">{workspaceName}</span>
+          </div>
+          {workspaceSubtitle && (
+            <span className="workspace-tab-subtitle">{workspaceSubtitle}</span>
+          )}
+        </div>
+      </div>
+      <div className="workspace-tab-right">
+        {hasNotification && <span className="workspace-notification-dot" />}
+        <span className="workspace-shortcut">{String.fromCharCode(8984)}{workspaceNumber}</span>
+      </div>
+    </TabsTab>
+  );
 }
 
 interface CreateWorkspaceOutput {
@@ -63,6 +176,8 @@ function WorkspaceList({ collapsed }: WorkspaceListProps) {
   const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const [contextMenuAnchor, setContextMenuAnchor] = useState<{ workspaceId: string } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+  const [settingsWorkspaceId, setSettingsWorkspaceId] = useState<string | null>(null);
 
   const selectedWorkspaceId = useRuntimeSelection((state) => state.activeWorkspaceId);
   const visibleWorkspaces = useMemo(() => workspaces.slice(0, 8), [workspaces]);
@@ -134,6 +249,15 @@ function WorkspaceList({ collapsed }: WorkspaceListProps) {
     }
   }, [contextMenuAnchor, refetch, websocketService, workspaces]);
 
+  const handleOpenSettings = useCallback(() => {
+    if (!contextMenuAnchor) {
+      return;
+    }
+    setSettingsWorkspaceId(contextMenuAnchor.workspaceId);
+    setSettingsDialogOpen(true);
+    setContextMenuOpen(false);
+  }, [contextMenuAnchor]);
+
   const handleDeleteWorkspace = useCallback(async () => {
     if (!contextMenuAnchor || workspaces.length <= 1) {
       return;
@@ -182,25 +306,20 @@ function WorkspaceList({ collapsed }: WorkspaceListProps) {
           <div className="workspace-empty-state">Loading workspaces...</div>
         ) : visibleWorkspaces.length === 0 ? (
           <div className="workspace-empty-state">No workspaces</div>
-        ) : (
+         ) : (
           visibleWorkspaces.map((workspace, index) => {
             const hasNotification = getWorkspaceNotificationCount(workspace.id) > 0;
             return (
-              <TabsTab
+              <WorkspaceTabContent
                 key={workspace.id}
-                value={workspace.id}
-                className={`workspace-tab ${hasNotification ? 'has-notification' : ''}`}
+                workspaceId={workspace.id}
+                workspaceName={workspace.name}
+                workspaceNumber={index + 1}
+                isActive={workspace.id === activeWorkspaceId}
+                hasNotification={hasNotification}
+                collapsed={collapsed}
                 onContextMenu={(e) => handleContextMenu(e, workspace.id)}
-              >
-                <div className="workspace-tab-content">
-                  <span className="workspace-number-badge">{index + 1}</span>
-                  <span className="workspace-name">{workspace.name}</span>
-                </div>
-                <div className="workspace-tab-right">
-                  {hasNotification && <span className="workspace-notification-dot" />}
-                  <span className="workspace-shortcut">{String.fromCharCode(8984)}{index + 1}</span>
-                </div>
-              </TabsTab>
+              />
             );
           })
         )}
@@ -266,6 +385,9 @@ function WorkspaceList({ collapsed }: WorkspaceListProps) {
               <MenuItem className="context-menu-item" onClick={() => void handleRenameWorkspace()}>
                 Rename Workspace
               </MenuItem>
+              <MenuItem className="context-menu-item" onClick={() => void handleOpenSettings()}>
+                Settings
+              </MenuItem>
               <div className="context-menu-separator" />
               <MenuItem
                 className={`context-menu-item context-menu-item-danger ${isOnly ? 'disabled' : ''}`}
@@ -278,6 +400,14 @@ function WorkspaceList({ collapsed }: WorkspaceListProps) {
           </MenuPositioner>
         </MenuPortal>
       </MenuRoot>
+
+      {settingsWorkspaceId && (
+        <WorkspaceSettingsDialog
+          isOpen={settingsDialogOpen}
+          onOpenChange={setSettingsDialogOpen}
+          workspaceId={settingsWorkspaceId}
+        />
+      )}
     </TabsRoot>
   );
 }
@@ -292,6 +422,10 @@ function CollapsedWorkspaceList() {
       ? selectedWorkspaceId
       : (visibleWorkspaces[0]?.id ?? null);
 
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+  }, []);
+
   return (
     <TabsRoot
       value={activeWorkspaceId ?? ''}
@@ -300,19 +434,25 @@ function CollapsedWorkspaceList() {
     >
       <TabsList className="workspace-tabs-collapsed-list">
         {isLoading && <div className="workspace-empty-state">...</div>}
-        {visibleWorkspaces.map((workspace, index) => (
-          <Tooltip
-            key={workspace.id}
-            content={`${workspace.name} (${String.fromCharCode(8984)}${index + 1})`}
-          >
-            <TabsTab value={workspace.id} className="workspace-tab-collapsed">
-              {index + 1}
-              {getWorkspaceNotificationCount(workspace.id) > 0 && (
-                <span className="workspace-notification-dot" />
-              )}
-            </TabsTab>
-          </Tooltip>
-        ))}
+        {visibleWorkspaces.map((workspace, index) => {
+          const hasNotification = getWorkspaceNotificationCount(workspace.id) > 0;
+          return (
+            <Tooltip
+              key={workspace.id}
+              content={`${workspace.name} (${String.fromCharCode(8984)}${index + 1})`}
+            >
+              <WorkspaceTabContent
+                workspaceId={workspace.id}
+                workspaceName={workspace.name}
+                workspaceNumber={index + 1}
+                isActive={workspace.id === activeWorkspaceId}
+                hasNotification={hasNotification}
+                collapsed={true}
+                onContextMenu={(e) => handleContextMenu(e)}
+              />
+            </Tooltip>
+          );
+        })}
       </TabsList>
     </TabsRoot>
   );
