@@ -1,7 +1,10 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { PanelDefinition, SidebarTab } from '../state/types';
 import { useWorkspaces } from '../hooks/useWorkspaces';
-import { getWebSocketService } from '../services/websocket';
+import {
+  type ConnectionStatus,
+  getWebSocketService,
+} from '../services/websocket';
 import { TabHeaderPanel } from './TabHeaderPanel';
 import { gitPanelDefinition } from './GitPanel';
 import { TabsRoot, TabsList, TabsTab } from './ui/Tabs';
@@ -442,6 +445,40 @@ export function WorkspaceSidebar() {
   const sidebarCollapsed = useRuntimeUiState((state) => state.sidebarCollapsed);
   const activeTab = useRuntimeUiState((state) => state.activeSidebarTab);
 
+  const websocketService = useMemo(() => getWebSocketService(), []);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(
+    () => websocketService.getStatus()
+  );
+
+  useEffect(() => {
+    return websocketService.onConnectionChange((nextStatus) => {
+      setConnectionStatus(nextStatus);
+    });
+  }, [websocketService]);
+
+  const connectionIndicator = useMemo(() => {
+    const stateLabels: Record<ConnectionStatus['state'], string> = {
+      connected: 'Connected',
+      connecting: 'Connecting',
+      reconnecting: 'Reconnecting',
+      disconnecting: 'Disconnecting',
+      disconnected: 'Offline',
+    };
+
+    const stateColors: Record<ConnectionStatus['state'], string> = {
+      connected: 'var(--status-added)',
+      connecting: 'var(--status-modified)',
+      reconnecting: 'var(--status-modified)',
+      disconnecting: 'var(--foreground-secondary)',
+      disconnected: 'var(--status-deleted)',
+    };
+
+    return {
+      label: stateLabels[connectionStatus.state],
+      color: stateColors[connectionStatus.state],
+    };
+  }, [connectionStatus.state]);
+
   const panels: PanelDefinition[] = useMemo(
     () => [
       {
@@ -496,6 +533,43 @@ export function WorkspaceSidebar() {
         onTabClick={handleTabClick}
         onToggleSidebar={toggleRuntimeSidebar}
       />
+      <div
+        title={connectionStatus.error ?? connectionIndicator.label}
+        style={{
+          marginTop: 'auto',
+          padding: '16px 0',
+          display: 'flex',
+          justifyContent: 'center',
+        }}
+      >
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '4px 8px',
+            borderRadius: '999px',
+            fontSize: '10px',
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+            backgroundColor: 'rgba(0, 0, 0, 0.28)',
+            border: '1px solid var(--border-secondary)',
+            color: 'var(--foreground-hex)',
+            pointerEvents: 'none',
+          }}
+        >
+          <span
+            style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: connectionIndicator.color,
+              boxShadow: `0 0 0 1px ${connectionIndicator.color}55`,
+            }}
+          />
+          <span>{connectionIndicator.label}</span>
+        </div>
+      </div>
     </div>
   );
 }
