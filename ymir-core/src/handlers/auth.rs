@@ -447,30 +447,30 @@ mod tests {
 
     #[test]
     fn test_is_localhost_ipv4() {
-        let localhost = SocketAddr::from(([127, 0, 0, 1], 7139));
+        let localhost = SocketAddr::from(([127, 0, 0, 1], 7319));
         assert!(AuthHandler::is_localhost(&localhost));
 
-        let not_local = SocketAddr::from(([192, 168, 1, 1], 7139));
+        let not_local = SocketAddr::from(([192, 168, 1, 1], 7319));
         assert!(!AuthHandler::is_localhost(&not_local));
     }
 
     #[test]
     fn test_is_localhost_ipv6() {
-        let localhost = SocketAddr::from(([0, 0, 0, 0, 0, 0, 0, 1], 7139));
+        let localhost = SocketAddr::from(([0, 0, 0, 0, 0, 0, 0, 1], 7319));
         assert!(AuthHandler::is_localhost(&localhost));
     }
 
     #[test]
     fn test_can_bypass_auth_localhost() {
         let handler = AuthHandler::with_password("secret".to_string());
-        let localhost = SocketAddr::from(([127, 0, 0, 1], 7139));
+        let localhost = SocketAddr::from(([127, 0, 0, 1], 7319));
         assert!(handler.can_bypass_auth(&localhost));
     }
 
     #[test]
     fn test_can_bypass_auth_remote() {
         let handler = AuthHandler::with_password("secret".to_string());
-        let remote = SocketAddr::from(([192, 168, 1, 1], 7139));
+        let remote = SocketAddr::from(([192, 168, 1, 1], 7319));
         assert!(!handler.can_bypass_auth(&remote));
     }
 
@@ -481,7 +481,7 @@ mod tests {
             allow_localhost_bypass: false,
         };
         let handler = AuthHandler::new(config);
-        let localhost = SocketAddr::from(([127, 0, 0, 1], 7139));
+        let localhost = SocketAddr::from(([127, 0, 0, 1], 7319));
         assert!(!handler.can_bypass_auth(&localhost));
     }
 
@@ -528,7 +528,7 @@ mod tests {
     #[test]
     fn test_get_status_authenticated() {
         let handler = AuthHandler::with_password("secret".to_string());
-        let addr = SocketAddr::from(([127, 0, 0, 1], 7139));
+        let addr = SocketAddr::from(([127, 0, 0, 1], 7319));
         let status = handler.get_status(true, &addr);
         assert!(status.authenticated);
         assert!(status.auth_required);
@@ -538,7 +538,7 @@ mod tests {
     #[test]
     fn test_get_status_not_authenticated_localhost() {
         let handler = AuthHandler::with_password("secret".to_string());
-        let addr = SocketAddr::from(([127, 0, 0, 1], 7139));
+        let addr = SocketAddr::from(([127, 0, 0, 1], 7319));
         let status = handler.get_status(false, &addr);
         // Should be authenticated due to localhost bypass
         assert!(status.authenticated);
@@ -549,7 +549,7 @@ mod tests {
     #[test]
     fn test_get_status_not_authenticated_remote() {
         let handler = AuthHandler::with_password("secret".to_string());
-        let addr = SocketAddr::from(([192, 168, 1, 1], 7139));
+        let addr = SocketAddr::from(([192, 168, 1, 1], 7319));
         let status = handler.get_status(false, &addr);
         assert!(!status.authenticated);
         assert!(status.auth_required);
@@ -559,7 +559,7 @@ mod tests {
     #[test]
     fn test_get_status_no_auth_required() {
         let handler = AuthHandler::open();
-        let addr = SocketAddr::from(([192, 168, 1, 1], 7139));
+        let addr = SocketAddr::from(([192, 168, 1, 1], 7319));
         let status = handler.get_status(false, &addr);
         // Should be authenticated because no auth required
         assert!(status.authenticated);
@@ -571,7 +571,7 @@ mod tests {
     fn test_auth_middleware_check_auth_authenticated() {
         let handler = AuthHandler::with_password("secret".to_string());
         let middleware = AuthMiddleware::new(handler);
-        let addr = SocketAddr::from(([192, 168, 1, 1], 7139));
+        let addr = SocketAddr::from(([192, 168, 1, 1], 7319));
         assert!(middleware.check_auth(true, &addr).is_ok());
     }
 
@@ -579,7 +579,7 @@ mod tests {
     fn test_auth_middleware_check_auth_no_password() {
         let handler = AuthHandler::open();
         let middleware = AuthMiddleware::new(handler);
-        let addr = SocketAddr::from(([192, 168, 1, 1], 7139));
+        let addr = SocketAddr::from(([192, 168, 1, 1], 7319));
         assert!(middleware.check_auth(false, &addr).is_ok());
     }
 
@@ -587,7 +587,7 @@ mod tests {
     fn test_auth_middleware_check_auth_localhost_bypass() {
         let handler = AuthHandler::with_password("secret".to_string());
         let middleware = AuthMiddleware::new(handler);
-        let addr = SocketAddr::from(([127, 0, 0, 1], 7139));
+        let addr = SocketAddr::from(([127, 0, 0, 1], 7319));
         assert!(middleware.check_auth(false, &addr).is_ok());
     }
 
@@ -595,7 +595,7 @@ mod tests {
     fn test_auth_middleware_check_auth_required() {
         let handler = AuthHandler::with_password("secret".to_string());
         let middleware = AuthMiddleware::new(handler);
-        let addr = SocketAddr::from(([192, 168, 1, 1], 7139));
+        let addr = SocketAddr::from(([192, 168, 1, 1], 7319));
         let result = middleware.check_auth(false, &addr);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().to_string(), "Authentication required");

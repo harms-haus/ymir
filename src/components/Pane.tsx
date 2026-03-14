@@ -102,11 +102,29 @@ export function Pane({ paneId, workspaceId, windowControlsPosition, isTopmost }:
   const handleCloseTab = useCallback(
     (_paneId: string, tabId: string) => {
       clearTabNotification(tabId);
+      
+      const status = websocketService.getStatus();
+      if (!websocketService.isConnected()) {
+        console.error('Cannot close tab: WebSocket not connected', {
+          state: status.state,
+          error: status.error,
+          tabId
+        });
+        return;
+      }
+      
+      console.log('Closing tab:', { tabId, connectionState: status.state });
       void websocketService
         .request('tab.close', { id: tabId })
-        .catch(() => undefined);
+        .then((result) => {
+          console.log('Tab close successful:', { tabId, result });
+          void refetchTabs();
+        })
+        .catch((error) => {
+          console.error('Failed to close tab:', error);
+        });
     },
-    [websocketService],
+    [websocketService, refetchTabs],
   );
 
   const handleSelectTab = useCallback((_paneId: string, tabId: string) => {

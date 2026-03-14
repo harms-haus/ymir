@@ -115,7 +115,7 @@ pub use protocol::*;
 pub use websocket::WebSocketHandler;
 
 /// Default WebSocket server port
-pub const DEFAULT_PORT: u16 = 7139;
+pub const DEFAULT_PORT: u16 = 7319;
 
 /// Default ping interval in seconds
 pub const DEFAULT_PING_INTERVAL_SECS: u64 = 30;

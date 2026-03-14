@@ -8,7 +8,7 @@ use tracing::{error, info, warn};
 use crate::platform;
 
 const EMBEDDED_SERVICE_HOST: &str = "127.0.0.1";
-const EMBEDDED_SERVICE_PORT: u16 = 7139;
+const EMBEDDED_SERVICE_PORT: u16 = 7319;
 
 struct EmbeddedService {
     port: u16,

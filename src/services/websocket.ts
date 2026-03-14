@@ -72,7 +72,7 @@ const DEFAULT_RECONNECT_BASE_DELAY_MS = 500;
 const DEFAULT_RECONNECT_MAX_DELAY_MS = 10_000;
 const DEFAULT_RECONNECT_BACKOFF_FACTOR = 2;
 const JSONRPC_INTERNAL_ERROR = -32603;
-const DEFAULT_WEBSOCKET_URL = 'ws://127.0.0.1:7144/ws';
+const DEFAULT_WEBSOCKET_URL = 'ws://127.0.0.1:7319/ws';
 
 type MessageListener = (message: JsonRpcIncomingMessage) => void;
 type ConnectionListener = (status: ConnectionStatus) => void;

@@ -26,7 +26,7 @@ pub struct WebArgs {
     pub host: String,
 
     /// Port to listen on (default: 7139)
-    #[arg(short, long, default_value = "7139")]
+    #[arg(short, long, default_value = "7319")]
     pub port: u16,
 
     /// Optional password for authentication (default: none, no auth required)
@@ -64,11 +64,11 @@ mod tests {
     fn test_web_args_default() {
         let args = WebArgs {
             host: "127.0.0.1".to_string(),
-            port: 7139,
+            port: 7319,
             password: None,
         };
         assert!(args.validate().is_ok());
-        assert_eq!(args.bind_address(), "127.0.0.1:7139");
+        assert_eq!(args.bind_address(), "127.0.0.1:7319");
     }
 
     #[test]
@@ -97,7 +97,7 @@ mod tests {
     fn test_web_args_empty_host() {
         let args = WebArgs {
             host: "".to_string(),
-            port: 7139,
+            port: 7319,
             password: None,
         };
         assert!(args.validate().is_err());
@@ -113,7 +113,7 @@ mod tests {
     fn test_cli_with_web_subcommand() {
         let web_args = WebArgs {
             host: "127.0.0.1".to_string(),
-            port: 7139,
+            port: 7319,
             password: None,
         };
         let cli = Cli {
@@ -123,7 +123,7 @@ mod tests {
         match cli.command {
             Some(Commands::Web(args)) => {
                 assert_eq!(args.host, "127.0.0.1");
-                assert_eq!(args.port, 7139);
+                assert_eq!(args.port, 7319);
             }
             _ => panic!("Expected Web command"),
         }
