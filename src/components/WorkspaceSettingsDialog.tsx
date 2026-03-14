@@ -37,6 +37,7 @@ import {
 } from './ui/Dialog';
 import { Button } from './ui/Button';
 import { useWorkspaceSettings } from '../hooks/useWorkspaceSettings';
+import { useDirectoryPicker } from '../hooks/useDirectoryPicker';
 
 const WORKSPACE_COLORS = [
   '#ef4444',
@@ -124,6 +125,7 @@ export function WorkspaceSettingsDialog({
   const { settings, loading, error, updateSettings } = useWorkspaceSettings(workspaceId);
   const [saving, setSaving] = useState(false);
   const [localSubtitle, setLocalSubtitle] = useState('');
+  const { selectDirectory, isSupported, isSelecting, result } = useDirectoryPicker();
 
   useEffect(() => {
     if (settings?.subtitle !== undefined) {
@@ -169,20 +171,19 @@ export function WorkspaceSettingsDialog({
   );
 
   const handleDirectorySelect = useCallback(async () => {
-    const selected = window.prompt(
-      'Enter working directory path:',
-      settings?.workingDirectory || ''
-    );
-
-    if (selected !== null && selected !== settings?.workingDirectory) {
-      setSaving(true);
-      try {
-        await updateSettings({ workingDirectory: selected });
-      } finally {
-        setSaving(false);
+    const selected = await selectDirectory();
+    if (selected && (selected.path || selected.name)) {
+      const newPath = selected.path || selected.name;
+      if (newPath !== settings?.workingDirectory) {
+        setSaving(true);
+        try {
+          await updateSettings({ workingDirectory: newPath });
+        } finally {
+          setSaving(false);
+        }
       }
     }
-  }, [settings?.workingDirectory, updateSettings]);
+  }, [selectDirectory, settings?.workingDirectory, updateSettings]);
 
   const handleSubtitleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -277,14 +278,16 @@ export function WorkspaceSettingsDialog({
             <span className="workspace-settings-label">Working Directory</span>
             <div className="workspace-settings-directory-row">
               <span className="workspace-settings-directory-path">
-                {settings?.workingDirectory || 'No directory set'}
+                {result?.path || result?.name || settings?.workingDirectory || 'No directory set'}
               </span>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleDirectorySelect}
-                disabled={saving}
-              >
+<Button
+          variant="secondary"
+          size="sm"
+          onClick={handleDirectorySelect}
+          disabled={saving || !isSupported || isSelecting}
+          title={!isSupported ? 'Folder selection requires Chrome, Edge, or Tauri' : undefined}
+          aria-label="Select working directory"
+        >
                 <FolderOpen size={14} />
                 Browse
               </Button>

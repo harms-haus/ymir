@@ -51,6 +51,7 @@
             "shell:allow-spawn",
             "notification:default",
             "store:default",
+            "dialog:allow-open",
             "allow-get-platform-info"
           ]
         }
