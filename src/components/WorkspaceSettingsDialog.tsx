@@ -280,13 +280,14 @@ export function WorkspaceSettingsDialog({
               <span className="workspace-settings-directory-path">
                 {result?.path || result?.name || settings?.workingDirectory || 'No directory set'}
               </span>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleDirectorySelect}
-                disabled={saving || !isSupported || isSelecting}
-                title={!isSupported ? 'Folder selection requires Chrome, Edge, or Tauri' : undefined}
-              >
+<Button
+          variant="secondary"
+          size="sm"
+          onClick={handleDirectorySelect}
+          disabled={saving || !isSupported || isSelecting}
+          title={!isSupported ? 'Folder selection requires Chrome, Edge, or Tauri' : undefined}
+          aria-label="Select working directory"
+        >
                 <FolderOpen size={14} />
                 Browse
               </Button>
