@@ -332,7 +332,7 @@ Evidence: .sisyphus/evidence/task-3-tauri-code.txt
 
 ---
 
-- [ ] 4. Update WorkspaceSettingsDialog Component
+- [x] 4. Update WorkspaceSettingsDialog Component
 
 **What to do**:
 - Import `useDirectoryPicker` hook
@@ -400,7 +400,7 @@ Evidence: .sisyphus/evidence/task-4-button-states.txt
 
 ---
 
-- [ ] 5. Write Unit Tests for useDirectoryPicker Hook
+- [x] 5. Write Unit Tests for useDirectoryPicker Hook
 
 **What to do**:
 - Create `src/hooks/useDirectoryPicker.test.ts`
@@ -460,7 +460,7 @@ Evidence: .sisyphus/evidence/task-5-tests-pass.txt
 
 ---
 
-- [ ] 6. Add Accessibility and Error Handling Polish
+- [x] 6. Add Accessibility and Error Handling Polish
 
 **What to do**:
 - Add `aria-label` to browse button
@@ -510,7 +510,7 @@ Evidence: .sisyphus/evidence/task-6-a11y.txt
 
 ---
 
-- [ ] 7. Run TypeScript Compilation Check
+- [x] 7. Run TypeScript Compilation Check
 
 **What to do**:
 - Run `bun run tsc --noEmit`
@@ -550,7 +550,7 @@ Evidence: .sisyphus/evidence/task-7-tsc.txt
 
 ---
 
-- [ ] 8. Run All Tests
+- [x] 8. Run All Tests
 
 **What to do**:
 - Run `bun test` (all tests)
@@ -592,7 +592,7 @@ Evidence: .sisyphus/evidence/task-8-all-tests.txt
 
 ---
 
-- [ ] 9. Integration Verification
+- [x] 9. Integration Verification
 
 **What to do**:
 - Verify Tauri build works: `cargo build -p ymir-tauri`
@@ -635,7 +635,7 @@ Evidence: .sisyphus/evidence/task-9-tauri-build.txt
 
 ## Final Verification Wave
 
-- [ ] F1. Code Quality Review
+- [x] F1. Code Quality Review
 
 **What to do**:
 - Run `bun run lint` (if available) or `eslint src/hooks/useDirectoryPicker.ts`
@@ -654,7 +654,7 @@ Evidence: .sisyphus/evidence/task-9-tauri-build.txt
 
 ---
 
-- [ ] F2. Final Scope Verification
+- [x] F2. Final Scope Verification
 
 **What to do**:
 - Verify `window.prompt` is completely removed
