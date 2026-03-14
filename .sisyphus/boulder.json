@@ -1,9 +1,10 @@
 {
-  "active_plan": "/home/blake/Documents/software/ymir/.sisyphus/plans/workspace-settings.md",
-  "started_at": "2026-03-14T04:43:43.089Z",
+  "active_plan": "/home/blake/Documents/software/ymir/.sisyphus/plans/folder-browser-dialog.md",
+  "started_at": "2026-03-14T14:50:33.167Z",
   "session_ids": [
-    "ses_31557b7e8ffe4QGNw4yQK07Qhb"
+    "ses_3134f26c9ffe3RBRPTZ7pNwkYn"
   ],
-  "plan_name": "workspace-settings",
-  "agent": "atlas"
+  "plan_name": "folder-browser-dialog",
+  "agent": "atlas",
+  "worktree_path": "/home/blake/Documents/software/ymir/.worktrees/folder-browser-dialog"
 }
