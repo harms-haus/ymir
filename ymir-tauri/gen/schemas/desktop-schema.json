@@ -387,16 +387,244 @@
       "description": "Permission identifier",
       "oneOf": [
         {
+          "description": "Enables the attach_pty_channel command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-attach-pty-channel",
+          "markdownDescription": "Enables the attach_pty_channel command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the checkout_branch command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-checkout-branch",
+          "markdownDescription": "Enables the checkout_branch command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the commit_changes command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-commit-changes",
+          "markdownDescription": "Enables the commit_changes command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the create_branch command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-create-branch",
+          "markdownDescription": "Enables the create_branch command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the delete_branch command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-delete-branch",
+          "markdownDescription": "Enables the delete_branch command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the discard_file_changes command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-discard-file-changes",
+          "markdownDescription": "Enables the discard_file_changes command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the discover_git_repos command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-discover-git-repos",
+          "markdownDescription": "Enables the discover_git_repos command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the exit_app command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-exit-app",
+          "markdownDescription": "Enables the exit_app command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the get_app_cwd command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-get-app-cwd",
+          "markdownDescription": "Enables the get_app_cwd command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the get_branches command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-get-branches",
+          "markdownDescription": "Enables the get_branches command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the get_git_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-get-git-status",
+          "markdownDescription": "Enables the get_git_status command without any pre-configured scope."
+        },
+        {
           "description": "Enables the get_platform_info command without any pre-configured scope.",
           "type": "string",
           "const": "allow-get-platform-info",
           "markdownDescription": "Enables the get_platform_info command without any pre-configured scope."
         },
         {
+          "description": "Enables the is_pty_alive command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-is-pty-alive",
+          "markdownDescription": "Enables the is_pty_alive command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the kill_all_sessions command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-kill-all-sessions",
+          "markdownDescription": "Enables the kill_all_sessions command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the kill_pty command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-kill-pty",
+          "markdownDescription": "Enables the kill_pty command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the resize_pty command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-resize-pty",
+          "markdownDescription": "Enables the resize_pty command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the spawn_pty command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-spawn-pty",
+          "markdownDescription": "Enables the spawn_pty command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the stage_file command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-stage-file",
+          "markdownDescription": "Enables the stage_file command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the unstage_file command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-unstage-file",
+          "markdownDescription": "Enables the unstage_file command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the write_pty command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-write-pty",
+          "markdownDescription": "Enables the write_pty command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the attach_pty_channel command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-attach-pty-channel",
+          "markdownDescription": "Denies the attach_pty_channel command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the checkout_branch command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-checkout-branch",
+          "markdownDescription": "Denies the checkout_branch command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the commit_changes command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-commit-changes",
+          "markdownDescription": "Denies the commit_changes command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the create_branch command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-create-branch",
+          "markdownDescription": "Denies the create_branch command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the delete_branch command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-delete-branch",
+          "markdownDescription": "Denies the delete_branch command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the discard_file_changes command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-discard-file-changes",
+          "markdownDescription": "Denies the discard_file_changes command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the discover_git_repos command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-discover-git-repos",
+          "markdownDescription": "Denies the discover_git_repos command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the exit_app command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-exit-app",
+          "markdownDescription": "Denies the exit_app command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_app_cwd command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-get-app-cwd",
+          "markdownDescription": "Denies the get_app_cwd command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_branches command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-get-branches",
+          "markdownDescription": "Denies the get_branches command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_git_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-get-git-status",
+          "markdownDescription": "Denies the get_git_status command without any pre-configured scope."
+        },
+        {
           "description": "Denies the get_platform_info command without any pre-configured scope.",
           "type": "string",
           "const": "deny-get-platform-info",
           "markdownDescription": "Denies the get_platform_info command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the is_pty_alive command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-is-pty-alive",
+          "markdownDescription": "Denies the is_pty_alive command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the kill_all_sessions command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-kill-all-sessions",
+          "markdownDescription": "Denies the kill_all_sessions command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the kill_pty command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-kill-pty",
+          "markdownDescription": "Denies the kill_pty command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the resize_pty command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-resize-pty",
+          "markdownDescription": "Denies the resize_pty command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the spawn_pty command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-spawn-pty",
+          "markdownDescription": "Denies the spawn_pty command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the stage_file command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-stage-file",
+          "markdownDescription": "Denies the stage_file command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the unstage_file command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-unstage-file",
+          "markdownDescription": "Denies the unstage_file command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the write_pty command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-write-pty",
+          "markdownDescription": "Denies the write_pty command without any pre-configured scope."
         },
         {
           "description": "Default core plugins set.\n#### This default permission set includes:\n\n- `core:path:default`\n- `core:event:default`\n- `core:window:default`\n- `core:webview:default`\n- `core:app:default`\n- `core:image:default`\n- `core:resources:default`\n- `core:menu:default`\n- `core:tray:default`",
@@ -2563,108 +2791,6 @@
           "type": "string",
           "const": "notification:deny-show",
           "markdownDescription": "Denies the show command without any pre-configured scope."
-        },
-        {
-          "description": "This permission set configures which\noperating system information are available\nto gather from the frontend.\n\n#### Granted Permissions\n\nAll information except the host name are available.\n\n\n#### This default permission set includes:\n\n- `allow-arch`\n- `allow-exe-extension`\n- `allow-family`\n- `allow-locale`\n- `allow-os-type`\n- `allow-platform`\n- `allow-version`",
-          "type": "string",
-          "const": "os:default",
-          "markdownDescription": "This permission set configures which\noperating system information are available\nto gather from the frontend.\n\n#### Granted Permissions\n\nAll information except the host name are available.\n\n\n#### This default permission set includes:\n\n- `allow-arch`\n- `allow-exe-extension`\n- `allow-family`\n- `allow-locale`\n- `allow-os-type`\n- `allow-platform`\n- `allow-version`"
-        },
-        {
-          "description": "Enables the arch command without any pre-configured scope.",
-          "type": "string",
-          "const": "os:allow-arch",
-          "markdownDescription": "Enables the arch command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the exe_extension command without any pre-configured scope.",
-          "type": "string",
-          "const": "os:allow-exe-extension",
-          "markdownDescription": "Enables the exe_extension command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the family command without any pre-configured scope.",
-          "type": "string",
-          "const": "os:allow-family",
-          "markdownDescription": "Enables the family command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the hostname command without any pre-configured scope.",
-          "type": "string",
-          "const": "os:allow-hostname",
-          "markdownDescription": "Enables the hostname command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the locale command without any pre-configured scope.",
-          "type": "string",
-          "const": "os:allow-locale",
-          "markdownDescription": "Enables the locale command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the os_type command without any pre-configured scope.",
-          "type": "string",
-          "const": "os:allow-os-type",
-          "markdownDescription": "Enables the os_type command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the platform command without any pre-configured scope.",
-          "type": "string",
-          "const": "os:allow-platform",
-          "markdownDescription": "Enables the platform command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the version command without any pre-configured scope.",
-          "type": "string",
-          "const": "os:allow-version",
-          "markdownDescription": "Enables the version command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the arch command without any pre-configured scope.",
-          "type": "string",
-          "const": "os:deny-arch",
-          "markdownDescription": "Denies the arch command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the exe_extension command without any pre-configured scope.",
-          "type": "string",
-          "const": "os:deny-exe-extension",
-          "markdownDescription": "Denies the exe_extension command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the family command without any pre-configured scope.",
-          "type": "string",
-          "const": "os:deny-family",
-          "markdownDescription": "Denies the family command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the hostname command without any pre-configured scope.",
-          "type": "string",
-          "const": "os:deny-hostname",
-          "markdownDescription": "Denies the hostname command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the locale command without any pre-configured scope.",
-          "type": "string",
-          "const": "os:deny-locale",
-          "markdownDescription": "Denies the locale command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the os_type command without any pre-configured scope.",
-          "type": "string",
-          "const": "os:deny-os-type",
-          "markdownDescription": "Denies the os_type command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the platform command without any pre-configured scope.",
-          "type": "string",
-          "const": "os:deny-platform",
-          "markdownDescription": "Denies the platform command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the version command without any pre-configured scope.",
-          "type": "string",
-          "const": "os:deny-version",
-          "markdownDescription": "Denies the version command without any pre-configured scope."
         },
         {
           "description": "This permission set configures which\nshell functionality is exposed by default.\n\n#### Granted Permissions\n\nIt allows to use the `open` functionality with a reasonable\nscope pre-configured. It will allow opening `http(s)://`,\n`tel:` and `mailto:` links.\n\n#### This default permission set includes:\n\n- `allow-open`",

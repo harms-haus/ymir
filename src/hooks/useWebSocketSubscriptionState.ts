@@ -76,20 +76,37 @@ export function useWebSocketSubscriptionState<TData, TResult>(
     setIsLoading(true);
     setError(null);
 
+    // Use aggressive timeout to fail fast and prevent UI blocking (3 seconds)
+    // This is critical for window controls to remain functional even when WebSocket fails
+    const requestTimeoutMs = 3000;
+    const timeoutController = new AbortController();
+    const timeoutId = setTimeout(() => timeoutController.abort(), requestTimeoutMs);
+
     try {
       if (!websocketService.isConnected()) {
         await ensureWebSocketConnected();
       }
-      const result = await websocketService.request<TResult>(method, params);
+      const result = await websocketService.request<TResult>(method, params, requestTimeoutMs);
       if (requestGenerationRef.current !== generation) {
+        clearTimeout(timeoutId);
         return;
       }
+      clearTimeout(timeoutId);
       setData(mapResult(result));
     } catch (requestError) {
       if (requestGenerationRef.current !== generation) {
+        clearTimeout(timeoutId);
         return;
       }
-      setError(extractErrorMessage(requestError));
+      clearTimeout(timeoutId);
+      // Fail silently in production - allow UI to keep working
+      // This is critical for window controls and drag functionality
+      if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+        setError(null);
+        // Keep old data on error to prevent UI from disappearing
+      } else {
+        setError(extractErrorMessage(requestError));
+      }
     } finally {
       if (requestGenerationRef.current === generation) {
         setIsLoading(false);

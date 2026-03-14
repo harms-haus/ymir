@@ -331,9 +331,10 @@ pub async fn kill_all_sessions(state: tauri::State<'_, PtyState>) -> Result<(), 
 
 #[tauri::command]
 #[instrument]
-pub async fn exit_app() {
+pub async fn exit_app(app: tauri::AppHandle) {
     info!("Exit requested from frontend");
-    std::process::exit(0);
+    // Exit the Tauri app gracefully - this will close all windows and clean up
+    app.exit(0);
 }
 
 #[tauri::command]

@@ -1,9 +1,10 @@
 mod app;
+mod commands;
 mod platform;
 
-pub fn run() {
+pub fn run(web_mode: bool) {
     init_logging();
-    app::run();
+    app::run(web_mode);
 }
 
 fn init_logging() {

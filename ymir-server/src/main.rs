@@ -32,13 +32,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 info!("Password: [none, no authentication required]");
             }
 
-            let url = browser::build_url(&web_args.host, web_args.port);
-            match browser::open_browser(&url) {
-                Ok(true) => info!("Browser opened to: {}", url),
-                Ok(false) => {
-                    warn!("Browser could not be opened, but server will continue");
+            if !web_args.no_browser {
+                let url = browser::build_url(&web_args.host, web_args.port);
+                match browser::open_browser(&url) {
+                    Ok(true) => info!("Browser opened to: {}", url),
+                    Ok(false) => {
+                        warn!("Browser could not be opened, but server will continue");
+                    }
+                    Err(e) => warn!("Browser warning: {}", e),
                 }
-                Err(e) => warn!("Browser warning: {}", e),
             }
 
             let config = ServerConfig {

@@ -14,9 +14,9 @@ fn test_cli_parsing_web_defaults() {
     match cli.command {
         Some(Commands::Web(web_args)) => {
             assert_eq!(web_args.host, "127.0.0.1");
-            assert_eq!(web_args.port, 7139);
+            assert_eq!(web_args.port, 7319);
             assert!(web_args.password.is_none());
-            assert_eq!(web_args.bind_address(), "127.0.0.1:7139");
+            assert_eq!(web_args.bind_address(), "127.0.0.1:7319");
         }
         _ => panic!("Expected Web command"),
     }
@@ -29,7 +29,7 @@ fn test_cli_parsing_web_custom_host() {
     match cli.command {
         Some(Commands::Web(web_args)) => {
             assert_eq!(web_args.host, "0.0.0.0");
-            assert_eq!(web_args.port, 7139);
+            assert_eq!(web_args.port, 7319);
         }
         _ => panic!("Expected Web command"),
     }
@@ -55,7 +55,7 @@ fn test_cli_parsing_web_with_password() {
     match cli.command {
         Some(Commands::Web(web_args)) => {
             assert_eq!(web_args.host, "127.0.0.1");
-            assert_eq!(web_args.port, 7139);
+            assert_eq!(web_args.port, 7319);
             assert_eq!(web_args.password, Some("secret123".to_string()));
         }
         _ => panic!("Expected Web command"),
@@ -154,4 +154,17 @@ fn test_cli_web_help_shows_options() {
     assert!(error_string.contains("--host"));
     assert!(error_string.contains("--port"));
     assert!(error_string.contains("--password"));
+    assert!(error_string.contains("--no-browser"));
+}
+
+#[test]
+fn test_cli_parsing_web_no_browser() {
+    let cli = Cli::try_parse_from(["ymir-server", "web", "--no-browser"]).unwrap();
+
+    match cli.command {
+        Some(Commands::Web(web_args)) => {
+            assert!(web_args.no_browser);
+        }
+        _ => panic!("Expected Web command"),
+    }
 }

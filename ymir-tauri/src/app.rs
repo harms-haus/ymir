@@ -5,6 +5,7 @@ use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
 use tracing::{error, info, warn};
 
+use crate::commands;
 use crate::platform;
 
 const EMBEDDED_SERVICE_HOST: &str = "127.0.0.1";
@@ -20,16 +21,29 @@ struct EmbeddedServiceManager {
     service: Mutex<Option<EmbeddedService>>,
 }
 
-pub fn run() {
+pub fn run(web_mode: bool) {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_store::Builder::default().build())
-        .plugin(tauri_plugin_os::init())
-        .invoke_handler(tauri::generate_handler![platform::get_platform_info])
         .manage(EmbeddedServiceManager::default())
-        .setup(|app| {
+        .invoke_handler(tauri::generate_handler![
+            platform::get_platform_info,
+            commands::kill_all_sessions,
+            commands::exit_app,
+            commands::get_app_cwd,
+        ])
+        .setup(move |app| {
             start_embedded_service(app.handle());
+
+            if web_mode {
+                let url = format!("http://{}:{}", EMBEDDED_SERVICE_HOST, EMBEDDED_SERVICE_PORT);
+                if let Err(e) = webbrowser::open(&url) {
+                    warn!(%e, "Failed to open browser in web mode");
+                } else {
+                    info!(url, "Opened browser in web mode");
+                }
+            }
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -76,6 +90,7 @@ fn start_embedded_service(app_handle: &tauri::AppHandle) {
             EMBEDDED_SERVICE_HOST,
             "--port",
             &EMBEDDED_SERVICE_PORT.to_string(),
+            "--no-browser",
         ])
         .spawn();
 

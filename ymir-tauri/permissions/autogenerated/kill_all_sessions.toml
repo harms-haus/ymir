@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-kill-all-sessions"
+description = "Enables the kill_all_sessions command without any pre-configured scope."
+commands.allow = ["kill_all_sessions"]
+
+[[permission]]
+identifier = "deny-kill-all-sessions"
+description = "Denies the kill_all_sessions command without any pre-configured scope."
+commands.deny = ["kill_all_sessions"]

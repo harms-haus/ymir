@@ -11,7 +11,6 @@ import {
   type JsonRpcNotification,
 } from '../services/websocket';
 import { useRuntimeUiState, zoomRuntimeIn, zoomRuntimeOut } from '../lib/runtime-ui-state';
-import { setActivePaneSelection, setActiveTabSelection } from '../lib/runtime-selection';
 
 interface TerminalProps {
   sessionId?: string;
@@ -39,7 +38,7 @@ function extractErrorMessage(error: unknown): string {
   }
 }
 
-export function Terminal({ sessionId, tabId, paneId, workspaceId, onNotification, hasNotification }: TerminalProps) {
+export function Terminal({ sessionId, tabId, paneId, workspaceId: _workspaceId, onNotification, hasNotification }: TerminalProps) {
   const [isReady, setIsReady] = useState(false);
 
   const fontSize = useRuntimeUiState((state) => state.fontSize);
@@ -48,7 +47,6 @@ export function Terminal({ sessionId, tabId, paneId, workspaceId, onNotification
   const isConnectingRef = useRef(false);
   const onNotificationRef = useRef<((message: string) => void) | undefined>(onNotification);
   const resizeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const recoveredTabIdsRef = useRef<Set<string>>(new Set());
   const websocketService = getWebSocketService();
 
   // Ghostty-web refs
@@ -217,6 +215,8 @@ export function Terminal({ sessionId, tabId, paneId, workspaceId, onNotification
     const term = terminalRef.current;
     if (!term) return;
 
+    let active = true;
+
     async function connectToPty(existingSessionId: string | undefined, term: GhosttyTerminal) {
       if (isConnectingRef.current) return;
 
@@ -238,7 +238,23 @@ export function Terminal({ sessionId, tabId, paneId, workspaceId, onNotification
           await websocketService.connect(resolveWebSocketUrl());
         }
 
-        await websocketService.request('pty.connect', { tabId: targetTabId });
+        let connected = false;
+        for (let attempt = 0; attempt < 3 && !connected && active; attempt++) {
+          try {
+            await websocketService.request('pty.connect', { tabId: targetTabId });
+            connected = true;
+          } catch {
+            if (attempt < 2 && active) {
+              await new Promise((resolve) => setTimeout(resolve, 500));
+            }
+          }
+        }
+
+        if (!active) return;
+
+        if (!connected) {
+          throw new Error('PTY connect failed after retries');
+        }
 
         const tabsResult = await websocketService.request<{ tabs?: Array<{ id?: string; sessionId?: string; scrollback?: Array<{ text?: unknown }> }> }>(
           'tab.list',
@@ -267,35 +283,25 @@ export function Terminal({ sessionId, tabId, paneId, workspaceId, onNotification
         currentSessionIdRef.current = targetTabId;
         setIsReady(true);
       } catch (error) {
+        if (!active) return;
         const errorMessage = extractErrorMessage(error);
-        if (workspaceId && !recoveredTabIdsRef.current.has(targetTabId)) {
-          recoveredTabIdsRef.current.add(targetTabId);
-          try {
-            const recoveryResult = await websocketService.request<{ tab?: { id?: string } }>('tab.create', {
-              workspaceId,
-              paneId,
-            });
-            const nextTabId = recoveryResult?.tab?.id;
-            if (nextTabId) {
-              setActivePaneSelection(paneId);
-              setActiveTabSelection(nextTabId);
-              void websocketService.request('tab.close', { id: targetTabId }).catch(() => undefined);
-              return;
-            }
-          } catch {
-            recoveredTabIdsRef.current.delete(targetTabId);
-          }
-        }
-
         logger.warn('Terminal PTY connection failed', { error: errorMessage, tabId: targetTabId });
-        term.write('\r\n[Error: Failed to connect PTY]\r\n');
+        try {
+          term.write('\r\n[Error: Failed to connect PTY]\r\n');
+        } catch {
+          // Terminal may be disposed
+        }
       } finally {
         isConnectingRef.current = false;
       }
     }
 
     void connectToPty(sessionId, term).catch(() => undefined);
-  }, [applyScrollback, paneId, sessionId, tabId, websocketService, workspaceId]);
+
+    return () => {
+      active = false;
+    };
+  }, [applyScrollback, paneId, sessionId, tabId, websocketService]);
 
   // Handle resize with ResizeObserver
   useEffect(() => {

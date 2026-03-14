@@ -25,12 +25,20 @@ interface PaneProps {
 }
 
 export function Pane({ paneId, workspaceId, windowControlsPosition, isTopmost }: PaneProps) {
-  const { tabs, refetch: refetchTabs } = useTabs(paneId);
-  const hasBootstrappedTabRef = useRef(false);
+  const { tabs, isLoading, refetch: refetchTabs } = useTabs(paneId);
+  const hasSeenTabsRef = useRef(false);
+  const hasReceivedDataRef = useRef(false);
   const selectedPaneId = useRuntimeSelection((state) => state.activePaneId);
   const selectedTabId = useRuntimeSelection((state) => state.activeTabId);
   const websocketService = useMemo(() => getWebSocketService(), []);
   useRuntimeNotifications((snapshot) => snapshot);
+
+  useEffect(() => {
+    if (!isLoading && tabs.length > 0) {
+      hasSeenTabsRef.current = true;
+      hasReceivedDataRef.current = true;
+    }
+  }, [isLoading, tabs.length]);
 
   useEffect(() => {
     syncPaneTabs(workspaceId, paneId, tabs);
@@ -51,16 +59,23 @@ export function Pane({ paneId, workspaceId, windowControlsPosition, isTopmost }:
   }, [activeTabId, paneId, selectedPaneId]);
 
   useEffect(() => {
+    if (isLoading) {
+      return;
+    }
+
     if (tabs.length > 0) {
-      hasBootstrappedTabRef.current = false;
       return;
     }
 
-    if (hasBootstrappedTabRef.current) {
+    if (hasSeenTabsRef.current) {
       return;
     }
 
-    hasBootstrappedTabRef.current = true;
+    if (!hasReceivedDataRef.current) {
+      return;
+    }
+
+    hasSeenTabsRef.current = true;
     void websocketService
       .request<{ tab?: { id?: string } }>('tab.create', {
         workspaceId,
@@ -75,9 +90,9 @@ export function Pane({ paneId, workspaceId, windowControlsPosition, isTopmost }:
         await refetchTabs();
       })
       .catch(() => {
-        hasBootstrappedTabRef.current = false;
+        hasSeenTabsRef.current = false;
       });
-  }, [paneId, refetchTabs, tabs.length, websocketService, workspaceId]);
+  }, [isLoading, paneId, refetchTabs, tabs.length, websocketService, workspaceId]);
 
   const handleCreateTab = useCallback(
     (targetPaneId: string) => {

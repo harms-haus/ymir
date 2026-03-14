@@ -13,6 +13,7 @@
     "withGlobalTauri": false,
     "windows": [
       {
+        "label": "main",
         "title": "Ymir",
         "width": 1200,
         "height": 800,
@@ -26,7 +27,34 @@
     ],
     "security": {
       "csp": null,
-      "dangerousDisableAssetCspModification": true
+      "dangerousDisableAssetCspModification": true,
+      "capabilities": [
+        {
+          "identifier": "default",
+          "description": "Capability for the main window",
+          "windows": ["main"],
+          "permissions": [
+            "core:default",
+            "core:webview:default",
+            "core:webview:allow-webview-close",
+            "core:webview:allow-create-webview",
+            "core:webview:allow-internal-toggle-devtools",
+            "core:window:allow-start-dragging",
+            "core:window:allow-minimize",
+            "core:window:allow-maximize",
+            "core:window:allow-toggle-maximize",
+            "core:window:allow-close",
+            "core:window:allow-set-fullscreen",
+            "core:window:allow-set-size",
+            "core:window:allow-set-position",
+            "shell:allow-execute",
+            "shell:allow-spawn",
+            "notification:default",
+            "store:default",
+            "allow-get-platform-info"
+          ]
+        }
+      ]
     }
   },
   "bundle": {

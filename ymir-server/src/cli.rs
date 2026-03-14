@@ -32,6 +32,10 @@ pub struct WebArgs {
     /// Optional password for authentication (default: none, no auth required)
     #[arg(long, value_name = "PASSWORD")]
     pub password: Option<String>,
+
+    /// Don't open a browser window (used when running as sidecar)
+    #[arg(long)]
+    pub no_browser: bool,
 }
 
 impl WebArgs {
@@ -66,6 +70,7 @@ mod tests {
             host: "127.0.0.1".to_string(),
             port: 7319,
             password: None,
+            no_browser: false,
         };
         assert!(args.validate().is_ok());
         assert_eq!(args.bind_address(), "127.0.0.1:7319");
@@ -77,6 +82,7 @@ mod tests {
             host: "0.0.0.0".to_string(),
             port: 3000,
             password: Some("secret".to_string()),
+            no_browser: false,
         };
         assert!(args.validate().is_ok());
         assert_eq!(args.bind_address(), "0.0.0.0:3000");
@@ -89,6 +95,7 @@ mod tests {
             host: "127.0.0.1".to_string(),
             port: 0,
             password: None,
+            no_browser: false,
         };
         assert!(args.validate().is_err());
     }
@@ -99,6 +106,7 @@ mod tests {
             host: "".to_string(),
             port: 7319,
             password: None,
+            no_browser: false,
         };
         assert!(args.validate().is_err());
     }
@@ -115,6 +123,7 @@ mod tests {
             host: "127.0.0.1".to_string(),
             port: 7319,
             password: None,
+            no_browser: false,
         };
         let cli = Cli {
             command: Some(Commands::Web(web_args)),
