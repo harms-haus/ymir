@@ -1,0 +1,16 @@
+[package]
+name = "ymir"
+version.workspace = true
+edition.workspace = true
+description = "ymir CLI — launches and manages ymir servers"
+
+[[bin]]
+name = "ymir"
+path = "src/main.rs"
+
+[dependencies]
+tokio.workspace = true
+clap.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true
