@@ -2,10 +2,12 @@ use crate::types::ScrollbackLine;
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tokio::time::{interval, Duration, Instant};
+use tracing::{debug, info};
 
 pub const BATCH_SIZE: usize = 50;
 pub const BATCH_TIMEOUT_MS: u64 = 500;
 pub const CHUNK_SIZE: usize = 1000;
+const DEBUG_SCROLLBACK: bool = true;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScrollbackChunk {
@@ -200,6 +202,9 @@ impl ScrollbackService {
 
     pub fn add_lines(&self, tab_id: impl Into<String>, lines: Vec<ScrollbackLine>) {
         let tab_id = tab_id.into();
+        if DEBUG_SCROLLBACK {
+            debug!(tab_id = %tab_id, line_count = lines.len(), "[SCROLLBACK] add_lines: adding lines to pending batch");
+        }
         if let Err(_e) = self
             .command_tx
             .send(ScrollbackCommand::AddLines { tab_id, lines })
@@ -210,6 +215,10 @@ impl ScrollbackService {
 
     pub async fn flush_tab(&self, tab_id: impl Into<String>) -> Vec<ScrollbackChunk> {
         let tab_id = tab_id.into();
+        if DEBUG_SCROLLBACK {
+            debug!(tab_id = %tab_id, "[SCROLLBACK] flush_tab: flushing tab scrollback");
+        }
+        
         let (tx, rx) = tokio::sync::oneshot::channel();
 
         if let Err(_e) = self.command_tx.send(ScrollbackCommand::FlushTab {
@@ -224,6 +233,11 @@ impl ScrollbackService {
 
     pub async fn get_scrollback(&self, tab_id: impl Into<String>) -> Vec<ScrollbackLine> {
         let tab_id = tab_id.into();
+        let tab_id_for_log = tab_id.clone();
+        if DEBUG_SCROLLBACK {
+            debug!(tab_id = %tab_id_for_log, "[SCROLLBACK] get_scrollback: requesting scrollback for tab");
+        }
+        
         let (tx, rx) = tokio::sync::oneshot::channel();
 
         if let Err(_e) = self.command_tx.send(ScrollbackCommand::GetScrollback {
@@ -233,7 +247,11 @@ impl ScrollbackService {
             return Vec::new();
         }
 
-        rx.await.unwrap_or_default()
+        let result = rx.await.unwrap_or_default();
+        if DEBUG_SCROLLBACK {
+            debug!(tab_id = %tab_id_for_log, line_count = result.len(), "[SCROLLBACK] get_scrollback: returning lines");
+        }
+        result
     }
 
     pub async fn get_chunks(&self, tab_id: impl Into<String>) -> Vec<ScrollbackChunk> {

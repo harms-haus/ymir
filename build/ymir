@@ -1,0 +1,16 @@
+#!/bin/bash
+
+case "$1" in
+  web)
+    "${YMIR_SERVER_PATH:-./ymir-server}" web --host 127.0.0.1 --port 7319 "${@:2}"
+    ;;
+  *)
+    # Default: run Tauri app
+    if command -v npm >/dev/null 2>&1; then
+      npm run tauri
+    else
+      echo "Error: npm is required to run the Tauri app" >&2
+      exit 1
+    fi
+    ;;
+esac

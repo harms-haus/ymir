@@ -11,6 +11,7 @@ use crate::Result;
 
 /// Embedded migration SQL files
 const MIGRATION_001: &str = include_str!("../../migrations/001_initial_schema.sql");
+const MIGRATION_002: &str = include_str!("../../migrations/002_workspace_settings.sql");
 
 /// Represents a single migration with its version number and SQL content
 #[derive(Debug, Clone)]
@@ -83,11 +84,18 @@ impl MigrationRunner {
     /// Discover all embedded migrations
     fn discover_migrations() -> Result<Vec<Migration>> {
         // Return migrations in version order (ordered list)
-        let migrations = vec![Migration {
-            version: 1,
-            name: "001_initial_schema".to_string(),
-            sql: MIGRATION_001.to_string(),
-        }];
+        let migrations = vec![
+            Migration {
+                version: 1,
+                name: "001_initial_schema".to_string(),
+                sql: MIGRATION_001.to_string(),
+            },
+            Migration {
+                version: 2,
+                name: "002_workspace_settings".to_string(),
+                sql: MIGRATION_002.to_string(),
+            },
+        ];
 
         if migrations.is_empty() {
             return Err(crate::CoreError::Database(

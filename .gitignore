@@ -66,4 +66,6 @@ coverage/
 
 # Worktrees
 .worktrees
-ymir-tauri/binaries/ymir-server-*
+
+# Tauri sidecar binaries (built separately, too large for git)
+ymir-tauri/binaries/ymir-server*

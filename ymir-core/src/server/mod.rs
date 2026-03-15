@@ -383,17 +383,32 @@ impl ServerState {
             .register("tab.close".to_string(), tab_handler);
 
         let pty_handler = PtyRequestHandler {
-            inner: PtyRpcHandler::new(db.clone(), pty_manager.clone(), scrollback_service.clone()),
+            inner: PtyRpcHandler::new(
+                db.clone(),
+                pty_manager.clone(),
+                scrollback_service.clone(),
+                self.broadcast_tx.clone(),
+            ),
         };
         self.request_router
             .register("pty.connect".to_string(), pty_handler);
         let pty_handler = PtyRequestHandler {
-            inner: PtyRpcHandler::new(db.clone(), pty_manager.clone(), scrollback_service.clone()),
+            inner: PtyRpcHandler::new(
+                db.clone(),
+                pty_manager.clone(),
+                scrollback_service.clone(),
+                self.broadcast_tx.clone(),
+            ),
         };
         self.request_router
             .register("pty.write".to_string(), pty_handler);
         let pty_handler = PtyRequestHandler {
-            inner: PtyRpcHandler::new(db.clone(), pty_manager.clone(), scrollback_service.clone()),
+            inner: PtyRpcHandler::new(
+                db.clone(),
+                pty_manager.clone(),
+                scrollback_service.clone(),
+                self.broadcast_tx.clone(),
+            ),
         };
         self.request_router
             .register("pty.resize".to_string(), pty_handler);

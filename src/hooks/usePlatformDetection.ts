@@ -16,6 +16,7 @@
 
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { isTauri } from '@tauri-apps/api/core';
 import logger from '../lib/logger';
 
 /**
@@ -108,8 +109,12 @@ export function usePlatformDetection(): PlatformInfo {
       }
     }
 
-    // Try Tauri backend first, fall back to browser detection
-    fetchPlatformInfo();
+    if (isTauri()) {
+      fetchPlatformInfo();
+    } else {
+      const fallback = detectPlatformBrowser();
+      setPlatformInfo(fallback);
+    }
 
     return () => {
       isMounted = false;

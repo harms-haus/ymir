@@ -120,7 +120,7 @@ fn test_web_args_validation_success() {
         "--host",
         "127.0.0.1",
         "--port",
-        "7139",
+        "7319",
     ])
     .unwrap();
 

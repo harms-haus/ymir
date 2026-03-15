@@ -8,7 +8,7 @@ use tracing::{info, warn};
 ///
 /// # Arguments
 ///
-/// * `url` - The URL to open in the browser (e.g., "http://127.0.0.1:7139")
+/// * `url` - The URL to open in the browser (e.g., "http://127.0.0.1:7319")
 ///
 /// # Returns
 ///
@@ -21,7 +21,7 @@ use tracing::{info, warn};
 /// ```no_run
 /// use ymir_server::browser::open_browser;
 ///
-/// if let Ok(success) = open_browser("http://127.0.0.1:7139") {
+/// if let Ok(success) = open_browser("http://127.0.0.1:7319") {
 ///     if success {
 ///         println!("Browser opened successfully");
 ///     } else {
@@ -60,7 +60,7 @@ pub fn open_browser(url: &str) -> Result<bool, String> {
 /// # Arguments
 ///
 /// * `host` - The host address (e.g., "127.0.0.1", "localhost")
-/// * `port` - The port number (e.g., 7139)
+/// * `port` - The port number (e.g., 7319)
 ///
 /// # Returns
 ///
@@ -71,8 +71,8 @@ pub fn open_browser(url: &str) -> Result<bool, String> {
 /// ```
 /// use ymir_server::browser::build_url;
 ///
-/// let url = build_url("127.0.0.1", 7139);
-/// assert_eq!(url, "http://127.0.0.1:7139");
+/// let url = build_url("127.0.0.1", 7319);
+/// assert_eq!(url, "http://127.0.0.1:7319");
 /// ```
 pub fn build_url(host: &str, port: u16) -> String {
     format!("http://{}:{}", host, port)
@@ -84,8 +84,8 @@ mod tests {
 
     #[test]
     fn test_build_url_with_ipv4() {
-        let url = build_url("127.0.0.1", 7139);
-        assert_eq!(url, "http://127.0.0.1:7139");
+        let url = build_url("127.0.0.1", 7319);
+        assert_eq!(url, "http://127.0.0.1:7319");
     }
 
     #[test]
@@ -121,13 +121,13 @@ mod tests {
 
     #[test]
     fn test_open_browser_http_accepted() {
-        let result = open_browser("http://127.0.0.1:7139");
+        let result = open_browser("http://127.0.0.1:7319");
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_build_url_with_default_port() {
-        let url = build_url("127.0.0.1", 7139);
-        assert_eq!(url, "http://127.0.0.1:7139");
+        let url = build_url("127.0.0.1", 7319);
+        assert_eq!(url, "http://127.0.0.1:7319");
     }
 }

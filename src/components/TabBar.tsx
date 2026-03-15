@@ -184,15 +184,22 @@ export function TabBar({
             </Badge>
           )}
 
-          {/* Close button */}
-          <button
-            type="button"
-            className="tab-close-button"
-            onClick={(e) => handleCloseTab(e, tab.id)}
-            aria-label={`Close ${tab.title}`}
-          >
-            ×
-          </button>
+      <span
+        role="button"
+        tabIndex={0}
+        className="tab-close-button"
+        onClick={(e) => handleCloseTab(e, tab.id)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            e.stopPropagation();
+            handleCloseTab(e as unknown as React.MouseEvent, tab.id);
+          }
+        }}
+        aria-label={`Close ${tab.title}`}
+      >
+        ×
+      </span>
         </TabsTab>
       ))}
             </TabsList>

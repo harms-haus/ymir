@@ -19,6 +19,7 @@
     "shell:allow-execute",
     "shell:allow-spawn",
     "notification:default",
-    "store:default"
+    "store:default",
+    "os:default"
   ]
 }

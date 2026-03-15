@@ -1,0 +1,6 @@
+workspaces:
+  workspace-1:
+    color: '#22c55e'
+    icon: null
+    working_directory: null
+    subtitle: null

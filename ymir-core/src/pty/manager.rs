@@ -275,33 +275,47 @@ fn spawn_pty_reader(
     tab_id: String,
     sessions: Arc<DashMap<String, PtySession>>,
 ) {
+    debug!(tab_id = %tab_id, "[PTY_READER] spawn_pty_reader: spawning background reader task");
+    
     tokio::task::spawn_blocking(move || {
+        let reader_tab_id = tab_id.clone();
+        debug!(tab_id = %reader_tab_id, "[PTY_READER] background task started, entering read loop");
+        
         let mut buffer = [0u8; 4096];
-
+        let mut read_count: u64 = 0;
+        
         loop {
             match reader.read(&mut buffer) {
                 Ok(0) => {
+                    debug!(tab_id = %reader_tab_id, reads_completed = read_count, "[PTY_READER] EOF received, sending Exit event");
                     let _ = output_tx.send(PtyOutput::Exit { code: None });
-                    sessions.remove(&tab_id);
+                    sessions.remove(&reader_tab_id);
                     break;
                 }
                 Ok(n) => {
+                    read_count += 1;
+                    debug!(tab_id = %reader_tab_id, bytes_read = n, read_count = read_count, receiver_count = output_tx.receiver_count(), "[PTY_READER] read data, broadcasting Output");
+                    
                     let data = String::from_utf8_lossy(&buffer[..n]);
                     let data_str = data.to_string();
-
+                    
                     if let Some(message) = parse_notification(&data_str) {
                         let _ = output_tx.send(PtyOutput::Notification { message });
                     }
-
-                    let _ = output_tx.send(PtyOutput::Output { data: data_str });
+                    
+                    let send_result = output_tx.send(PtyOutput::Output { data: data_str });
+                    debug!(tab_id = %reader_tab_id, send_success = send_result.is_ok(), "[PTY_READER] Output event sent");
                 }
-                Err(_) => {
+                Err(e) => {
+                    debug!(tab_id = %reader_tab_id, error = %e, "[PTY_READER] read error, sending Exit event");
                     let _ = output_tx.send(PtyOutput::Exit { code: None });
-                    sessions.remove(&tab_id);
+                    sessions.remove(&reader_tab_id);
                     break;
                 }
             }
         }
+        
+        debug!(tab_id = %reader_tab_id, "[PTY_READER] background task exiting");
     });
 }
 

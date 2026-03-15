@@ -7,7 +7,7 @@
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
     "devUrl": "http://localhost:5173",
-    "frontendDist": "dist"
+    "frontendDist": "../dist"
   },
   "app": {
     "withGlobalTauri": false,
@@ -52,6 +52,7 @@
             "notification:default",
             "store:default",
             "dialog:allow-open",
+            "os:default",
             "allow-get-platform-info"
           ]
         }

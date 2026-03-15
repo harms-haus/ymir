@@ -25,7 +25,7 @@ pub struct WebArgs {
     #[arg(short = 'H', long, default_value = "127.0.0.1")]
     pub host: String,
 
-    /// Port to listen on (default: 7139)
+    /// Port to listen on (default: 7319)
     #[arg(short, long, default_value = "7319")]
     pub port: u16,
 

@@ -60,13 +60,13 @@ npm run dev
 If you connect this frontend to `ymir-server`, set the WebSocket URL first:
 
 ```bash
-export VITE_WEBSOCKET_URL="ws://127.0.0.1:7139/ws"
+export VITE_WEBSOCKET_URL="ws://127.0.0.1:7319/ws"
 ```
 
 ### Run Rust WebSocket Server
 
 ```bash
-cargo run -p ymir-server -- web --host 127.0.0.1 --port 7139
+cargo run -p ymir-server -- web --host 127.0.0.1 --port 7319
 ```
 
 ### Run Tauri Desktop App

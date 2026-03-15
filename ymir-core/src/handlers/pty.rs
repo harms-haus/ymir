@@ -3,10 +3,12 @@ use crate::pty::manager::{PtyConfig, PtyManager, PtyOutput};
 use crate::scrollback::service::ScrollbackService;
 use crate::server::protocol::{OutgoingMessage, ProtocolError};
 use crate::types::{CoreError, Result, ScrollbackLine};
+use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::broadcast;
+use tokio::task::AbortHandle;
 
 fn escape_sql(value: &str) -> String {
     value.replace("'", "''")
@@ -55,9 +57,21 @@ pub struct ResizePtyOutput {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum PtyNotification {
-    Output { tab_id: String, data: String },
-    Notification { tab_id: String, message: String },
-    Exit { tab_id: String, code: Option<u32> },
+    Output {
+        #[serde(rename = "tabId")]
+        tab_id: String,
+        data: String,
+    },
+    Notification {
+        #[serde(rename = "tabId")]
+        tab_id: String,
+        message: String,
+    },
+    Exit {
+        #[serde(rename = "tabId")]
+        tab_id: String,
+        code: Option<u32>,
+    },
 }
 
 #[derive(Clone)]
@@ -65,6 +79,9 @@ pub struct PtyHandler {
     db: Arc<DatabaseClient>,
     pty_manager: Arc<PtyManager>,
     scrollback_service: Arc<ScrollbackService>,
+    broadcast_tx: broadcast::Sender<String>,
+    /// Tracks active forwarding tasks per tab_id to prevent duplicates
+    forwarder_tasks: Arc<DashMap<String, AbortHandle>>,
 }
 
 impl PtyHandler {
@@ -72,11 +89,14 @@ impl PtyHandler {
         db: Arc<DatabaseClient>,
         pty_manager: Arc<PtyManager>,
         scrollback_service: Arc<ScrollbackService>,
+        broadcast_tx: broadcast::Sender<String>,
     ) -> Self {
         Self {
             db,
             pty_manager,
             scrollback_service,
+            broadcast_tx,
+            forwarder_tasks: Arc::new(DashMap::new()),
         }
     }
 
@@ -85,31 +105,117 @@ impl PtyHandler {
         let tab_id = &input.tab_id;
         let tab_id_escaped = escape_sql(tab_id);
 
-        // Verify tab exists
-        let sql = format!("SELECT id FROM tabs WHERE id = '{}'", tab_id_escaped);
+        // Verify tab exists and get cwd for respawn
+        let sql = format!("SELECT id, cwd FROM tabs WHERE id = '{}'", tab_id_escaped);
         let mut rows = self.db.query(&sql, ()).await?;
 
-        if rows
+        let tab_row = rows
             .next()
             .await
-            .map_err(|e| CoreError::Database(e.to_string()))?
-            .is_none()
-        {
-            return Err(CoreError::InvalidTabId(format!(
-                "Tab not found: {}",
-                tab_id
-            )));
-        }
+            .map_err(|e| CoreError::Database(e.to_string()))?;
 
-        // Verify PTY session exists
+        let cwd = match tab_row {
+            Some(row) => {
+                let _id: String = row.get(0).map_err(|e| CoreError::Database(e.to_string()))?;
+                let cwd: String = row.get(1).map_err(|e| CoreError::Database(e.to_string()))?;
+                cwd
+            }
+            None => {
+                return Err(CoreError::InvalidTabId(format!(
+                    "Tab not found: {}",
+                    tab_id
+                )));
+            }
+        };
+
+        // Check if PTY is alive, if not try to respawn
         if !self.pty_manager.is_alive(tab_id) {
-            return Err(CoreError::PtyError(format!(
-                "PTY session not found for tab: {}",
-                tab_id
-            )));
+            // Check if pty_sessions record exists in DB
+            let sql = format!(
+                "SELECT id FROM pty_sessions WHERE tab_id = '{}'",
+                tab_id_escaped
+            );
+            let mut rows = self.db.query(&sql, ()).await?;
+            let has_session = rows
+                .next()
+                .await
+                .map_err(|e| CoreError::Database(e.to_string()))?
+                .is_some();
+
+            if has_session {
+                // Respawn PTY from database record
+                let resolved_cwd = if cwd.is_empty() || cwd == "~" {
+                    std::env::var("HOME").unwrap_or_else(|_| "/".to_string())
+                } else {
+                    cwd
+                };
+                let config = PtyConfig::new().with_cwd(&resolved_cwd);
+                if let Err(e) = self.pty_manager.spawn(tab_id, config).await {
+                    return Err(CoreError::PtyError(format!(
+                        "Failed to respawn PTY for tab {}: {}",
+                        tab_id, e
+                    )));
+                }
+            } else {
+                return Err(CoreError::PtyError(format!(
+                    "PTY session not found for tab: {}",
+                    tab_id
+                )));
+            }
         }
 
-        let _receiver = self.pty_manager.subscribe(tab_id)?;
+        let mut receiver = self.pty_manager.subscribe(tab_id)?;
+        let broadcast_tx = self.broadcast_tx.clone();
+        let tab_id_clone = tab_id.to_string();
+
+        // Abort any existing forwarding task for this tab to prevent duplicate output
+        if let Some((_, old_handle)) = self.forwarder_tasks.remove(tab_id) {
+            old_handle.abort();
+        }
+
+        let forwarder_tasks = self.forwarder_tasks.clone();
+        let forward_tab_id = tab_id.to_string();
+        let handle = tokio::spawn(async move {
+            let result = async {
+                while let Ok(output) = receiver.recv().await {
+                    match output {
+                        PtyOutput::Output { data } => {
+                            let notification = PtyNotification::Output {
+                                tab_id: tab_id_clone.clone(),
+                                data,
+                            };
+                            let params = serde_json::to_value(&notification);
+                            let message = OutgoingMessage::notification(
+                                "pty.output".to_string(),
+                                params.ok(),
+                            );
+                            if let Ok(json) = message.to_json() {
+                                let _ = broadcast_tx.send(json);
+                            }
+                        }
+                        PtyOutput::Exit { code } => {
+                            let notification = PtyNotification::Exit {
+                                tab_id: tab_id_clone.clone(),
+                                code,
+                            };
+                            let message = OutgoingMessage::notification(
+                                "pty.output".to_string(),
+                                serde_json::to_value(notification).ok(),
+                            );
+                            if let Ok(json) = message.to_json() {
+                                let _ = broadcast_tx.send(json);
+                            }
+                            break;
+                        }
+                        PtyOutput::Notification { .. } => continue,
+                    }
+                }
+            }.await;
+            forwarder_tasks.remove(&forward_tab_id);
+            result
+        });
+
+        self.forwarder_tasks.insert(tab_id.clone(), handle.abort_handle());
 
         Ok(ConnectPtyOutput {
             tab_id: tab_id.clone(),
@@ -251,9 +357,10 @@ impl PtyRpcHandler {
         db: Arc<DatabaseClient>,
         pty_manager: Arc<PtyManager>,
         scrollback_service: Arc<ScrollbackService>,
+        broadcast_tx: broadcast::Sender<String>,
     ) -> Self {
         Self {
-            inner: PtyHandler::new(db, pty_manager, scrollback_service),
+            inner: PtyHandler::new(db, pty_manager, scrollback_service, broadcast_tx),
         }
     }
 
@@ -358,7 +465,8 @@ mod tests {
         let db = setup_test_db().await;
         let pty_manager = Arc::new(PtyManager::new());
         let scrollback_service = Arc::new(ScrollbackService::new());
-        let handler = PtyHandler::new(db.clone(), pty_manager.clone(), scrollback_service);
+		let (broadcast_tx, _) = broadcast::channel(256);
+                let handler = PtyHandler::new(db.clone(), pty_manager.clone(), scrollback_service, broadcast_tx);
 
         create_test_tab(&db, "tab-connect").await;
 
@@ -384,7 +492,8 @@ mod tests {
         let db = setup_test_db().await;
         let pty_manager = Arc::new(PtyManager::new());
         let scrollback_service = Arc::new(ScrollbackService::new());
-        let handler = PtyHandler::new(db, pty_manager, scrollback_service);
+		let (broadcast_tx, _) = broadcast::channel(256);
+                let handler = PtyHandler::new(db, pty_manager, scrollback_service, broadcast_tx);
 
         let input = ConnectPtyInput {
             tab_id: "non-existent".to_string(),
@@ -398,7 +507,8 @@ mod tests {
         let db = setup_test_db().await;
         let pty_manager = Arc::new(PtyManager::new());
         let scrollback_service = Arc::new(ScrollbackService::new());
-        let handler = PtyHandler::new(db.clone(), pty_manager, scrollback_service);
+		let (broadcast_tx, _) = broadcast::channel(256);
+                let handler = PtyHandler::new(db.clone(), pty_manager, scrollback_service, broadcast_tx);
 
         create_test_tab(&db, "tab-no-pty").await;
 
@@ -414,7 +524,8 @@ mod tests {
         let db = setup_test_db().await;
         let pty_manager = Arc::new(PtyManager::new());
         let scrollback_service = Arc::new(ScrollbackService::new());
-        let handler = PtyHandler::new(db.clone(), pty_manager.clone(), scrollback_service);
+		let (broadcast_tx, _) = broadcast::channel(256);
+                let handler = PtyHandler::new(db.clone(), pty_manager.clone(), scrollback_service, broadcast_tx);
 
         create_test_tab(&db, "tab-write").await;
 
@@ -441,7 +552,8 @@ mod tests {
         let db = setup_test_db().await;
         let pty_manager = Arc::new(PtyManager::new());
         let scrollback_service = Arc::new(ScrollbackService::new());
-        let handler = PtyHandler::new(db, pty_manager, scrollback_service);
+		let (broadcast_tx, _) = broadcast::channel(256);
+                let handler = PtyHandler::new(db, pty_manager, scrollback_service, broadcast_tx);
 
         let input = WritePtyInput {
             tab_id: "non-existent".to_string(),
@@ -456,7 +568,8 @@ mod tests {
         let db = setup_test_db().await;
         let pty_manager = Arc::new(PtyManager::new());
         let scrollback_service = Arc::new(ScrollbackService::new());
-        let handler = PtyHandler::new(db.clone(), pty_manager.clone(), scrollback_service);
+		let (broadcast_tx, _) = broadcast::channel(256);
+                let handler = PtyHandler::new(db.clone(), pty_manager.clone(), scrollback_service, broadcast_tx);
 
         create_test_tab(&db, "tab-resize").await;
 
@@ -485,7 +598,8 @@ mod tests {
         let db = setup_test_db().await;
         let pty_manager = Arc::new(PtyManager::new());
         let scrollback_service = Arc::new(ScrollbackService::new());
-        let handler = PtyHandler::new(db, pty_manager, scrollback_service);
+		let (broadcast_tx, _) = broadcast::channel(256);
+                let handler = PtyHandler::new(db, pty_manager, scrollback_service, broadcast_tx);
 
         let input = ResizePtyInput {
             tab_id: "non-existent".to_string(),
@@ -501,7 +615,8 @@ mod tests {
         let db = setup_test_db().await;
         let pty_manager = Arc::new(PtyManager::new());
         let scrollback_service = Arc::new(ScrollbackService::new());
-        let handler = PtyHandler::new(db.clone(), pty_manager.clone(), scrollback_service);
+		let (broadcast_tx, _) = broadcast::channel(256);
+                let handler = PtyHandler::new(db.clone(), pty_manager.clone(), scrollback_service, broadcast_tx);
 
         create_test_tab(&db, "tab-alive").await;
 
@@ -522,7 +637,8 @@ mod tests {
         let db = setup_test_db().await;
         let pty_manager = Arc::new(PtyManager::new());
         let scrollback_service = Arc::new(ScrollbackService::new());
-        let handler = PtyHandler::new(db.clone(), pty_manager.clone(), scrollback_service);
+		let (broadcast_tx, _) = broadcast::channel(256);
+                let handler = PtyHandler::new(db.clone(), pty_manager.clone(), scrollback_service, broadcast_tx);
 
         create_test_tab(&db, "tab-subscribe").await;
 
@@ -543,7 +659,8 @@ mod tests {
         let db = setup_test_db().await;
         let pty_manager = Arc::new(PtyManager::new());
         let scrollback_service = Arc::new(ScrollbackService::new());
-        let handler = PtyHandler::new(db, pty_manager, scrollback_service.clone());
+		let (broadcast_tx, _) = broadcast::channel(256);
+                let handler = PtyHandler::new(db, pty_manager, scrollback_service.clone(), broadcast_tx);
 
         handler
             .process_output("tab-process", "line 1\nline 2\nline 3")
@@ -564,7 +681,8 @@ mod tests {
         let db = setup_test_db().await;
         let pty_manager = Arc::new(PtyManager::new());
         let scrollback_service = Arc::new(ScrollbackService::new());
-        let handler = PtyHandler::new(db, pty_manager, scrollback_service);
+		let (broadcast_tx, _) = broadcast::channel(256);
+                let handler = PtyHandler::new(db, pty_manager, scrollback_service, broadcast_tx);
 
         let notification = PtyNotification::Output {
             tab_id: "tab-1".to_string(),
@@ -585,7 +703,8 @@ mod tests {
         let db = setup_test_db().await;
         let pty_manager = Arc::new(PtyManager::new());
         let scrollback_service = Arc::new(ScrollbackService::new());
-        let handler = PtyRpcHandler::new(db.clone(), pty_manager.clone(), scrollback_service);
+		let (broadcast_tx, _) = broadcast::channel(256);
+                let handler = PtyRpcHandler::new(db.clone(), pty_manager.clone(), scrollback_service, broadcast_tx);
 
         create_test_tab(&db, "tab-rpc-connect").await;
 
@@ -609,7 +728,8 @@ mod tests {
         let db = setup_test_db().await;
         let pty_manager = Arc::new(PtyManager::new());
         let scrollback_service = Arc::new(ScrollbackService::new());
-        let handler = PtyRpcHandler::new(db.clone(), pty_manager.clone(), scrollback_service);
+		let (broadcast_tx, _) = broadcast::channel(256);
+                let handler = PtyRpcHandler::new(db.clone(), pty_manager.clone(), scrollback_service, broadcast_tx);
 
         create_test_tab(&db, "tab-rpc-write").await;
 
@@ -634,7 +754,8 @@ mod tests {
         let db = setup_test_db().await;
         let pty_manager = Arc::new(PtyManager::new());
         let scrollback_service = Arc::new(ScrollbackService::new());
-        let handler = PtyRpcHandler::new(db.clone(), pty_manager.clone(), scrollback_service);
+		let (broadcast_tx, _) = broadcast::channel(256);
+                let handler = PtyRpcHandler::new(db.clone(), pty_manager.clone(), scrollback_service, broadcast_tx);
 
         create_test_tab(&db, "tab-rpc-resize").await;
 
@@ -660,7 +781,8 @@ mod tests {
         let db = setup_test_db().await;
         let pty_manager = Arc::new(PtyManager::new());
         let scrollback_service = Arc::new(ScrollbackService::new());
-        let handler = PtyRpcHandler::new(db, pty_manager, scrollback_service);
+		let (broadcast_tx, _) = broadcast::channel(256);
+                let handler = PtyRpcHandler::new(db, pty_manager, scrollback_service, broadcast_tx);
 
         let result = handler.handle("pty.unknown", None).await;
         assert!(result.is_err());
@@ -671,7 +793,8 @@ mod tests {
         let db = setup_test_db().await;
         let pty_manager = Arc::new(PtyManager::new());
         let scrollback_service = Arc::new(ScrollbackService::new());
-        let handler = PtyRpcHandler::new(db, pty_manager, scrollback_service);
+		let (broadcast_tx, _) = broadcast::channel(256);
+                let handler = PtyRpcHandler::new(db, pty_manager, scrollback_service, broadcast_tx);
 
         let result = handler.handle("pty.connect", None).await;
         assert!(result.is_err());
@@ -682,7 +805,8 @@ mod tests {
         let db = setup_test_db().await;
         let pty_manager = Arc::new(PtyManager::new());
         let scrollback_service = Arc::new(ScrollbackService::new());
-        let handler = PtyHandler::new(db.clone(), pty_manager.clone(), scrollback_service.clone());
+		let (broadcast_tx, _) = broadcast::channel(256);
+                let handler = PtyHandler::new(db.clone(), pty_manager.clone(), scrollback_service.clone(), broadcast_tx);
 
         create_test_tab(&db, "tab-lifecycle").await;
 

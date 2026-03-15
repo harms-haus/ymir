@@ -203,7 +203,22 @@ function WorkspaceList({ collapsed }: WorkspaceListProps) {
         name: `Workspace ${workspaces.length + 1}`,
       });
       if (result.workspace?.id) {
-        switchWorkspace(result.workspace.id);
+        const workspaceId = result.workspace.id;
+        
+        // Create initial pane
+        const paneResult = await websocketService.request<{ pane?: { id?: string } }>('pane.create', {
+          workspaceId,
+        });
+        
+        // Create initial tab in the pane
+        if (paneResult?.pane?.id) {
+          await websocketService.request('tab.create', {
+            workspaceId,
+            paneId: paneResult.pane.id,
+          });
+        }
+        
+        switchWorkspace(workspaceId);
       }
       await refetch();
     } catch (requestError) {

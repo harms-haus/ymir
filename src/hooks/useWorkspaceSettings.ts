@@ -21,10 +21,12 @@ interface GetSettingsParams {
 }
 
 interface GetSettingsOutput {
-  color?: string;
-  icon?: string;
-  working_directory?: string;
-  subtitle?: string;
+  settings: {
+    color?: string;
+    icon?: string;
+    working_directory?: string;
+    subtitle?: string;
+  };
 }
 
 interface UpdateSettingsParams {
@@ -36,15 +38,20 @@ interface UpdateSettingsParams {
 }
 
 interface UpdateSettingsOutput {
-  success: boolean;
+  settings: {
+    color?: string;
+    icon?: string;
+    working_directory?: string;
+    subtitle?: string;
+  };
 }
 
 function mapSettingsResult(result: GetSettingsOutput): WorkspaceSettings {
   return {
-    color: result.color,
-    icon: result.icon,
-    workingDirectory: result.working_directory,
-    subtitle: result.subtitle,
+    color: result.settings.color,
+    icon: result.settings.icon,
+    workingDirectory: result.settings.working_directory,
+    subtitle: result.settings.subtitle,
   };
 }
 
@@ -98,11 +105,18 @@ export function useWorkspaceSettings(workspaceId: string): UseWorkspaceSettingsR
 
         await websocketService.request<UpdateSettingsOutput>('workspace.updateSettings', params);
         await refetch();
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        setUpdateError(errorMessage);
-        throw error;
+} catch (error) {
+      let errorMessage: string;
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null && 'message' in error) {
+        errorMessage = String((error as { message: unknown }).message);
+      } else {
+        errorMessage = String(error);
       }
+      setUpdateError(errorMessage);
+      throw error;
+    }
     },
     [workspaceId, websocketService, refetch]
   );

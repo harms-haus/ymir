@@ -7,6 +7,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::broadcast;
+use tracing::{debug, info, warn};
+
+const DEBUG_TAB_PTY: bool = true;
 
 fn escape_sql(value: &str) -> String {
     value.replace("'", "''")
@@ -78,6 +81,10 @@ impl TabHandler {
 
     /// Create a new tab with auto-spawned PTY
     pub async fn create(&self, input: CreateTabInput) -> Result<CreateTabOutput> {
+        if DEBUG_TAB_PTY {
+            info!(workspace_id = %input.workspace_id, pane_id = %input.pane_id, id = ?input.id, title = ?input.title, cwd = ?input.cwd, "[TAB] create: starting tab creation");
+        }
+        
         // Verify workspace exists
         let workspace_id_escaped = escape_sql(&input.workspace_id);
         let sql = format!(
@@ -131,19 +138,39 @@ impl TabHandler {
             tab_id_escaped, workspace_id_escaped, pane_id_escaped, title_escaped, cwd_escaped
         );
         self.db.execute(&sql, ()).await?;
+        
+        if DEBUG_TAB_PTY {
+            debug!(tab_id = %tab_id, "[TAB] create: tab record inserted in database");
+        }
 
         // Auto-spawn PTY bound to tab_id
         let pty_config = PtyConfig::new().with_cwd(&cwd);
 
+        if DEBUG_TAB_PTY {
+            info!(tab_id = %tab_id, cwd = %cwd, "[TAB] create: spawning PTY");
+        }
+        
         self.pty_manager.spawn(&tab_id, pty_config).await?;
+        
+        if DEBUG_TAB_PTY {
+            debug!(tab_id = %tab_id, "[TAB] create: PTY spawned, subscribing to output");
+        }
 
         let mut output_rx = self.pty_manager.subscribe(&tab_id)?;
-        let scrollback_service = self.scrollback_service.clone();
         let output_tab_id = tab_id.clone();
+        
+        if DEBUG_TAB_PTY {
+            info!(tab_id = %tab_id, output_tab_id = %output_tab_id, "[TAB] create: subscribed to PTY output subscription");
+        }
+        
+        let scrollback_service = self.scrollback_service.clone();
+        
         tokio::spawn(async move {
+            let mut event_count: u64 = 0;
             loop {
                 match output_rx.recv().await {
                     Ok(PtyOutput::Output { data }) => {
+                        event_count += 1;
                         let lines: Vec<ScrollbackLine> = data
                             .lines()
                             .map(|line| ScrollbackLine {
@@ -159,13 +186,37 @@ impl TabHandler {
                             .collect();
 
                         if !lines.is_empty() {
+                            if DEBUG_TAB_PTY {
+                                debug!(tab_id = %output_tab_id, line_count = lines.len(), event_count, "[TAB_PTY_SUBSCRIPTION] storing output to scrollback - NOTE: NOT broadcasting to WebSocket clients");
+                            }
                             scrollback_service.add_lines(output_tab_id.clone(), lines);
+                        } else if DEBUG_TAB_PTY {
+                            debug!(tab_id = %output_tab_id, event_count, "[TAB_PTY_SUBSCRIPTION] received empty output (no newlines in data)");
                         }
                     }
-                    Ok(PtyOutput::Notification { .. }) => {}
-                    Ok(PtyOutput::Exit { .. }) => break,
-                    Err(broadcast::error::RecvError::Lagged(_)) => continue,
-                    Err(broadcast::error::RecvError::Closed) => break,
+                    Ok(PtyOutput::Notification { message }) => {
+                        if DEBUG_TAB_PTY {
+                            debug!(tab_id = %output_tab_id, message_len = message.len(), "[TAB_PTY_SUBSCRIPTION] received OSC notification - NOT broadcasting to WebSocket");
+                        }
+                    }
+                    Ok(PtyOutput::Exit { code }) => {
+                        if DEBUG_TAB_PTY {
+                            info!(tab_id = %output_tab_id, ?code, total_events = event_count, "[TAB_PTY_SUBSCRIPTION] received Exit event, ending subscription");
+                        }
+                        break;
+                    }
+                    Err(broadcast::error::RecvError::Lagged(n)) => {
+                        if DEBUG_TAB_PTY {
+                            warn!(tab_id = %output_tab_id, missed_messages = n, "[TAB_PTY_SUBSCRIPTION] lagged behind, continuing");
+                        }
+                        continue;
+                    }
+                    Err(broadcast::error::RecvError::Closed) => {
+                        if DEBUG_TAB_PTY {
+                            info!(tab_id = %output_tab_id, total_events = event_count, "[TAB_PTY_SUBSCRIPTION] broadcast channel closed, ending subscription");
+                        }
+                        break;
+                    }
                 }
             }
         });
@@ -176,6 +227,10 @@ impl TabHandler {
             tab_id_escaped, tab_id_escaped, cwd_escaped
         );
         self.db.execute(&sql, ()).await?;
+        
+        if DEBUG_TAB_PTY {
+            info!(tab_id = %tab_id, title = %title, cwd = %cwd, "[TAB] create: tab created successfully");
+        }
 
         let tab = Tab {
             id: tab_id.clone(),

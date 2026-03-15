@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTabs } from '../hooks/useTabs';
+import { usePanes } from '../hooks/usePanes';
 import { getWebSocketService } from '../services/websocket';
 import {
   clearTabNotification,
@@ -26,7 +27,7 @@ interface PaneProps {
 
 export function Pane({ paneId, workspaceId, windowControlsPosition, isTopmost }: PaneProps) {
   const { tabs, isLoading, refetch: refetchTabs } = useTabs(paneId);
-  const hasSeenTabsRef = useRef(false);
+  const { panes } = usePanes(workspaceId);
   const hasReceivedDataRef = useRef(false);
   const selectedPaneId = useRuntimeSelection((state) => state.activePaneId);
   const selectedTabId = useRuntimeSelection((state) => state.activeTabId);
@@ -35,7 +36,6 @@ export function Pane({ paneId, workspaceId, windowControlsPosition, isTopmost }:
 
   useEffect(() => {
     if (!isLoading && tabs.length > 0) {
-      hasSeenTabsRef.current = true;
       hasReceivedDataRef.current = true;
     }
   }, [isLoading, tabs.length]);
@@ -64,18 +64,16 @@ export function Pane({ paneId, workspaceId, windowControlsPosition, isTopmost }:
     }
 
     if (tabs.length > 0) {
+      hasReceivedDataRef.current = true;
       return;
     }
 
-    if (hasSeenTabsRef.current) {
-      return;
-    }
-
+    // Only create initial tab if we've received data but have no tabs
+    // This handles both startup and after all tabs are closed
     if (!hasReceivedDataRef.current) {
       return;
     }
 
-    hasSeenTabsRef.current = true;
     void websocketService
       .request<{ tab?: { id?: string } }>('tab.create', {
         workspaceId,
@@ -89,9 +87,7 @@ export function Pane({ paneId, workspaceId, windowControlsPosition, isTopmost }:
         }
         await refetchTabs();
       })
-      .catch(() => {
-        hasSeenTabsRef.current = false;
-      });
+      .catch(() => undefined);
   }, [isLoading, paneId, refetchTabs, tabs.length, websocketService, workspaceId]);
 
   const handleCreateTab = useCallback(
@@ -128,18 +124,30 @@ export function Pane({ paneId, workspaceId, windowControlsPosition, isTopmost }:
         return;
       }
       
-      console.log('Closing tab:', { tabId, connectionState: status.state });
+      const isLastTab = tabs.length === 1;
+      const paneCount = panes.length;
+      
       void websocketService
         .request('tab.close', { id: tabId })
-        .then((result) => {
-          console.log('Tab close successful:', { tabId, result });
-          void refetchTabs();
+        .then(async () => {
+          await refetchTabs();
+          
+          // If this was the last tab in the pane
+          if (isLastTab) {
+            // If there are other panes, delete this empty pane
+            // If this is the only pane, keep it empty (don't delete the last pane)
+            if (paneCount > 1) {
+              void websocketService
+                .request('pane.delete', { id: paneId })
+                .catch(() => undefined);
+            }
+          }
         })
         .catch((error) => {
           console.error('Failed to close tab:', error);
         });
     },
-    [websocketService, refetchTabs],
+    [websocketService, refetchTabs, tabs.length, panes.length, paneId],
   );
 
   const handleSelectTab = useCallback((_paneId: string, tabId: string) => {
@@ -184,11 +192,6 @@ export function Pane({ paneId, workspaceId, windowControlsPosition, isTopmost }:
     [tabs],
   );
 
-  const activeTab = useMemo(
-    () => decoratedTabs.find((tab) => tab.id === activeTabId) ?? null,
-    [activeTabId, decoratedTabs],
-  );
-
   const hasNotification = decoratedTabs.some((tab) => tab.hasNotification);
 
   if (tabs.length === 0) {
@@ -197,14 +200,52 @@ export function Pane({ paneId, workspaceId, windowControlsPosition, isTopmost }:
         style={{
           flex: 1,
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          flexDirection: 'column',
           backgroundColor: 'var(--background-hex)',
-          color: 'var(--foreground-muted)',
-          fontSize: '14px',
         }}
       >
-        Initializing pane...
+        <TabBar
+          paneId={paneId}
+          tabs={[]}
+          activeTabId={null}
+          onCreateTab={handleCreateTab}
+          onCloseTab={handleCloseTab}
+          onSelectTab={handleSelectTab}
+          onSplitPane={() => {
+            void handleSplitPane();
+          }}
+          windowControlsPosition={windowControlsPosition}
+          isTopmost={isTopmost}
+        />
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--foreground-muted)',
+            fontSize: '14px',
+            gap: '12px',
+          }}
+        >
+          <span>No tabs</span>
+          <button
+            onClick={() => handleCreateTab(paneId)}
+            type="button"
+            style={{
+              padding: '8px 16px',
+              backgroundColor: 'var(--primary-hex)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 'var(--radius-sm)',
+              fontSize: '12px',
+              cursor: 'pointer',
+            }}
+          >
+            New Tab
+          </button>
+        </div>
       </div>
     );
   }
@@ -242,28 +283,38 @@ export function Pane({ paneId, workspaceId, windowControlsPosition, isTopmost }:
             flexDirection: 'column',
             overflow: 'hidden',
             borderTop: '1px solid var(--border-tertiary)',
+            position: 'relative',
           }}
         >
-          {activeTab && (
-            <div
-              key={activeTab.id}
-              style={{
-                display: 'flex',
-                flex: 1,
-                width: '100%',
-                height: '100%',
-              }}
-            >
-              <Terminal
-                sessionId={activeTab.sessionId}
-                tabId={activeTab.id}
-                paneId={paneId}
-                workspaceId={workspaceId}
-                onNotification={tabNotificationHandlers[activeTab.id]}
-                hasNotification={activeTab.hasNotification}
-              />
-            </div>
-          )}
+          {decoratedTabs.map((tab) => {
+            const isActive = tab.id === activeTabId;
+            return (
+              <div
+                key={tab.id}
+                style={{
+                  display: 'flex',
+                  flex: 1,
+                  width: '100%',
+                  height: '100%',
+                  position: isActive ? 'relative' : 'absolute',
+                  top: 0,
+                  left: 0,
+                  visibility: isActive ? 'visible' : 'hidden',
+                  opacity: isActive ? 1 : 0,
+                  pointerEvents: isActive ? 'auto' : 'none',
+                }}
+              >
+                <Terminal
+                  sessionId={tab.sessionId}
+                  tabId={tab.id}
+                  paneId={paneId}
+                  workspaceId={workspaceId}
+                  onNotification={tabNotificationHandlers[tab.id]}
+                  hasNotification={tab.hasNotification}
+                />
+              </div>
+            );
+          })}
         </div>
       </div>
     </ErrorBoundary>

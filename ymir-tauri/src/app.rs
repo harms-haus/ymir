@@ -23,6 +23,7 @@ struct EmbeddedServiceManager {
 
 pub fn run(web_mode: bool) {
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_store::Builder::default().build())
@@ -93,6 +94,7 @@ fn start_embedded_service(app_handle: &tauri::AppHandle) {
             &EMBEDDED_SERVICE_PORT.to_string(),
             "--no-browser",
         ])
+        .env("RUST_LOG", "ymir_core::pty=debug")
         .spawn();
 
     match spawn_result {

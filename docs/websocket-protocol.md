@@ -8,7 +8,7 @@ This document describes the active runtime protocol between the frontend and Rus
 - Transport: WebSocket
 - Endpoint: `/ws`
 - Frontend default URL: `ws://127.0.0.1:7144/ws` (`src/services/websocket.ts`)
-- Server default port: `7139` (`ymir-core/src/server/mod.rs`)
+- Server default port: `7319` (`ymir-core/src/server/mod.rs`)
 
 In development, set `VITE_WEBSOCKET_URL` (or `VITE_YMIR_WS_URL`) so the frontend points at the running server.
 

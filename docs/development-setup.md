@@ -27,20 +27,20 @@ The frontend will start on port `5173` by default.
 If you want live backend data, point it at a running `ymir-server` instance:
 
 ```bash
-export VITE_WEBSOCKET_URL="ws://127.0.0.1:7139/ws"
+export VITE_WEBSOCKET_URL="ws://127.0.0.1:7319/ws"
 npm run dev
 ```
 
 ### 2) Run standalone WebSocket server
 
 ```bash
-cargo run -p ymir-server -- web --host 127.0.0.1 --port 7139
+cargo run -p ymir-server -- web --host 127.0.0.1 --port 7319
 ```
 
 Optional auth:
 
 ```bash
-cargo run -p ymir-server -- web --host 127.0.0.1 --port 7139 --password "dev-password"
+cargo run -p ymir-server -- web --host 127.0.0.1 --port 7319 --password "dev-password"
 ```
 
 ### 3) Run desktop app with embedded sidecar
@@ -55,7 +55,7 @@ What happens:
 - Script changes into `ymir-tauri/` and runs `npx tauri dev`
 - `ymir-tauri` starts `ymir-server` sidecar with:
   - host `127.0.0.1`
-  - port `7139`
+  - port `7319`
 - Sidecar is stopped on window close and app exit events
 
 ## Build and Test

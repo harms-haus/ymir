@@ -2,6 +2,7 @@ import logger from '../lib/logger';
 import { generateUUID } from '../lib/utils';
 
 export const JSONRPC_VERSION = '2.0' as const;
+export const DEBUG_WEBSOCKET = true;
 
 export type ConnectionState =
   | 'disconnected'
@@ -96,12 +97,13 @@ export class WebSocketService {
   private readonly maxOutboundQueueSize: number;
   private readonly reconnectBaseDelayMs: number;
   private readonly reconnectMaxDelayMs: number;
-  private readonly reconnectBackoffFactor: number;
-  private readonly outboundQueue: JsonRpcOutgoingMessage[] = [];
-  private readonly pendingRequests = new Map<string, PendingRequest>();
-  private readonly messageListeners = new Set<MessageListener>();
-  private readonly connectionListeners = new Set<ConnectionListener>();
-  private intentionalDisconnect = false;
+private readonly reconnectBackoffFactor: number;
+private readonly outboundQueue: JsonRpcOutgoingMessage[] = [];
+private readonly pendingRequests = new Map<string, PendingRequest>();
+private readonly messageListeners = new Set<MessageListener>();
+private readonly connectionListeners = new Set<ConnectionListener>();
+private onNotificationCallback?: (notification: JsonRpcNotification) => void;
+private intentionalDisconnect = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempt = 0;
   private connectionUrl: string | null = null;
@@ -137,6 +139,13 @@ export class WebSocketService {
   onMessage(listener: MessageListener): () => void {
     this.messageListeners.add(listener);
     return () => this.messageListeners.delete(listener);
+  }
+
+  onNotification(listener: (notification: JsonRpcNotification) => void): () => void {
+    this.onNotificationCallback = listener;
+    return () => {
+      this.onNotificationCallback = undefined;
+    };
   }
 
   onConnectionChange(listener: ConnectionListener): () => void {
@@ -309,12 +318,28 @@ export class WebSocketService {
     }
 
     const message = parsed as JsonRpcIncomingMessage;
+
+    // DEBUG: Log all incoming messages
+    if (DEBUG_WEBSOCKET) {
+      const messageType = 'id' in message ? 'response' : 'notification';
+      const method = 'method' in message && message.method ? message.method : 'N/A';
+      logger.info('[WEBSOCKET ←] Incoming message', {
+        type: messageType,
+        method,
+        hasId: 'id' in message,
+        rawLength: rawData.length,
+        rawPreview: rawData.substring(0, 500),
+      });
+    }
+
     for (const listener of this.messageListeners) {
       listener(message);
     }
 
     if ('id' in message) {
       this.handleResponse(message as JsonRpcResponse);
+    } else if (this.onNotificationCallback) {
+      this.onNotificationCallback(message as JsonRpcNotification);
     }
   }
 

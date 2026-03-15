@@ -13,7 +13,7 @@
     "test:coverage": "vitest run --coverage",
     "test:close": "vitest run src/tests/window-close.test.ts",
     "tauri": "./scripts/tauri-dev.sh",
-    "tauri:dev": "./scripts/tauri-dev.sh dev",
+    "tauri:dev": "cargo build -p ymir-server && cp target/debug/ymir-server ymir-tauri/binaries/ && ./scripts/tauri-dev.sh dev",
     "tauri:build": "./scripts/tauri-dev.sh build"
   },
   "dependencies": {
@@ -23,6 +23,7 @@
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.0.0",
     "@tauri-apps/plugin-notification": "^2.3.3",
+    "@tauri-apps/plugin-os": "^2.3.2",
     "@tauri-apps/plugin-shell": "^2.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

@@ -146,29 +146,29 @@ export function WorkspaceSettingsDialog({
     [updateSettings]
   );
 
-  const handleColorSelect = useCallback(
-    async (color: string) => {
-      setSaving(true);
-      try {
-        await updateSettings({ color });
-      } finally {
-        setSaving(false);
-      }
-    },
-    [updateSettings]
-  );
+const handleColorSelect = useCallback(
+  async (color: string) => {
+    setSaving(true);
+    try {
+      await updateSettings({ color });
+    } finally {
+      setSaving(false);
+    }
+  },
+  [updateSettings]
+);
 
-  const handleIconSelect = useCallback(
-    async (icon: string) => {
-      setSaving(true);
-      try {
-        await updateSettings({ icon });
-      } finally {
-        setSaving(false);
-      }
-    },
-    [updateSettings]
-  );
+const handleIconSelect = useCallback(
+  async (icon: string) => {
+    setSaving(true);
+    try {
+      await updateSettings({ icon });
+    } finally {
+      setSaving(false);
+    }
+  },
+  [updateSettings]
+);
 
   const handleDirectorySelect = useCallback(async () => {
     const selected = await selectDirectory();
@@ -243,7 +243,7 @@ export function WorkspaceSettingsDialog({
                     currentColor === color ? 'selected' : ''
                   }`}
                   style={{ backgroundColor: color }}
-                  onClick={() => handleColorSelect(color)}
+                  onClick={() => handleColorSelect(color).catch(() => {})}
                   aria-label={`Select color ${color}`}
                   aria-pressed={currentColor === color}
                 />
@@ -263,7 +263,7 @@ export function WorkspaceSettingsDialog({
                     className={`workspace-settings-icon-button ${
                       currentIcon === iconName ? 'selected' : ''
                     }`}
-                    onClick={() => handleIconSelect(iconName)}
+                    onClick={() => handleIconSelect(iconName).catch(() => {})}
                     aria-label={`Select icon ${iconName}`}
                     aria-pressed={currentIcon === iconName}
                   >
@@ -283,7 +283,7 @@ export function WorkspaceSettingsDialog({
 <Button
           variant="secondary"
           size="sm"
-          onClick={handleDirectorySelect}
+              onClick={() => handleDirectorySelect().catch(() => {})}
           disabled={saving || !isSupported || isSelecting}
           title={!isSupported ? 'Folder selection requires Chrome, Edge, or Tauri' : undefined}
           aria-label="Select working directory"
