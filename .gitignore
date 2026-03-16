@@ -1,0 +1,43 @@
+# === Rust ===
+target/
+**/*.rs.bk
+Cargo.lock
+
+# === Node ===
+node_modules/
+dist/
+
+# === Tauri ===
+apps/tauri/src-tauri/target/
+*.msi
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+
+# === Build output ===
+build/
+out/
+
+# === OS ===
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# === IDE ===
+.idea/
+.vscode/
+*.code-workspace
+
+# === Environment ===
+.env
+.env.*
+!.env.example
+
+# === Logs ===
+*.log
+
+# === Tauri generated ===
+apps/tauri/src-tauri/gen/
