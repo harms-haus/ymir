@@ -15,3 +15,6 @@ serde_json.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 anyhow.workspace = true
+libsql = "0.5.0"
+uuid = { version = "1.10", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
