@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react'
-import { StatusDot, StatusDotStatus } from './StatusDot'
+import { StatusDot } from './StatusDot'
+import { useAgentStatus, useWorkspaceAgentStatusSummary } from '../../hooks/useAgentStatus'
 import {
   useWorkspaceStore,
   useStore,
@@ -35,25 +36,6 @@ interface WorktreeRowProps {
   onSelect: () => void
 }
 
-function getWorkspaceStatusSummary(
-  workspaceId: string,
-  worktrees: Worktree[]
-): {
-  working: number
-  waiting: number
-  idle: number
-} {
-  return worktrees
-    .filter((wt) => wt.workspaceId === workspaceId)
-    .reduce(
-      (acc, wt) => {
-        acc[wt.status]++
-        return acc
-      },
-      { working: 0, waiting: 0, idle: 0 }
-    )
-}
-
 function WorkspaceRow({
   workspace,
   isExpanded,
@@ -62,7 +44,7 @@ function WorkspaceRow({
   onContextMenu,
 }: WorkspaceRowProps & { onContextMenu?: (e: React.MouseEvent) => void }) {
   const worktrees = useWorkspaceStore((state) => state.worktrees)
-  const summary = getWorkspaceStatusSummary(workspace.id, worktrees)
+  const summary = useWorkspaceAgentStatusSummary(workspace.id, worktrees)
   const hasActive = summary.working > 0 || summary.waiting > 0
 
   return (
@@ -203,6 +185,9 @@ function WorktreeRow({
   onSelect,
   onContextMenu,
 }: WorktreeRowProps & { onContextMenu?: (e: React.MouseEvent) => void }) {
+  const agentStatus = useAgentStatus(worktree.id)
+  const status = agentStatus?.status ?? 'idle'
+  
   return (
     <button
       type="button"
@@ -226,7 +211,7 @@ function WorktreeRow({
       }}
     >
       <span style={{ marginRight: '8px' }}>
-        <StatusDot status={worktree.status as StatusDotStatus} size={8} />
+        <StatusDot status={status} size={8} />
       </span>
 
       <span

@@ -52,7 +52,6 @@ import {
   isAck,
   ClientMessage,
   ServerMessage,
-  AnyMessage,
   UnknownMessage,
   PROTOCOL_VERSION
 } from '../protocol';
@@ -608,7 +607,7 @@ describe('Protocol Types', () => {
     });
 
     it('should handle Error with details', () => {
-      const message: Error = {
+      const message: ProtocolError = {
         type: 'Error',
         code: 'WORKTREE_CREATE_FAILED',
         message: 'Failed to create worktree',
@@ -624,7 +623,7 @@ describe('Protocol Types', () => {
 
       expect(decoded).toEqual(message);
       expect(isError(decoded)).toBe(true);
-      expect((decoded as Error).details).toBeDefined();
+      expect((decoded as ProtocolError).details).toBeDefined();
     });
   });
 

@@ -1782,7 +1782,7 @@ Max Concurrent: 7 (Waves 0, 1, 2)
 
 ## Wave 3: Main Panel
 
-- [ ] 18. ghostty-web Terminal Component
+- [x] 18. ghostty-web Terminal Component
 
   **What to do**:
   - Install `ghostty-web` in apps/web/ (per verified spike from T1)
@@ -1871,7 +1871,7 @@ Max Concurrent: 7 (Waves 0, 1, 2)
 
 ---
 
-- [ ] 19. Terminal Tab Management
+- [x] 19. Terminal Tab Management
 
   **What to do**:
   - Create `apps/web/src/components/terminal/TerminalPane.tsx` — the complete terminal pane component:
@@ -1968,7 +1968,7 @@ Max Concurrent: 7 (Waves 0, 1, 2)
 
 ---
 
-- [ ] 20. ACP Client (Rust)
+- [x] 20. ACP Client (Rust)
 
   **What to do**:
   - Create `crates/ws-server/src/agent/acp.rs` — the ACP protocol client:
@@ -2085,7 +2085,7 @@ Max Concurrent: 7 (Waves 0, 1, 2)
 
 ---
 
-- [ ] 21. Agent Pane with Tabs
+- [x] 21. Agent Pane with Tabs
 
   **What to do**:
   - Create `apps/web/src/components/agent/AgentPane.tsx` — the agent pane component:
@@ -2182,7 +2182,7 @@ Max Concurrent: 7 (Waves 0, 1, 2)
 
 ---
 
-- [ ] 22. Agent Status Tracking (React)
+- [x] 22. Agent Status Tracking (React)
 
   **What to do**:
   - Create `apps/web/src/hooks/useAgentStatus.ts` — React hook for agent status:
@@ -2270,7 +2270,7 @@ Max Concurrent: 7 (Waves 0, 1, 2)
 
 ---
 
-- [ ] 23. PR Creation Dialog
+- [x] 23. PR Creation Dialog
 
   **What to do**:
   - Create `apps/web/src/components/dialogs/CreatePRDialog.tsx` — PR creation dialog using Base UI Dialog:

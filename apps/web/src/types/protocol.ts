@@ -214,6 +214,11 @@ export interface TerminalCreate {
   shell?: string;
 }
 
+export interface TerminalKill {
+  type: 'TerminalKill';
+  sessionId: string;
+}
+
 // File messages
 export interface FileRead {
   type: 'FileRead';
@@ -385,6 +390,7 @@ export type ClientMessage =
   | TerminalInput
   | TerminalResize
   | TerminalCreate
+  | TerminalKill
   | FileRead
   | FileWrite
   | GitStatus
@@ -509,6 +515,10 @@ export function isTerminalResize(message: AnyMessage | UnknownMessage): message 
 
 export function isTerminalCreate(message: AnyMessage | UnknownMessage): message is TerminalCreate {
   return message.type === 'TerminalCreate';
+}
+
+export function isTerminalKill(message: AnyMessage | UnknownMessage): message is TerminalKill {
+  return message.type === 'TerminalKill';
 }
 
 export function isFileRead(message: AnyMessage | UnknownMessage): message is FileRead {
@@ -637,12 +647,12 @@ export function decodeMessage(data: ArrayBuffer | Uint8Array): AnyMessage | Unkn
     
     // Check if the type is a valid message type
     const validTypes = [
-      // Client messages
-      'WorkspaceCreate', 'WorkspaceDelete', 'WorkspaceRename', 'WorkspaceUpdate',
-      'WorktreeCreate', 'WorktreeDelete', 'WorktreeMerge', 'WorktreeList',
-      'AgentSpawn', 'AgentSend', 'AgentCancel',
-      'TerminalInput', 'TerminalResize', 'TerminalCreate',
-      'FileRead', 'FileWrite',
+  // Client messages
+  'WorkspaceCreate', 'WorkspaceDelete', 'WorkspaceRename', 'WorkspaceUpdate',
+  'WorktreeCreate', 'WorktreeDelete', 'WorktreeMerge', 'WorktreeList',
+  'AgentSpawn', 'AgentSend', 'AgentCancel',
+  'TerminalInput', 'TerminalResize', 'TerminalCreate', 'TerminalKill',
+  'FileRead', 'FileWrite',
       'GitStatus', 'GitDiff', 'GitCommit',
       'CreatePR',
       'GetState', 'UpdateSettings',
