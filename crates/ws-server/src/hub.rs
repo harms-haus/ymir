@@ -110,8 +110,9 @@ impl AppState {
 
 /// Handle incoming pong message
 pub async fn handle_pong(state: Arc<AppState>, client_id: Uuid, timestamp: u64) {
-    debug!(%client_id, timestamp, "Received pong");
-    state.update_pong(client_id).await;
+    info!(%client_id, timestamp, "Received pong from client");
+    let updated = state.update_pong(client_id).await;
+    info!(%client_id, "Pong updated: {}", updated);
 }
 
 #[cfg(test)]

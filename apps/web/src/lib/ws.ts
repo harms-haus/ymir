@@ -1,6 +1,11 @@
 import { encode, decode } from '@msgpack/msgpack';
-import { ClientMessage, ServerMessage } from '../types/protocol';
+import { ClientMessage, ServerMessage, PROTOCOL_VERSION } from '../types/protocol';
 import { updateStateFromServerMessage } from '../store';
+
+// Generate a UUID v4 for request IDs
+function generateId(): string {
+  return crypto.randomUUID();
+}
 
 export type ConnectionStatus = 'connecting' | 'open' | 'closed' | 'reconnecting';
 
@@ -81,7 +86,7 @@ export class YmirClient {
           });
         }
 
-        this.send({ type: 'GetState' });
+        this.send({ type: 'GetState', requestId: generateId() });
       };
       
       this.ws.onmessage = (event) => {
@@ -194,7 +199,7 @@ export class YmirClient {
   }
   
   private sendPing(): void {
-    this.send({ type: 'Ping', id: Date.now(), timestamp: Date.now() });
+    this.send({ type: 'Ping', timestamp: Date.now() });
 
     // Clear existing timeout before setting new one to prevent timer leak
     if (this.heartbeatTimeoutTimer) {
@@ -215,18 +220,60 @@ export class YmirClient {
   }
   
   private encodeMessage(message: ClientMessage): ArrayBuffer {
-    const encoded = encode(message);
+    // Extract type and wrap remaining fields in data property
+    // Backend expects: { version, type, data: { ...payload } }
+    const { type, ...payload } = message;
+    
+    // Convert camelCase field names to snake_case for Rust compatibility
+    const snakeCasePayload = this.toSnakeCaseKeys(payload);
+    
+    const messageWithVersion = {
+      version: PROTOCOL_VERSION,
+      type,
+      data: snakeCasePayload
+    };
+    const encoded = encode(messageWithVersion);
     return encoded.buffer.slice(encoded.byteOffset, encoded.byteOffset + encoded.byteLength);
+  }
+  
+  private toSnakeCaseKeys(obj: Record<string, unknown>): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+      result[snakeKey] = value;
+    }
+    return result;
   }
   
   private decodeMessage(data: ArrayBuffer): ServerMessage {
     const uint8Array = new Uint8Array(data);
-    return decode(uint8Array) as ServerMessage;
+    const decoded = decode(uint8Array) as { version: number; type: string; data: Record<string, unknown> };
+    // Convert snake_case field names to camelCase for TypeScript compatibility
+    const camelCaseData = this.toCamelCaseKeys(decoded.data);
+    // Flatten nested structure: { version, type, data } -> { type, ...data }
+    return {
+      type: decoded.type,
+      ...camelCaseData
+    } as ServerMessage;
+  }
+  
+  private toCamelCaseKeys(obj: Record<string, unknown>): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+      result[camelKey] = value;
+    }
+    return result;
   }
   
   private handleMessage(message: ServerMessage): void {
+    console.log('[WS] Received message type:', message.type, message);
     if (message.type === 'Pong') {
+      console.log('[WS] Got Pong, clearing timeout');
       this.handlePong();
+    } else if (message.type === 'Ping') {
+      console.log('[WS] Got Ping from server, sending Pong');
+      this.send({ type: 'Pong', timestamp: Date.now() });
     } else {
       updateStateFromServerMessage(message);
     }
@@ -344,8 +391,11 @@ let client: YmirClient | null = null;
 
 export function getWebSocketClient(config?: Partial<WebSocketConfig>): YmirClient {
   if (!client) {
+    // Use WebSocket proxy path - Vite forwards /ws to ws://localhost:7319
+    const wsUrl = `ws://${window.location.host}/ws`;
+    
     const defaultConfig: WebSocketConfig = {
-      url: 'ws://localhost:7319',
+      url: wsUrl,
       reconnectEnabled: true,
       maxReconnectDelay: 30000,
       heartbeatInterval: 30000,

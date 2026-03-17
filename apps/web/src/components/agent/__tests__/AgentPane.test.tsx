@@ -31,6 +31,7 @@ describe('AgentPane', () => {
 
     const mockClient = {
       send: mockSend,
+      onMessage: vi.fn(() => vi.fn()),
     };
 
     (useWebSocketClient as any).mockReturnValue(mockClient);
@@ -94,7 +95,7 @@ describe('AgentPane', () => {
     render(<AgentPane worktreeId="worktree-1" />);
 
     expect(screen.getByText('Diff: file.ts')).toBeInTheDocument();
-    expect(screen.getByText('Diff viewer placeholder (T25)')).toBeInTheDocument();
+    expect(screen.getByText('Loading diff...')).toBeInTheDocument();
   });
 
   it('renders editor tab with code icon', () => {

@@ -18,7 +18,7 @@ use ymir_ws_server::protocol::{
     ClientMessage, Ping, ServerMessage, ServerMessagePayload, PROTOCOL_VERSION,
 };
 use ymir_ws_server::router::route_message;
-use ymir_ws_server::state::{AppState, HEARTBEAT_INTERVAL_SECS};
+use ymir_ws_server::state::{AppState, HEARTBEAT_INTERVAL_SECS, HEARTBEAT_TIMEOUT_SECS};
 
 const DEFAULT_PORT: u16 = 7319;
 
@@ -135,26 +135,30 @@ async fn process_ws_message(
     msg: Message,
 ) -> anyhow::Result<()> {
     match msg {
-        Message::Binary(data) => match rmp_serde::from_slice::<ClientMessage>(&data) {
-            Ok(client_msg) => {
-                if client_msg.version != PROTOCOL_VERSION {
-                    warn!(
-                        %client_id,
-                        version = client_msg.version,
-                        expected = PROTOCOL_VERSION,
-                        "Client protocol version mismatch"
-                    );
-                    return Ok(());
-                }
+        Message::Binary(data) => {
+            info!(%client_id, "Received binary message, size: {}", data.len());
+            match rmp_serde::from_slice::<ClientMessage>(&data) {
+                Ok(client_msg) => {
+                    info!(%client_id, "Decoded message type: {:?}", client_msg.payload);
+                    if client_msg.version != PROTOCOL_VERSION {
+                        warn!(
+                            %client_id,
+                            version = client_msg.version,
+                            expected = PROTOCOL_VERSION,
+                            "Client protocol version mismatch"
+                        );
+                        return Ok(());
+                    }
 
-                if let Some(response) = route_message(state.clone(), client_id, client_msg).await {
-                    state.send_to(client_id, response).await;
+                    if let Some(response) = route_message(state.clone(), client_id, client_msg).await {
+                        state.send_to(client_id, response).await;
+                    }
+                }
+                Err(e) => {
+                    error!(%client_id, error = %e, "Failed to decode MessagePack");
                 }
             }
-            Err(e) => {
-                error!(%client_id, error = %e, "Failed to decode MessagePack");
-            }
-        },
+        }
         Message::Close(_) => {
             info!(%client_id, "Client requested close");
             return Ok(());
@@ -186,25 +190,39 @@ fn spawn_heartbeat(state: Arc<AppState>) -> JoinHandle<()> {
         loop {
             tokio::select! {
                 _ = interval.tick() => {
-                    debug!("Sending heartbeat to all clients");
                     let clients = state.connected_clients().await;
-                    let mut timed_out_clients = Vec::new();
+                    info!("Sending heartbeat to {} clients", clients.len());
+                    let ping_msg = Ping {
+                        timestamp: std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs()
+                    };
 
-                    for client_id in clients {
-                        if state.is_client_timed_out(client_id).await {
-                            warn!(%client_id, "Client timed out, disconnecting");
-                            timed_out_clients.push(client_id);
-            } else {
-                let ping_msg = Ping {
-                    timestamp: std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs()
-                };
-                            state.send_to(
-                                client_id,
-                                ServerMessage::new(ServerMessagePayload::Ping(ping_msg))
-                            ).await;
+                    // Send Ping to all clients
+                    for client_id in &clients {
+                        let sent = state.send_to(
+                            *client_id,
+                            ServerMessage::new(ServerMessagePayload::Ping(ping_msg.clone()))
+                        ).await;
+                        if !sent {
+                            warn!(%client_id, "Failed to send Ping to client");
+                        }
+                    }
+
+                    // Wait for Pong response (check every second for up to HEARTBEAT_TIMEOUT_SECS)
+                    let mut timed_out_clients = Vec::new();
+                    for _ in 0..HEARTBEAT_TIMEOUT_SECS {
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                    }
+
+                    // Check which clients didn't respond
+                    for client_id in &clients {
+                        if state.is_client_timed_out(*client_id).await {
+                            warn!(%client_id, "Client timed out (no Pong received in 5s), disconnecting");
+                            timed_out_clients.push(*client_id);
+                        } else {
+                            debug!("Client {} still alive", client_id);
                         }
                     }
 

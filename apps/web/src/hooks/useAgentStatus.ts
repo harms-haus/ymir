@@ -7,7 +7,7 @@ export type StatusDotStatus = 'working' | 'waiting' | 'idle';
 
 export interface AgentStatusInfo {
   status: StatusDotStatus;
-  taskSummary: string;
+  taskSummary?: string;
   lastActivity: number;
   agentType: string;
 }
@@ -33,18 +33,14 @@ export function useAgentStatus(worktreeId: string | null): AgentStatusInfo | nul
     worktreeId ? state.agentSessions.find((as) => as.worktreeId === worktreeId) || null : null
   );
   const [lastActivity, setLastActivity] = useState<number>(Date.now());
-  const [taskSummary, setTaskSummary] = useState<string>('');
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!worktreeId || !activeSession) return;
 
     const unsubscribe = wsClient.onMessage('AgentStatusUpdate', (message) => {
-      if (message.sessionId === activeSession.id) {
+      if (message.worktreeId === worktreeId) {
         setLastActivity(Date.now());
-        if (message.message) {
-          setTaskSummary(message.message);
-        }
       }
     });
 
@@ -56,7 +52,7 @@ export function useAgentStatus(worktreeId: string | null): AgentStatusInfo | nul
     if (!worktreeId || !activeSession) return;
 
     const unsubscribe = wsClient.onMessage('AgentOutput', (message) => {
-      if (message.sessionId === activeSession.id) {
+      if (message.worktreeId === worktreeId) {
         setLastActivity(Date.now());
       }
     });
@@ -72,7 +68,6 @@ export function useAgentStatus(worktreeId: string | null): AgentStatusInfo | nul
 
   return {
     status,
-    taskSummary,
     lastActivity,
     agentType: activeSession.agentType,
   };

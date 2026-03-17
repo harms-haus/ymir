@@ -8,8 +8,9 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/ws': {
-        target: 'ws://localhost:7319',
+        target: 'http://localhost:7319',
         ws: true,
+        changeOrigin: true,
       },
     },
   },

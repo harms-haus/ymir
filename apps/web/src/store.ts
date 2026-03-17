@@ -320,7 +320,7 @@ export function updateStateFromServerMessage(message: ServerMessage): void {
       break;
     
     case 'WorkspaceDeleted':
-      removeWorkspace(message.id);
+      removeWorkspace(message.workspaceId);
       break;
     
     case 'WorktreeCreated':
@@ -332,15 +332,14 @@ export function updateStateFromServerMessage(message: ServerMessage): void {
       break;
     
     case 'WorktreeDeleted':
-      removeWorktree(message.id);
+      removeWorktree(message.worktreeId);
       break;
     
     case 'AgentStatusUpdate': {
-      const existingSession = useStore.getState().agentSessions.find(as => as.id === message.sessionId);
+      const existingSession = useStore.getState().agentSessions.find(as => as.worktreeId === message.worktreeId);
       if (existingSession) {
-        updateAgentSession(message.sessionId, {
+        updateAgentSession(message.worktreeId, {
           status: message.status,
-          ...(message.message ? { message: message.message } : {}),
         } as any);
       }
       break;
@@ -351,7 +350,13 @@ export function updateStateFromServerMessage(message: ServerMessage): void {
       break;
     
     case 'TerminalCreated':
-      addTerminalSession(message.session);
+      addTerminalSession({
+        id: message.sessionId,
+        worktreeId: message.worktreeId,
+        label: message.label ?? 'Terminal',
+        shell: message.shell,
+        createdAt: Date.now(),
+      });
       break;
     
     case 'TerminalOutput':

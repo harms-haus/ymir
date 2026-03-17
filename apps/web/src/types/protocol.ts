@@ -12,18 +12,16 @@ import { encode, decode } from '@msgpack/msgpack';
 export interface Ack {
   type: 'Ack';
   messageId: string;
-  timestamp: number;
+  status: 'Success' | 'Error';
 }
 
 export interface Ping {
   type: 'Ping';
-  id: number;
   timestamp: number;
 }
 
 export interface Pong {
   type: 'Pong';
-  id: number;
   timestamp: number;
 }
 
@@ -31,14 +29,14 @@ export interface Error {
   type: 'Error';
   code: string;
   message: string;
-  details?: unknown;
+  details?: string;
 }
 
 export interface Notification {
   type: 'Notification';
-  level: 'info' | 'warn' | 'error';
+  level: 'info' | 'warning' | 'error';
+  title: string;
   message: string;
-  timestamp: number;
 }
 
 // Workspace types
@@ -121,33 +119,31 @@ export interface GitDiffEntry {
 // Workspace messages
 export interface WorkspaceCreate {
   type: 'WorkspaceCreate';
-  id: string;
   name: string;
   rootPath: string;
   color?: string;
   icon?: string;
   worktreeBaseDir?: string;
-  settings?: Record<string, unknown>;
 }
 
 export interface WorkspaceDelete {
   type: 'WorkspaceDelete';
-  id: string;
+  workspaceId: string;
 }
 
 export interface WorkspaceRename {
   type: 'WorkspaceRename';
-  id: string;
-  name: string;
+  workspaceId: string;
+  newName: string;
 }
 
 export interface WorkspaceUpdate {
   type: 'WorkspaceUpdate';
-  id: string;
+  workspaceId: string;
   color?: string;
   icon?: string;
   worktreeBaseDir?: string;
-  settings?: Record<string, unknown>;
+  settings?: string;
 }
 
 // Worktree messages
@@ -160,12 +156,12 @@ export interface WorktreeCreate {
 
 export interface WorktreeDelete {
   type: 'WorktreeDelete';
-  id: string;
+  worktreeId: string;
 }
 
 export interface WorktreeMerge {
   type: 'WorktreeMerge';
-  id: string;
+  worktreeId: string;
   squash: boolean;
   deleteAfter: boolean;
 }
@@ -210,7 +206,7 @@ export interface TerminalResize {
 export interface TerminalCreate {
   type: 'TerminalCreate';
   worktreeId: string;
-  label: string;
+  label?: string;
   shell?: string;
 }
 
@@ -264,12 +260,13 @@ export interface CreatePR {
 // State messages
 export interface GetState {
   type: 'GetState';
+  requestId: string;
 }
 
 export interface UpdateSettings {
   type: 'UpdateSettings';
   key: string;
-  value: unknown;
+  value: string;
 }
 
 // ============================================================================
@@ -279,11 +276,12 @@ export interface UpdateSettings {
 // State snapshot
 export interface StateSnapshot {
   type: 'StateSnapshot';
+  requestId: string;
   workspaces: Workspace[];
   worktrees: Worktree[];
   agentSessions: AgentSession[];
   terminalSessions: TerminalSession[];
-  settings: Record<string, unknown>;
+  settings: Array<{ key: string; value: string }>;
 }
 
 // Workspace events
@@ -294,7 +292,7 @@ export interface WorkspaceCreated {
 
 export interface WorkspaceDeleted {
   type: 'WorkspaceDeleted';
-  id: string;
+  workspaceId: string;
 }
 
 export interface WorkspaceUpdated {
@@ -310,7 +308,13 @@ export interface WorktreeCreated {
 
 export interface WorktreeDeleted {
   type: 'WorktreeDeleted';
-  id: string;
+  worktreeId: string;
+}
+
+export interface WorktreeStatus {
+  type: 'WorktreeStatus';
+  worktreeId: string;
+  status: string;
 }
 
 export interface WorktreeStatus {
@@ -321,20 +325,19 @@ export interface WorktreeStatus {
 // Agent events
 export interface AgentStatusUpdate {
   type: 'AgentStatusUpdate';
-  sessionId: string;
+  worktreeId: string;
   status: AgentStatus;
-  message?: string;
 }
 
 export interface AgentOutput {
   type: 'AgentOutput';
-  sessionId: string;
+  worktreeId: string;
   output: string;
 }
 
 export interface AgentPrompt {
   type: 'AgentPrompt';
-  sessionId: string;
+  worktreeId: string;
   prompt: string;
 }
 
@@ -347,28 +350,32 @@ export interface TerminalOutput {
 
 export interface TerminalCreated {
   type: 'TerminalCreated';
-  session: TerminalSession;
+  sessionId: string;
+  worktreeId: string;
+  label?: string;
+  shell: string;
 }
 
 // File events
 export interface FileContentMessage {
   type: 'FileContent';
   worktreeId: string;
-  file: FileData;
+  path: string;
+  content: string;
 }
 
 // Git events
 export interface GitStatusResult {
   type: 'GitStatusResult';
   worktreeId: string;
-  entries: GitStatusEntry[];
+  status: string;
 }
 
 export interface GitDiffResult {
   type: 'GitDiffResult';
   worktreeId: string;
   filePath?: string;
-  entries: GitDiffEntry[];
+  diff: string;
 }
 
 // ============================================================================
@@ -400,6 +407,7 @@ export type ClientMessage =
   | GetState
   | UpdateSettings
   | Ping
+  | Pong
   | Ack;
 
 export type ServerMessage =
@@ -419,6 +427,7 @@ export type ServerMessage =
   | GitStatusResult
   | GitDiffResult
   | Error
+  | Ping
   | Pong
   | Notification
   | Ack;
@@ -713,14 +722,14 @@ export function decodeAndValidate<T extends AnyMessage>(
 // Version Header
 // ============================================================================
 
-export const PROTOCOL_VERSION = '1.0.0';
+export const PROTOCOL_VERSION = 1;
 
 /**
  * Wraps a message with protocol version header
  * @param message - The message to wrap
  * @returns Message with version header
  */
-export function withVersion<T extends AnyMessage>(message: T): T & { version: string } {
+export function withVersion<T extends AnyMessage>(message: T): T & { version: number } {
   return {
     ...message,
     version: PROTOCOL_VERSION
