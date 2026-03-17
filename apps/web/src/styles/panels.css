@@ -184,3 +184,15 @@
     color: hsl(var(--muted-foreground, 220 9% 60%));
   }
 }
+
+/* Context Menu hover/focus feedback */
+.context-menu-item:hover,
+.context-menu-item:focus {
+  background-color: hsl(var(--accent));
+  outline: none;
+}
+
+.context-menu-item:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: -2px;
+}
