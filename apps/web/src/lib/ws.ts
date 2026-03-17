@@ -18,13 +18,14 @@ export class YmirClient {
   private maxReconnectDelay: number;
   private heartbeatInterval: number;
   private heartbeatTimeout: number;
-  
+
   private ws: WebSocket | null = null;
   private status: ConnectionStatus = 'closed';
   private reconnectAttempts = 0;
-  private reconnectTimer: NodeJS.Timeout | null = null;
-  private heartbeatTimer: NodeJS.Timeout | null = null;
-  private heartbeatTimeoutTimer: NodeJS.Timeout | null = null;
+  private hasConnectedOnce = false;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
+  private heartbeatTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
   
   private messageQueue: ClientMessage[] = [];
   private messageHandlers = new Map<ServerMessage['type'], Set<(message: ServerMessage) => void>>();
@@ -66,14 +67,20 @@ export class YmirClient {
       this.ws.binaryType = 'arraybuffer';
       
       this.ws.onopen = () => {
+        const isReconnection = this.hasConnectedOnce;
         this.reconnectAttempts = 0;
+        this.hasConnectedOnce = true;
         this.updateStatus('open');
         this.flushMessageQueue();
         this.startHeartbeat();
-        this.reconnectHandlers.forEach(handler => {
-          handler();
-        });
-        
+
+        // Only call reconnect handlers on true reconnections
+        if (isReconnection) {
+          this.reconnectHandlers.forEach(handler => {
+            handler();
+          });
+        }
+
         this.send({ type: 'GetState' });
       };
       
@@ -97,6 +104,8 @@ export class YmirClient {
         this.disconnectHandlers.forEach(handler => {
           handler();
         });
+
+        this.ws = null;
 
         if (this.reconnectEnabled) {
           this.scheduleReconnect();
@@ -218,10 +227,9 @@ export class YmirClient {
   private handleMessage(message: ServerMessage): void {
     if (message.type === 'Pong') {
       this.handlePong();
-      return;
+    } else {
+      updateStateFromServerMessage(message);
     }
-
-    updateStateFromServerMessage(message);
 
     const handlers = this.messageHandlers.get(message.type);
     if (handlers) {

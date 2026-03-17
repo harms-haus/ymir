@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { AppState, WorkspaceState, WorktreeState, AgentSessionState, TerminalSessionState, NotificationState, ConnectionStatus } from './types/state';
+import { AppState, NotificationState } from './types/state';
 import { ServerMessage } from './types/protocol';
 
 export const useStore = create<AppState>()(
@@ -135,17 +135,18 @@ export const useStore = create<AppState>()(
       addNotification: (notification) => {
         const id = `notification-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         const newNotification: NotificationState = {
-          ...notification,
+          level: notification.level,
+          message: notification.message,
           id,
           timestamp: Date.now(),
         };
-        
+
         set((state) => ({
           notifications: [...state.notifications, newNotification],
         }));
 
-        // Auto-remove notifications after duration (default 5 seconds)
-        const duration = notification.duration ?? 5000;
+        // Auto-remove notifications after duration
+        const duration = (notification as any).duration ?? 5000;
         if (duration > 0) {
           setTimeout(() => {
             get().removeNotification(id);
@@ -197,9 +198,7 @@ export const selectActiveWorkspace = (state: AppState) => {
 // Helper to update state from ServerMessage
 export function updateStateFromServerMessage(message: ServerMessage): void {
   const { addWorkspace, updateWorkspace, removeWorkspace, addWorktree, updateWorktree, removeWorktree } = useStore.getState();
-  const { addAgentSession, updateAgentSession, removeAgentSession } = useStore.getState();
-  const { addTerminalSession, removeTerminalSession } = useStore.getState();
-  const { addNotification } = useStore.getState();
+  const { addAgentSession, addTerminalSession, addNotification } = useStore.getState();
 
   switch (message.type) {
     case 'WorkspaceCreated':
@@ -211,7 +210,7 @@ export function updateStateFromServerMessage(message: ServerMessage): void {
       break;
     
     case 'WorkspaceDeleted':
-      removeWorkspace(message.workspaceId);
+      removeWorkspace(message.id);
       break;
     
     case 'WorktreeCreated':
@@ -223,16 +222,16 @@ export function updateStateFromServerMessage(message: ServerMessage): void {
       break;
     
     case 'WorktreeDeleted':
-      removeWorktree(message.worktreeId);
+      removeWorktree(message.id);
       break;
     
     case 'AgentStatusUpdate': {
-      // Check if session exists to decide between add/update
-      const existingSession = useStore.getState().agentSessions.find(as => as.id === message.session.id);
+      const existingSession = useStore.getState().agentSessions.find(as => as.id === message.sessionId);
       if (existingSession) {
-        updateAgentSession(message.session.id, message.session);
-      } else {
-        addAgentSession(message.session);
+        updateAgentSession(message.sessionId, {
+          status: message.status,
+          ...(message.message ? { message: message.message } : {}),
+        } as any);
       }
       break;
     }
@@ -242,7 +241,7 @@ export function updateStateFromServerMessage(message: ServerMessage): void {
       break;
     
     case 'TerminalCreated':
-      addTerminalSession(message.terminal);
+      addTerminalSession(message.session);
       break;
     
     case 'TerminalOutput':
@@ -254,15 +253,15 @@ export function updateStateFromServerMessage(message: ServerMessage): void {
         level: message.level,
         message: message.message,
         duration: 5000,
-      });
+      } as any);
       break;
-    
+
     case 'Error':
       addNotification({
         level: 'error',
         message: message.message,
         duration: 8000,
-      });
+      } as any);
       break;
   }
 }
@@ -335,7 +334,7 @@ export interface Workspace {
   worktreeBaseDir?: string;
 }
 
-interface WorkspaceState {
+interface WorkspaceStoreState {
   workspaces: Workspace[];
   worktrees: Worktree[];
   activeWorktreeId: string | null;
@@ -343,9 +342,9 @@ interface WorkspaceState {
   toggleWorkspaceExpanded: (id: string) => void;
 }
 
-export const useWorkspaceStore = create<WorkspaceState>()(
+export const useWorkspaceStore = create<WorkspaceStoreState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       workspaces: [],
       worktrees: [],
       activeWorktreeId: null,
@@ -363,32 +362,17 @@ export const useWorkspaceStore = create<WorkspaceState>()(
     }),
     {
       name: 'workspace-storage',
-      serialize: (state) => {
-        // Convert Set to Array for proper JSON serialization
-        return JSON.stringify({
-          ...state,
-          state: {
-            ...state.state,
-            expandedWorkspaceIds: Array.from(state.state.expandedWorkspaceIds)
-          }
-        })
-      },
-      deserialize: (str) => {
-        const parsed = JSON.parse(str)
-        // Convert Array back to Set when loading
-        return {
-          ...parsed,
-          state: {
-            ...parsed.state,
-            expandedWorkspaceIds: new Set(parsed.state.expandedWorkspaceIds)
-          }
-        }
-      }
+      partialize: (state) => ({
+        workspaces: state.workspaces,
+        worktrees: state.worktrees,
+        activeWorktreeId: state.activeWorktreeId,
+        expandedWorkspaceIds: Array.from(state.expandedWorkspaceIds)
+      })
     }
   )
 );
 
 // Selectors (backward compatibility)
-export const selectWorkspaces = (state: WorkspaceState) => state.workspaces;
-export const selectActiveWorktreeId = (state: WorkspaceState) => state.activeWorktreeId;
-export const selectExpandedWorkspaceIds = (state: WorkspaceState) => state.expandedWorkspaceIds;
+export const selectWorkspaces = (state: WorkspaceStoreState) => state.workspaces;
+export const selectActiveWorktreeId = (state: WorkspaceStoreState) => state.activeWorktreeId;
+export const selectExpandedWorkspaceIds = (state: WorkspaceStoreState) => state.expandedWorkspaceIds;

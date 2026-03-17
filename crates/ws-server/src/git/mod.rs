@@ -1,7 +1,9 @@
 use crate::db::{ActivityLogEntry, Db};
 use crate::protocol::{GitDiffResult, GitStatusResult};
 use git2::build::CheckoutBuilder;
-use git2::{BranchType, Commit, DiffFormat, DiffOptions, IndexAddOption, Repository, Status, StatusOptions};
+use git2::{
+    BranchType, Commit, DiffFormat, DiffOptions, IndexAddOption, Repository, Status, StatusOptions,
+};
 use std::path::Path;
 use std::process::Command;
 use std::sync::Arc;
@@ -23,7 +25,11 @@ impl GitOps {
         Self { db }
     }
 
-    pub async fn status(&self, worktree_id: Uuid, repo_path: &Path) -> Result<GitStatusResult, GitError> {
+    pub async fn status(
+        &self,
+        worktree_id: Uuid,
+        repo_path: &Path,
+    ) -> Result<GitStatusResult, GitError> {
         let (status, entry_count) = {
             let repo = open_repo(repo_path)?;
 
@@ -62,7 +68,10 @@ impl GitOps {
         )
         .await?;
 
-        Ok(GitStatusResult { worktree_id, status })
+        Ok(GitStatusResult {
+            worktree_id,
+            status,
+        })
     }
 
     pub async fn diff(
@@ -75,17 +84,17 @@ impl GitOps {
             let repo = open_repo(repo_path)?;
 
             let mut diff_opts = DiffOptions::new();
-            diff_opts.include_untracked(true).recurse_untracked_dirs(true);
+            diff_opts
+                .include_untracked(true)
+                .recurse_untracked_dirs(true);
             if let Some(path) = file_path {
                 diff_opts.pathspec(path);
             }
 
-            let head_tree = repo
-                .head()
-                .ok()
-                .and_then(|head| head.peel_to_tree().ok());
+            let head_tree = repo.head().ok().and_then(|head| head.peel_to_tree().ok());
 
-            let diff = repo.diff_tree_to_workdir_with_index(head_tree.as_ref(), Some(&mut diff_opts))?;
+            let diff =
+                repo.diff_tree_to_workdir_with_index(head_tree.as_ref(), Some(&mut diff_opts))?;
 
             let mut out = String::new();
             diff.print(DiffFormat::Patch, |_delta, _hunk, line| {
@@ -150,14 +159,7 @@ impl GitOps {
             let parent = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
 
             let oid = if let Some(parent_commit) = parent.as_ref() {
-                repo.commit(
-                    Some("HEAD"),
-                    &sig,
-                    &sig,
-                    message,
-                    &tree,
-                    &[parent_commit],
-                )?
+                repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &[parent_commit])?
             } else {
                 repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &[])?
             };
@@ -207,7 +209,9 @@ impl GitOps {
 
             let mut merge_index = repo.merge_commits(&base_commit, &feature_commit, None)?;
             if merge_index.has_conflicts() {
-                return Err(GitError::MergeConflicts(collect_conflicts(&mut merge_index)?));
+                return Err(GitError::MergeConflicts(collect_conflicts(
+                    &mut merge_index,
+                )?));
             }
 
             repo.set_head(base_ref_name)?;
@@ -228,10 +232,24 @@ impl GitOps {
 
             let oid = if squash {
                 let parents: [&Commit<'_>; 1] = [&base_commit];
-                repo.commit(Some("HEAD"), &sig, &sig, msg.as_str(), &tree, parents.as_slice())?
+                repo.commit(
+                    Some("HEAD"),
+                    &sig,
+                    &sig,
+                    msg.as_str(),
+                    &tree,
+                    parents.as_slice(),
+                )?
             } else {
                 let parents: [&Commit<'_>; 2] = [&base_commit, &feature_commit];
-                repo.commit(Some("HEAD"), &sig, &sig, msg.as_str(), &tree, parents.as_slice())?
+                repo.commit(
+                    Some("HEAD"),
+                    &sig,
+                    &sig,
+                    msg.as_str(),
+                    &tree,
+                    parents.as_slice(),
+                )?
             };
 
             repo.cleanup_state()?;
@@ -302,7 +320,12 @@ impl GitOps {
         Ok(pr_url)
     }
 
-    async fn log_info(&self, op: &str, message: String, metadata_json: String) -> Result<(), GitError> {
+    async fn log_info(
+        &self,
+        op: &str,
+        message: String,
+        metadata_json: String,
+    ) -> Result<(), GitError> {
         self.db
             .log_activity(&ActivityLogEntry {
                 id: None,
@@ -340,10 +363,15 @@ fn status_code(status: Status) -> &'static str {
     }
 }
 
-fn find_base_branch<'a>(repo: &'a Repository) -> Result<(&'static str, git2::Branch<'a>), GitError> {
+fn find_base_branch<'a>(
+    repo: &'a Repository,
+) -> Result<(&'static str, git2::Branch<'a>), GitError> {
     repo.find_branch("main", BranchType::Local)
         .map(|branch| ("refs/heads/main", branch))
-        .or_else(|_| repo.find_branch("master", BranchType::Local).map(|branch| ("refs/heads/master", branch)))
+        .or_else(|_| {
+            repo.find_branch("master", BranchType::Local)
+                .map(|branch| ("refs/heads/master", branch))
+        })
         .map_err(|e| GitError::BranchNotFound("main/master".to_string(), e.to_string()))
 }
 
@@ -451,11 +479,20 @@ mod tests {
         let mut index = repo.index().expect("index");
         index.add_path(Path::new("README.md")).expect("add path");
         index.write().expect("write");
-        let tree = repo.find_tree(index.write_tree().expect("tree id")).expect("tree");
+        let tree = repo
+            .find_tree(index.write_tree().expect("tree id"))
+            .expect("tree");
         let parent = repo.head().expect("head").peel_to_commit().expect("parent");
 
-        repo.commit(Some("HEAD"), &sig, &sig, "feature commit", &tree, &[&parent])
-            .expect("commit feature");
+        repo.commit(
+            Some("HEAD"),
+            &sig,
+            &sig,
+            "feature commit",
+            &tree,
+            &[&parent],
+        )
+        .expect("commit feature");
     }
 
     #[tokio::test]
@@ -463,10 +500,16 @@ mod tests {
         let (_temp, repo_path, db, git_ops, worktree_id) = setup_git_ops().await;
         fs::write(repo_path.join("new.txt"), "new file\n").expect("write untracked");
 
-        let result = git_ops.status(worktree_id, &repo_path).await.expect("status result");
+        let result = git_ops
+            .status(worktree_id, &repo_path)
+            .await
+            .expect("status result");
         assert!(result.status.contains("new.txt"));
 
-        let logs = db.query_activity_log(Some("info"), None).await.expect("activity logs");
+        let logs = db
+            .query_activity_log(Some("info"), None)
+            .await
+            .expect("activity logs");
         assert!(logs.iter().any(|entry| {
             entry.source.as_deref() == Some("git") && entry.message.contains("Checked git status")
         }));

@@ -55,7 +55,7 @@ impl FileWatcher {
                         let tx = tx.clone();
                         // Use try_send since we're in a sync context
                         match tx.try_send(file_event) {
-                            Ok(()) => {},
+                            Ok(()) => {}
                             Err(mpsc::error::TrySendError::Full(_)) => {
                                 warn!("File event channel full, dropping event");
                             }
@@ -81,13 +81,39 @@ impl FileWatcher {
     }
 
     /// Stop watching
-    pub fn stop(self) -> Result<(), notify:: Error> {
+    pub fn stop(self) -> Result<(), notify::Error> {
         if let Some(mut watcher) = self._watcher {
+            let mut errors = Vec::new();
+
             for path in &self.paths {
-                watcher.unwatch(path)?;
-                debug!("Stopped watching: {:?}", path);
+                match watcher.unwatch(path) {
+                    Ok(()) => {
+                        debug!("Stopped watching: {:?}", path);
+                    }
+                    Err(err) => {
+                        warn!("Failed to stop watching {:?}: {}", path, err);
+                        errors.push(err.add_path(path.clone()));
+                    }
+                }
+            }
+
+            if !errors.is_empty() {
+                let mut error = notify::Error::generic(
+                    &errors
+                        .iter()
+                        .map(|err| err.to_string())
+                        .collect::<Vec<_>>()
+                        .join("; "),
+                );
+                let paths = errors
+                    .into_iter()
+                    .flat_map(|err| err.paths.into_iter())
+                    .collect();
+                error = error.set_paths(paths);
+                return Err(error);
             }
         }
+
         Ok(())
     }
 
@@ -123,7 +149,11 @@ impl FileWatcher {
         // This prevents events for large files from being sent at all
         if let Ok(metadata) = std::fs::metadata(path) {
             if metadata.is_file() && metadata.len() > MAX_FILE_SIZE_BYTES {
-                debug!("Ignoring large file: {:?} (size: {} bytes)", path, metadata.len());
+                debug!(
+                    "Ignoring large file: {:?} (size: {} bytes)",
+                    path,
+                    metadata.len()
+                );
                 return None;
             }
         }
@@ -165,13 +195,15 @@ impl FileWatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::time::{timeout, Duration};
     use std::fs;
+    use tokio::time::{timeout, Duration};
 
     #[test]
     fn test_is_git_path() {
         assert!(FileWatcher::is_git_path(Path::new("/path/to/.git/config")));
-        assert!(FileWatcher::is_git_path(Path::new("/path/to/.git/refs/heads/main")));
+        assert!(FileWatcher::is_git_path(Path::new(
+            "/path/to/.git/refs/heads/main"
+        )));
         assert!(!FileWatcher::is_git_path(Path::new("/path/src/main.rs")));
         assert!(!FileWatcher::is_git_path(Path::new("/path/.gitignore")));
     }
@@ -207,30 +239,52 @@ mod tests {
 
         // Wait for and verify the event - accept either Created or Modified
         // File systems may coalesce create/modify events
-        let event = timeout(Duration::from_secs(5), rx.recv()).await
+        let event = timeout(Duration::from_secs(5), rx.recv())
+            .await
             .unwrap()
             .unwrap();
 
         eprintln!("First event: {:?}, size: {:?}", event.kind, event.size);
         assert_eq!(event.path, test_file);
-        assert!(matches!(event.kind, FileEventKind::Created | FileEventKind::Modified));
-        // Accept either size - file system may report different sizes due to timing
-        assert!(event.size == Some(12) || event.size == Some(16), "Expected size 12 or 16, got {:?}", event.size);
+        assert!(matches!(
+            event.kind,
+            FileEventKind::Created | FileEventKind::Modified
+        ));
+        assert_eq!(
+            event.size,
+            Some(12),
+            "Expected exact byte size for created file"
+        );
 
         // Modify the file
         fs::write(&test_file, "modified content").unwrap();
         tokio::time::sleep(Duration::from_millis(100)).await; // Let file system settle
 
-        // Wait for and verify the modify event
-        let event = timeout(Duration::from_secs(5), rx.recv()).await
-            .unwrap()
-            .unwrap();
+        let event = timeout(Duration::from_secs(5), async {
+            loop {
+                let event = rx.recv().await.unwrap();
+                if event.path == test_file
+                    && event.kind == FileEventKind::Modified
+                    && event.size == Some(16)
+                {
+                    break event;
+                }
+            }
+        })
+        .await
+        .unwrap();
 
-        eprintln!("Second event: {:?}, size: {:?}, debug: {:?}", event.kind, event.size, event);
+        eprintln!(
+            "Second event: {:?}, size: {:?}, debug: {:?}",
+            event.kind, event.size, event
+        );
         assert_eq!(event.path, test_file);
         assert_eq!(event.kind, FileEventKind::Modified);
-        // Accept either size - metadata might be stale due to race conditions
-        assert!(event.size == Some(12) || event.size == Some(16), "Expected size 12 or 16, got {:?}", event.size);
+        assert_eq!(
+            event.size,
+            Some(16),
+            "Expected exact byte size for modified file"
+        );
 
         watcher.stop().unwrap();
     }
@@ -266,7 +320,8 @@ mod tests {
         let test_file2 = temp_path.join("resumed.txt");
         fs::write(&test_file2, "resumed content").unwrap();
 
-        let event = timeout(Duration::from_secs(5), rx.recv()).await
+        let event = timeout(Duration::from_secs(5), rx.recv())
+            .await
             .unwrap()
             .unwrap();
 
@@ -317,7 +372,10 @@ mod tests {
 
         // Verify the file is actually larger than 5MB
         let metadata = fs::metadata(&large_file).unwrap();
-        assert!(metadata.len() > MAX_FILE_SIZE_BYTES, "Test file should be larger than 5MB");
+        assert!(
+            metadata.len() > MAX_FILE_SIZE_BYTES,
+            "Test file should be larger than 5MB"
+        );
 
         // Wait a bit and verify no event was received
         // Note: Due to file system event timing, we might get 1 create event before the file size is checked
@@ -327,7 +385,11 @@ mod tests {
         while rx.try_recv().is_ok() {
             event_count += 1;
         }
-        assert!(event_count <= 1, "Should receive at most 1 event for large files, got {} events", event_count);
+        assert!(
+            event_count <= 1,
+            "Should receive at most 1 event for large files, got {} events",
+            event_count
+        );
 
         watcher.stop().unwrap();
     }
@@ -347,7 +409,8 @@ mod tests {
         let small_file = temp_path.join("small.txt");
         fs::write(&small_file, "small content").unwrap();
 
-        let event = timeout(Duration::from_secs(2), rx.recv()).await
+        let event = timeout(Duration::from_secs(2), rx.recv())
+            .await
             .unwrap()
             .unwrap();
         assert_eq!(event.path, small_file);
@@ -360,27 +423,36 @@ mod tests {
 
         // Verify the file is actually larger than 5MB
         let metadata = fs::metadata(&large_file).unwrap();
-        assert!(metadata.len() > MAX_FILE_SIZE_BYTES, "Test file should be larger than 5MB");
+        assert!(
+            metadata.len() > MAX_FILE_SIZE_BYTES,
+            "Test file should be larger than 5MB"
+        );
 
         // We might receive events while the file is being written (when it's still <5MB)
         // But once the file exceeds 5MB, we should NOT receive any more events for it
         tokio::time::sleep(Duration::from_millis(500)).await;
-        
+
         // Check that any events we received were for the file when it was still small
         let mut event_count = 0;
         while let Ok(event) = rx.try_recv() {
             if event.path == large_file {
                 eprintln!("Event for large file: size: {:?}", event.size);
                 // The event size should be <5MB (file was still being written)
-                assert!(event.size.unwrap_or(0) <= MAX_FILE_SIZE_BYTES, 
-                    "Received event for large file with size {} (>5MB), filtering not working", event.size.unwrap_or(0));
+                assert!(
+                    event.size.unwrap_or(0) <= MAX_FILE_SIZE_BYTES,
+                    "Received event for large file with size {} (>5MB), filtering not working",
+                    event.size.unwrap_or(0)
+                );
                 event_count += 1;
             }
         }
-        
+
         // We might get 0 or more events depending on how quickly the file grows
         // The important thing is that we never get events for the file when it's >5MB
-        eprintln!("Received {} events for large file while it was still small (expected: 0 or more)", event_count);
+        eprintln!(
+            "Received {} events for large file while it was still small (expected: 0 or more)",
+            event_count
+        );
 
         watcher.stop().unwrap();
     }

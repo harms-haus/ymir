@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getWebSocketClient, resetWebSocketClient, type ConnectionStatus } from '../lib/ws';
+import { getWebSocketClient, type ConnectionStatus } from '../lib/ws';
 import type { YmirClient } from '../lib/ws';
 
 export interface UseWebSocketReturn {

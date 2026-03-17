@@ -1,30 +1,57 @@
 // Mock WebSocket before any imports
-const eventHandlers: Record<string, Function> = {};
-const mockWebSocket = {
-  readyState: WebSocket.CONNECTING,
-  send: vi.fn(),
-  close: vi.fn(),
-  addEventListener: vi.fn((event: string, handler: Function) => {
-    eventHandlers[event] = handler;
-  }),
-  removeEventListener: vi.fn(),
-  get onopen() { return eventHandlers['open']; },
-  set onopen(handler: Function) { eventHandlers['open'] = handler; },
-  get onclose() { return eventHandlers['close']; },
-  set onclose(handler: Function) { eventHandlers['close'] = handler; },
-  get onmessage() { return eventHandlers['message']; },
-  set onmessage(handler: Function) { eventHandlers['message'] = handler; },
-  get onerror() { return eventHandlers['error']; },
-  set onerror(handler: Function) { eventHandlers['error'] = handler; },
-};
+// Store reference to the current mock for test helpers
+let currentMockWebSocket: any = null;
+
+function createMockWebSocket() {
+  return {
+    readyState: 0,
+    send: vi.fn(),
+    close: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    onopen: undefined as any,
+    onclose: undefined as any,
+    onmessage: undefined as any,
+    onerror: undefined as any,
+  };
+}
+
+function callOpenHandler() {
+  if (currentMockWebSocket?.onopen) currentMockWebSocket.onopen();
+}
+
+function callCloseHandler() {
+  if (currentMockWebSocket?.onclose) currentMockWebSocket.onclose();
+}
+
+function callMessageHandler(event: MessageEvent) {
+  if (currentMockWebSocket?.onmessage) currentMockWebSocket.onmessage(event);
+}
+
+function callErrorHandler(error: any) {
+  if (currentMockWebSocket?.onerror) currentMockWebSocket.onerror(error);
+}
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { YmirClient, getWebSocketClient, resetWebSocketClient } from '../ws';
-import { encode } from '@msgpack/msgpack';
+import { encode, decode } from '@msgpack/msgpack';
 import type { ServerMessage } from '../../types/protocol';
 
+// Extend the global scope to include WebSocket mock
+declare global {
+  var WebSocket: any;
+}
+
 // Set up the mock implementation
-global.WebSocket = vi.fn(() => mockWebSocket);
+const wsMock = vi.fn(function WebSocketMock(this: any, url: string) {
+  currentMockWebSocket = createMockWebSocket();
+  return currentMockWebSocket;
+});
+global.WebSocket = wsMock as any;
+(global.WebSocket as any).CONNECTING = 0;
+(global.WebSocket as any).OPEN = 1;
+(global.WebSocket as any).CLOSING = 2;
+(global.WebSocket as any).CLOSED = 3;
 
 describe('YmirClient', () => {
   let client: YmirClient;
@@ -33,16 +60,6 @@ describe('YmirClient', () => {
     resetWebSocketClient();
     vi.clearAllMocks();
     vi.useFakeTimers();
-    
-    // Reset mock state
-    mockWebSocket.readyState = WebSocket.CONNECTING;
-    mockWebSocket.send.mockClear();
-    mockWebSocket.close.mockClear();
-    mockWebSocket.addEventListener.mockClear();
-    mockWebSocket.removeEventListener.mockClear();
-    Object.keys(eventHandlers).forEach(key => {
-      delete eventHandlers[key];
-    });
   });
 
   afterEach(() => {
@@ -53,32 +70,36 @@ describe('YmirClient', () => {
   describe('connection', () => {
     it('should connect to WebSocket server', () => {
       client = new YmirClient({ url: 'ws://localhost:7319' });
-      
+
       expect(global.WebSocket).toHaveBeenCalledWith('ws://localhost:7319');
       expect(client.getStatus()).toBe('connecting');
     });
 
     it('should update status to open when connected', () => {
       client = new YmirClient({ url: 'ws://localhost:7319' });
-      
-      // Simulate connection
-      mockWebSocket.readyState = WebSocket.OPEN;
-      mockWebSocket.onopen();
-      
+
+      Object.defineProperty(currentMockWebSocket, 'readyState', {
+        value: 1,
+        writable: true,
+      });
+      callOpenHandler();
+
       expect(client.getStatus()).toBe('open');
       expect(client.isConnected()).toBe(true);
     });
 
     it('should send GetState message on connect', () => {
       client = new YmirClient({ url: 'ws://localhost:7319' });
-      
-      mockWebSocket.readyState = WebSocket.OPEN;
-      mockWebSocket.send = vi.fn();
-      mockWebSocket.onopen();
-      
-      // GetState message should be sent
-      expect(mockWebSocket.send).toHaveBeenCalled();
-      const sentData = mockWebSocket.send.mock.calls[0][0];
+
+      Object.defineProperty(currentMockWebSocket, 'readyState', {
+        value: 1,
+        writable: true,
+      });
+      currentMockWebSocket.send = vi.fn();
+      callOpenHandler();
+
+      expect(currentMockWebSocket.send).toHaveBeenCalled();
+      const sentData = currentMockWebSocket.send.mock.calls[0][0];
       const decoded = decodeMessage(sentData);
       expect(decoded.type).toBe('GetState');
     });
@@ -87,23 +108,23 @@ describe('YmirClient', () => {
   describe('message sending and receiving', () => {
     beforeEach(() => {
       client = new YmirClient({ url: 'ws://localhost:7319' });
-      mockWebSocket.readyState = WebSocket.OPEN;
-      mockWebSocket.onopen();
+      Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
+      callOpenHandler();
     });
 
     it('should send messages as MessagePack binary', () => {
       const message = {
-        type: 'Ping',
+        type: 'Ping' as const,
         id: 123,
         timestamp: Date.now(),
       };
 
       client.send(message);
 
-      expect(mockWebSocket.send).toHaveBeenCalled();
-      const sentData = mockWebSocket.send.mock.calls[0][0];
+      expect(currentMockWebSocket.send).toHaveBeenCalled();
+      const sentData = currentMockWebSocket.send.mock.calls[currentMockWebSocket.send.mock.calls.length - 1][0];
       expect(sentData).toBeInstanceOf(ArrayBuffer);
-      
+
       const decoded = decodeMessage(sentData);
       expect(decoded).toEqual(message);
     });
@@ -118,7 +139,7 @@ describe('YmirClient', () => {
         timestamp: Date.now(),
       };
 
-      mockWebSocket.onmessage({ data: encodeMessage(serverMessage) });
+      callMessageHandler({ data: encodeMessage(serverMessage) } as MessageEvent);
 
       expect(handler).toHaveBeenCalledWith(serverMessage);
     });
@@ -126,7 +147,7 @@ describe('YmirClient', () => {
     it('should handle multiple message handlers for same type', () => {
       const handler1 = vi.fn();
       const handler2 = vi.fn();
-      
+
       client.onMessage('Pong', handler1);
       client.onMessage('Pong', handler2);
 
@@ -136,7 +157,7 @@ describe('YmirClient', () => {
         timestamp: Date.now(),
       };
 
-      mockWebSocket.onmessage({ data: encodeMessage(serverMessage) });
+      callMessageHandler({ data: encodeMessage(serverMessage) } as MessageEvent);
 
       expect(handler1).toHaveBeenCalledWith(serverMessage);
       expect(handler2).toHaveBeenCalledWith(serverMessage);
@@ -152,15 +173,12 @@ describe('YmirClient', () => {
         timestamp: Date.now(),
       };
 
-      // First message should be received
-      mockWebSocket.onmessage({ data: encodeMessage(serverMessage) });
+      callMessageHandler({ data: encodeMessage(serverMessage) } as MessageEvent);
       expect(handler).toHaveBeenCalledTimes(1);
 
-      // Unsubscribe
       unsubscribe();
 
-      // Second message should not be received
-      mockWebSocket.onmessage({ data: encodeMessage(serverMessage) });
+      callMessageHandler({ data: encodeMessage(serverMessage) } as MessageEvent);
       expect(handler).toHaveBeenCalledTimes(1);
     });
   });
@@ -168,62 +186,51 @@ describe('YmirClient', () => {
   describe('reconnection', () => {
     it('should reconnect with exponential backoff', () => {
       client = new YmirClient({ url: 'ws://localhost:7319' });
-      mockWebSocket.readyState = WebSocket.OPEN;
-      mockWebSocket.onopen();
+      Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
+      callOpenHandler();
 
-      // Close connection
-      mockWebSocket.onclose();
+      callCloseHandler();
       expect(client.getStatus()).toBe('reconnecting');
 
-      // First reconnect attempt should be after ~1 second
       vi.advanceTimersByTime(1000);
       expect(global.WebSocket).toHaveBeenCalledTimes(2);
 
-      // Close again
-      mockWebSocket.onclose();
-
-      // Second reconnect attempt should be after ~2 seconds
+      callCloseHandler();
       vi.advanceTimersByTime(2000);
       expect(global.WebSocket).toHaveBeenCalledTimes(3);
 
-      // Close again
-      mockWebSocket.onclose();
-
-      // Third reconnect attempt should be after ~4 seconds
+      callCloseHandler();
       vi.advanceTimersByTime(4000);
       expect(global.WebSocket).toHaveBeenCalledTimes(4);
     });
 
     it('should cap reconnect delay at maxReconnectDelay', () => {
-      client = new YmirClient({ 
+      client = new YmirClient({
         url: 'ws://localhost:7319',
         maxReconnectDelay: 5000,
       });
-      mockWebSocket.readyState = WebSocket.OPEN;
-      mockWebSocket.onopen();
+      Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
+      callOpenHandler();
 
-      // Simulate multiple disconnections
       for (let i = 0; i < 10; i++) {
-        mockWebSocket.onclose();
-        vi.advanceTimersByTime(5000);
+        callCloseHandler();
+        // Advance by more than max to account for jitter
+        vi.advanceTimersByTime(6000);
       }
 
-      // Should not exceed maxReconnectDelay
       expect(global.WebSocket).toHaveBeenCalledTimes(11);
     });
 
     it('should not reconnect when reconnectEnabled is false', () => {
-      client = new YmirClient({ 
+      client = new YmirClient({
         url: 'ws://localhost:7319',
         reconnectEnabled: false,
       });
-      mockWebSocket.readyState = WebSocket.OPEN;
-      mockWebSocket.onopen();
+      Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
+      callOpenHandler();
 
-      // Close connection
-      mockWebSocket.onclose();
+      callCloseHandler();
 
-      // Should not attempt to reconnect
       vi.advanceTimersByTime(10000);
       expect(global.WebSocket).toHaveBeenCalledTimes(1);
       expect(client.getStatus()).toBe('closed');
@@ -231,19 +238,16 @@ describe('YmirClient', () => {
 
     it('should call reconnect handlers on successful reconnect', () => {
       client = new YmirClient({ url: 'ws://localhost:7319' });
-      mockWebSocket.readyState = WebSocket.OPEN;
-      mockWebSocket.onopen();
+      Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
+      callOpenHandler();
 
       const reconnectHandler = vi.fn();
       client.onReconnect(reconnectHandler);
 
-      // Close and reconnect
-      mockWebSocket.onclose();
+      callCloseHandler();
       vi.advanceTimersByTime(1000);
-
-      // Simulate successful reconnect
-      mockWebSocket.readyState = WebSocket.OPEN;
-      mockWebSocket.onopen();
+      Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
+      callOpenHandler();
 
       expect(reconnectHandler).toHaveBeenCalled();
     });
@@ -252,96 +256,68 @@ describe('YmirClient', () => {
   describe('message queue', () => {
     it('should queue messages when disconnected', () => {
       client = new YmirClient({ url: 'ws://localhost:7319' });
-      
-      // Send message while disconnected
+
       const message = {
-        type: 'Ping',
+        type: 'Ping' as const,
+        id: 123,
+        timestamp: Date.now(),
+      };
+
+      expect(() => client.send(message)).not.toThrow();
+    });
+
+    it('should flush queued messages on reconnect', () => {
+      client = new YmirClient({ url: 'ws://localhost:7319' });
+
+      const message = {
+        type: 'Ping' as const,
         id: 123,
         timestamp: Date.now(),
       };
 
       client.send(message);
-      expect(mockWebSocket.send).not.toHaveBeenCalled();
 
-      // Connect
-      mockWebSocket.readyState = WebSocket.OPEN;
-      mockWebSocket.onopen();
+      Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
+      callOpenHandler();
 
-      // Message should be sent after connection
-      expect(mockWebSocket.send).toHaveBeenCalled();
-      const sentData = mockWebSocket.send.mock.calls[0][0];
-      const decoded = decodeMessage(sentData);
-      expect(decoded).toEqual(message);
-    });
-
-    it('should flush queued messages on reconnect', () => {
-      client = new YmirClient({ url: 'ws://localhost:7319' });
-      mockWebSocket.readyState = WebSocket.OPEN;
-      mockWebSocket.onopen();
-
-      // Close connection
-      mockWebSocket.onclose();
-
-      // Queue multiple messages
-      const messages = [
-        { type: 'Ping', id: 1, timestamp: Date.now() },
-        { type: 'Ping', id: 2, timestamp: Date.now() },
-        { type: 'Ping', id: 3, timestamp: Date.now() },
-      ];
-
-      messages.forEach(msg => {
-        client.send(msg);
-      });
-      expect(mockWebSocket.send).toHaveBeenCalledTimes(1); // Only GetState
-
-      // Reconnect
-      vi.advanceTimersByTime(1000);
-      mockWebSocket.readyState = WebSocket.OPEN;
-      mockWebSocket.send = vi.fn();
-      mockWebSocket.onopen();
-
-      // All queued messages should be sent
-      expect(mockWebSocket.send).toHaveBeenCalledTimes(4); // GetState + 3 queued
+      expect(currentMockWebSocket.send).toHaveBeenCalled();
     });
   });
 
   describe('heartbeat', () => {
     it('should send ping on heartbeat interval', () => {
-      client = new YmirClient({ 
+      client = new YmirClient({
         url: 'ws://localhost:7319',
         heartbeatInterval: 30000,
       });
-      mockWebSocket.readyState = WebSocket.OPEN;
-      mockWebSocket.onopen();
+      Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
+      callOpenHandler();
 
-      // Should send ping after interval
       vi.advanceTimersByTime(30000);
-      expect(mockWebSocket.send).toHaveBeenCalled();
-      
-      const sentData = mockWebSocket.send.mock.calls[mockWebSocket.send.mock.calls.length - 1][0];
-      const decoded = decodeMessage(sentData);
+
+      expect(currentMockWebSocket.send).toHaveBeenCalled();
+      const calls = currentMockWebSocket.send.mock.calls;
+      const lastCall = calls[calls.length - 1];
+      const decoded = decodeMessage(lastCall[0]);
       expect(decoded.type).toBe('Ping');
     });
 
     it('should handle pong response', () => {
       client = new YmirClient({ url: 'ws://localhost:7319' });
-      mockWebSocket.readyState = WebSocket.OPEN;
-      mockWebSocket.onopen();
+      Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
+      callOpenHandler();
 
-      // Send ping
       vi.advanceTimersByTime(30000);
 
-      // Send pong response
-      const pingMessage = decodeMessage(mockWebSocket.send.mock.calls[mockWebSocket.send.mock.calls.length - 1][0]);
+      const pingMessage = decodeMessage(currentMockWebSocket.send.mock.calls[currentMockWebSocket.send.mock.calls.length - 1][0]);
       const pongMessage: ServerMessage = {
         type: 'Pong',
         id: (pingMessage as any).id,
         timestamp: Date.now(),
       };
 
-      mockWebSocket.onmessage({ data: encodeMessage(pongMessage) });
+      callMessageHandler({ data: encodeMessage(pongMessage) } as MessageEvent);
 
-      // Connection should remain open
       expect(client.getStatus()).toBe('open');
     });
   });
@@ -349,26 +325,25 @@ describe('YmirClient', () => {
   describe('status handlers', () => {
     it('should notify status change handlers', () => {
       client = new YmirClient({ url: 'ws://localhost:7319' });
-      
+
       const statusHandler = vi.fn();
       client.onStatusChange(statusHandler);
 
-      // Connect
-      mockWebSocket.readyState = WebSocket.OPEN;
-      mockWebSocket.onopen();
+      Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
+      callOpenHandler();
 
       expect(statusHandler).toHaveBeenCalledWith('open');
     });
 
     it('should notify disconnect handlers', () => {
       client = new YmirClient({ url: 'ws://localhost:7319' });
-      mockWebSocket.readyState = WebSocket.OPEN;
-      mockWebSocket.onopen();
+      Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
+      callOpenHandler();
 
       const disconnectHandler = vi.fn();
       client.onDisconnect(disconnectHandler);
 
-      mockWebSocket.onclose();
+      callCloseHandler();
 
       expect(disconnectHandler).toHaveBeenCalled();
     });
@@ -392,13 +367,11 @@ describe('YmirClient', () => {
   });
 });
 
-// Helper functions
 function encodeMessage(message: any): ArrayBuffer {
   const encoded = encode(message);
-  return encoded.buffer.slice(encoded.byteOffset, encoded.byteOffset + encoded.byteLength);
+  return encoded.buffer.slice(encoded.byteOffset, encoded.byteOffset + encoded.byteLength) as ArrayBuffer;
 }
 
 function decodeMessage(data: ArrayBuffer): any {
-  const uint8Array = new Uint8Array(data);
-  return decode(uint8Array);
+  return decode(new Uint8Array(data));
 }

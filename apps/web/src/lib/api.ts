@@ -2,6 +2,8 @@ import { getWebSocketClient } from './ws';
 import { 
   WorkspaceCreate, 
   WorkspaceDelete, 
+  WorkspaceRename,
+  WorkspaceUpdate,
   WorktreeCreate, 
   WorktreeDelete, 
   WorktreeMerge, 
@@ -22,11 +24,16 @@ import {
   GetState
 } from '../types/protocol';
 
+const createWorkspaceId = (): string =>
+  globalThis.crypto?.randomUUID?.() ??
+  `workspace-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
 // Workspace API
 export function createWorkspace(name: string, rootPath: string, color?: string, icon?: string): void {
   const client = getWebSocketClient();
   const message: WorkspaceCreate = {
     type: 'WorkspaceCreate',
+    id: createWorkspaceId(),
     name,
     rootPath,
     color,
@@ -39,16 +46,16 @@ export function deleteWorkspace(workspaceId: string): void {
   const client = getWebSocketClient();
   const message: WorkspaceDelete = {
     type: 'WorkspaceDelete',
-    workspaceId,
+    id: workspaceId,
   };
   client.send(message);
 }
 
 export function renameWorkspace(workspaceId: string, name: string): void {
   const client = getWebSocketClient();
-  const message = {
+  const message: WorkspaceRename = {
     type: 'WorkspaceRename',
-    workspaceId,
+    id: workspaceId,
     name,
   };
   client.send(message);
@@ -62,10 +69,25 @@ export function updateWorkspace(workspaceId: string, updates: {
   settings?: Record<string, unknown>;
 }): void {
   const client = getWebSocketClient();
-  const message = {
+  const { name, ...workspaceUpdates } = updates;
+
+  if (name !== undefined) {
+    const renameMessage: WorkspaceRename = {
+      type: 'WorkspaceRename',
+      id: workspaceId,
+      name,
+    };
+    client.send(renameMessage);
+  }
+
+  if (Object.keys(workspaceUpdates).length === 0) {
+    return;
+  }
+
+  const message: WorkspaceUpdate = {
     type: 'WorkspaceUpdate',
-    workspaceId,
-    ...updates,
+    id: workspaceId,
+    ...workspaceUpdates,
   };
   client.send(message);
 }
@@ -86,7 +108,7 @@ export function deleteWorktree(worktreeId: string): void {
   const client = getWebSocketClient();
   const message: WorktreeDelete = {
     type: 'WorktreeDelete',
-    worktreeId,
+    id: worktreeId,
   };
   client.send(message);
 }
@@ -95,7 +117,7 @@ export function mergeWorktree(worktreeId: string, squash = false, deleteAfter = 
   const client = getWebSocketClient();
   const message: WorktreeMerge = {
     type: 'WorktreeMerge',
-    worktreeId,
+    id: worktreeId,
     squash,
     deleteAfter,
   };
@@ -274,6 +296,6 @@ export function createWorkspaceAndWorktree(
 ): void {
   createWorkspace(workspaceName, rootPath);
   setTimeout(() => {
-    console.warn('createWorkspaceAndWorktree: Workspace ID needed for createWorktree');
+    console.warn('createWorkspaceAndWorktree: Workspace ID needed for createWorktree', { branchName, agentType });
   }, 100);
 }

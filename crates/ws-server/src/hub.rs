@@ -35,17 +35,21 @@ impl AppState {
 
     /// Broadcast a message to all connected clients
     pub async fn broadcast(&self, message: ServerMessage) {
-        let clients = self.clients.read().await;
+        let clients: Vec<_> = self
+            .clients
+            .read()
+            .await
+            .iter()
+            .map(|(client_id, client_state)| (*client_id, client_state.tx.clone()))
+            .collect();
         let mut failed_clients = Vec::new();
 
-        for (client_id, client_state) in clients.iter() {
-            if let Err(e) = client_state.tx.send(message.clone()).await {
+        for (client_id, tx) in clients {
+            if let Err(e) = tx.send(message.clone()).await {
                 warn!(%client_id, error = %e, "Failed to send message to client");
-                failed_clients.push(*client_id);
+                failed_clients.push(client_id);
             }
         }
-
-        drop(clients);
 
         for client_id in failed_clients {
             self.disconnect(client_id).await;
@@ -54,11 +58,16 @@ impl AppState {
 
     /// Send a message to a specific client
     pub async fn send_to(&self, client_id: Uuid, message: ServerMessage) -> bool {
-        let clients = self.clients.read().await;
-        if let Some(client_state) = clients.get(&client_id) {
-            if let Err(e) = client_state.tx.send(message).await {
+        let tx = self
+            .clients
+            .read()
+            .await
+            .get(&client_id)
+            .map(|client_state| client_state.tx.clone());
+
+        if let Some(tx) = tx {
+            if let Err(e) = tx.send(message).await {
                 warn!(%client_id, error = %e, "Failed to send message to client");
-                drop(clients);
                 self.disconnect(client_id).await;
                 return false;
             }
@@ -108,7 +117,7 @@ pub async fn handle_pong(state: Arc<AppState>, client_id: Uuid, timestamp: u64) 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::{ServerMessagePayload, Pong};
+    use crate::protocol::{Pong, ServerMessagePayload};
     use tokio::time::timeout;
 
     #[tokio::test]

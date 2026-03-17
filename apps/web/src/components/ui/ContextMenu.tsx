@@ -36,7 +36,7 @@ export function ContextMenu({ state, items, onAction }: ContextMenuProps) {
   }
 
   return (
-    <BaseContextMenu.Root open={isOpen} onOpenChange={(open) => !open && console.log('ContextMenu closed')}>
+    <BaseContextMenu.Root open={isOpen} onOpenChange={() => {}}>
       <BaseContextMenu.Portal>
         <BaseContextMenu.Positioner
           style={{
@@ -70,7 +70,6 @@ export function ContextMenu({ state, items, onAction }: ContextMenuProps) {
                     : 'hsl(var(--foreground))',
                   cursor: 'pointer',
                   gap: '8px',
-                  backgroundColor: 'transparent',
                   border: 'none',
                   textAlign: 'left',
                   fontFamily: 'inherit',
