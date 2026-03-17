@@ -1,6 +1,7 @@
 //! ymir WebSocket server library
 //! Core communication framework for the ymir orchestrator
 
+pub mod agent;
 pub mod db;
 pub mod git;
 pub mod hub;

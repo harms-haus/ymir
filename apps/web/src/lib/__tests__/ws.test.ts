@@ -28,30 +28,21 @@ function callMessageHandler(event: MessageEvent) {
   if (currentMockWebSocket?.onmessage) currentMockWebSocket.onmessage(event);
 }
 
-function callErrorHandler(error: any) {
-  if (currentMockWebSocket?.onerror) currentMockWebSocket.onerror(error);
-}
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { YmirClient, getWebSocketClient, resetWebSocketClient } from '../ws';
 import { encode, decode } from '@msgpack/msgpack';
 import type { ServerMessage } from '../../types/protocol';
 
-// Extend the global scope to include WebSocket mock
-declare global {
-  var WebSocket: any;
-}
-
 // Set up the mock implementation
-const wsMock = vi.fn(function WebSocketMock(this: any, url: string) {
+const wsMock = vi.fn(function WebSocketMock(this: any, _url: string) {
   currentMockWebSocket = createMockWebSocket();
   return currentMockWebSocket;
 });
-global.WebSocket = wsMock as any;
-(global.WebSocket as any).CONNECTING = 0;
-(global.WebSocket as any).OPEN = 1;
-(global.WebSocket as any).CLOSING = 2;
-(global.WebSocket as any).CLOSED = 3;
+globalThis.WebSocket = wsMock as any;
+(globalThis.WebSocket as any).CONNECTING = 0;
+(globalThis.WebSocket as any).OPEN = 1;
+(globalThis.WebSocket as any).CLOSING = 2;
+(globalThis.WebSocket as any).CLOSED = 3;
 
 describe('YmirClient', () => {
   let client: YmirClient;
@@ -71,7 +62,7 @@ describe('YmirClient', () => {
     it('should connect to WebSocket server', () => {
       client = new YmirClient({ url: 'ws://localhost:7319' });
 
-      expect(global.WebSocket).toHaveBeenCalledWith('ws://localhost:7319');
+      expect(globalThis.WebSocket).toHaveBeenCalledWith('ws://localhost:7319');
       expect(client.getStatus()).toBe('connecting');
     });
 
@@ -193,15 +184,15 @@ describe('YmirClient', () => {
       expect(client.getStatus()).toBe('reconnecting');
 
       vi.advanceTimersByTime(1000);
-      expect(global.WebSocket).toHaveBeenCalledTimes(2);
+      expect(globalThis.WebSocket).toHaveBeenCalledTimes(2);
 
       callCloseHandler();
       vi.advanceTimersByTime(2000);
-      expect(global.WebSocket).toHaveBeenCalledTimes(3);
+      expect(globalThis.WebSocket).toHaveBeenCalledTimes(3);
 
       callCloseHandler();
       vi.advanceTimersByTime(4000);
-      expect(global.WebSocket).toHaveBeenCalledTimes(4);
+      expect(globalThis.WebSocket).toHaveBeenCalledTimes(4);
     });
 
     it('should cap reconnect delay at maxReconnectDelay', () => {
@@ -218,7 +209,7 @@ describe('YmirClient', () => {
         vi.advanceTimersByTime(6000);
       }
 
-      expect(global.WebSocket).toHaveBeenCalledTimes(11);
+      expect(globalThis.WebSocket).toHaveBeenCalledTimes(11);
     });
 
     it('should not reconnect when reconnectEnabled is false', () => {
@@ -232,7 +223,7 @@ describe('YmirClient', () => {
       callCloseHandler();
 
       vi.advanceTimersByTime(10000);
-      expect(global.WebSocket).toHaveBeenCalledTimes(1);
+      expect(globalThis.WebSocket).toHaveBeenCalledTimes(1);
       expect(client.getStatus()).toBe('closed');
     });
 
