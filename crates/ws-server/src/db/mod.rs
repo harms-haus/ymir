@@ -6,6 +6,7 @@ use libsql::{Builder, Connection, Database};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use tracing::{debug, info, Level};
+#[cfg(test)]
 use uuid::Uuid;
 
 const SCHEMA_MIGRATIONS: &[&str] = &[
@@ -151,6 +152,7 @@ pub struct PanelLayout {
     pub main_split_ratio: f64,
 }
 
+#[derive(Debug)]
 pub struct Db {
     db: Database,
 }
