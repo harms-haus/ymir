@@ -54,6 +54,7 @@ pub enum ClientMessagePayload {
     UpdateSettings(UpdateSettings),
     Ping(Ping),
     Pong(Pong),
+    Ack(Ack),
 }
 
 /// All server-to-client message types
@@ -66,6 +67,7 @@ pub enum ServerMessagePayload {
     WorkspaceUpdated(WorkspaceUpdated),
     WorktreeCreated(WorktreeCreated),
     WorktreeDeleted(WorktreeDeleted),
+    WorktreeListResult(WorktreeListResult),
     WorktreeStatus(WorktreeStatus),
     AgentStatusUpdate(AgentStatusUpdate),
     AgentOutput(AgentOutput),
@@ -79,6 +81,7 @@ pub enum ServerMessagePayload {
     Ping(Ping),
     Pong(Pong),
     Notification(Notification),
+    Ack(Ack),
 }
 
 /// Bidirectional messages (can be sent by either side)
@@ -328,6 +331,12 @@ pub struct WorktreeCreated {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct WorktreeDeleted {
     pub worktree_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WorktreeListResult {
+    pub workspace_id: Uuid,
+    pub worktrees: Vec<WorktreeData>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

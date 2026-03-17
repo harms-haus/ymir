@@ -185,22 +185,32 @@ impl Db {
 
     pub async fn migrate(&self) -> Result<()> {
         let _span = tracing::span!(Level::INFO, "db_migrate").entered();
-        let conn = self.conn().context("Failed to get connection for migration")?;
+        let conn = self
+            .conn()
+            .context("Failed to get connection for migration")?;
 
         for (idx, migration) in SCHEMA_MIGRATIONS.iter().enumerate() {
             debug!("Executing migration {} (bytes: {})", idx, migration.len());
-            conn.execute_batch(migration).await
+            conn.execute_batch(migration)
+                .await
                 .with_context(|| format!("Failed to execute migration {}", idx))?;
             debug!("Migration {} completed", idx);
         }
 
-        info!("All {} migrations completed successfully", SCHEMA_MIGRATIONS.len());
+        info!(
+            "All {} migrations completed successfully",
+            SCHEMA_MIGRATIONS.len()
+        );
         Ok(())
     }
 
     pub async fn verify_schema(&self) -> Result<usize> {
-        let conn = self.conn().context("Failed to get connection for schema verification")?;
-        let mut stmt = conn.prepare("SELECT name FROM sqlite_master WHERE type='table'").await?;
+        let conn = self
+            .conn()
+            .context("Failed to get connection for schema verification")?;
+        let mut stmt = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+            .await?;
         let mut rows = stmt.query(()).await?;
         let mut table_count = 0;
 
@@ -235,7 +245,8 @@ impl Db {
             workspace.settings_json.as_str(),
             workspace.created_at.as_str(),
             workspace.updated_at.as_str(),
-        ]).await?;
+        ])
+        .await?;
 
         debug!("Created workspace: {}", workspace.name);
         Ok(())
@@ -286,7 +297,12 @@ impl Db {
         Ok(workspaces)
     }
 
-    pub async fn update_workspace(&self, id: &str, name: Option<&str>, settings_json: Option<&str>) -> Result<bool> {
+    pub async fn update_workspace(
+        &self,
+        id: &str,
+        name: Option<&str>,
+        settings_json: Option<&str>,
+    ) -> Result<bool> {
         let conn = self.conn()?;
 
         let rows_affected = if let (Some(n), Some(s)) = (name, settings_json) {
@@ -297,8 +313,9 @@ impl Db {
         } else if let Some(n) = name {
             conn.execute(
                 "UPDATE workspaces SET name = ?1, updated_at = datetime('now') WHERE id = ?2",
-                libsql::params![n, id]
-            ).await?
+                libsql::params![n, id],
+            )
+            .await?
         } else if let Some(s) = settings_json {
             conn.execute(
                 "UPDATE workspaces SET settings_json = ?1, updated_at = datetime('now') WHERE id = ?2",
@@ -308,14 +325,22 @@ impl Db {
             return Ok(false);
         };
 
-        debug!("Updated workspace {} (rows affected: {})", id, rows_affected);
+        debug!(
+            "Updated workspace {} (rows affected: {})",
+            id, rows_affected
+        );
         Ok(rows_affected > 0)
     }
 
     pub async fn delete_workspace(&self, id: &str) -> Result<bool> {
         let conn = self.conn()?;
-        let rows_affected = conn.execute("DELETE FROM workspaces WHERE id = ?1", libsql::params![id]).await?;
-        debug!("Deleted workspace {} (rows affected: {})", id, rows_affected);
+        let rows_affected = conn
+            .execute("DELETE FROM workspaces WHERE id = ?1", libsql::params![id])
+            .await?;
+        debug!(
+            "Deleted workspace {} (rows affected: {})",
+            id, rows_affected
+        );
         Ok(rows_affected > 0)
     }
 }
@@ -323,12 +348,14 @@ impl Db {
 impl Db {
     pub async fn create_worktree(&self, worktree: &Worktree) -> Result<()> {
         let conn = self.conn()?;
-        let mut stmt = conn.prepare(
-            r#"
+        let mut stmt = conn
+            .prepare(
+                r#"
             INSERT INTO worktrees (id, workspace_id, branch_name, path, status, created_at)
             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
             "#,
-        ).await?;
+            )
+            .await?;
 
         stmt.execute((
             worktree.id.as_str(),
@@ -337,7 +364,8 @@ impl Db {
             worktree.path.as_str(),
             worktree.status.as_str(),
             worktree.created_at.as_str(),
-        )).await?;
+        ))
+        .await?;
 
         debug!("Created worktree: {}", worktree.branch_name);
         Ok(())
@@ -391,14 +419,21 @@ impl Db {
             return Ok(false);
         }
 
-        let rows_affected = conn.execute("UPDATE worktrees SET status = ?1 WHERE id = ?2", libsql::params![status.unwrap(), id]).await?;
+        let rows_affected = conn
+            .execute(
+                "UPDATE worktrees SET status = ?1 WHERE id = ?2",
+                libsql::params![status.unwrap(), id],
+            )
+            .await?;
         debug!("Updated worktree {} (rows affected: {})", id, rows_affected);
         Ok(rows_affected > 0)
     }
 
     pub async fn delete_worktree(&self, id: &str) -> Result<bool> {
         let conn = self.conn()?;
-        let rows_affected = conn.execute("DELETE FROM worktrees WHERE id = ?1", libsql::params![id]).await?;
+        let rows_affected = conn
+            .execute("DELETE FROM worktrees WHERE id = ?1", libsql::params![id])
+            .await?;
         debug!("Deleted worktree {} (rows affected: {})", id, rows_affected);
         Ok(rows_affected > 0)
     }
@@ -421,9 +456,13 @@ impl Db {
             session.acp_session_id.as_deref(),
             session.status.as_str(),
             session.started_at.as_str(),
-        )).await?;
+        ))
+        .await?;
 
-        debug!("Created agent session: {} (type: {})", session.id, session.agent_type);
+        debug!(
+            "Created agent session: {} (type: {})",
+            session.id, session.agent_type
+        );
         Ok(())
     }
 
@@ -470,15 +509,31 @@ impl Db {
 
     pub async fn update_agent_session(&self, id: &str, status: &str) -> Result<bool> {
         let conn = self.conn()?;
-        let rows_affected = conn.execute("UPDATE agent_sessions SET status = ?1 WHERE id = ?2", libsql::params![status, id]).await?;
-        debug!("Updated agent session {} (status: {}, rows affected: {})", id, status, rows_affected);
+        let rows_affected = conn
+            .execute(
+                "UPDATE agent_sessions SET status = ?1 WHERE id = ?2",
+                libsql::params![status, id],
+            )
+            .await?;
+        debug!(
+            "Updated agent session {} (status: {}, rows affected: {})",
+            id, status, rows_affected
+        );
         Ok(rows_affected > 0)
     }
 
     pub async fn delete_agent_session(&self, id: &str) -> Result<bool> {
         let conn = self.conn()?;
-        let rows_affected = conn.execute("DELETE FROM agent_sessions WHERE id = ?1", libsql::params![id]).await?;
-        debug!("Deleted agent session {} (rows affected: {})", id, rows_affected);
+        let rows_affected = conn
+            .execute(
+                "DELETE FROM agent_sessions WHERE id = ?1",
+                libsql::params![id],
+            )
+            .await?;
+        debug!(
+            "Deleted agent session {} (rows affected: {})",
+            id, rows_affected
+        );
         Ok(rows_affected > 0)
     }
 }
@@ -486,12 +541,14 @@ impl Db {
 impl Db {
     pub async fn create_terminal_session(&self, session: &TerminalSession) -> Result<()> {
         let conn = self.conn()?;
-        let mut stmt = conn.prepare(
-            r#"
+        let mut stmt = conn
+            .prepare(
+                r#"
             INSERT INTO terminal_sessions (id, worktree_id, label, shell, created_at)
             VALUES (?1, ?2, ?3, ?4, ?5)
             "#,
-        ).await?;
+            )
+            .await?;
 
         stmt.execute((
             session.id.as_str(),
@@ -499,7 +556,8 @@ impl Db {
             session.label.as_deref(),
             session.shell.as_str(),
             session.created_at.as_str(),
-        )).await?;
+        ))
+        .await?;
 
         debug!("Created terminal session: {}", session.id);
         Ok(())
@@ -546,8 +604,16 @@ impl Db {
 
     pub async fn delete_terminal_session(&self, id: &str) -> Result<bool> {
         let conn = self.conn()?;
-        let rows_affected = conn.execute("DELETE FROM terminal_sessions WHERE id = ?1", libsql::params![id]).await?;
-        debug!("Deleted terminal session {} (rows affected: {})", id, rows_affected);
+        let rows_affected = conn
+            .execute(
+                "DELETE FROM terminal_sessions WHERE id = ?1",
+                libsql::params![id],
+            )
+            .await?;
+        debug!(
+            "Deleted terminal session {} (rows affected: {})",
+            id, rows_affected
+        );
         Ok(rows_affected > 0)
     }
 }
@@ -555,14 +621,20 @@ impl Db {
 impl Db {
     pub async fn set_user_setting(&self, key: &str, value: &str) -> Result<()> {
         let conn = self.conn()?;
-        conn.execute("INSERT OR REPLACE INTO user_settings (key, value) VALUES (?1, ?2)", libsql::params![key, value]).await?;
+        conn.execute(
+            "INSERT OR REPLACE INTO user_settings (key, value) VALUES (?1, ?2)",
+            libsql::params![key, value],
+        )
+        .await?;
         debug!("Set user setting: {}", key);
         Ok(())
     }
 
     pub async fn get_user_setting(&self, key: &str) -> Result<Option<String>> {
         let conn = self.conn()?;
-        let mut stmt = conn.prepare("SELECT value FROM user_settings WHERE key = ?1").await?;
+        let mut stmt = conn
+            .prepare("SELECT value FROM user_settings WHERE key = ?1")
+            .await?;
         let mut rows = stmt.query([key]).await?;
 
         if let Some(row) = rows.next().await? {
@@ -574,7 +646,9 @@ impl Db {
 
     pub async fn list_user_settings(&self) -> Result<Vec<UserSetting>> {
         let conn = self.conn()?;
-        let mut stmt = conn.prepare("SELECT key, value FROM user_settings ORDER BY key ASC").await?;
+        let mut stmt = conn
+            .prepare("SELECT key, value FROM user_settings ORDER BY key ASC")
+            .await?;
         let mut rows = stmt.query(()).await?;
         let mut settings = Vec::new();
 
@@ -590,8 +664,16 @@ impl Db {
 
     pub async fn delete_user_setting(&self, key: &str) -> Result<bool> {
         let conn = self.conn()?;
-        let rows_affected = conn.execute("DELETE FROM user_settings WHERE key = ?1", libsql::params![key]).await?;
-        debug!("Deleted user setting: {} (rows affected: {})", key, rows_affected);
+        let rows_affected = conn
+            .execute(
+                "DELETE FROM user_settings WHERE key = ?1",
+                libsql::params![key],
+            )
+            .await?;
+        debug!(
+            "Deleted user setting: {} (rows affected: {})",
+            key, rows_affected
+        );
         Ok(rows_affected > 0)
     }
 }
@@ -599,12 +681,14 @@ impl Db {
 impl Db {
     pub async fn log_activity(&self, entry: &ActivityLogEntry) -> Result<i64> {
         let conn = self.conn()?;
-        let mut stmt = conn.prepare(
-            r#"
+        let mut stmt = conn
+            .prepare(
+                r#"
             INSERT INTO activity_log (timestamp, level, source, message, metadata_json)
             VALUES (?1, ?2, ?3, ?4, ?5)
             "#,
-        ).await?;
+            )
+            .await?;
 
         stmt.execute((
             entry.timestamp.as_str(),
@@ -612,14 +696,19 @@ impl Db {
             entry.source.as_deref(),
             entry.message.as_str(),
             entry.metadata_json.as_str(),
-        )).await?;
+        ))
+        .await?;
 
         let id = conn.last_insert_rowid();
         debug!("Logged activity (id: {}, level: {})", id, entry.level);
         Ok(id)
     }
 
-    pub async fn query_activity_log(&self, level: Option<&str>, limit: Option<i64>) -> Result<Vec<ActivityLogEntry>> {
+    pub async fn query_activity_log(
+        &self,
+        level: Option<&str>,
+        limit: Option<i64>,
+    ) -> Result<Vec<ActivityLogEntry>> {
         let conn = self.conn()?;
 
         let sql = if let Some(lvl) = level {
@@ -670,7 +759,9 @@ impl Db {
 
     pub async fn clear_activity_log(&self) -> Result<u64> {
         let conn = self.conn()?;
-        let rows_affected = conn.execute("DELETE FROM activity_log", libsql::params![]).await?;
+        let rows_affected = conn
+            .execute("DELETE FROM activity_log", libsql::params![])
+            .await?;
         debug!("Cleared activity log (rows affected: {})", rows_affected);
         Ok(rows_affected)
     }
@@ -722,8 +813,16 @@ impl Db {
 
     pub async fn delete_panel_layout(&self, workspace_id: &str) -> Result<bool> {
         let conn = self.conn()?;
-        let rows_affected = conn.execute("DELETE FROM panel_layouts WHERE workspace_id = ?1", libsql::params![workspace_id]).await?;
-        debug!("Deleted panel layout for workspace: {} (rows affected: {})", workspace_id, rows_affected);
+        let rows_affected = conn
+            .execute(
+                "DELETE FROM panel_layouts WHERE workspace_id = ?1",
+                libsql::params![workspace_id],
+            )
+            .await?;
+        debug!(
+            "Deleted panel layout for workspace: {} (rows affected: {})",
+            workspace_id, rows_affected
+        );
         Ok(rows_affected > 0)
     }
 }
@@ -733,7 +832,9 @@ mod tests {
     use super::*;
 
     async fn create_test_db() -> Db {
-        Db::in_memory().await.expect("Failed to create in-memory db")
+        Db::in_memory()
+            .await
+            .expect("Failed to create in-memory db")
     }
 
     fn generate_uuid() -> String {
@@ -745,7 +846,11 @@ mod tests {
         let db = create_test_db().await;
         let table_count = db.verify_schema().await.expect("Failed to verify schema");
         // libsql may create internal tables, so we just verify we have at least our 7 tables
-        assert!(table_count >= 7, "Expected at least 7 tables, found {}", table_count);
+        assert!(
+            table_count >= 7,
+            "Expected at least 7 tables, found {}",
+            table_count
+        );
     }
 
     #[tokio::test]
@@ -763,23 +868,42 @@ mod tests {
             created_at: chrono::Utc::now().to_rfc3339(),
             updated_at: chrono::Utc::now().to_rfc3339(),
         };
-        db.create_workspace(&workspace).await.expect("Failed to create workspace");
+        db.create_workspace(&workspace)
+            .await
+            .expect("Failed to create workspace");
 
-        let retrieved = db.get_workspace(&workspace.id).await.expect("Failed to get workspace");
+        let retrieved = db
+            .get_workspace(&workspace.id)
+            .await
+            .expect("Failed to get workspace");
         assert!(retrieved.is_some(), "Workspace not found");
         let retrieved = retrieved.unwrap();
         assert_eq!(retrieved.name, workspace.name);
         assert_eq!(retrieved.root_path, workspace.root_path);
 
-        let workspaces = db.list_workspaces().await.expect("Failed to list workspaces");
+        let workspaces = db
+            .list_workspaces()
+            .await
+            .expect("Failed to list workspaces");
         assert_eq!(workspaces.len(), 1, "Expected 1 workspace");
 
-        db.update_workspace(&workspace.id, Some("Updated Workspace"), None).await.expect("Failed to update workspace");
-        let updated = db.get_workspace(&workspace.id).await.expect("Failed to get updated workspace").unwrap();
+        db.update_workspace(&workspace.id, Some("Updated Workspace"), None)
+            .await
+            .expect("Failed to update workspace");
+        let updated = db
+            .get_workspace(&workspace.id)
+            .await
+            .expect("Failed to get updated workspace")
+            .unwrap();
         assert_eq!(updated.name, "Updated Workspace");
 
-        db.delete_workspace(&workspace.id).await.expect("Failed to delete workspace");
-        let deleted = db.get_workspace(&workspace.id).await.expect("Failed to check deletion");
+        db.delete_workspace(&workspace.id)
+            .await
+            .expect("Failed to delete workspace");
+        let deleted = db
+            .get_workspace(&workspace.id)
+            .await
+            .expect("Failed to check deletion");
         assert!(deleted.is_none(), "Workspace should be deleted");
     }
 
@@ -799,7 +923,9 @@ mod tests {
             created_at: chrono::Utc::now().to_rfc3339(),
             updated_at: chrono::Utc::now().to_rfc3339(),
         };
-        db.create_workspace(&workspace).await.expect("Failed to create workspace");
+        db.create_workspace(&workspace)
+            .await
+            .expect("Failed to create workspace");
 
         let worktree = Worktree {
             id: generate_uuid(),
@@ -809,22 +935,41 @@ mod tests {
             status: "active".to_string(),
             created_at: chrono::Utc::now().to_rfc3339(),
         };
-        db.create_worktree(&worktree).await.expect("Failed to create worktree");
+        db.create_worktree(&worktree)
+            .await
+            .expect("Failed to create worktree");
 
-        let retrieved = db.get_worktree(&worktree.id).await.expect("Failed to get worktree");
+        let retrieved = db
+            .get_worktree(&worktree.id)
+            .await
+            .expect("Failed to get worktree");
         assert!(retrieved.is_some(), "Worktree not found");
         let retrieved = retrieved.unwrap();
         assert_eq!(retrieved.branch_name, worktree.branch_name);
 
-        let worktrees = db.list_worktrees(&workspace_id).await.expect("Failed to list worktrees");
+        let worktrees = db
+            .list_worktrees(&workspace_id)
+            .await
+            .expect("Failed to list worktrees");
         assert_eq!(worktrees.len(), 1, "Expected 1 worktree");
 
-        db.update_worktree(&worktree.id, Some("inactive")).await.expect("Failed to update worktree");
-        let updated = db.get_worktree(&worktree.id).await.expect("Failed to get updated worktree").unwrap();
+        db.update_worktree(&worktree.id, Some("inactive"))
+            .await
+            .expect("Failed to update worktree");
+        let updated = db
+            .get_worktree(&worktree.id)
+            .await
+            .expect("Failed to get updated worktree")
+            .unwrap();
         assert_eq!(updated.status, "inactive");
 
-        db.delete_worktree(&worktree.id).await.expect("Failed to delete worktree");
-        let deleted = db.get_worktree(&worktree.id).await.expect("Failed to check deletion");
+        db.delete_worktree(&worktree.id)
+            .await
+            .expect("Failed to delete worktree");
+        let deleted = db
+            .get_worktree(&worktree.id)
+            .await
+            .expect("Failed to check deletion");
         assert!(deleted.is_none(), "Worktree should be deleted");
     }
 
@@ -846,7 +991,9 @@ mod tests {
             created_at: chrono::Utc::now().to_rfc3339(),
             updated_at: chrono::Utc::now().to_rfc3339(),
         };
-        db.create_workspace(&workspace).await.expect("Failed to create workspace");
+        db.create_workspace(&workspace)
+            .await
+            .expect("Failed to create workspace");
 
         let worktree = Worktree {
             id: worktree_id.clone(),
@@ -856,7 +1003,9 @@ mod tests {
             status: "active".to_string(),
             created_at: chrono::Utc::now().to_rfc3339(),
         };
-        db.create_worktree(&worktree).await.expect("Failed to create worktree");
+        db.create_worktree(&worktree)
+            .await
+            .expect("Failed to create worktree");
 
         let session = AgentSession {
             id: generate_uuid(),
@@ -866,22 +1015,41 @@ mod tests {
             status: "active".to_string(),
             started_at: chrono::Utc::now().to_rfc3339(),
         };
-        db.create_agent_session(&session).await.expect("Failed to create agent session");
+        db.create_agent_session(&session)
+            .await
+            .expect("Failed to create agent session");
 
-        let retrieved = db.get_agent_session(&session.id).await.expect("Failed to get agent session");
+        let retrieved = db
+            .get_agent_session(&session.id)
+            .await
+            .expect("Failed to get agent session");
         assert!(retrieved.is_some(), "Agent session not found");
         let retrieved = retrieved.unwrap();
         assert_eq!(retrieved.agent_type, session.agent_type);
 
-        let sessions = db.list_agent_sessions(&worktree_id).await.expect("Failed to list agent sessions");
+        let sessions = db
+            .list_agent_sessions(&worktree_id)
+            .await
+            .expect("Failed to list agent sessions");
         assert_eq!(sessions.len(), 1, "Expected 1 agent session");
 
-        db.update_agent_session(&session.id, "completed").await.expect("Failed to update agent session");
-        let updated = db.get_agent_session(&session.id).await.expect("Failed to get updated agent session").unwrap();
+        db.update_agent_session(&session.id, "completed")
+            .await
+            .expect("Failed to update agent session");
+        let updated = db
+            .get_agent_session(&session.id)
+            .await
+            .expect("Failed to get updated agent session")
+            .unwrap();
         assert_eq!(updated.status, "completed");
 
-        db.delete_agent_session(&session.id).await.expect("Failed to delete agent session");
-        let deleted = db.get_agent_session(&session.id).await.expect("Failed to check deletion");
+        db.delete_agent_session(&session.id)
+            .await
+            .expect("Failed to delete agent session");
+        let deleted = db
+            .get_agent_session(&session.id)
+            .await
+            .expect("Failed to check deletion");
         assert!(deleted.is_none(), "Agent session should be deleted");
     }
 
@@ -903,7 +1071,9 @@ mod tests {
             created_at: chrono::Utc::now().to_rfc3339(),
             updated_at: chrono::Utc::now().to_rfc3339(),
         };
-        db.create_workspace(&workspace).await.expect("Failed to create workspace");
+        db.create_workspace(&workspace)
+            .await
+            .expect("Failed to create workspace");
 
         let worktree = Worktree {
             id: worktree_id.clone(),
@@ -913,7 +1083,9 @@ mod tests {
             status: "active".to_string(),
             created_at: chrono::Utc::now().to_rfc3339(),
         };
-        db.create_worktree(&worktree).await.expect("Failed to create worktree");
+        db.create_worktree(&worktree)
+            .await
+            .expect("Failed to create worktree");
 
         let session = TerminalSession {
             id: generate_uuid(),
@@ -922,18 +1094,31 @@ mod tests {
             shell: "bash".to_string(),
             created_at: chrono::Utc::now().to_rfc3339(),
         };
-        db.create_terminal_session(&session).await.expect("Failed to create terminal session");
+        db.create_terminal_session(&session)
+            .await
+            .expect("Failed to create terminal session");
 
-        let retrieved = db.get_terminal_session(&session.id).await.expect("Failed to get terminal session");
+        let retrieved = db
+            .get_terminal_session(&session.id)
+            .await
+            .expect("Failed to get terminal session");
         assert!(retrieved.is_some(), "Terminal session not found");
         let retrieved = retrieved.unwrap();
         assert_eq!(retrieved.shell, session.shell);
 
-        let sessions = db.list_terminal_sessions(&worktree_id).await.expect("Failed to list terminal sessions");
+        let sessions = db
+            .list_terminal_sessions(&worktree_id)
+            .await
+            .expect("Failed to list terminal sessions");
         assert_eq!(sessions.len(), 1, "Expected 1 terminal session");
 
-        db.delete_terminal_session(&session.id).await.expect("Failed to delete terminal session");
-        let deleted = db.get_terminal_session(&session.id).await.expect("Failed to check deletion");
+        db.delete_terminal_session(&session.id)
+            .await
+            .expect("Failed to delete terminal session");
+        let deleted = db
+            .get_terminal_session(&session.id)
+            .await
+            .expect("Failed to check deletion");
         assert!(deleted.is_none(), "Terminal session should be deleted");
     }
 
@@ -941,20 +1126,38 @@ mod tests {
     async fn test_user_settings_crud() {
         let db = create_test_db().await;
 
-        db.set_user_setting("theme", "dark").await.expect("Failed to set user setting");
-        db.set_user_setting("language", "en").await.expect("Failed to set user setting");
+        db.set_user_setting("theme", "dark")
+            .await
+            .expect("Failed to set user setting");
+        db.set_user_setting("language", "en")
+            .await
+            .expect("Failed to set user setting");
 
-        let theme = db.get_user_setting("theme").await.expect("Failed to get user setting");
+        let theme = db
+            .get_user_setting("theme")
+            .await
+            .expect("Failed to get user setting");
         assert_eq!(theme, Some("dark".to_string()));
 
-        let missing = db.get_user_setting("nonexistent").await.expect("Failed to get user setting");
+        let missing = db
+            .get_user_setting("nonexistent")
+            .await
+            .expect("Failed to get user setting");
         assert_eq!(missing, None);
 
-        let settings = db.list_user_settings().await.expect("Failed to list user settings");
+        let settings = db
+            .list_user_settings()
+            .await
+            .expect("Failed to list user settings");
         assert_eq!(settings.len(), 2, "Expected 2 settings");
 
-        db.delete_user_setting("theme").await.expect("Failed to delete user setting");
-        let deleted = db.get_user_setting("theme").await.expect("Failed to check deletion");
+        db.delete_user_setting("theme")
+            .await
+            .expect("Failed to delete user setting");
+        let deleted = db
+            .get_user_setting("theme")
+            .await
+            .expect("Failed to check deletion");
         assert_eq!(deleted, None);
     }
 
@@ -970,7 +1173,10 @@ mod tests {
             message: "Test message".to_string(),
             metadata_json: "{}".to_string(),
         };
-        let id1 = db.log_activity(&entry1).await.expect("Failed to log activity");
+        let id1 = db
+            .log_activity(&entry1)
+            .await
+            .expect("Failed to log activity");
 
         let entry2 = ActivityLogEntry {
             id: None,
@@ -980,20 +1186,34 @@ mod tests {
             message: "Error message".to_string(),
             metadata_json: r#"{"error": "test"}"#.to_string(),
         };
-        let id2 = db.log_activity(&entry2).await.expect("Failed to log activity");
+        let id2 = db
+            .log_activity(&entry2)
+            .await
+            .expect("Failed to log activity");
 
         assert!(id1 > 0, "Expected positive id");
         assert!(id2 > id1, "Expected id2 > id1");
 
-        let all = db.query_activity_log(None, None).await.expect("Failed to query activity log");
+        let all = db
+            .query_activity_log(None, None)
+            .await
+            .expect("Failed to query activity log");
         assert_eq!(all.len(), 2, "Expected 2 entries");
 
-        let errors = db.query_activity_log(Some("error"), None).await.expect("Failed to query activity log by level");
+        let errors = db
+            .query_activity_log(Some("error"), None)
+            .await
+            .expect("Failed to query activity log by level");
         assert_eq!(errors.len(), 1, "Expected 1 error entry");
         assert_eq!(errors[0].level, "error");
 
-        db.clear_activity_log().await.expect("Failed to clear activity log");
-        let cleared = db.query_activity_log(None, None).await.expect("Failed to query cleared log");
+        db.clear_activity_log()
+            .await
+            .expect("Failed to clear activity log");
+        let cleared = db
+            .query_activity_log(None, None)
+            .await
+            .expect("Failed to query cleared log");
         assert_eq!(cleared.len(), 0, "Expected 0 entries after clear");
     }
 
@@ -1013,7 +1233,9 @@ mod tests {
             created_at: chrono::Utc::now().to_rfc3339(),
             updated_at: chrono::Utc::now().to_rfc3339(),
         };
-        db.create_workspace(&workspace).await.expect("Failed to create workspace");
+        db.create_workspace(&workspace)
+            .await
+            .expect("Failed to create workspace");
 
         let layout = PanelLayout {
             workspace_id: workspace_id.clone(),
@@ -1022,9 +1244,14 @@ mod tests {
             project_size: 300,
             main_split_ratio: 0.6,
         };
-        db.set_panel_layout(&layout).await.expect("Failed to set panel layout");
+        db.set_panel_layout(&layout)
+            .await
+            .expect("Failed to set panel layout");
 
-        let retrieved = db.get_panel_layout(&workspace_id).await.expect("Failed to get panel layout");
+        let retrieved = db
+            .get_panel_layout(&workspace_id)
+            .await
+            .expect("Failed to get panel layout");
         assert!(retrieved.is_some(), "Panel layout not found");
         let retrieved = retrieved.unwrap();
         assert_eq!(retrieved.sidebar_size, 300);
@@ -1037,12 +1264,23 @@ mod tests {
             project_size: 350,
             main_split_ratio: 0.5,
         };
-        db.set_panel_layout(&updated_layout).await.expect("Failed to update panel layout");
-        let updated = db.get_panel_layout(&workspace_id).await.expect("Failed to get updated panel layout").unwrap();
+        db.set_panel_layout(&updated_layout)
+            .await
+            .expect("Failed to update panel layout");
+        let updated = db
+            .get_panel_layout(&workspace_id)
+            .await
+            .expect("Failed to get updated panel layout")
+            .unwrap();
         assert_eq!(updated.sidebar_size, 350);
 
-        db.delete_panel_layout(&workspace_id).await.expect("Failed to delete panel layout");
-        let deleted = db.get_panel_layout(&workspace_id).await.expect("Failed to check deletion");
+        db.delete_panel_layout(&workspace_id)
+            .await
+            .expect("Failed to delete panel layout");
+        let deleted = db
+            .get_panel_layout(&workspace_id)
+            .await
+            .expect("Failed to check deletion");
         assert!(deleted.is_none(), "Panel layout should be deleted");
     }
 }

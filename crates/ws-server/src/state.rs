@@ -9,7 +9,7 @@ use crate::git::GitOps;
 use crate::protocol::ServerMessage;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{broadcast, mpsc, RwLock, watch};
+use tokio::sync::{broadcast, mpsc, watch, RwLock};
 use uuid::Uuid;
 
 /// Heartbeat configuration
@@ -117,7 +117,9 @@ impl AppState {
     /// Create an AppState for testing with an in-memory database
     #[cfg(test)]
     pub async fn new_test() -> Self {
-        let db = Db::in_memory().await.expect("Failed to create in-memory db");
+        let db = Db::in_memory()
+            .await
+            .expect("Failed to create in-memory db");
         let (_shutdown_tx, shutdown_rx) = watch::channel(false);
         Self::new(Arc::new(db), shutdown_rx)
     }

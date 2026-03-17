@@ -86,7 +86,7 @@ export interface TerminalSession {
 }
 
 // File types
-export interface FileContent {
+export interface FileData {
   path: string;
   content: string;
   encoding: 'utf8' | 'base64';
@@ -346,10 +346,10 @@ export interface TerminalCreated {
 }
 
 // File events
-export interface FileContent {
+export interface FileContentMessage {
   type: 'FileContent';
   worktreeId: string;
-  file: FileContent;
+  file: FileData;
 }
 
 // Git events
@@ -393,7 +393,8 @@ export type ClientMessage =
   | CreatePR
   | GetState
   | UpdateSettings
-  | Ping;
+  | Ping
+  | Ack;
 
 export type ServerMessage =
   | StateSnapshot
@@ -408,12 +409,13 @@ export type ServerMessage =
   | AgentPrompt
   | TerminalOutput
   | TerminalCreated
-  | FileContent
+  | FileContentMessage
   | GitStatusResult
   | GitDiffResult
   | Error
   | Pong
-  | Notification;
+  | Notification
+  | Ack;
 
 export type BidirectionalMessage = Ack;
 
@@ -432,173 +434,173 @@ export interface UnknownMessage {
 // Type Guards
 // ============================================================================
 
-export function isAck(message: AnyMessage): message is Ack {
+export function isAck(message: AnyMessage | UnknownMessage): message is Ack {
   return message.type === 'Ack';
 }
 
-export function isPing(message: AnyMessage): message is Ping {
+export function isPing(message: AnyMessage | UnknownMessage): message is Ping {
   return message.type === 'Ping';
 }
 
-export function isPong(message: AnyMessage): message is Pong {
+export function isPong(message: AnyMessage | UnknownMessage): message is Pong {
   return message.type === 'Pong';
 }
 
-export function isError(message: AnyMessage): message is Error {
+export function isError(message: AnyMessage | UnknownMessage): message is Error {
   return message.type === 'Error';
 }
 
-export function isNotification(message: AnyMessage): message is Notification {
+export function isNotification(message: AnyMessage | UnknownMessage): message is Notification {
   return message.type === 'Notification';
 }
 
 // Client message guards
-export function isWorkspaceCreate(message: AnyMessage): message is WorkspaceCreate {
+export function isWorkspaceCreate(message: AnyMessage | UnknownMessage): message is WorkspaceCreate {
   return message.type === 'WorkspaceCreate';
 }
 
-export function isWorkspaceDelete(message: AnyMessage): message is WorkspaceDelete {
+export function isWorkspaceDelete(message: AnyMessage | UnknownMessage): message is WorkspaceDelete {
   return message.type === 'WorkspaceDelete';
 }
 
-export function isWorkspaceRename(message: AnyMessage): message is WorkspaceRename {
+export function isWorkspaceRename(message: AnyMessage | UnknownMessage): message is WorkspaceRename {
   return message.type === 'WorkspaceRename';
 }
 
-export function isWorkspaceUpdate(message: AnyMessage): message is WorkspaceUpdate {
+export function isWorkspaceUpdate(message: AnyMessage | UnknownMessage): message is WorkspaceUpdate {
   return message.type === 'WorkspaceUpdate';
 }
 
-export function isWorktreeCreate(message: AnyMessage): message is WorktreeCreate {
+export function isWorktreeCreate(message: AnyMessage | UnknownMessage): message is WorktreeCreate {
   return message.type === 'WorktreeCreate';
 }
 
-export function isWorktreeDelete(message: AnyMessage): message is WorktreeDelete {
+export function isWorktreeDelete(message: AnyMessage | UnknownMessage): message is WorktreeDelete {
   return message.type === 'WorktreeDelete';
 }
 
-export function isWorktreeMerge(message: AnyMessage): message is WorktreeMerge {
+export function isWorktreeMerge(message: AnyMessage | UnknownMessage): message is WorktreeMerge {
   return message.type === 'WorktreeMerge';
 }
 
-export function isWorktreeList(message: AnyMessage): message is WorktreeList {
+export function isWorktreeList(message: AnyMessage | UnknownMessage): message is WorktreeList {
   return message.type === 'WorktreeList';
 }
 
-export function isAgentSpawn(message: AnyMessage): message is AgentSpawn {
+export function isAgentSpawn(message: AnyMessage | UnknownMessage): message is AgentSpawn {
   return message.type === 'AgentSpawn';
 }
 
-export function isAgentSend(message: AnyMessage): message is AgentSend {
+export function isAgentSend(message: AnyMessage | UnknownMessage): message is AgentSend {
   return message.type === 'AgentSend';
 }
 
-export function isAgentCancel(message: AnyMessage): message is AgentCancel {
+export function isAgentCancel(message: AnyMessage | UnknownMessage): message is AgentCancel {
   return message.type === 'AgentCancel';
 }
 
-export function isTerminalInput(message: AnyMessage): message is TerminalInput {
+export function isTerminalInput(message: AnyMessage | UnknownMessage): message is TerminalInput {
   return message.type === 'TerminalInput';
 }
 
-export function isTerminalResize(message: AnyMessage): message is TerminalResize {
+export function isTerminalResize(message: AnyMessage | UnknownMessage): message is TerminalResize {
   return message.type === 'TerminalResize';
 }
 
-export function isTerminalCreate(message: AnyMessage): message is TerminalCreate {
+export function isTerminalCreate(message: AnyMessage | UnknownMessage): message is TerminalCreate {
   return message.type === 'TerminalCreate';
 }
 
-export function isFileRead(message: AnyMessage): message is FileRead {
+export function isFileRead(message: AnyMessage | UnknownMessage): message is FileRead {
   return message.type === 'FileRead';
 }
 
-export function isFileWrite(message: AnyMessage): message is FileWrite {
+export function isFileWrite(message: AnyMessage | UnknownMessage): message is FileWrite {
   return message.type === 'FileWrite';
 }
 
-export function isGitStatus(message: AnyMessage): message is GitStatus {
+export function isGitStatus(message: AnyMessage | UnknownMessage): message is GitStatus {
   return message.type === 'GitStatus';
 }
 
-export function isGitDiff(message: AnyMessage): message is GitDiff {
+export function isGitDiff(message: AnyMessage | UnknownMessage): message is GitDiff {
   return message.type === 'GitDiff';
 }
 
-export function isGitCommit(message: AnyMessage): message is GitCommit {
+export function isGitCommit(message: AnyMessage | UnknownMessage): message is GitCommit {
   return message.type === 'GitCommit';
 }
 
-export function isCreatePR(message: AnyMessage): message is CreatePR {
+export function isCreatePR(message: AnyMessage | UnknownMessage): message is CreatePR {
   return message.type === 'CreatePR';
 }
 
-export function isGetState(message: AnyMessage): message is GetState {
+export function isGetState(message: AnyMessage | UnknownMessage): message is GetState {
   return message.type === 'GetState';
 }
 
-export function isUpdateSettings(message: AnyMessage): message is UpdateSettings {
+export function isUpdateSettings(message: AnyMessage | UnknownMessage): message is UpdateSettings {
   return message.type === 'UpdateSettings';
 }
 
 // Server message guards
-export function isStateSnapshot(message: AnyMessage): message is StateSnapshot {
+export function isStateSnapshot(message: AnyMessage | UnknownMessage): message is StateSnapshot {
   return message.type === 'StateSnapshot';
 }
 
-export function isWorkspaceCreated(message: AnyMessage): message is WorkspaceCreated {
+export function isWorkspaceCreated(message: AnyMessage | UnknownMessage): message is WorkspaceCreated {
   return message.type === 'WorkspaceCreated';
 }
 
-export function isWorkspaceDeleted(message: AnyMessage): message is WorkspaceDeleted {
+export function isWorkspaceDeleted(message: AnyMessage | UnknownMessage): message is WorkspaceDeleted {
   return message.type === 'WorkspaceDeleted';
 }
 
-export function isWorkspaceUpdated(message: AnyMessage): message is WorkspaceUpdated {
+export function isWorkspaceUpdated(message: AnyMessage | UnknownMessage): message is WorkspaceUpdated {
   return message.type === 'WorkspaceUpdated';
 }
 
-export function isWorktreeCreated(message: AnyMessage): message is WorktreeCreated {
+export function isWorktreeCreated(message: AnyMessage | UnknownMessage): message is WorktreeCreated {
   return message.type === 'WorktreeCreated';
 }
 
-export function isWorktreeDeleted(message: AnyMessage): message is WorktreeDeleted {
+export function isWorktreeDeleted(message: AnyMessage | UnknownMessage): message is WorktreeDeleted {
   return message.type === 'WorktreeDeleted';
 }
 
-export function isWorktreeStatus(message: AnyMessage): message is WorktreeStatus {
+export function isWorktreeStatus(message: AnyMessage | UnknownMessage): message is WorktreeStatus {
   return message.type === 'WorktreeStatus';
 }
 
-export function isAgentStatusUpdate(message: AnyMessage): message is AgentStatusUpdate {
+export function isAgentStatusUpdate(message: AnyMessage | UnknownMessage): message is AgentStatusUpdate {
   return message.type === 'AgentStatusUpdate';
 }
 
-export function isAgentOutput(message: AnyMessage): message is AgentOutput {
+export function isAgentOutput(message: AnyMessage | UnknownMessage): message is AgentOutput {
   return message.type === 'AgentOutput';
 }
 
-export function isAgentPrompt(message: AnyMessage): message is AgentPrompt {
+export function isAgentPrompt(message: AnyMessage | UnknownMessage): message is AgentPrompt {
   return message.type === 'AgentPrompt';
 }
 
-export function isTerminalOutput(message: AnyMessage): message is TerminalOutput {
+export function isTerminalOutput(message: AnyMessage | UnknownMessage): message is TerminalOutput {
   return message.type === 'TerminalOutput';
 }
 
-export function isTerminalCreated(message: AnyMessage): message is TerminalCreated {
+export function isTerminalCreated(message: AnyMessage | UnknownMessage): message is TerminalCreated {
   return message.type === 'TerminalCreated';
 }
 
-export function isFileContent(message: AnyMessage): message is FileContent {
+export function isFileContent(message: AnyMessage | UnknownMessage): message is FileContentMessage {
   return message.type === 'FileContent';
 }
 
-export function isGitStatusResult(message: AnyMessage): message is GitStatusResult {
+export function isGitStatusResult(message: AnyMessage | UnknownMessage): message is GitStatusResult {
   return message.type === 'GitStatusResult';
 }
 
-export function isGitDiffResult(message: AnyMessage): message is GitDiffResult {
+export function isGitDiffResult(message: AnyMessage | UnknownMessage): message is GitDiffResult {
   return message.type === 'GitDiffResult';
 }
 
@@ -612,7 +614,8 @@ export function isGitDiffResult(message: AnyMessage): message is GitDiffResult {
  * @returns ArrayBuffer containing the encoded message
  */
 export function encodeMessage(message: AnyMessage): ArrayBuffer {
-  return encode(message);
+  const encoded = encode(message);
+  return encoded.buffer.slice(encoded.byteOffset, encoded.byteOffset + encoded.byteLength);
 }
 
 /**
@@ -682,7 +685,7 @@ export function decodeMessage(data: ArrayBuffer | Uint8Array): AnyMessage | Unkn
  */
 export function decodeAndValidate<T extends AnyMessage>(
   data: ArrayBuffer | Uint8Array,
-  typeGuard: (msg: AnyMessage) => msg is T
+  typeGuard: (msg: AnyMessage | UnknownMessage) => msg is T
 ): T | UnknownMessage {
   const decoded = decodeMessage(data);
   

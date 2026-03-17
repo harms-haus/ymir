@@ -3,7 +3,7 @@ import { WorkspaceTree } from './WorkspaceTree'
 import {
   useWorkspaceStore,
   selectWorkspaces,
-  Workspace,
+  useStore,
 } from '../../store'
 
 interface CreateWorkspaceModalProps {
@@ -185,16 +185,17 @@ function CreateWorkspaceModal({ isOpen, onClose, onCreate }: CreateWorkspaceModa
 
 export function SidebarPanel() {
   const workspaces = useWorkspaceStore(selectWorkspaces)
-  const addWorkspace = useWorkspaceStore((state) => state.addWorkspace)
+  const addWorkspace = useStore((state) => state.addWorkspace)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   const handleCreateWorkspace = useCallback(
     (name: string, path: string) => {
-      const newWorkspace: Workspace = {
+      const newWorkspace = {
         id: `workspace-${Date.now()}`,
         name,
-        path,
-        worktrees: [],
+        rootPath: path,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       }
       addWorkspace(newWorkspace)
     },

@@ -1,11 +1,7 @@
-use ymir_ws_server::db::Db;
-use ymir_ws_server::protocol::{ClientMessage, Ping, PROTOCOL_VERSION, ServerMessage, ServerMessagePayload};
-use ymir_ws_server::router::route_message;
-use ymir_ws_server::state::{AppState, HEARTBEAT_INTERVAL_SECS};
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
-        State, ConnectInfo,
+        ConnectInfo, State,
     },
     response::{IntoResponse, Json},
 };
@@ -17,6 +13,12 @@ use std::time::Duration;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
+use ymir_ws_server::db::Db;
+use ymir_ws_server::protocol::{
+    ClientMessage, Ping, ServerMessage, ServerMessagePayload, PROTOCOL_VERSION,
+};
+use ymir_ws_server::router::route_message;
+use ymir_ws_server::state::{AppState, HEARTBEAT_INTERVAL_SECS};
 
 const DEFAULT_PORT: u16 = 7319;
 
@@ -24,8 +26,7 @@ const DEFAULT_PORT: u16 = 7319;
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info".into())
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
         .init();
 
@@ -34,13 +35,12 @@ async fn main() -> anyhow::Result<()> {
         .and_then(|p| p.parse().ok())
         .unwrap_or(DEFAULT_PORT);
 
-    let db_path = std::env::var("YMIR_DB_PATH")
-        .unwrap_or_else(|_| "ymir.db".to_string());
+    let db_path = std::env::var("YMIR_DB_PATH").unwrap_or_else(|_| "ymir.db".to_string());
 
     let db = Arc::new(Db::open(db_path).await?);
-    let (shutdown_tx, shutdown_rx) = watch::channel(false);
+    let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
 
-    let state = Arc::new(AppState::new(db, shutdown_rx));
+    let state = Arc::new(AppState::new(db, shutdown_rx.clone()));
 
     let app = axum::Router::new()
         .route("/health", axum::routing::get(health_check))
@@ -83,11 +83,7 @@ async fn ws_handler(
     ws.on_upgrade(move |socket| handle_socket(socket, state, addr))
 }
 
-async fn handle_socket(
-    mut socket: WebSocket,
-    state: Arc<AppState>,
-    addr: SocketAddr,
-) {
+async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, addr: SocketAddr) {
     let client_id = uuid::Uuid::new_v4();
     info!(%addr, client_id = %client_id, "WebSocket connection established");
 
@@ -139,28 +135,26 @@ async fn process_ws_message(
     msg: Message,
 ) -> anyhow::Result<()> {
     match msg {
-        Message::Binary(data) => {
-            match rmp_serde::from_slice::<ClientMessage>(&data) {
-                Ok(client_msg) => {
-                    if client_msg.version != PROTOCOL_VERSION {
-                        warn!(
-                            %client_id,
-                            version = client_msg.version,
-                            expected = PROTOCOL_VERSION,
-                            "Client protocol version mismatch"
-                        );
-                        return Ok(());
-                    }
-
-                    if let Some(response) = route_message(state.clone(), client_id, client_msg).await {
-                        state.send_to(client_id, response).await;
-                    }
+        Message::Binary(data) => match rmp_serde::from_slice::<ClientMessage>(&data) {
+            Ok(client_msg) => {
+                if client_msg.version != PROTOCOL_VERSION {
+                    warn!(
+                        %client_id,
+                        version = client_msg.version,
+                        expected = PROTOCOL_VERSION,
+                        "Client protocol version mismatch"
+                    );
+                    return Ok(());
                 }
-                Err(e) => {
-                    error!(%client_id, error = %e, "Failed to decode MessagePack");
+
+                if let Some(response) = route_message(state.clone(), client_id, client_msg).await {
+                    state.send_to(client_id, response).await;
                 }
             }
-        }
+            Err(e) => {
+                error!(%client_id, error = %e, "Failed to decode MessagePack");
+            }
+        },
         Message::Close(_) => {
             info!(%client_id, "Client requested close");
             return Ok(());
@@ -178,10 +172,7 @@ async fn process_ws_message(
     Ok(())
 }
 
-async fn send_ws_message(
-    socket: &mut WebSocket,
-    msg: ServerMessage,
-) -> anyhow::Result<()> {
+async fn send_ws_message(socket: &mut WebSocket, msg: ServerMessage) -> anyhow::Result<()> {
     let bytes = rmp_serde::to_vec(&msg)?;
     socket.send(Message::Binary(bytes)).await?;
     Ok(())
@@ -260,8 +251,8 @@ fn spawn_client_heartbeat(state: Arc<AppState>, client_id: uuid::Uuid) -> JoinHa
 fn spawn_shutdown_handler(shutdown_tx: watch::Sender<bool>) -> JoinHandle<()> {
     tokio::spawn(async move {
         tokio::signal::ctrl_c()
-        .await
-        .expect("Failed to set up Ctrl-C handler");
+            .await
+            .expect("Failed to set up Ctrl-C handler");
         info!("Ctrl-C received, initiating graceful shutdown");
         // Non-panicking send to handle case when all receivers have dropped
         let _ = shutdown_tx.send(true);

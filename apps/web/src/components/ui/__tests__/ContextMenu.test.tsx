@@ -1,9 +1,19 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { ContextMenu, type ContextMenuItem, type ContextMenuState } from '../ContextMenu'
+import { ContextMenu, type ContextMenuItem } from '../ContextMenu'
+import type { ContextMenuState } from '../../../hooks/useContextMenu'
+import type { ContextMenuAction } from '../../../hooks/useContextMenu'
 
 describe('ContextMenu', () => {
-  const mockOnAction = vi.fn()
+  let mockOnAction: ReturnType<typeof vi.fn<(action: ContextMenuAction) => void>>
+
+  beforeEach(() => {
+    mockOnAction = vi.fn<(action: ContextMenuAction) => void>()
+  })
+
+  afterEach(() => {
+    mockOnAction.mockReset()
+  })
 
   const createWorkspaceState = (): ContextMenuState => ({
     isOpen: true,
@@ -37,11 +47,11 @@ describe('ContextMenu', () => {
       targetType: null,
     }
 
-    const { container } = render(
+    render(
       <ContextMenu state={closedState} items={allItems} onAction={mockOnAction} />
     )
 
-    expect(container.firstChild).toBeNull()
+    expect(screen.queryByText('Create Worktree')).not.toBeInTheDocument()
   })
 
   it('should render menu when open for workspace', () => {
@@ -110,24 +120,30 @@ describe('ContextMenu', () => {
   })
 
   it('should apply destructive style for destructive items', () => {
-    const { container } = render(
+    render(
       <ContextMenu state={createWorktreeState()} items={allItems} onAction={mockOnAction} />
     )
 
-    const deleteButton = screen.getByText('Delete Worktree')
-    const computedStyle = window.getComputedStyle(deleteButton as HTMLElement)
-    
-    expect(computedStyle.color).toContain('destructive')
+    const deleteButton = screen.getByText('Delete Worktree') as HTMLElement
+
+    // Check that the element has the correct color value (HSL for destructive)
+    expect(deleteButton).toHaveStyle({
+      color: 'hsl(var(--destructive))'
+    })
   })
 
   it('should position menu at correct coordinates', () => {
     const state = createWorktreeState()
-    const { container } = render(
+    render(
       <ContextMenu state={state} items={allItems} onAction={mockOnAction} />
     )
 
-    const popup = screen.getByText('Delete Worktree').closest('[role="menu"]')
-    expect(popup).toBeInTheDocument()
+    const popup = screen.getByText('Delete Worktree').closest('[style*="position: fixed"]') as HTMLElement
+    const computedStyle = window.getComputedStyle(popup)
+
+    // The positioner should have the correct x, y coordinates
+    expect(computedStyle.left).toBe('150px')
+    expect(computedStyle.top).toBe('250px')
   })
 
   it('should render nothing when no visible items', () => {

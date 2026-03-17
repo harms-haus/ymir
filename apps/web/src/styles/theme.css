@@ -73,3 +73,11 @@
 .status-dot-flash {
   animation: status-flash 0.5s ease-in-out;
 }
+
+/* Context menu item hover/focus states */
+.context-menu-item:hover,
+.context-menu-item:focus-visible {
+  background-color: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+  outline: none;
+}

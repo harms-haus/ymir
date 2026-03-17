@@ -15,11 +15,11 @@ pub async fn route_message(
     message: ClientMessage,
 ) -> Option<ServerMessage> {
     let response = match message.payload {
-        ClientMessagePayload::Ping(ping) => {
-            Some(ServerMessage::new(ServerMessagePayload::Pong(crate::protocol::Pong {
+        ClientMessagePayload::Ping(ping) => Some(ServerMessage::new(ServerMessagePayload::Pong(
+            crate::protocol::Pong {
                 timestamp: ping.timestamp,
-            })))
-        }
+            },
+        ))),
         ClientMessagePayload::Pong(pong) => {
             handle_pong(state, client_id, pong.timestamp).await;
             None
@@ -31,7 +31,9 @@ pub async fn route_message(
 
         ClientMessagePayload::WorkspaceCreate(msg) => {
             match crate::workspace::create(state.clone(), msg).await {
-                Ok(result) => Some(ServerMessage::new(ServerMessagePayload::WorkspaceCreated(result))),
+                Ok(result) => Some(ServerMessage::new(ServerMessagePayload::WorkspaceCreated(
+                    result,
+                ))),
                 Err(e) => Some(ServerMessage::new(ServerMessagePayload::Error(Error {
                     code: "WORKSPACE_CREATE_ERROR".to_string(),
                     message: e.to_string(),
@@ -39,10 +41,12 @@ pub async fn route_message(
                 }))),
             }
         }
-        
+
         ClientMessagePayload::WorkspaceDelete(msg) => {
             match crate::workspace::delete(state.clone(), msg).await {
-                Ok(result) => Some(ServerMessage::new(ServerMessagePayload::WorkspaceDeleted(result))),
+                Ok(result) => Some(ServerMessage::new(ServerMessagePayload::WorkspaceDeleted(
+                    result,
+                ))),
                 Err(e) => Some(ServerMessage::new(ServerMessagePayload::Error(Error {
                     code: "WORKSPACE_DELETE_ERROR".to_string(),
                     message: e.to_string(),
@@ -50,10 +54,12 @@ pub async fn route_message(
                 }))),
             }
         }
-        
+
         ClientMessagePayload::WorktreeCreate(msg) => {
             match crate::worktree::create(state.clone(), msg).await {
-                Ok(result) => Some(ServerMessage::new(ServerMessagePayload::WorktreeCreated(result))),
+                Ok(result) => Some(ServerMessage::new(ServerMessagePayload::WorktreeCreated(
+                    result,
+                ))),
                 Err(e) => Some(ServerMessage::new(ServerMessagePayload::Error(Error {
                     code: "WORKTREE_CREATE_ERROR".to_string(),
                     message: e.to_string(),
@@ -61,10 +67,12 @@ pub async fn route_message(
                 }))),
             }
         }
-        
+
         ClientMessagePayload::WorktreeDelete(msg) => {
             match crate::worktree::delete(state.clone(), msg).await {
-                Ok(result) => Some(ServerMessage::new(ServerMessagePayload::WorktreeDeleted(result))),
+                Ok(result) => Some(ServerMessage::new(ServerMessagePayload::WorktreeDeleted(
+                    result,
+                ))),
                 Err(e) => Some(ServerMessage::new(ServerMessagePayload::Error(Error {
                     code: "WORKTREE_DELETE_ERROR".to_string(),
                     message: e.to_string(),
@@ -72,16 +80,16 @@ pub async fn route_message(
                 }))),
             }
         }
-        
+
         ClientMessagePayload::WorktreeList(msg) => {
             let workspace_id = msg.workspace_id;
             match crate::worktree::list(state.clone(), msg).await {
-                Ok(worktrees) => Some(ServerMessage::new(ServerMessagePayload::WorktreeStatus(
-                    crate::protocol::WorktreeStatus {
-                        worktree_id: workspace_id,
-                        status: format!("Found {} worktrees", worktrees.len()),
-                    }
-                ))),
+                Ok(worktrees) => Some(ServerMessage::new(
+                    ServerMessagePayload::WorktreeListResult(crate::protocol::WorktreeListResult {
+                        workspace_id,
+                        worktrees,
+                    }),
+                )),
                 Err(e) => Some(ServerMessage::new(ServerMessagePayload::Error(Error {
                     code: "WORKTREE_LIST_ERROR".to_string(),
                     message: e.to_string(),
@@ -89,23 +97,28 @@ pub async fn route_message(
                 }))),
             }
         }
-        ClientMessagePayload::WorkspaceRename(_) | ClientMessagePayload::WorkspaceUpdate(_) | ClientMessagePayload::WorktreeMerge(_) | ClientMessagePayload::AgentSpawn(_) | ClientMessagePayload::AgentSend(_) | ClientMessagePayload::AgentCancel(_) | ClientMessagePayload::TerminalInput(_) | ClientMessagePayload::TerminalResize(_) | ClientMessagePayload::TerminalCreate(_) | ClientMessagePayload::FileRead(_) | ClientMessagePayload::FileWrite(_) | ClientMessagePayload::UpdateSettings(_) => Some(not_implemented(message.payload)),
-        
-        ClientMessagePayload::GitStatus(msg) => {
-            Some(handle_git_status(state.clone(), msg).await)
-        }
-        
-        ClientMessagePayload::GitDiff(msg) => {
-            Some(handle_git_diff(state.clone(), msg).await)
-        }
-        
-        ClientMessagePayload::GitCommit(msg) => {
-            Some(handle_git_commit(state.clone(), msg).await)
-        }
-        
-        ClientMessagePayload::CreatePR(msg) => {
-            Some(handle_create_pr(state.clone(), msg).await)
-        }
+        ClientMessagePayload::WorkspaceRename(_)
+        | ClientMessagePayload::WorkspaceUpdate(_)
+        | ClientMessagePayload::WorktreeMerge(_)
+        | ClientMessagePayload::AgentSpawn(_)
+        | ClientMessagePayload::AgentSend(_)
+        | ClientMessagePayload::AgentCancel(_)
+        | ClientMessagePayload::TerminalInput(_)
+        | ClientMessagePayload::TerminalResize(_)
+        | ClientMessagePayload::TerminalCreate(_)
+        | ClientMessagePayload::FileRead(_)
+        | ClientMessagePayload::FileWrite(_)
+        | ClientMessagePayload::UpdateSettings(_) => Some(not_implemented(message.payload)),
+
+        ClientMessagePayload::GitStatus(msg) => Some(handle_git_status(state.clone(), msg).await),
+
+        ClientMessagePayload::GitDiff(msg) => Some(handle_git_diff(state.clone(), msg).await),
+
+        ClientMessagePayload::GitCommit(msg) => Some(handle_git_commit(state.clone(), msg).await),
+
+        ClientMessagePayload::CreatePR(msg) => Some(handle_create_pr(state.clone(), msg).await),
+
+        ClientMessagePayload::Ack(_) => Some(not_implemented(message.payload)),
     };
     response
 }
@@ -133,6 +146,7 @@ fn not_implemented(payload: ClientMessagePayload) -> ServerMessage {
         ClientMessagePayload::GitCommit(_) => "GitCommit",
         ClientMessagePayload::CreatePR(_) => "CreatePR",
         ClientMessagePayload::UpdateSettings(_) => "UpdateSettings",
+        ClientMessagePayload::Ack(_) => "Ack",
         _ => "Unknown",
     };
 
@@ -143,70 +157,107 @@ fn not_implemented(payload: ClientMessagePayload) -> ServerMessage {
     }))
 }
 
+fn parse_timestamp(timestamp: &str) -> u64 {
+    chrono::DateTime::parse_from_rfc3339(timestamp)
+        .ok()
+        .and_then(|dt| u64::try_from(dt.timestamp()).ok())
+        .unwrap_or(0)
+}
+
+fn parse_agent_status(status: &str) -> crate::protocol::AgentStatus {
+    match status {
+        "working" | "Working" => crate::protocol::AgentStatus::Working,
+        "waiting" | "Waiting" => crate::protocol::AgentStatus::Waiting,
+        _ => crate::protocol::AgentStatus::Idle,
+    }
+}
+
 async fn handle_get_state(state: Arc<AppState>, request_id: Uuid) -> ServerMessage {
-    use crate::protocol::{StateSnapshot, WorkspaceData, WorktreeData, AgentSessionData, TerminalSessionData};
+    use crate::protocol::{
+        AgentSessionData, StateSnapshot, TerminalSessionData, WorkspaceData, WorktreeData,
+    };
 
-    let workspaces: Vec<WorkspaceData> = state
-        .workspaces
-        .read()
-        .await
-        .values()
-        .map(|ws| WorkspaceData {
-            id: ws.id,
-            name: ws.name.clone(),
-            root_path: ws.root_path.clone(),
-            color: ws.color.clone(),
-            icon: ws.icon.clone(),
-            worktree_base_dir: ws.worktree_base_dir.clone(),
-            settings: None,
-            created_at: 0,
-            updated_at: 0,
-        })
-        .collect();
+    let workspaces: Vec<WorkspaceData> = match crate::workspace::list(state.clone()).await {
+        Ok(workspaces) => workspaces,
+        Err(e) => {
+            return ServerMessage::new(ServerMessagePayload::Error(Error {
+                code: "GET_STATE_ERROR".to_string(),
+                message: e.to_string(),
+                details: None,
+            }));
+        }
+    };
 
-    let worktrees: Vec<WorktreeData> = state
-        .worktrees
-        .read()
+    let mut worktrees: Vec<WorktreeData> = Vec::new();
+    for workspace in &workspaces {
+        let workspace_worktrees = match crate::worktree::list(
+            state.clone(),
+            crate::protocol::WorktreeList {
+                workspace_id: workspace.id,
+            },
+        )
         .await
-        .values()
-        .map(|wt| WorktreeData {
-            id: wt.id,
-            workspace_id: wt.workspace_id,
-            branch_name: wt.branch_name.clone(),
-            path: wt.path.clone(),
-            status: wt.status.clone(),
-            created_at: 0,
-        })
-        .collect();
+        {
+            Ok(worktrees) => worktrees,
+            Err(e) => {
+                return ServerMessage::new(ServerMessagePayload::Error(Error {
+                    code: "GET_STATE_ERROR".to_string(),
+                    message: e.to_string(),
+                    details: None,
+                }));
+            }
+        };
+        worktrees.extend(workspace_worktrees);
+    }
 
-    let agent_sessions: Vec<AgentSessionData> = state
-        .agents
-        .read()
-        .await
-        .values()
-        .map(|a| AgentSessionData {
-            id: a.id,
-            worktree_id: a.worktree_id,
-            agent_type: a.agent_type.clone(),
-            acp_session_id: None,
-            status: crate::protocol::AgentStatus::Idle,
-            started_at: 0,
-        })
-        .collect();
+    let mut agent_sessions: Vec<AgentSessionData> = Vec::new();
+    let mut terminal_sessions: Vec<TerminalSessionData> = Vec::new();
+    for worktree in &worktrees {
+        let worktree_id = worktree.id.to_string();
 
-    let terminal_sessions: Vec<TerminalSessionData> = state
-        .terminals
-        .read()
-        .await
-        .values()
-        .map(|t| TerminalSessionData {
-            id: t.id,
-            worktree_id: t.worktree_id,
-            label: t.label.clone(),
-            shell: t.shell.clone(),
-            created_at: 0,
-        })
-        .collect();
+        let db_agent_sessions = match state.db.list_agent_sessions(&worktree_id).await {
+            Ok(agent_sessions) => agent_sessions,
+            Err(e) => {
+                return ServerMessage::new(ServerMessagePayload::Error(Error {
+                    code: "GET_STATE_ERROR".to_string(),
+                    message: e.to_string(),
+                    details: None,
+                }));
+            }
+        };
+        agent_sessions.extend(
+            db_agent_sessions
+                .into_iter()
+                .map(|session| AgentSessionData {
+                    id: Uuid::parse_str(&session.id).unwrap_or_else(|_| Uuid::new_v4()),
+                    worktree_id: Uuid::parse_str(&session.worktree_id).unwrap_or(worktree.id),
+                    agent_type: session.agent_type,
+                    acp_session_id: session.acp_session_id,
+                    status: parse_agent_status(&session.status),
+                    started_at: parse_timestamp(&session.started_at),
+                }),
+        );
+
+        let db_terminal_sessions = match state.db.list_terminal_sessions(&worktree_id).await {
+            Ok(terminal_sessions) => terminal_sessions,
+            Err(e) => {
+                return ServerMessage::new(ServerMessagePayload::Error(Error {
+                    code: "GET_STATE_ERROR".to_string(),
+                    message: e.to_string(),
+                    details: None,
+                }));
+            }
+        };
+        terminal_sessions.extend(db_terminal_sessions.into_iter().map(|session| {
+            TerminalSessionData {
+                id: Uuid::parse_str(&session.id).unwrap_or_else(|_| Uuid::new_v4()),
+                worktree_id: Uuid::parse_str(&session.worktree_id).unwrap_or(worktree.id),
+                label: session.label,
+                shell: session.shell,
+                created_at: parse_timestamp(&session.created_at),
+            }
+        }));
+    }
 
     ServerMessage::new(ServerMessagePayload::StateSnapshot(StateSnapshot {
         request_id,
@@ -218,28 +269,24 @@ async fn handle_get_state(state: Arc<AppState>, request_id: Uuid) -> ServerMessa
     }))
 }
 
-
-async fn handle_git_status(
-    state: Arc<AppState>,
-    msg: crate::protocol::GitStatus,
-) -> ServerMessage {
+async fn handle_git_status(state: Arc<AppState>, msg: crate::protocol::GitStatus) -> ServerMessage {
     let worktree_id = msg.worktree_id;
-    
-    let worktrees = state.worktrees.read().await;
-    let worktree = match worktrees.get(&worktree_id) {
-        Some(wt) => wt,
-        None => {
-            return ServerMessage::new(ServerMessagePayload::Error(Error {
-                code: "WORKTREE_NOT_FOUND".to_string(),
-                message: format!("Worktree {} not found", worktree_id),
-                details: None,
-            }));
+
+    let repo_path = {
+        let worktrees = state.worktrees.read().await;
+        match worktrees.get(&worktree_id) {
+            Some(worktree) => std::path::PathBuf::from(worktree.path.clone()),
+            None => {
+                return ServerMessage::new(ServerMessagePayload::Error(Error {
+                    code: "WORKTREE_NOT_FOUND".to_string(),
+                    message: format!("Worktree {} not found", worktree_id),
+                    details: None,
+                }));
+            }
         }
     };
-    
-    let repo_path = std::path::Path::new(&worktree.path);
-    
-    match state.git_ops.status(worktree_id, repo_path).await {
+
+    match state.git_ops.status(worktree_id, repo_path.as_path()).await {
         Ok(result) => ServerMessage::new(ServerMessagePayload::GitStatusResult(result)),
         Err(e) => ServerMessage::new(ServerMessagePayload::Error(Error {
             code: "GIT_STATUS_ERROR".to_string(),
@@ -249,28 +296,29 @@ async fn handle_git_status(
     }
 }
 
-async fn handle_git_diff(
-    state: Arc<AppState>,
-    msg: crate::protocol::GitDiff,
-) -> ServerMessage {
+async fn handle_git_diff(state: Arc<AppState>, msg: crate::protocol::GitDiff) -> ServerMessage {
     let worktree_id = msg.worktree_id;
     let file_path = msg.file_path.as_deref();
-    
-    let worktrees = state.worktrees.read().await;
-    let worktree = match worktrees.get(&worktree_id) {
-        Some(wt) => wt,
-        None => {
-            return ServerMessage::new(ServerMessagePayload::Error(Error {
-                code: "WORKTREE_NOT_FOUND".to_string(),
-                message: format!("Worktree {} not found", worktree_id),
-                details: None,
-            }));
+
+    let repo_path = {
+        let worktrees = state.worktrees.read().await;
+        match worktrees.get(&worktree_id) {
+            Some(worktree) => std::path::PathBuf::from(worktree.path.clone()),
+            None => {
+                return ServerMessage::new(ServerMessagePayload::Error(Error {
+                    code: "WORKTREE_NOT_FOUND".to_string(),
+                    message: format!("Worktree {} not found", worktree_id),
+                    details: None,
+                }));
+            }
         }
     };
-    
-    let repo_path = std::path::Path::new(&worktree.path);
-    
-    match state.git_ops.diff(worktree_id, repo_path, file_path).await {
+
+    match state
+        .git_ops
+        .diff(worktree_id, repo_path.as_path(), file_path)
+        .await
+    {
         Ok(result) => ServerMessage::new(ServerMessagePayload::GitDiffResult(result)),
         Err(e) => ServerMessage::new(ServerMessagePayload::Error(Error {
             code: "GIT_DIFF_ERROR".to_string(),
@@ -280,29 +328,30 @@ async fn handle_git_diff(
     }
 }
 
-async fn handle_git_commit(
-    state: Arc<AppState>,
-    msg: crate::protocol::GitCommit,
-) -> ServerMessage {
+async fn handle_git_commit(state: Arc<AppState>, msg: crate::protocol::GitCommit) -> ServerMessage {
     let worktree_id = msg.worktree_id;
     let message = msg.message;
     let files = msg.files;
-    
-    let worktrees = state.worktrees.read().await;
-    let worktree = match worktrees.get(&worktree_id) {
-        Some(wt) => wt,
-        None => {
-            return ServerMessage::new(ServerMessagePayload::Error(Error {
-                code: "WORKTREE_NOT_FOUND".to_string(),
-                message: format!("Worktree {} not found", worktree_id),
-                details: None,
-            }));
+
+    let repo_path = {
+        let worktrees = state.worktrees.read().await;
+        match worktrees.get(&worktree_id) {
+            Some(worktree) => std::path::PathBuf::from(worktree.path.clone()),
+            None => {
+                return ServerMessage::new(ServerMessagePayload::Error(Error {
+                    code: "WORKTREE_NOT_FOUND".to_string(),
+                    message: format!("Worktree {} not found", worktree_id),
+                    details: None,
+                }));
+            }
         }
     };
-    
-    let repo_path = std::path::Path::new(&worktree.path);
-    
-    match state.git_ops.commit(worktree_id, repo_path, &message, files).await {
+
+    match state
+        .git_ops
+        .commit(worktree_id, repo_path.as_path(), &message, files)
+        .await
+    {
         Ok(result) => ServerMessage::new(ServerMessagePayload::Notification(
             crate::protocol::Notification {
                 level: crate::protocol::NotificationLevel::Info,
@@ -318,29 +367,30 @@ async fn handle_git_commit(
     }
 }
 
-async fn handle_create_pr(
-    state: Arc<AppState>,
-    msg: crate::protocol::CreatePR,
-) -> ServerMessage {
+async fn handle_create_pr(state: Arc<AppState>, msg: crate::protocol::CreatePR) -> ServerMessage {
     let worktree_id = msg.worktree_id;
     let title = msg.title;
     let body = msg.body.as_deref();
-    
-    let worktrees = state.worktrees.read().await;
-    let worktree = match worktrees.get(&worktree_id) {
-        Some(wt) => wt,
-        None => {
-            return ServerMessage::new(ServerMessagePayload::Error(Error {
-                code: "WORKTREE_NOT_FOUND".to_string(),
-                message: format!("Worktree {} not found", worktree_id),
-                details: None,
-            }));
+
+    let repo_path = {
+        let worktrees = state.worktrees.read().await;
+        match worktrees.get(&worktree_id) {
+            Some(worktree) => std::path::PathBuf::from(worktree.path.clone()),
+            None => {
+                return ServerMessage::new(ServerMessagePayload::Error(Error {
+                    code: "WORKTREE_NOT_FOUND".to_string(),
+                    message: format!("Worktree {} not found", worktree_id),
+                    details: None,
+                }));
+            }
         }
     };
-    
-    let repo_path = std::path::Path::new(&worktree.path);
-    
-    match state.git_ops.create_pr(worktree_id, repo_path, &title, body).await {
+
+    match state
+        .git_ops
+        .create_pr(worktree_id, repo_path.as_path(), &title, body)
+        .await
+    {
         Ok(result) => ServerMessage::new(ServerMessagePayload::Notification(
             crate::protocol::Notification {
                 level: crate::protocol::NotificationLevel::Info,

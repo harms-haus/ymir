@@ -4,8 +4,8 @@
 pub mod db;
 pub mod git;
 pub mod hub;
-pub mod pty;
 pub mod protocol;
+pub mod pty;
 pub mod router;
 pub mod state;
 pub mod watcher;
