@@ -3,6 +3,7 @@ import { Tabs } from '@base-ui/react';
 import { useStore, selectAgentTabsByWorktreeId, selectActiveAgentTabId, AgentTab } from '../../store';
 import { useWebSocketClient } from '../../hooks/useWebSocket';
 import { AgentChat } from './AgentChat';
+import { DiffTab } from '../editor/DiffTab';
 import { AgentSession, AgentSend } from '../../types/protocol';
 
 interface AgentPaneProps {
@@ -165,11 +166,13 @@ export function AgentPane({ worktreeId, agentSession }: AgentPaneProps) {
                   <p>No active agent session</p>
                 </div>
               )}
-              {tab.type === 'diff' && (
-                <div className="flex items-center justify-center h-full text-muted-foreground">
-                  <p>Diff viewer placeholder (T25)</p>
-                </div>
-              )}
+            {tab.type === 'diff' && tab.filePath && (
+              <DiffTab
+                filePath={tab.filePath}
+                worktreeId={worktreeId}
+                sessionId={tab.sessionId}
+              />
+            )}
               {tab.type === 'editor' && (
                 <div className="flex items-center justify-center h-full text-muted-foreground">
                   <p>Editor placeholder (T24)</p>

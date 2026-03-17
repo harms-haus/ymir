@@ -196,3 +196,100 @@
   outline: 2px solid hsl(var(--ring));
   outline-offset: -2px;
 }
+
+/* Editor styles */
+.editor-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+.editor-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: hsl(var(--panel-sidebar, 222.2 84% 5.9%));
+  border-bottom: 1px solid hsl(var(--border, 217.2 32.6% 17.5%));
+  flex-shrink: 0;
+  min-height: 40px;
+}
+
+.editor-filename {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: hsl(var(--foreground, 210 40% 98%));
+}
+
+.editor-path {
+  flex: 1;
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground, 215 20.2% 65.1%));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-unsaved-indicator {
+  color: hsl(var(--primary, 217.2 91.2% 59.8%));
+  font-size: 0.75rem;
+}
+
+.editor-readonly-badge {
+  font-size: 0.625rem;
+  padding: 0.125rem 0.375rem;
+  background: hsl(var(--muted, 217.2 32.6% 17.5%));
+  color: hsl(var(--muted-foreground, 215 20.2% 65.1%));
+  border-radius: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.editor-wrapper {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.editor-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 1rem;
+  color: hsl(var(--muted-foreground, 215 20.2% 65.1%));
+}
+
+.editor-loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid hsl(var(--border, 217.2 32.6% 17.5%));
+  border-top-color: hsl(var(--primary, 217.2 91.2% 59.8%));
+  border-radius: 50%;
+  animation: editor-spin 1s linear infinite;
+}
+
+@keyframes editor-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.editor-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 0.75rem;
+  color: hsl(var(--destructive, 0 62.8% 30.6%));
+  padding: 2rem;
+  text-align: center;
+}
+
+.editor-error-icon {
+  font-size: 2rem;
+}

@@ -23,8 +23,9 @@ kill:
 debug: kill
 	@echo "[ymir] building rust workspace..."
 	@cargo build
-	@echo "[ymir] installing web dependencies..."
+	@echo "[ymir] building web client..."
 	@npm install --prefix apps/web
+	@npm run build --prefix apps/web
 	@echo "[ymir] launching servers..."
 	@cargo run -p ymir
 

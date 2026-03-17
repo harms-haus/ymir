@@ -1,44 +1,81 @@
 import { useState } from 'react';
+import { Tabs } from '@base-ui/react/tabs';
 import { useStore, selectActiveWorktree } from '../../store';
+import { Toolbar } from './Toolbar';
+import { ChangesTab } from './ChangesTab';
+import { AllFilesTab } from './AllFilesTab';
 import { CreatePRDialog } from '../dialogs/CreatePRDialog';
 
 export function ProjectPanel() {
   const activeWorktree = useStore(selectActiveWorktree);
+  const [activeTab, setActiveTab] = useState<'changes' | 'all-files'>('changes');
   const [isPRDialogOpen, setIsPRDialogOpen] = useState(false);
 
   const canCreatePR = activeWorktree?.status === 'active';
 
   return (
-    <div className="project-container">
-      <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2>Project</h2>
-        <button
-          type="button"
-          onClick={() => setIsPRDialogOpen(true)}
-          disabled={!canCreatePR}
-          style={{
-            padding: '6px 12px',
-            borderRadius: '6px',
-            border: 'none',
-            backgroundColor: canCreatePR ? 'hsl(var(--primary))' : 'hsl(var(--muted))',
-            color: 'hsl(var(--primary-foreground))',
-            cursor: canCreatePR ? 'pointer' : 'not-allowed',
-            fontSize: '13px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            opacity: canCreatePR ? 1 : 0.5,
+    <div className="project-container" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid hsl(var(--border))' }}>
+        <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Project</h2>
+        <Toolbar 
+          onPRClick={() => setIsPRDialogOpen(true)} 
+          canCreatePR={canCreatePR}
+        />
+      </div>
+      
+      <Tabs.Root 
+        value={activeTab} 
+        onValueChange={(value) => setActiveTab(value as 'changes' | 'all-files')}
+        style={{ flex: 1, display: 'flex', flexDirection: 'column' }}
+      >
+        <Tabs.List 
+          style={{ 
+            display: 'flex', 
+            borderBottom: '1px solid hsl(var(--border))',
+            padding: '0 16px'
           }}
         >
-          <i className="ri-git-pull-request-line" style={{ fontSize: '14px' }} />
-          PR
-        </button>
-      </div>
-      <div className="panel-content">
-        <div className="file-list">
-          <p className="placeholder-text">Files will appear here</p>
+          <Tabs.Tab 
+            value="changes"
+            style={{
+              padding: '8px 16px',
+              border: 'none',
+              background: 'transparent',
+              cursor: 'pointer',
+              fontSize: '13px',
+              color: activeTab === 'changes' ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))',
+              borderBottom: activeTab === 'changes' ? '2px solid hsl(var(--primary))' : '2px solid transparent',
+              marginBottom: '-1px'
+            }}
+          >
+            Changes
+          </Tabs.Tab>
+          <Tabs.Tab 
+            value="all-files"
+            style={{
+              padding: '8px 16px',
+              border: 'none',
+              background: 'transparent',
+              cursor: 'pointer',
+              fontSize: '13px',
+              color: activeTab === 'all-files' ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))',
+              borderBottom: activeTab === 'all-files' ? '2px solid hsl(var(--primary))' : '2px solid transparent',
+              marginBottom: '-1px'
+            }}
+          >
+            All Files
+          </Tabs.Tab>
+        </Tabs.List>
+        
+        <div style={{ flex: 1, overflow: 'hidden' }}>
+          <Tabs.Panel value="changes" style={{ height: '100%' }}>
+            <ChangesTab />
+          </Tabs.Panel>
+          <Tabs.Panel value="all-files" style={{ height: '100%' }}>
+            <AllFilesTab />
+          </Tabs.Panel>
         </div>
-      </div>
+      </Tabs.Root>
 
       <CreatePRDialog open={isPRDialogOpen} onOpenChange={setIsPRDialogOpen} />
     </div>

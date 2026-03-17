@@ -107,7 +107,7 @@ export function TerminalPane({ worktreeId }: TerminalPaneProps) {
     if (tabs.length === 0 && worktreeId) {
       if (!creationInFlightRef.current) {
         creationInFlightRef.current = true;
-        handleCreateTab().finally(() => {
+        Promise.resolve(handleCreateTab()).finally(() => {
           creationInFlightRef.current = false;
         });
       }

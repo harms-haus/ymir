@@ -54,7 +54,7 @@ function getStatusDotColor(status: AgentStatus): string {
   }
 }
 
-export function AgentChat({ sessionId, agentType, worktreeId, onSendMessage }: AgentChatProps) {
+export function AgentChat({ sessionId: _sessionId, agentType, worktreeId, onSendMessage }: AgentChatProps) {
   const client = useWebSocketClient();
   const agentStatusInfo = useAgentStatus(worktreeId);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
@@ -68,7 +68,7 @@ export function AgentChat({ sessionId, agentType, worktreeId, onSendMessage }: A
 
   useEffect(() => {
     const unsubscribeOutput = client.onMessage('AgentOutput', (msg: AgentOutput) => {
-      if (msg.sessionId === sessionId) {
+      if (msg.worktreeId === worktreeId) {
         setMessages((prev) => [
           ...prev,
           {
@@ -82,7 +82,7 @@ export function AgentChat({ sessionId, agentType, worktreeId, onSendMessage }: A
     });
 
     const unsubscribePrompt = client.onMessage('AgentPrompt', (msg: AgentPrompt) => {
-      if (msg.sessionId === sessionId) {
+      if (msg.worktreeId === worktreeId) {
         setMessages((prev) => [
           ...prev,
           {
@@ -99,7 +99,7 @@ export function AgentChat({ sessionId, agentType, worktreeId, onSendMessage }: A
       unsubscribeOutput();
       unsubscribePrompt();
     };
-  }, [client, sessionId]);
+  }, [client, worktreeId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView?.({ behavior: 'smooth' });

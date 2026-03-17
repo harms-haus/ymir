@@ -27,8 +27,6 @@ export function CreatePRDialog({ open, onOpenChange }: CreatePRDialogProps) {
 
   useEffect(() => {
     if (open && activeWorktree) {
-      const currentWorktreeId = activeWorktree.id;
-      
       setTitle(activeWorktree.branchName);
       setBody('');
       setIsAutoGenerating(false);

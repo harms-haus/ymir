@@ -38,26 +38,30 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn serve() -> anyhow::Result<()> {
-    tracing::info!("starting ymir servers...");
-    tracing::info!("  ws-server  → ws://0.0.0.0:{WS_PORT}");
-    tracing::info!("  vite       → http://0.0.0.0:{VITE_PORT}");
+  tracing::info!("starting ymir servers...");
+  tracing::info!(" ws-server → ws://0.0.0.0:{WS_PORT}");
+  tracing::info!(" vite → http://0.0.0.0:{VITE_PORT}");
 
-    let _ws_server = tokio::process::Command::new("cargo")
-        .args(["run", "-p", "ymir-ws-server"])
-        .env("YMIR_WS_PORT", WS_PORT.to_string())
-        .env("YMIR_VITE_PORT", VITE_PORT.to_string())
-        .spawn()?;
+  let ws_server_path = std::env::current_exe()?
+    .parent()
+    .ok_or_else(|| anyhow::anyhow!("Could not find executable directory"))?
+    .join("ymir-ws-server");
 
-    let _vite = tokio::process::Command::new("npx")
-        .args(["vite", "--port", &VITE_PORT.to_string()])
-        .current_dir("apps/web")
-        .spawn()?;
+  let _ws_server = tokio::process::Command::new(ws_server_path)
+    .env("YMIR_WS_PORT", WS_PORT.to_string())
+    .env("YMIR_VITE_PORT", VITE_PORT.to_string())
+    .spawn()?;
 
-    tracing::info!("servers running. press ctrl-c to stop.");
+  let _vite = tokio::process::Command::new("npx")
+    .args(["vite", "--port", &VITE_PORT.to_string()])
+    .current_dir("apps/web")
+    .spawn()?;
 
-    tokio::signal::ctrl_c().await?;
-    tracing::info!("shutting down...");
-    kill().await
+  tracing::info!("servers running. press ctrl-c to stop.");
+
+  tokio::signal::ctrl_c().await?;
+  tracing::info!("shutting down...");
+  kill().await
 }
 
 async fn kill() -> anyhow::Result<()> {

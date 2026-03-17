@@ -12,6 +12,7 @@ import {
 } from '../../store'
 import { useContextMenu, type ContextMenuCallbacks } from '../../hooks/useContextMenu'
 import { ContextMenu, type ContextMenuItem } from '../ui/ContextMenu'
+import type { Worktree as ProtocolWorktree } from '../../types/protocol'
 
 export type TreeNodeType = 'workspace' | 'worktree'
 
@@ -44,7 +45,15 @@ function WorkspaceRow({
   onContextMenu,
 }: WorkspaceRowProps & { onContextMenu?: (e: React.MouseEvent) => void }) {
   const worktrees = useWorkspaceStore((state) => state.worktrees)
-  const summary = useWorkspaceAgentStatusSummary(workspace.id, worktrees)
+  const protocolWorktrees: ProtocolWorktree[] = worktrees.map(wt => ({
+    id: wt.id,
+    workspaceId: wt.workspaceId,
+    branchName: wt.branchName,
+    path: '',
+    status: 'active',
+    createdAt: 0,
+  }))
+  const summary = useWorkspaceAgentStatusSummary(workspace.id, protocolWorktrees)
   const hasActive = summary.working > 0 || summary.waiting > 0
 
   return (
