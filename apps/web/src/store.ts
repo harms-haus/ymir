@@ -1,7 +1,19 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { AppState, NotificationState } from './types/state';
-import { ServerMessage } from './types/protocol';
+import { AppState, NotificationState, AgentTab } from './types/state';
+export type { AgentTab };
+import { ServerMessage, TerminalOutput } from './types/protocol';
+
+// Terminal output callback registry (for routing TerminalOutput to TerminalProvider)
+let terminalOutputCallback: ((message: TerminalOutput) => void) | null = null;
+
+export function setTerminalOutputCallback(callback: ((message: TerminalOutput) => void) | null): void {
+  terminalOutputCallback = callback;
+}
+
+export function getTerminalOutputCallback(): ((message: TerminalOutput) => void) | null {
+  return terminalOutputCallback;
+}
 
 export const useStore = create<AppState>()(
   devtools(
@@ -13,12 +25,23 @@ export const useStore = create<AppState>()(
       terminalSessions: [],
       notifications: [],
       
-      // UI state
-      activeWorktreeId: null,
-      connectionStatus: 'closed',
-      connectionError: null,
+  // UI state
+    activeWorktreeId: null,
+    connectionStatus: 'closed',
+    connectionError: null,
 
-      // Action implementations
+  // Agent pane tabs (per worktree)
+  agentTabs: new Map(),
+  activeAgentTabId: new Map(),
+
+  // PR dialog state
+  prDialog: {
+    isOpen: false,
+    title: '',
+    body: '',
+  },
+
+  // Action implementations
       setWorkspaces: (workspaces) => set({ workspaces }),
       
       setWorktrees: (worktrees) => set({ worktrees }),
@@ -159,9 +182,86 @@ export const useStore = create<AppState>()(
           notifications: state.notifications.filter((n) => n.id !== id),
         })),
 
-      clearNotifications: () => set({ notifications: [] }),
-    }),
-    { name: 'ymir-app-store' }
+    clearNotifications: () => set({ notifications: [] }),
+
+    // Agent tab management
+    addAgentTab: (worktreeId, tab) =>
+      set((state) => {
+        const newTabs = new Map(state.agentTabs);
+        const existingTabs = newTabs.get(worktreeId) || [];
+        newTabs.set(worktreeId, [...existingTabs, tab]);
+
+        const newActiveTabId = new Map(state.activeAgentTabId);
+        if (!newActiveTabId.has(worktreeId)) {
+          newActiveTabId.set(worktreeId, tab.id);
+        }
+
+        return { agentTabs: newTabs, activeAgentTabId: newActiveTabId };
+      }),
+
+    removeAgentTab: (worktreeId, tabId) =>
+      set((state) => {
+        const newTabs = new Map(state.agentTabs);
+        const existingTabs = newTabs.get(worktreeId) || [];
+        const filteredTabs = existingTabs.filter((t) => t.id !== tabId);
+
+        if (filteredTabs.length === 0) {
+          newTabs.delete(worktreeId);
+        } else {
+          newTabs.set(worktreeId, filteredTabs);
+        }
+
+        const newActiveTabId = new Map(state.activeAgentTabId);
+        if (newActiveTabId.get(worktreeId) === tabId) {
+          if (filteredTabs.length > 0) {
+            newActiveTabId.set(worktreeId, filteredTabs[0].id);
+          } else {
+            newActiveTabId.delete(worktreeId);
+          }
+        }
+
+        return { agentTabs: newTabs, activeAgentTabId: newActiveTabId };
+      }),
+
+    setActiveAgentTab: (worktreeId, tabId) =>
+      set((state) => {
+        const newActiveTabId = new Map(state.activeAgentTabId);
+        newActiveTabId.set(worktreeId, tabId);
+        return { activeAgentTabId: newActiveTabId };
+      }),
+
+    updateAgentTab: (worktreeId, tabId, updates) =>
+      set((state) => {
+        const newTabs = new Map(state.agentTabs);
+        const existingTabs = newTabs.get(worktreeId) || [];
+        const updatedTabs = existingTabs.map((t) =>
+          t.id === tabId ? { ...t, ...updates } : t
+        );
+        newTabs.set(worktreeId, updatedTabs);
+        return { agentTabs: newTabs };
+      }),
+
+  setPRDialogOpen: (isOpen) =>
+      set((state) => ({
+        prDialog: { ...state.prDialog, isOpen },
+      })),
+
+  setPRDialogTitle: (title) =>
+      set((state) => ({
+        prDialog: { ...state.prDialog, title },
+      })),
+
+  setPRDialogBody: (body) =>
+      set((state) => ({
+        prDialog: { ...state.prDialog, body },
+      })),
+
+  resetPRDialog: () =>
+      set({
+        prDialog: { isOpen: false, title: '', body: '' },
+      }),
+  }),
+  { name: 'ymir-app-store' }
   )
 );
 
@@ -195,10 +295,20 @@ export const selectActiveWorkspace = (state: AppState) => {
   return state.workspaces.find((w) => w.id === activeWorktree.workspaceId) || null;
 };
 
+export const selectAgentTabsByWorktreeId = (worktreeId: string) => (state: AppState) =>
+  state.agentTabs.get(worktreeId) || [];
+
+export const selectActiveAgentTabId = (worktreeId: string) => (state: AppState) =>
+  state.activeAgentTabId.get(worktreeId) || null;
+
+export const selectPRDialog = (state: AppState) => state.prDialog;
+
+export const selectPRDialogOpen = (state: AppState) => state.prDialog.isOpen;
+
 // Helper to update state from ServerMessage
 export function updateStateFromServerMessage(message: ServerMessage): void {
   const { addWorkspace, updateWorkspace, removeWorkspace, addWorktree, updateWorktree, removeWorktree } = useStore.getState();
-  const { addAgentSession, addTerminalSession, addNotification } = useStore.getState();
+  const { updateAgentSession, addTerminalSession, addNotification } = useStore.getState();
 
   switch (message.type) {
     case 'WorkspaceCreated':
@@ -245,7 +355,10 @@ export function updateStateFromServerMessage(message: ServerMessage): void {
       break;
     
     case 'TerminalOutput':
-      // Terminal output is handled separately (not stored in main state)
+      // Terminal output is routed to TerminalProvider via callback
+      if (terminalOutputCallback) {
+        terminalOutputCallback(message);
+      }
       break;
     
     case 'Notification':

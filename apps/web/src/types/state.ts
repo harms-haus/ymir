@@ -57,6 +57,24 @@ export interface NotificationState {
 // Connection status for WebSocket client
 export type ConnectionStatus = 'connecting' | 'open' | 'closed' | 'reconnecting';
 
+// Agent tab types
+export type AgentTabType = 'agent' | 'diff' | 'editor';
+
+export interface AgentTab {
+  id: string;
+  type: AgentTabType;
+  sessionId?: string;
+  filePath?: string;
+  label?: string;
+}
+
+// PR dialog state
+export interface PRDialogState {
+  isOpen: boolean;
+  title: string;
+  body: string;
+}
+
 // Main application state shape
 export interface AppState {
   // Data slices
@@ -65,11 +83,18 @@ export interface AppState {
   agentSessions: AgentSessionState[];
   terminalSessions: TerminalSessionState[];
   notifications: NotificationState[];
-  
+
   // UI state
   activeWorktreeId: string | null;
   connectionStatus: ConnectionStatus;
   connectionError: string | null;
+
+  // Agent pane tabs (per worktree)
+  agentTabs: Map<string, AgentTab[]>;
+  activeAgentTabId: Map<string, string>;
+
+  // PR dialog state
+  prDialog: PRDialogState;
   
   // Actions
   setWorkspaces: (workspaces: WorkspaceState[]) => void;
@@ -108,4 +133,16 @@ export interface AppState {
   addNotification: (notification: Omit<NotificationState, 'id' | 'timestamp'>) => void;
   removeNotification: (id: string) => void;
   clearNotifications: () => void;
+
+  // Agent tab management
+  addAgentTab: (worktreeId: string, tab: AgentTab) => void;
+  removeAgentTab: (worktreeId: string, tabId: string) => void;
+  setActiveAgentTab: (worktreeId: string, tabId: string) => void;
+  updateAgentTab: (worktreeId: string, tabId: string, updates: Partial<AgentTab>) => void;
+
+  // PR dialog actions
+  setPRDialogOpen: (isOpen: boolean) => void;
+  setPRDialogTitle: (title: string) => void;
+  setPRDialogBody: (body: string) => void;
+  resetPRDialog: () => void;
 }
