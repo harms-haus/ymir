@@ -29,6 +29,7 @@ export const useStore = create<AppState>()(
     activeWorktreeId: null,
     connectionStatus: 'closed',
     connectionError: null,
+    expandedWorkspaceIds: new Set<string>(),
 
   // Agent pane tabs (per worktree)
   agentTabs: new Map(),
@@ -55,6 +56,17 @@ export const useStore = create<AppState>()(
       setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
       
       setConnectionError: (connectionError) => set({ connectionError }),
+
+      toggleWorkspaceExpanded: (workspaceId: string) =>
+        set((state) => {
+          const expandedIds = new Set(state.expandedWorkspaceIds)
+          if (expandedIds.has(workspaceId)) {
+            expandedIds.delete(workspaceId)
+          } else {
+            expandedIds.add(workspaceId)
+          }
+          return { expandedWorkspaceIds: expandedIds }
+        }),
 
       // State management from server snapshot
       stateFromSnapshot: (snapshot) => {
@@ -384,16 +396,9 @@ export function updateStateFromServerMessage(message: ServerMessage): void {
   }
 }
 
-// ============================================================================
-// Backward Compatibility Exports
-// ============================================================================
-// These exports maintain compatibility with existing code that expects the old store API
-// TODO: Migrate all components to use the new useStore API and remove these exports
-
 import { persist } from 'zustand/middleware';
 import { ToastVariant } from './components/ui/Toast';
 
-// Toast store (backward compatibility)
 export interface Notification {
   id: string;
   variant: ToastVariant;
@@ -432,65 +437,3 @@ export const useToastStore = create<ToastStore>()(
     { name: 'toast-storage' }
   )
 );
-
-// Workspace store (backward compatibility)
-export type WorktreeStatus = 'working' | 'waiting' | 'idle';
-
-export interface Worktree {
-  id: string;
-  branchName: string;
-  status: WorktreeStatus;
-  workspaceId: string;
-}
-
-export interface Workspace {
-  id: string;
-  name: string;
-  rootPath: string;
-  color?: string;
-  icon?: string;
-  worktreeBaseDir?: string;
-}
-
-interface WorkspaceStoreState {
-  workspaces: Workspace[];
-  worktrees: Worktree[];
-  activeWorktreeId: string | null;
-  expandedWorkspaceIds: Set<string>;
-  toggleWorkspaceExpanded: (id: string) => void;
-}
-
-export const useWorkspaceStore = create<WorkspaceStoreState>()(
-  persist(
-    (set) => ({
-      workspaces: [],
-      worktrees: [],
-      activeWorktreeId: null,
-      expandedWorkspaceIds: new Set(),
-      toggleWorkspaceExpanded: (id: string) =>
-        set((state) => {
-          const expandedIds = new Set(state.expandedWorkspaceIds)
-          if (expandedIds.has(id)) {
-            expandedIds.delete(id)
-          } else {
-            expandedIds.add(id)
-          }
-          return { expandedWorkspaceIds: expandedIds }
-        }),
-    }),
-    {
-      name: 'workspace-storage',
-      partialize: (state) => ({
-        workspaces: state.workspaces,
-        worktrees: state.worktrees,
-        activeWorktreeId: state.activeWorktreeId,
-        expandedWorkspaceIds: Array.from(state.expandedWorkspaceIds)
-      })
-    }
-  )
-);
-
-// Selectors (backward compatibility)
-export const selectWorkspaces = (state: WorkspaceStoreState) => state.workspaces;
-export const selectActiveWorktreeId = (state: WorkspaceStoreState) => state.activeWorktreeId;
-export const selectExpandedWorkspaceIds = (state: WorkspaceStoreState) => state.expandedWorkspaceIds;

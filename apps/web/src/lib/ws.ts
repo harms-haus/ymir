@@ -188,18 +188,22 @@ export class YmirClient {
   
   private stopHeartbeat(): void {
     if (this.heartbeatTimer) {
+      console.log('[WS] [Heartbeat] Stopping heartbeat timer');
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
     }
-    
+
     if (this.heartbeatTimeoutTimer) {
+      console.log('[WS] [Heartbeat] Clearing timeout timer');
       clearTimeout(this.heartbeatTimeoutTimer);
       this.heartbeatTimeoutTimer = null;
     }
   }
   
   private sendPing(): void {
-    this.send({ type: 'Ping', timestamp: Date.now() });
+    const timestamp = Date.now();
+    console.log(`[WS] [Heartbeat] Sending ping at ${timestamp}`);
+    this.send({ type: 'Ping', timestamp });
 
     // Clear existing timeout before setting new one to prevent timer leak
     if (this.heartbeatTimeoutTimer) {
@@ -207,7 +211,7 @@ export class YmirClient {
     }
 
     this.heartbeatTimeoutTimer = setTimeout(() => {
-      console.warn('Heartbeat timeout - closing connection');
+      console.warn(`[WS] [Heartbeat] Timeout after ${this.heartbeatTimeout}ms - closing connection`);
       this.ws?.close();
     }, this.heartbeatTimeout);
   }
@@ -269,11 +273,8 @@ export class YmirClient {
   private handleMessage(message: ServerMessage): void {
     console.log('[WS] Received message type:', message.type, message);
     if (message.type === 'Pong') {
-      console.log('[WS] Got Pong, clearing timeout');
+      console.log('[WS] [Heartbeat] Received Pong, clearing timeout');
       this.handlePong();
-    } else if (message.type === 'Ping') {
-      console.log('[WS] Got Ping from server, sending Pong');
-      this.send({ type: 'Pong', timestamp: Date.now() });
     } else {
       updateStateFromServerMessage(message);
     }
@@ -393,15 +394,20 @@ export function getWebSocketClient(config?: Partial<WebSocketConfig>): YmirClien
   if (!client) {
     // Use WebSocket proxy path - Vite forwards /ws to ws://localhost:7319
     const wsUrl = `ws://${window.location.host}/ws`;
-    
+
     const defaultConfig: WebSocketConfig = {
       url: wsUrl,
       reconnectEnabled: true,
       maxReconnectDelay: 30000,
-      heartbeatInterval: 30000,
+      heartbeatInterval: 15000,
       heartbeatTimeout: 5000,
       ...config,
     };
+    console.log('[WS] Creating WebSocket client with config:', {
+      url: wsUrl,
+      heartbeatIntervalMs: defaultConfig.heartbeatInterval,
+      heartbeatTimeoutMs: defaultConfig.heartbeatTimeout
+    });
     client = new YmirClient(defaultConfig);
   }
   return client;

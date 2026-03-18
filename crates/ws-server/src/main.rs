@@ -1,13 +1,12 @@
 use axum::{
-    extract::{
-        ws::{Message, WebSocket, WebSocketUpgrade},
-        ConnectInfo, State,
-    },
-    response::{IntoResponse, Json},
+  extract::{
+    ws::{Message, WebSocket, WebSocketUpgrade},
+    State,
+  },
+  response::{IntoResponse, Json},
 };
 use futures_util::StreamExt;
 use serde_json::json;
-use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::watch;
@@ -15,10 +14,10 @@ use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
 use ymir_ws_server::db::Db;
 use ymir_ws_server::protocol::{
-    ClientMessage, Ping, ServerMessage, ServerMessagePayload, PROTOCOL_VERSION,
+  ClientMessage, ServerMessage, PROTOCOL_VERSION,
 };
 use ymir_ws_server::router::route_message;
-use ymir_ws_server::state::{AppState, HEARTBEAT_INTERVAL_SECS, HEARTBEAT_TIMEOUT_SECS};
+use ymir_ws_server::state::AppState;
 
 const DEFAULT_PORT: u16 = 7319;
 
@@ -47,25 +46,23 @@ async fn main() -> anyhow::Result<()> {
         .route("/", axum::routing::get(ws_handler))
         .with_state(state.clone());
 
-    info!("ymir ws-server listening on http://0.0.0.0:{port}");
-    info!("WebSocket endpoint: ws://0.0.0.0:{port}");
-    info!("Health endpoint: http://0.0.0.0:{port}/health");
+  info!("ymir ws-server listening on http://0.0.0.0:{port}");
+  info!("WebSocket endpoint: ws://0.0.0.0:{port}");
+  info!("Health endpoint: http://0.0.0.0:{port}/health");
 
-    let heartbeat_task = spawn_heartbeat(state.clone());
-    let shutdown_task = spawn_shutdown_handler(shutdown_tx);
+  let shutdown_task = spawn_shutdown_handler(shutdown_tx);
 
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await?;
-    axum::serve(listener, app)
-        .with_graceful_shutdown(async move {
-            // Wait for shutdown signal
-            let _ = shutdown_rx.changed().await;
-        })
-        .await?;
+  let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await?;
+  axum::serve(listener, app)
+    .with_graceful_shutdown(async move {
+      // Wait for shutdown signal
+      let _ = shutdown_rx.changed().await;
+    })
+    .await?;
 
-    heartbeat_task.abort();
-    shutdown_task.abort();
+  shutdown_task.abort();
 
-    info!("Server shutdown complete");
+  info!("Server shutdown complete");
     Ok(())
 }
 
@@ -74,33 +71,32 @@ async fn health_check() -> impl IntoResponse {
 }
 
 async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<Arc<AppState>>,
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+  ws: WebSocketUpgrade,
+  State(state): State<Arc<AppState>>,
 ) -> impl IntoResponse {
-    info!(%addr, "WebSocket connection attempt");
+  info!("WebSocket connection attempt");
 
-    ws.on_upgrade(move |socket| handle_socket(socket, state, addr))
+  ws.on_upgrade(move |socket| handle_socket(socket, state))
 }
 
-async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>, addr: SocketAddr) {
-    let client_id = uuid::Uuid::new_v4();
-    info!(%addr, client_id = %client_id, "WebSocket connection established");
+async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
+  let client_id = uuid::Uuid::new_v4();
+  info!(client_id = %client_id, "WebSocket connection established");
 
     let mut rx = state.connect(client_id).await;
 
-    let heartbeat_task = spawn_client_heartbeat(state.clone(), client_id);
+  let timeout_checker_task = spawn_client_timeout_checker(state.clone(), client_id);
 
-    let result = handle_connection_loop(&mut socket, &state, client_id, &mut rx).await;
+  let result = handle_connection_loop(&mut socket, &state, client_id, &mut rx).await;
 
-    heartbeat_task.abort();
+  timeout_checker_task.abort();
 
-    if result.is_err() {
-        error!(%addr, client_id = %client_id, "Connection error: {:?}", result);
-    }
+  if result.is_err() {
+    error!(client_id = %client_id, "Connection error: {:?}", result);
+  }
 
-    state.disconnect(client_id).await;
-    info!(%addr, client_id = %client_id, "WebSocket connection closed");
+  state.disconnect(client_id).await;
+  info!(client_id = %client_id, "WebSocket connection closed");
 }
 
 async fn handle_connection_loop(
@@ -177,93 +173,35 @@ async fn process_ws_message(
 }
 
 async fn send_ws_message(socket: &mut WebSocket, msg: ServerMessage) -> anyhow::Result<()> {
-    let bytes = rmp_serde::to_vec(&msg)?;
+    let bytes = rmp_serde::to_vec_named(&msg)?;
     socket.send(Message::Binary(bytes)).await?;
     Ok(())
 }
 
-fn spawn_heartbeat(state: Arc<AppState>) -> JoinHandle<()> {
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(HEARTBEAT_INTERVAL_SECS));
-        let mut shutdown_rx = state.shutdown_rx.clone();
 
-        loop {
-            tokio::select! {
-                _ = interval.tick() => {
-                    let clients = state.connected_clients().await;
-                    info!("Sending heartbeat to {} clients", clients.len());
-                    let ping_msg = Ping {
-                        timestamp: std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap()
-                            .as_secs()
-                    };
+fn spawn_client_timeout_checker(state: Arc<AppState>, client_id: uuid::Uuid) -> JoinHandle<()> {
+  tokio::spawn(async move {
+    let mut interval = tokio::time::interval(Duration::from_secs(5));
+    let mut shutdown_rx = state.shutdown_rx.clone();
 
-                    // Send Ping to all clients
-                    for client_id in &clients {
-                        let sent = state.send_to(
-                            *client_id,
-                            ServerMessage::new(ServerMessagePayload::Ping(ping_msg.clone()))
-                        ).await;
-                        if !sent {
-                            warn!(%client_id, "Failed to send Ping to client");
-                        }
-                    }
-
-                    // Wait for Pong response (check every second for up to HEARTBEAT_TIMEOUT_SECS)
-                    let mut timed_out_clients = Vec::new();
-                    for _ in 0..HEARTBEAT_TIMEOUT_SECS {
-                        tokio::time::sleep(Duration::from_secs(1)).await;
-                    }
-
-                    // Check which clients didn't respond
-                    for client_id in &clients {
-                        if state.is_client_timed_out(*client_id).await {
-                            warn!(%client_id, "Client timed out (no Pong received in 5s), disconnecting");
-                            timed_out_clients.push(*client_id);
-                        } else {
-                            debug!("Client {} still alive", client_id);
-                        }
-                    }
-
-                    for client_id in timed_out_clients {
-                        state.disconnect(client_id).await;
-                    }
-                }
-                Ok(_) = shutdown_rx.changed() => {
-                    if *shutdown_rx.borrow() {
-                        info!("Heartbeat task received shutdown signal");
-                        break;
-                    }
-                }
-            }
+    loop {
+      tokio::select! {
+        _ = interval.tick() => {
+          if state.is_client_timed_out(client_id).await {
+            warn!(%client_id, "Client timed out (no ping received in 30s), disconnecting");
+            state.disconnect(client_id).await;
+            break;
+          }
         }
-    })
-}
-
-fn spawn_client_heartbeat(state: Arc<AppState>, client_id: uuid::Uuid) -> JoinHandle<()> {
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(HEARTBEAT_INTERVAL_SECS));
-        let mut shutdown_rx = state.shutdown_rx.clone();
-
-        loop {
-            tokio::select! {
-                _ = interval.tick() => {
-                    if state.is_client_timed_out(client_id).await {
-                        warn!(%client_id, "Client timed out, disconnecting");
-                        state.disconnect(client_id).await;
-                        break;
-                    }
-                }
-                Ok(_) = shutdown_rx.changed() => {
-                    if *shutdown_rx.borrow() {
-                        debug!("Client heartbeat task for {} received shutdown", client_id);
-                        break;
-                    }
-                }
-            }
+        Ok(_) = shutdown_rx.changed() => {
+          if *shutdown_rx.borrow() {
+            debug!("Client timeout checker for {} received shutdown", client_id);
+            break;
+          }
         }
-    })
+      }
+    }
+  })
 }
 
 fn spawn_shutdown_handler(shutdown_tx: watch::Sender<bool>) -> JoinHandle<()> {

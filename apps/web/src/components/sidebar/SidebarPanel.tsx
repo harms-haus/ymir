@@ -1,10 +1,7 @@
 import { useCallback, useState, useRef, useEffect } from 'react'
 import { WorkspaceTree } from './WorkspaceTree'
-import {
-  useWorkspaceStore,
-  selectWorkspaces,
-  useStore,
-} from '../../store'
+import { useStore } from '../../store'
+import { createWorkspace } from '../../lib/api'
 
 interface CreateWorkspaceModalProps {
   isOpen: boolean
@@ -184,22 +181,14 @@ function CreateWorkspaceModal({ isOpen, onClose, onCreate }: CreateWorkspaceModa
 }
 
 export function SidebarPanel() {
-  const workspaces = useWorkspaceStore(selectWorkspaces)
-  const addWorkspace = useStore((state) => state.addWorkspace)
+  const workspaces = useStore((state) => state.workspaces)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   const handleCreateWorkspace = useCallback(
     (name: string, path: string) => {
-      const newWorkspace = {
-        id: `workspace-${Date.now()}`,
-        name,
-        rootPath: path,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      }
-      addWorkspace(newWorkspace)
+      createWorkspace(name, path)
     },
-    [addWorkspace]
+    []
   )
 
   const containerHeight = workspaces.length > 0 ? 400 : 200
