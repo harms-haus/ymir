@@ -4,8 +4,28 @@
 //! client-to-server requests, server-to-client responses, and bidirectional messages.
 //! All messages include a version header for protocol compatibility.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use uuid::Uuid;
+
+mod uuid_str {
+    use super::*;
+    use std::str::FromStr;
+
+    pub fn serialize<S>(uuid: &Uuid, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&uuid.hyphenated().to_string())
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Uuid, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Uuid::from_str(&s).map_err(serde::de::Error::custom)
+    }
+}
 
 /// Protocol version for message compatibility
 pub const PROTOCOL_VERSION: u32 = 1;
@@ -244,7 +264,9 @@ pub struct Ping {
 // Server response messages
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct StateSnapshot {
+    #[serde(with = "uuid_str")]
     pub request_id: Uuid,
     pub workspaces: Vec<WorkspaceData>,
     pub worktrees: Vec<WorktreeData>,
@@ -254,7 +276,9 @@ pub struct StateSnapshot {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkspaceData {
+    #[serde(with = "uuid_str")]
     pub id: Uuid,
     pub name: String,
     pub root_path: String,
@@ -267,8 +291,11 @@ pub struct WorkspaceData {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct WorktreeData {
+    #[serde(with = "uuid_str")]
     pub id: Uuid,
+    #[serde(with = "uuid_str")]
     pub workspace_id: Uuid,
     pub branch_name: String,
     pub path: String,
@@ -277,8 +304,11 @@ pub struct WorktreeData {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentSessionData {
+    #[serde(with = "uuid_str")]
     pub id: Uuid,
+    #[serde(with = "uuid_str")]
     pub worktree_id: Uuid,
     pub agent_type: String,
     pub acp_session_id: Option<String>,
@@ -287,6 +317,7 @@ pub struct AgentSessionData {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub enum AgentStatus {
     Working,
     Waiting,
@@ -294,8 +325,11 @@ pub enum AgentStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct TerminalSessionData {
+    #[serde(with = "uuid_str")]
     pub id: Uuid,
+    #[serde(with = "uuid_str")]
     pub worktree_id: Uuid,
     pub label: Option<String>,
     pub shell: String,
@@ -315,6 +349,7 @@ pub struct WorkspaceCreated {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct WorkspaceDeleted {
+    #[serde(with = "uuid_str")]
     pub workspace_id: Uuid,
 }
 
@@ -330,68 +365,90 @@ pub struct WorktreeCreated {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct WorktreeDeleted {
+    #[serde(with = "uuid_str")]
     pub worktree_id: Uuid,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct WorktreeListResult {
+    #[serde(with = "uuid_str")]
     pub workspace_id: Uuid,
     pub worktrees: Vec<WorktreeData>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct WorktreeStatus {
+    #[serde(with = "uuid_str")]
     pub worktree_id: Uuid,
     pub status: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentStatusUpdate {
+    #[serde(with = "uuid_str")]
     pub worktree_id: Uuid,
     pub status: AgentStatus,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentOutput {
+    #[serde(with = "uuid_str")]
     pub worktree_id: Uuid,
     pub output: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentPrompt {
+    #[serde(with = "uuid_str")]
     pub worktree_id: Uuid,
     pub prompt: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct TerminalOutput {
+    #[serde(with = "uuid_str")]
     pub session_id: Uuid,
     pub data: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct TerminalCreated {
+    #[serde(with = "uuid_str")]
     pub session_id: Uuid,
+    #[serde(with = "uuid_str")]
     pub worktree_id: Uuid,
     pub label: Option<String>,
     pub shell: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct FileContent {
+    #[serde(with = "uuid_str")]
     pub worktree_id: Uuid,
     pub path: String,
     pub content: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct GitStatusResult {
+    #[serde(with = "uuid_str")]
     pub worktree_id: Uuid,
     pub status: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct GitDiffResult {
+    #[serde(with = "uuid_str")]
     pub worktree_id: Uuid,
     pub file_path: Option<String>,
     pub diff: String,

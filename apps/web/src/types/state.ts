@@ -88,6 +88,7 @@ export interface AppState {
   activeWorktreeId: string | null;
   connectionStatus: ConnectionStatus;
   connectionError: string | null;
+  expandedWorkspaceIds: Set<string>;
 
   // Agent pane tabs (per worktree)
   agentTabs: Map<string, AgentTab[]>;
@@ -104,6 +105,7 @@ export interface AppState {
   setActiveWorktree: (worktreeId: string | null) => void;
   setConnectionStatus: (status: ConnectionStatus) => void;
   setConnectionError: (error: string | null) => void;
+  toggleWorkspaceExpanded: (workspaceId: string) => void;
   
   // State management from server messages
   stateFromSnapshot: (snapshot: {

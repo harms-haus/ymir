@@ -3,8 +3,7 @@
 //! Manages client connections, broadcasting, and message routing.
 
 use crate::protocol::ServerMessage;
-use crate::state::{AppState, ClientState, HEARTBEAT_TIMEOUT_SECS};
-use std::sync::Arc;
+use crate::state::{AppState, ClientState, CLIENT_INACTIVITY_TIMEOUT_SECS};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
@@ -17,7 +16,7 @@ impl AppState {
 
         let client_state = ClientState {
             tx,
-            last_pong: Instant::now(),
+            last_activity: Instant::now(),
         };
 
         self.clients.write().await.insert(client_id, client_state);
@@ -76,23 +75,23 @@ impl AppState {
         false
     }
 
-    /// Update the last pong timestamp for a client
-    pub async fn update_pong(&self, client_id: Uuid) -> bool {
+    /// Update the last activity timestamp for a client (called when Ping received)
+    pub async fn update_activity(&self, client_id: Uuid) -> bool {
         let mut clients = self.clients.write().await;
         if let Some(client_state) = clients.get_mut(&client_id) {
-            client_state.last_pong = Instant::now();
-            debug!(%client_id, "Updated pong timestamp");
+            client_state.last_activity = Instant::now();
+            debug!(%client_id, "Updated activity timestamp");
             return true;
         }
         false
     }
 
-    /// Check if a client has timed out (no pong within timeout period)
+    /// Check if a client has timed out (no ping within timeout period)
     pub async fn is_client_timed_out(&self, client_id: Uuid) -> bool {
         let clients = self.clients.read().await;
         if let Some(client_state) = clients.get(&client_id) {
-            let elapsed = client_state.last_pong.elapsed();
-            return elapsed > Duration::from_secs(HEARTBEAT_TIMEOUT_SECS);
+            let elapsed = client_state.last_activity.elapsed();
+            return elapsed > Duration::from_secs(CLIENT_INACTIVITY_TIMEOUT_SECS);
         }
         true
     }
@@ -106,13 +105,6 @@ impl AppState {
     pub async fn connected_clients(&self) -> Vec<Uuid> {
         self.clients.read().await.keys().copied().collect()
     }
-}
-
-/// Handle incoming pong message
-pub async fn handle_pong(state: Arc<AppState>, client_id: Uuid, timestamp: u64) {
-    info!(%client_id, timestamp, "Received pong from client");
-    let updated = state.update_pong(client_id).await;
-    info!(%client_id, "Pong updated: {}", updated);
 }
 
 #[cfg(test)]
@@ -190,19 +182,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_pong_updates_timestamp() {
+    async fn test_activity_updates_timestamp() {
         let state = AppState::new_test().await;
         let client_id = Uuid::new_v4();
 
         state.connect(client_id).await;
 
-        // Initially should not be timed out
         assert!(!state.is_client_timed_out(client_id).await);
 
-        // Update pong
-        assert!(state.update_pong(client_id).await);
+        assert!(state.update_activity(client_id).await);
 
-        // Still not timed out
         assert!(!state.is_client_timed_out(client_id).await);
     }
 
@@ -211,14 +200,13 @@ mod tests {
         let state = AppState::new_test().await;
         let client_id = Uuid::new_v4();
 
-        // Manually insert a client with old timestamp
         let (tx, _rx) = mpsc::channel(256);
-        let old_time = Instant::now() - Duration::from_secs(HEARTBEAT_TIMEOUT_SECS + 1);
+        let old_time = Instant::now() - Duration::from_secs(CLIENT_INACTIVITY_TIMEOUT_SECS + 1);
         state.clients.write().await.insert(
             client_id,
             ClientState {
                 tx,
-                last_pong: old_time,
+                last_activity: old_time,
             },
         );
 

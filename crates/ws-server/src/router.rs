@@ -1,6 +1,5 @@
 //! Message routing and dispatch for WebSocket server
 
-use crate::hub::handle_pong;
 use crate::protocol::{
     ClientMessage, ClientMessagePayload, Error, ServerMessage, ServerMessagePayload,
 };
@@ -15,13 +14,15 @@ pub async fn route_message(
     message: ClientMessage,
 ) -> Option<ServerMessage> {
     let response = match message.payload {
-        ClientMessagePayload::Ping(ping) => Some(ServerMessage::new(ServerMessagePayload::Pong(
-            crate::protocol::Pong {
-                timestamp: ping.timestamp,
-            },
-        ))),
-        ClientMessagePayload::Pong(pong) => {
-            handle_pong(state, client_id, pong.timestamp).await;
+        ClientMessagePayload::Ping(ping) => {
+            state.update_activity(client_id).await;
+            Some(ServerMessage::new(ServerMessagePayload::Pong(
+                crate::protocol::Pong {
+                    timestamp: ping.timestamp,
+                },
+            )))
+        }
+        ClientMessagePayload::Pong(_) => {
             None
         }
 

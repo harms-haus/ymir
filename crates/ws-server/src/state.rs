@@ -12,9 +12,8 @@ use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, watch, RwLock};
 use uuid::Uuid;
 
-/// Heartbeat configuration
-pub const HEARTBEAT_INTERVAL_SECS: u64 = 30;
-pub const HEARTBEAT_TIMEOUT_SECS: u64 = 5;
+/// Disconnect clients inactive for this many seconds
+pub const CLIENT_INACTIVITY_TIMEOUT_SECS: u64 = 30;
 
 /// In-memory state for a workspace
 #[derive(Debug, Clone)]
@@ -60,8 +59,8 @@ pub struct TerminalState {
 pub struct ClientState {
     /// Channel to send messages to this client
     pub tx: mpsc::Sender<ServerMessage>,
-    /// Last pong timestamp (for heartbeat tracking)
-    pub last_pong: std::time::Instant,
+    /// Last activity timestamp (updated when Ping received)
+    pub last_activity: std::time::Instant,
 }
 
 /// The central application state shared across all handlers
@@ -141,9 +140,8 @@ mod tests {
         assert!(state.clients.read().await.is_empty());
     }
 
-    #[tokio::test]
-    async fn test_heartbeat_constants() {
-        assert_eq!(HEARTBEAT_INTERVAL_SECS, 30);
-        assert_eq!(HEARTBEAT_TIMEOUT_SECS, 5);
-    }
+#[tokio::test]
+  async fn test_client_inactivity_timeout() {
+    assert_eq!(CLIENT_INACTIVITY_TIMEOUT_SECS, 30);
+  }
 }

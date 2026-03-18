@@ -1,15 +1,8 @@
 import { useCallback, useMemo } from 'react'
 import { StatusDot } from './StatusDot'
 import { useAgentStatus, useWorkspaceAgentStatusSummary } from '../../hooks/useAgentStatus'
-import {
-  useWorkspaceStore,
-  useStore,
-  Workspace,
-  Worktree,
-  selectWorkspaces,
-  selectExpandedWorkspaceIds,
-  selectActiveWorktreeId,
-} from '../../store'
+import { useStore } from '../../store'
+import type { WorkspaceState, WorktreeState } from '../../types/state'
 import { useContextMenu, type ContextMenuCallbacks } from '../../hooks/useContextMenu'
 import { ContextMenu, type ContextMenuItem } from '../ui/ContextMenu'
 import type { Worktree as ProtocolWorktree } from '../../types/protocol'
@@ -20,19 +13,19 @@ export interface TreeNode {
   id: string
   type: TreeNodeType
   depth: number
-  data: Workspace | Worktree
+  data: WorkspaceState | WorktreeState
   parentId?: string
 }
 
 interface WorkspaceRowProps {
-  workspace: Workspace
+  workspace: WorkspaceState
   isExpanded: boolean
   onToggle: () => void
   onNewWorktree: () => void
 }
 
 interface WorktreeRowProps {
-  worktree: Worktree
+  worktree: WorktreeState
   isSelected: boolean
   onSelect: () => void
 }
@@ -44,7 +37,7 @@ function WorkspaceRow({
   onNewWorktree,
   onContextMenu,
 }: WorkspaceRowProps & { onContextMenu?: (e: React.MouseEvent) => void }) {
-  const worktrees = useWorkspaceStore((state) => state.worktrees)
+  const worktrees = useStore((state) => state.worktrees)
   const protocolWorktrees: ProtocolWorktree[] = worktrees.map(wt => ({
     id: wt.id,
     workspaceId: wt.workspaceId,
@@ -247,16 +240,12 @@ export interface WorkspaceTreeProps {
 }
 
 export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
-  const workspaces = useWorkspaceStore(selectWorkspaces)
-  const expandedIds = useWorkspaceStore(selectExpandedWorkspaceIds)
-  const activeWorktreeId = useWorkspaceStore(selectActiveWorktreeId)
-  const toggleWorkspaceExpanded = useWorkspaceStore(
-    (state) => state.toggleWorkspaceExpanded
-  )
-  const setActiveWorktree = useStore(
-    (state) => state.setActiveWorktree
-  )
-  const worktrees = useWorkspaceStore((state) => state.worktrees)
+  const workspaces = useStore((state) => state.workspaces)
+  const expandedIds = useStore((state) => state.expandedWorkspaceIds)
+  const activeWorktreeId = useStore((state) => state.activeWorktreeId)
+  const toggleWorkspaceExpanded = useStore((state) => state.toggleWorkspaceExpanded)
+  const setActiveWorktree = useStore((state) => state.setActiveWorktree)
+  const worktrees = useStore((state) => state.worktrees)
 
   const contextMenuItems: ContextMenuItem[] = [
     {
@@ -362,7 +351,7 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
       <div style={{ height, overflow: 'auto' }}>
         {flattenedNodes.map((node) => {
           if (node.type === 'workspace') {
-            const workspace = node.data as Workspace
+            const workspace = node.data as WorkspaceState
             const isExpanded = expandedIds.has(workspace.id)
 
             return (
@@ -380,7 +369,7 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
             )
           }
 
-          const worktree = node.data as Worktree
+          const worktree = node.data as WorktreeState
           const isSelected = activeWorktreeId === worktree.id
 
           return (

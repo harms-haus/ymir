@@ -54,6 +54,19 @@
   --spacing-xl: 32px;
 }
 
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-sans);
+}
+
 /* Status dot animations */
 @keyframes status-pulse {
   0%, 100% { opacity: 1; }

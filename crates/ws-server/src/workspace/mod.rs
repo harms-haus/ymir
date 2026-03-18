@@ -39,23 +39,36 @@ fn workspace_data_from_db(ws: DbWorkspace) -> Result<WorkspaceData> {
     })
 }
 
+/// Expand tilde (~) to home directory in a path
+fn expand_tilde(path: &str) -> String {
+    if path.starts_with("~/") {
+        if let Some(home) = std::env::var_os("HOME") {
+            return path.replacen("~", &home.to_string_lossy(), 1);
+        }
+    } else if path == "~" {
+        if let Some(home) = std::env::var_os("HOME") {
+            return home.to_string_lossy().to_string();
+        }
+    }
+    path.to_string()
+}
+
 /// Create a new workspace and initialize git repository if needed
 pub async fn create(state: Arc<AppState>, msg: WorkspaceCreate) -> Result<WorkspaceCreated> {
-    // Validate root path exists
-    let root_path = Path::new(&msg.root_path);
+    let expanded_root_path = expand_tilde(&msg.root_path);
+    let root_path = Path::new(&expanded_root_path);
     if !root_path.exists() {
         anyhow::bail!("Root path does not exist: {}", msg.root_path);
     }
 
-    // Initialize git repository if it doesn't exist
     if root_path.join(".git").exists() {
-        let root_path = msg.root_path.clone();
+        let root_path = expanded_root_path.clone();
         tokio::task::spawn_blocking(move || Repository::open(&root_path))
             .await
             .context("Git repository open task failed")?
             .context("Failed to open existing git repository")?;
     } else {
-        let root_path = msg.root_path.clone();
+        let root_path = expanded_root_path.clone();
         tokio::task::spawn_blocking(move || Repository::init(&root_path))
             .await
             .context("Git repository init task failed")?
@@ -70,7 +83,7 @@ pub async fn create(state: Arc<AppState>, msg: WorkspaceCreate) -> Result<Worksp
     let workspace = DbWorkspace {
         id: workspace_id.to_string(),
         name: msg.name.clone(),
-        root_path: msg.root_path.clone(),
+        root_path: expanded_root_path.clone(),
         color: msg.color.unwrap_or_else(|| "#3B82F6".to_string()),
         icon: msg.icon.unwrap_or_else(|| "folder".to_string()),
         worktree_base_dir: msg
@@ -109,7 +122,7 @@ pub async fn create(state: Arc<AppState>, msg: WorkspaceCreate) -> Result<Worksp
         message: format!("Created workspace: {}", workspace.name),
         metadata_json: serde_json::json!({
             "workspace_id": workspace_id.to_string(),
-            "root_path": msg.root_path,
+            "root_path": expanded_root_path,
             "has_git_repo": true
         })
         .to_string(),
