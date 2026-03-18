@@ -60,9 +60,15 @@ pub async fn show_notification(
         .map_err(|e| format!("Failed to check notification permission: {}", e))?;
 
     if permission_state != tauri_plugin_notification::PermissionState::Granted {
-        app.notification()
+        let new_permission_state = app
+            .notification()
             .request_permission()
             .map_err(|e| format!("Failed to request notification permission: {}", e))?;
+        
+        // Only proceed if permission was actually granted
+        if new_permission_state != tauri_plugin_notification::PermissionState::Granted {
+            return Err("Notification permission denied".to_string());
+        }
     }
 
     app.notification()

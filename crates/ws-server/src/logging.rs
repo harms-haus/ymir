@@ -32,6 +32,20 @@ struct BufferedLogEntry {
 }
 
 /// Activity logger that buffers tracing events and flushes to database
+///
+/// # Graceful Shutdown Required
+///
+/// This logger buffers log entries in memory before persisting to the database.
+/// To avoid data loss, you **must** call `shutdown().await` before dropping this
+/// struct. The `Drop` implementation aborts the background flush task but does
+/// not flush remaining entries.
+///
+/// ```ignore
+/// let mut logger = ActivityLogger::new(db);
+/// // ... use logger ...
+/// logger.shutdown().await; // Flush remaining entries
+/// // Now safe to drop
+/// ```
 #[derive(Debug)]
 pub struct ActivityLogger {
     /// Buffer for pending log entries
@@ -126,17 +140,29 @@ impl ActivityLogger {
         }
 
         let count = entries.len();
+        let mut successfully_flushed = 0;
 
-        for entry in entries {
+        for (idx, entry) in entries.iter().enumerate() {
             let db_entry = ActivityLogEntry {
                 id: None,
-                timestamp: entry.timestamp,
-                level: entry.level,
-                source: entry.source,
-                message: entry.message,
-                metadata_json: entry.metadata_json,
+                timestamp: entry.timestamp.clone(),
+                level: entry.level.clone(),
+                source: entry.source.clone(),
+                message: entry.message.clone(),
+                metadata_json: entry.metadata_json.clone(),
             };
-            db.log_activity(&db_entry).await?;
+            match db.log_activity(&db_entry).await {
+                Ok(_) => successfully_flushed += 1,
+                Err(_) => {
+                    // Re-queue failed entry and all remaining entries in correct order
+                    let mut buffer = buffer.lock().await;
+                    // Add remaining entries in reverse order to preserve original order
+                    for remaining_entry in entries[idx..].iter().rev() {
+                        buffer.push_front(remaining_entry.clone());
+                    }
+                    return Ok(successfully_flushed);
+                }
+            }
         }
 
         Ok(count)
@@ -158,6 +184,10 @@ impl ActivityLogger {
 }
 
 impl Drop for ActivityLogger {
+    /// Aborts the background flush task without flushing remaining entries.
+    ///
+    /// **Warning**: This does not flush buffered log entries. Call `shutdown().await`
+    /// before dropping to ensure all entries are persisted.
     fn drop(&mut self) {
         if let Some(task) = self.flush_task.take() {
             task.abort();
@@ -252,19 +282,27 @@ impl<S: Subscriber> Layer<S> for ActivityLayer {
         // Get source from module path
         let source = metadata.module_path().map(ToString::to_string);
 
-        // Spawn a task to log asynchronously (avoid blocking the tracing system)
+        // Spawn a task to log asynchronously, handling the case where no runtime exists
         let logger = self.logger.clone();
         let level = level.to_string();
         let source = source.clone();
         let log_message = log_message.clone();
         let metadata_json = metadata_json.clone();
 
-        tokio::spawn(async move {
-            if let Some(l) = logger.lock().await.as_ref() {
-                l.log(&level, source.as_deref(), &log_message, &metadata_json)
-                    .await;
+        match tokio::runtime::Handle::try_current() {
+            Ok(handle) => {
+                handle.spawn(async move {
+                    if let Some(l) = logger.lock().await.as_ref() {
+                        l.log(&level, source.as_deref(), &log_message, &metadata_json)
+                            .await;
+                    }
+                });
             }
-        });
+            Err(_) => {
+                // No Tokio runtime available; drop the log entry silently
+                // This can happen during shutdown or in non-async contexts
+            }
+        }
     }
 }
 
@@ -333,13 +371,17 @@ impl tracing::field::Visit for EventVisitor<'_> {
     }
 
     fn record_i128(&mut self, field: &tracing::field::Field, value: i128) {
-        self.fields
-            .insert(field.name().to_string(), serde_json::json!(value));
+        self.fields.insert(
+            field.name().to_string(),
+            serde_json::Value::String(value.to_string()),
+        );
     }
 
     fn record_u128(&mut self, field: &tracing::field::Field, value: u128) {
-        self.fields
-            .insert(field.name().to_string(), serde_json::json!(value));
+        self.fields.insert(
+            field.name().to_string(),
+            serde_json::Value::String(value.to_string()),
+        );
     }
 }
 
@@ -424,8 +466,9 @@ mod tests {
 
         logger.log("info", Some("test"), "Test message", "{}").await;
 
-        let count = logger.flush().await.expect("Failed to flush");
-        assert_eq!(count, 1);
+        // Unwrap from Arc to call shutdown() which requires &mut self
+        let mut logger = Arc::try_unwrap(logger).expect("Logger should have single reference");
+        logger.shutdown().await;
 
         let entries = db.query_activity_log(None, None).await.expect("Failed to query");
         assert_eq!(entries.len(), 1);

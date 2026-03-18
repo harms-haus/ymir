@@ -30,6 +30,7 @@ export interface Error {
   code: string;
   message: string;
   details?: string;
+  requestId?: string;
 }
 
 export const ErrorCodes = {
@@ -165,6 +166,7 @@ export interface WorkspaceCreate {
 export interface WorkspaceDelete {
   type: 'WorkspaceDelete';
   workspaceId: string;
+  requestId?: string;
 }
 
 export interface WorkspaceRename {
@@ -180,6 +182,7 @@ export interface WorkspaceUpdate {
   icon?: string;
   worktreeBaseDir?: string;
   settings?: string;
+  requestId?: string;
 }
 
 // Worktree messages
@@ -188,6 +191,8 @@ export interface WorktreeCreate {
   workspaceId: string;
   branchName: string;
   agentType?: string;
+  requestId?: string;
+  useExistingBranch?: boolean;
 }
 
 export interface WorktreeDelete {

@@ -7,15 +7,18 @@ import React from 'react';
 import { Skeleton } from '../ui/Skeleton';
 
 export const SidebarSkeleton: React.FC = () => {
-  return (
-    <div
-      style={{
-        padding: '16px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '12px',
-      }}
-    >
+ return (
+ <div
+ role="status"
+ aria-busy="true"
+ aria-label="Loading sidebar"
+ style={{
+ padding: '16px',
+ display: 'flex',
+ flexDirection: 'column',
+ gap: '12px',
+ }}
+ >
       {/* Workspace 1 */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

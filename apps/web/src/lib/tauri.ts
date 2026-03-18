@@ -19,14 +19,18 @@ export async function copyToClipboard(text: string): Promise<void> {
 }
 
 export async function showNotification(title: string, body: string): Promise<void> {
-  if (isTauri) {
-    await invoke('show_notification', { title, body });
-  } else if ('Notification' in window) {
-    const permission = await Notification.requestPermission();
-    if (permission === 'granted') {
-      new Notification(title, { body });
-    }
-  }
+ if (isTauri) {
+ await invoke('show_notification', { title, body });
+ } else if ('Notification' in window) {
+ if (Notification.permission === 'default') {
+ const permission = await Notification.requestPermission();
+ if (permission === 'granted') {
+ new Notification(title, { body });
+ }
+ } else if (Notification.permission === 'granted') {
+ new Notification(title, { body });
+ }
+ }
 }
 
 export async function pickDirectory(): Promise<string | null> {

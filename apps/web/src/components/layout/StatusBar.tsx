@@ -3,34 +3,40 @@ import { useStore } from '../../store'
 export function StatusBar() {
   const connectionStatus = useStore((state) => state.connectionStatus)
 
-  const getStatusConfig = () => {
-    switch (connectionStatus) {
-      case 'open':
-        return {
-          dotColor: 'hsl(var(--status-working))',
-          text: 'Online',
-          icon: '●',
-        }
-      case 'closed':
-        return {
-          dotColor: 'hsl(var(--status-idle))',
-          text: 'Offline',
-          icon: '●',
-        }
-      case 'reconnecting':
-        return {
-          dotColor: 'hsl(var(--status-waiting))',
-          text: 'Reconnecting...',
-          icon: '⟳',
-        }
-      case 'connecting':
-        return {
-          dotColor: 'hsl(var(--status-waiting))',
-          text: 'Connecting...',
-          icon: '⟳',
-        }
-    }
-  }
+ const getStatusConfig = () => {
+ switch (connectionStatus) {
+ case 'open':
+ return {
+ dotColor: 'hsl(var(--status-working))',
+ text: 'Online',
+ icon: '●',
+ }
+ case 'closed':
+ return {
+ dotColor: 'hsl(var(--status-idle))',
+ text: 'Offline',
+ icon: '●',
+ }
+ case 'reconnecting':
+ return {
+ dotColor: 'hsl(var(--status-waiting))',
+ text: 'Reconnecting...',
+ icon: '⟳',
+ }
+ case 'connecting':
+ return {
+ dotColor: 'hsl(var(--status-waiting))',
+ text: 'Connecting...',
+ icon: '⟳',
+ }
+ default:
+ return {
+ dotColor: 'hsl(var(--status-idle))',
+ text: 'Unknown',
+ icon: '●',
+ }
+ }
+ }
 
   const config = getStatusConfig()
   const isSpinning = connectionStatus === 'connecting' || connectionStatus === 'reconnecting'

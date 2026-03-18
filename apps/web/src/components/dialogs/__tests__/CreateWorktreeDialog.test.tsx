@@ -560,12 +560,32 @@ describe('CreateWorktreeDialog', () => {
     it('clears selected agent when dialog opens', () => {
       const { rerender } = render(
         <CreateWorktreeDialog
+          open={true}
+          onOpenChange={mockOnOpenChange}
+          workspaceId="workspace-1"
+        />
+      );
+
+      // Select an agent
+      const claudeOption = screen.getByText('Claude').closest('label');
+      fireEvent.click(claudeOption!);
+
+      // Verify agent is selected
+      const branchInput = screen.getByPlaceholderText('feature/my-branch');
+      fireEvent.change(branchInput, { target: { value: 'feature/test' } });
+      let createButton = screen.getByRole('button', { name: /create/i });
+      expect(createButton).not.toBeDisabled();
+
+      // Close the dialog
+      rerender(
+        <CreateWorktreeDialog
           open={false}
           onOpenChange={mockOnOpenChange}
           workspaceId="workspace-1"
         />
       );
 
+      // Reopen the dialog
       rerender(
         <CreateWorktreeDialog
           open={true}
@@ -574,10 +594,8 @@ describe('CreateWorktreeDialog', () => {
         />
       );
 
-      const branchInput = screen.getByPlaceholderText('feature/my-branch');
-      fireEvent.change(branchInput, { target: { value: 'feature/test' } });
-
-      const createButton = screen.getByRole('button', { name: /create/i });
+      // Verify agent selection is cleared - Create button should be disabled
+      createButton = screen.getByRole('button', { name: /create/i });
       expect(createButton).toBeDisabled();
     });
   });

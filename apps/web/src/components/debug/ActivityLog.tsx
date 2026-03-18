@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 interface LogEntry {
   id: number;
@@ -59,15 +59,11 @@ export function ActivityLog() {
     return () => clearInterval(interval);
   }, [isVisible, isDev]);
 
-  const scrollToBottom = useCallback(() => {
+  useEffect(() => {
     if (containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
   }, []);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [scrollToBottom]);
 
   const getLevelColor = (level: string) => {
     switch (level) {

@@ -262,7 +262,7 @@ impl PtyManager {
         self.sessions.lock().unwrap().get(&session_id).cloned()
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip(self, data))]
     pub fn write(&self, session_id: Uuid, data: &[u8]) -> Result<()> {
         let session = self
             .sessions

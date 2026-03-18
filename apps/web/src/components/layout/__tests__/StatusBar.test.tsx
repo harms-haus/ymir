@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { StatusBar } from '../StatusBar'
 import { useStore } from '../../../store'
@@ -57,15 +57,6 @@ describe('StatusBar', () => {
       expect(statusBar.style.alignItems).toBe('center')
       expect(statusBar.style.height).toBe('24px')
       expect(statusBar.style.fontSize).toBe('11px')
-    })
-
-    it('applies spin animation to icon in connecting state', () => {
-      vi.mocked(useStore).mockImplementation((selector) => selector({ connectionStatus: 'connecting' }))
-      render(<StatusBar />)
-
-      const icon = screen.getByText('⟳')
-      expect(icon).toBeInTheDocument()
-      expect(icon.style.animation).toBe('spin 1s linear infinite')
     })
 
     it('applies spin animation to icon in connecting state', () => {
