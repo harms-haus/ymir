@@ -35,10 +35,12 @@ export function CreateWorktreeDialog({ open, onOpenChange, workspaceId }: Create
   const [useExistingBranch, setUseExistingBranch] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<AgentOption | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isBranchInputFocused, setIsBranchInputFocused] = useState(false);
 
   const submitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unsubscribeCreatedRef = useRef<(() => void) | null>(null);
   const unsubscribeErrorRef = useRef<(() => void) | null>(null);
+  const currentRequestIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -96,6 +98,9 @@ export function CreateWorktreeDialog({ open, onOpenChange, workspaceId }: Create
 
     setIsSubmitting(true);
 
+    const requestId = `create-worktree-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    currentRequestIdRef.current = requestId;
+
     try {
       const client = getWebSocketClient();
 
@@ -121,10 +126,14 @@ export function CreateWorktreeDialog({ open, onOpenChange, workspaceId }: Create
             clearTimeout(submitTimeoutRef.current);
             submitTimeoutRef.current = null;
           }
+          currentRequestIdRef.current = null;
         }
       });
 
       const unsubscribeError = client.onMessage('Error', (msg: ErrorMessage) => {
+        if (msg.requestId !== requestId) {
+          return;
+        }
         setIsSubmitting(false);
         addNotification({
           level: 'error',
@@ -142,6 +151,7 @@ export function CreateWorktreeDialog({ open, onOpenChange, workspaceId }: Create
           clearTimeout(submitTimeoutRef.current);
           submitTimeoutRef.current = null;
         }
+        currentRequestIdRef.current = null;
       });
 
       unsubscribeCreatedRef.current = unsubscribeCreated;
@@ -152,6 +162,8 @@ export function CreateWorktreeDialog({ open, onOpenChange, workspaceId }: Create
         workspaceId,
         branchName: branchName.trim(),
         agentType: selectedAgent === 'none' ? undefined : selectedAgent,
+        requestId,
+        useExistingBranch,
       };
 
       client.send(message);
@@ -180,7 +192,7 @@ export function CreateWorktreeDialog({ open, onOpenChange, workspaceId }: Create
         message: error instanceof Error ? error.message : 'Failed to create worktree',
       });
     }
-  }, [workspaceId, branchName, selectedAgent, onOpenChange, addNotification, setActiveWorktree]);
+  }, [workspaceId, branchName, selectedAgent, useExistingBranch, onOpenChange, addNotification, setActiveWorktree]);
 
   const handleCancel = useCallback(() => {
     onOpenChange(false);
@@ -279,6 +291,8 @@ export function CreateWorktreeDialog({ open, onOpenChange, workspaceId }: Create
                 type="text"
                 value={branchName}
                 onChange={(e) => setBranchName(e.target.value)}
+                onFocus={() => setIsBranchInputFocused(true)}
+                onBlur={() => setIsBranchInputFocused(false)}
                 placeholder="feature/my-branch"
                 disabled={isSubmitting}
                 required
@@ -286,12 +300,14 @@ export function CreateWorktreeDialog({ open, onOpenChange, workspaceId }: Create
                   width: '100%',
                   padding: '10px 12px',
                   borderRadius: '6px',
-                  border: '1px solid hsl(var(--border))',
+                  border: `1px solid ${isBranchInputFocused ? 'hsl(var(--ring))' : 'hsl(var(--border))'}`,
                   backgroundColor: 'hsl(var(--input))',
                   color: 'hsl(var(--foreground))',
                   fontSize: '14px',
                   boxSizing: 'border-box',
                   outline: 'none',
+                  boxShadow: isBranchInputFocused ? `0 0 0 2px hsl(var(--ring) / 0.2)` : 'none',
+                  transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
                 }}
               />
             </div>

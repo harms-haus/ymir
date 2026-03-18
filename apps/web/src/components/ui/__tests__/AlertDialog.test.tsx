@@ -105,25 +105,19 @@ describe('AlertDialog', () => {
     expect(icon).toBeInTheDocument();
   });
 
-  it('should apply default variant styling to confirm button', () => {
-    render(<AlertDialog {...defaultProps} variant="default" />);
+ it('should apply default variant styling to confirm button', () => {
+ render(<AlertDialog {...defaultProps} variant="default" />);
 
-    const confirmButton = screen.getByText('Confirm');
-    expect(confirmButton).toHaveStyle({
-      backgroundColor: 'hsl(var(--primary))',
-      color: 'hsl(var(--primary-foreground))',
-    });
-  });
+ const confirmButton = screen.getByText('Confirm');
+ expect(confirmButton).toHaveClass('alert-dialog-confirm-default');
+ });
 
-  it('should apply destructive variant styling to confirm button', () => {
-    render(<AlertDialog {...defaultProps} variant="destructive" />);
+ it('should apply destructive variant styling to confirm button', () => {
+ render(<AlertDialog {...defaultProps} variant="destructive" />);
 
-    const confirmButton = screen.getByText('Confirm');
-    expect(confirmButton).toHaveStyle({
-      backgroundColor: 'hsl(var(--destructive))',
-      color: 'hsl(var(--destructive-foreground))',
-    });
-  });
+ const confirmButton = screen.getByText('Confirm');
+ expect(confirmButton).toHaveClass('alert-dialog-confirm-destructive');
+ });
 
   it('should default to default variant when variant not specified', () => {
     render(<AlertDialog {...defaultProps} />);

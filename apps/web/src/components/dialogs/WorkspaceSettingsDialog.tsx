@@ -57,6 +57,8 @@ export function WorkspaceSettingsDialog({
   const deleteUnsubscribeRef = useRef<(() => void) | null>(null);
   const updateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const deleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const errorUnsubscribeRef = useRef<(() => void) | null>(null);
+  const currentRequestIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (open && workspace) {
@@ -77,6 +79,10 @@ export function WorkspaceSettingsDialog({
       if (deleteUnsubscribeRef.current) {
         deleteUnsubscribeRef.current();
         deleteUnsubscribeRef.current = null;
+      }
+      if (errorUnsubscribeRef.current) {
+        errorUnsubscribeRef.current();
+        errorUnsubscribeRef.current = null;
       }
       if (updateTimeoutRef.current) {
         clearTimeout(updateTimeoutRef.current);
@@ -107,6 +113,9 @@ export function WorkspaceSettingsDialog({
 
     setIsSubmitting(true);
 
+    const requestId = `workspace-update-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    currentRequestIdRef.current = requestId;
+
     try {
       const client = getWebSocketClient();
 
@@ -116,6 +125,7 @@ export function WorkspaceSettingsDialog({
         color,
         icon,
         worktreeBaseDir,
+        requestId,
       };
 
       client.send(message);
@@ -133,16 +143,24 @@ export function WorkspaceSettingsDialog({
             updateUnsubscribeRef.current();
             updateUnsubscribeRef.current = null;
           }
+          if (errorUnsubscribeRef.current) {
+            errorUnsubscribeRef.current();
+            errorUnsubscribeRef.current = null;
+          }
           if (updateTimeoutRef.current) {
             clearTimeout(updateTimeoutRef.current);
             updateTimeoutRef.current = null;
           }
+          currentRequestIdRef.current = null;
         }
       });
 
       updateUnsubscribeRef.current = unsubscribe;
 
-      client.onMessage('Error', (msg: ErrorMessage) => {
+      const errorUnsubscribe = client.onMessage('Error', (msg: ErrorMessage) => {
+        if (msg.requestId !== requestId) {
+          return;
+        }
         setIsSubmitting(false);
         addNotification({
           level: 'error',
@@ -153,11 +171,18 @@ export function WorkspaceSettingsDialog({
           updateUnsubscribeRef.current();
           updateUnsubscribeRef.current = null;
         }
+        if (errorUnsubscribeRef.current) {
+          errorUnsubscribeRef.current();
+          errorUnsubscribeRef.current = null;
+        }
         if (updateTimeoutRef.current) {
           clearTimeout(updateTimeoutRef.current);
           updateTimeoutRef.current = null;
         }
+        currentRequestIdRef.current = null;
       });
+
+      errorUnsubscribeRef.current = errorUnsubscribe;
 
       updateTimeoutRef.current = setTimeout(() => {
         setIsSubmitting(false);
@@ -205,12 +230,16 @@ export function WorkspaceSettingsDialog({
 
     setIsSubmitting(true);
 
+    const requestId = `workspace-delete-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    currentRequestIdRef.current = requestId;
+
     try {
       const client = getWebSocketClient();
 
       client.send({
         type: 'WorkspaceDelete',
         workspaceId,
+        requestId,
       });
 
       const unsubscribe = client.onMessage('WorkspaceDeleted', (msg: WorkspaceDeleted) => {
@@ -226,16 +255,24 @@ export function WorkspaceSettingsDialog({
             deleteUnsubscribeRef.current();
             deleteUnsubscribeRef.current = null;
           }
+          if (errorUnsubscribeRef.current) {
+            errorUnsubscribeRef.current();
+            errorUnsubscribeRef.current = null;
+          }
           if (deleteTimeoutRef.current) {
             clearTimeout(deleteTimeoutRef.current);
             deleteTimeoutRef.current = null;
           }
+          currentRequestIdRef.current = null;
         }
       });
 
       deleteUnsubscribeRef.current = unsubscribe;
 
-      client.onMessage('Error', (msg: ErrorMessage) => {
+      const errorUnsubscribe = client.onMessage('Error', (msg: ErrorMessage) => {
+        if (msg.requestId !== requestId) {
+          return;
+        }
         setIsSubmitting(false);
         addNotification({
           level: 'error',
@@ -246,11 +283,18 @@ export function WorkspaceSettingsDialog({
           deleteUnsubscribeRef.current();
           deleteUnsubscribeRef.current = null;
         }
+        if (errorUnsubscribeRef.current) {
+          errorUnsubscribeRef.current();
+          errorUnsubscribeRef.current = null;
+        }
         if (deleteTimeoutRef.current) {
           clearTimeout(deleteTimeoutRef.current);
           deleteTimeoutRef.current = null;
         }
+        currentRequestIdRef.current = null;
       });
+
+      errorUnsubscribeRef.current = errorUnsubscribe;
 
       deleteTimeoutRef.current = setTimeout(() => {
         setIsSubmitting(false);
@@ -357,7 +401,7 @@ export function WorkspaceSettingsDialog({
                 id="ws-name"
                 type="text"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                readOnly
                 disabled={isSubmitting}
                 style={{
                   width: '100%',

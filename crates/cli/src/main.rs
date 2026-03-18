@@ -9,8 +9,6 @@ use tracing_subscriber::EnvFilter;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const WS_PORT_DEFAULT: u16 = 7319;
 const VITE_PORT_DEFAULT: u16 = 5173;
-const DB_PATH: &str = "~/.ymir/ymir.db";
-const CONFIG_PATH: &str = "~/.ymir/config.toml";
 const LOG_LEVEL: &str = "info";
 const GRACEFUL_TIMEOUT_SECS: u64 = 5;
 
@@ -26,13 +24,24 @@ enum Commands {
     /// Launch all ymir servers (WS server + Vite dev server in --dev mode)
     Serve(ServeArgs),
     /// Kill all running ymir servers
-    Kill,
+    Kill(KillArgs),
     /// Print current configuration
     Config,
     /// Check if ymir server is running
     Status,
     /// Run diagnostic checks
     Doctor,
+}
+
+#[derive(Args)]
+struct KillArgs {
+    /// Override WebSocket server port to kill
+    #[arg(short, long)]
+    port: Option<u16>,
+
+    /// Override Vite dev server port to kill
+    #[arg(long)]
+    vite_port: Option<u16>,
 }
 
 #[derive(Args)]
@@ -44,6 +53,10 @@ struct ServeArgs {
     /// Override WebSocket server port
     #[arg(short, long, default_value_t = WS_PORT_DEFAULT)]
     port: u16,
+
+    /// Override web app directory path (for development or custom layouts)
+    #[arg(long, env = "YMIR_WEB_APP_PATH")]
+    web_app_path: Option<String>,
 }
 
 #[tokio::main]
@@ -56,11 +69,11 @@ async fn main() -> anyhow::Result<ExitCode> {
 
     match cli.command {
         Some(Commands::Serve(args)) => serve(args).await,
-        Some(Commands::Kill) => kill().await,
+        Some(Commands::Kill(args)) => kill(args).await,
         Some(Commands::Config) => config(),
         Some(Commands::Status) => status().await,
         Some(Commands::Doctor) => doctor().await,
-        None => serve(ServeArgs { dev: false, port: WS_PORT_DEFAULT }).await,
+        None => serve(ServeArgs { dev: false, port: WS_PORT_DEFAULT, web_app_path: None }).await,
     }
 }
 
@@ -86,14 +99,35 @@ async fn serve(args: ServeArgs) -> anyhow::Result<ExitCode> {
     }
 
     // Find ws-server binary
-    let ws_server_path = std::env::current_exe()?
+    let exe_dir = std::env::current_exe()?
         .parent()
         .ok_or_else(|| anyhow::anyhow!("Could not find executable directory"))?
-        .join("ymir-ws-server");
+        .to_path_buf();
+
+    let ws_server_path = exe_dir.join("ymir-ws-server");
 
     if !ws_server_path.exists() {
         eprintln!("error: ymir-ws-server binary not found at {}", ws_server_path.display());
         eprintln!("hint: run 'cargo build' or 'make build-prod'");
+        return Ok(ExitCode::FAILURE);
+    }
+
+    // Resolve web app directory: CLI arg/env var > relative path fallback
+    let web_app_path = if let Some(path) = args.web_app_path {
+        std::path::PathBuf::from(path)
+    } else {
+        // Fallback: resolve relative to executable (works for cargo target layout)
+        exe_dir
+            .parent()
+            .and_then(|p| p.parent())
+            .map(|p| p.join("apps").join("web"))
+            .ok_or_else(|| anyhow::anyhow!("Could not resolve web app directory"))?
+    };
+
+    if args.dev && !web_app_path.exists() {
+        eprintln!("error: web app directory not found at {}", web_app_path.display());
+        eprintln!("hint: set YMIR_WEB_APP_PATH environment variable or use --web-app-path to specify the correct path");
+        eprintln!("      expected layout: <project-root>/apps/web (or provide custom path via CLI/env)");
         return Ok(ExitCode::FAILURE);
     }
 
@@ -112,7 +146,7 @@ async fn serve(args: ServeArgs) -> anyhow::Result<ExitCode> {
         Some(
             Command::new("npx")
                 .args(["vite", "--port", &vite_port.to_string()])
-                .current_dir("apps/web")
+                .current_dir(&web_app_path)
                 .kill_on_drop(true)
                 .spawn()?
         )
@@ -153,9 +187,39 @@ fn print_banner(ws_port: u16, vite_port: u16, dev_mode: bool) {
 }
 
 async fn graceful_shutdown(child: &mut tokio::process::Child, name: &str, port: u16) {
-    // Send SIGTERM
-    if let Err(e) = child.start_kill() {
-        tracing::debug!("failed to send SIGTERM to {name}: {e}");
+    #[cfg(unix)]
+    {
+        use nix::sys::signal::{kill, Signal};
+        use nix::unistd::Pid;
+
+        if let Some(pid_val) = child.id() {
+            let nix_pid = Pid::from_raw(pid_val as i32);
+            match kill(nix_pid, Signal::SIGTERM) {
+                Ok(()) => {
+                    tracing::debug!("sent SIGTERM to {name} (pid: {pid_val})");
+                }
+                Err(e) => {
+                    tracing::debug!("failed to send SIGTERM to {name}: {e}; falling back to SIGKILL");
+                    // Fall back to SIGKILL if SIGTERM fails
+                    if let Err(e) = child.start_kill() {
+                        tracing::debug!("failed to kill {name}: {e}");
+                    }
+                }
+            }
+        } else {
+            // No PID available, fall back to start_kill
+            if let Err(e) = child.start_kill() {
+                tracing::debug!("failed to kill {name} (no PID): {e}");
+            }
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        // On non-Unix platforms (e.g., Windows), use start_kill which terminates the process
+        if let Err(e) = child.start_kill() {
+            tracing::debug!("failed to terminate {name}: {e}");
+        }
     }
 
     // Wait with timeout
@@ -170,7 +234,7 @@ async fn graceful_shutdown(child: &mut tokio::process::Child, name: &str, port: 
             // Timeout - force kill via port
             println!("  {name} did not exit gracefully, forcing kill...");
             kill_port_sync(port);
-            
+
             // Wait a bit more for process to die
             let _ = timeout(Duration::from_secs(1), child.wait()).await;
         }
@@ -181,17 +245,20 @@ async fn graceful_shutdown(child: &mut tokio::process::Child, name: &str, port: 
 // KILL COMMAND
 // ============================================================================
 
-async fn kill() -> anyhow::Result<ExitCode> {
-    println!("killing processes on ports {WS_PORT_DEFAULT} and {VITE_PORT_DEFAULT}...");
-    
-    let ws_killed = kill_port(WS_PORT_DEFAULT).await;
-    let vite_killed = kill_port(VITE_PORT_DEFAULT).await;
+async fn kill(args: KillArgs) -> anyhow::Result<ExitCode> {
+    let ws_port = args.port.unwrap_or(WS_PORT_DEFAULT);
+    let vite_port = args.vite_port.unwrap_or(VITE_PORT_DEFAULT);
+
+    println!("killing processes on ports {ws_port} and {vite_port}...");
+
+    let ws_killed = kill_port(ws_port).await;
+    let vite_killed = kill_port(vite_port).await;
 
     match (ws_killed, vite_killed) {
         (true, true) => println!("killed processes on both ports."),
-        (true, false) => println!("killed process on port {WS_PORT_DEFAULT}. Port {VITE_PORT_DEFAULT} was not in use."),
-        (false, true) => println!("killed process on port {VITE_PORT_DEFAULT}. Port {WS_PORT_DEFAULT} was not in use."),
-        (false, false) => println!("no processes found on ports {WS_PORT_DEFAULT} or {VITE_PORT_DEFAULT}."),
+        (true, false) => println!("killed process on port {ws_port}. Port {vite_port} was not in use."),
+        (false, true) => println!("killed process on port {vite_port}. Port {ws_port} was not in use."),
+        (false, false) => println!("no processes found on ports {ws_port} or {vite_port}."),
     }
 
     Ok(ExitCode::SUCCESS)
@@ -267,9 +334,11 @@ fn kill_port_sync(port: u16) -> bool {
 // ============================================================================
 
 fn config() -> anyhow::Result<ExitCode> {
-    let home = std::env::var("HOME").unwrap_or_else(|_| "~".to_string());
-    let db_path = DB_PATH.replace("~", &home);
-    let config_path = CONFIG_PATH.replace("~", &home);
+    let home_path = dirs::home_dir()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|| std::env::var("HOME").unwrap_or_else(|_| "~".to_string()));
+    let db_path = format!("{}/.ymir/ymir.db", home_path);
+    let config_path = format!("{}/.ymir/config.toml", home_path);
 
     println!("ymir configuration:");
     println!();
@@ -374,8 +443,15 @@ async fn check_port_available(port: u16, name: &str) -> bool {
 }
 
 async fn check_ymir_directory() -> bool {
-    let home = std::env::var("HOME").unwrap_or_else(|_| "~".to_string());
-    let ymir_dir = format!("{}/.ymir", home.replace("~", &home));
+    let home_path = dirs::home_dir()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|| {
+            std::env::var("HOME").unwrap_or_else(|_| {
+                eprintln!("warning: could not determine home directory");
+                "/tmp".to_string()
+            })
+        });
+    let ymir_dir = format!("{}/.ymir", home_path);
 
     let dir_exists = std::path::Path::new(&ymir_dir).exists();
     let db_path = format!("{}/ymir.db", ymir_dir);

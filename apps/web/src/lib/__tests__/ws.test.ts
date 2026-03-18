@@ -31,7 +31,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { YmirClient, getWebSocketClient, resetWebSocketClient } from '../ws';
 import { encode, decode } from '@msgpack/msgpack';
 import type { ServerMessage, StateSnapshot } from '../../types/protocol';
-import { useToastStore } from '../../store';
+import { useToastStore, useStore } from '../../store';
 
 const wsMock = vi.fn(function WebSocketMock(this: any, _url: string) {
   currentMockWebSocket = createMockWebSocket();
@@ -51,6 +51,14 @@ describe('YmirClient', () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
     useToastStore.setState({ notifications: [] });
+    // Reset useStore to initial state for test isolation
+    useStore.setState({
+      workspaces: [],
+      worktrees: [],
+      agentSessions: [],
+      terminalSessions: [],
+      connectionStatus: 'closed',
+    });
   });
 
   afterEach(() => {
@@ -366,27 +374,33 @@ describe('YmirClient', () => {
     });
   });
 
-  describe('state snapshot handling', () => {
-    it('should handle StateSnapshot message and update store', () => {
-      client = new YmirClient({ url: 'ws://localhost:7319' });
-      Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
-      callOpenHandler();
+ describe('state snapshot handling', () => {
+ it('should handle StateSnapshot message and update store', () => {
+ client = new YmirClient({ url: 'ws://localhost:7319' });
+ Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
+ callOpenHandler();
 
-      const snapshot: StateSnapshot = {
-        type: 'StateSnapshot',
-        requestId: 'test-request-id',
-        workspaces: [{ id: 'ws-1', name: 'Test', rootPath: '/test', createdAt: 1, updatedAt: 1 }],
-        worktrees: [],
-        agentSessions: [],
-        terminalSessions: [],
-        settings: [],
-      };
+ const snapshot: StateSnapshot = {
+ type: 'StateSnapshot',
+ requestId: 'test-request-id',
+ workspaces: [{ id: 'ws-1', name: 'Test', rootPath: '/test', createdAt: 1, updatedAt: 1 }],
+ worktrees: [],
+ agentSessions: [],
+ terminalSessions: [],
+ settings: [],
+ };
 
-      callMessageHandler({ data: encodeMessage(snapshot) } as MessageEvent);
+ callMessageHandler({ data: encodeMessage(snapshot) } as MessageEvent);
 
-      expect(true).toBe(true);
-    });
-  });
+ const store = useStore.getState();
+ expect(store.workspaces).toHaveLength(1);
+ expect(store.workspaces[0]).toMatchObject({
+ id: 'ws-1',
+ name: 'Test',
+ rootPath: '/test',
+ });
+ });
+ });
 
   describe('disconnect with close code', () => {
     it('should close WebSocket with default code 1000', () => {

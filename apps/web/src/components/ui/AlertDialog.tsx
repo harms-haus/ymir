@@ -43,11 +43,20 @@ export const AlertDialog: React.FC<AlertDialogProps> = ({
   open,
   onOpenChange,
 }) => {
+  const isConfirmDismissal = React.useRef(false);
+
   const handleOpenChange = React.useCallback(
-    (_isOpen: boolean, eventDetails: AlertDialogRootChangeEventDetails) => {
+    (_isOpen: boolean, _eventDetails: AlertDialogRootChangeEventDetails) => {
       onOpenChange(_isOpen);
 
-      if (!_isOpen && 'event' in eventDetails && eventDetails.event instanceof KeyboardEvent) {
+      // Reset the flag when dialog is opened
+      if (_isOpen) {
+        isConfirmDismissal.current = false;
+        return;
+      }
+
+      // Only call onCancel if not dismissed via confirm
+      if (!isConfirmDismissal.current) {
         onCancel?.();
       }
     },
@@ -55,51 +64,36 @@ export const AlertDialog: React.FC<AlertDialogProps> = ({
   );
 
   const handleConfirm = React.useCallback(() => {
+    isConfirmDismissal.current = true;
     onConfirm();
     onOpenChange(false);
   }, [onConfirm, onOpenChange]);
 
-  const handleCancel = React.useCallback(() => {
-    onCancel?.();
-    onOpenChange(false);
-  }, [onCancel, onOpenChange]);
+ if (!open) {
+ return null;
+ }
 
-  const handleKeyDown = React.useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        handleCancel();
-      }
-    },
-    [handleCancel]
-  );
-
-  if (!open) {
-    return null;
-  }
-
-  return (
-    <BaseAlertDialog.Root open={open} onOpenChange={handleOpenChange}>
-      <BaseAlertDialog.Portal>
-        <BaseAlertDialog.Backdrop
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            zIndex: 9998,
-          }}
-        />
-        <BaseAlertDialog.Viewport
-          style={{
-            position: 'fixed',
-            inset: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-          }}
-          onKeyDown={handleKeyDown}
-        >
+ return (
+ <BaseAlertDialog.Root open={open} onOpenChange={handleOpenChange}>
+ <BaseAlertDialog.Portal>
+ <BaseAlertDialog.Backdrop
+ style={{
+ position: 'fixed',
+ inset: 0,
+ backgroundColor: 'rgba(0, 0, 0, 0.5)',
+ zIndex: 9998,
+ }}
+ />
+ <BaseAlertDialog.Viewport
+ style={{
+ position: 'fixed',
+ inset: 0,
+ display: 'flex',
+ alignItems: 'center',
+ justifyContent: 'center',
+ zIndex: 9999,
+ }}
+ >
           <BaseAlertDialog.Popup
             style={{
               backgroundColor: 'hsl(var(--card))',
@@ -162,51 +156,51 @@ export const AlertDialog: React.FC<AlertDialogProps> = ({
                 gap: '12px',
               }}
             >
-              <BaseAlertDialog.Close
-                onClick={handleCancel}
-                style={{
-                  padding: '8px 16px',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  borderRadius: '6px',
-                  border: '1px solid hsl(var(--border))',
-                  backgroundColor: 'hsl(var(--secondary))',
-                  color: 'hsl(var(--secondary-foreground))',
-                  cursor: 'pointer',
-                  transition: 'background-color 0.2s',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'hsl(var(--secondary) / 0.8)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'hsl(var(--secondary))';
-                }}
-              >
-                {cancelLabel}
-              </BaseAlertDialog.Close>
+ <BaseAlertDialog.Close
+ style={{
+ padding: '8px 16px',
+ fontSize: '14px',
+ fontWeight: 500,
+ borderRadius: '6px',
+ border: '1px solid hsl(var(--border))',
+ backgroundColor: 'hsl(var(--secondary))',
+ color: 'hsl(var(--secondary-foreground))',
+ cursor: 'pointer',
+ transition: 'background-color 0.2s',
+ }}
+ onMouseEnter={(e) => {
+ e.currentTarget.style.backgroundColor = 'hsl(var(--secondary) / 0.8)';
+ }}
+ onMouseLeave={(e) => {
+ e.currentTarget.style.backgroundColor = 'hsl(var(--secondary))';
+ }}
+ >
+ {cancelLabel}
+ </BaseAlertDialog.Close>
 
-              <button
-                type="button"
-                onClick={handleConfirm}
-                style={{
-                  padding: '8px 16px',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  borderRadius: '6px',
-                  border: 'none',
-                  cursor: 'pointer',
-                  transition: 'opacity 0.2s',
-                  ...variantConfirmColor[variant],
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.opacity = '0.9';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.opacity = '1';
-                }}
-              >
-                {confirmLabel}
-              </button>
+ <button
+ type="button"
+ onClick={handleConfirm}
+ className={`alert-dialog-confirm alert-dialog-confirm-${variant}`}
+ style={{
+ padding: '8px 16px',
+ fontSize: '14px',
+ fontWeight: 500,
+ borderRadius: '6px',
+ border: 'none',
+ cursor: 'pointer',
+ transition: 'opacity 0.2s',
+ ...variantConfirmColor[variant],
+ }}
+ onMouseEnter={(e) => {
+ e.currentTarget.style.opacity = '0.9';
+ }}
+ onMouseLeave={(e) => {
+ e.currentTarget.style.opacity = '1';
+ }}
+ >
+ {confirmLabel}
+ </button>
             </div>
           </BaseAlertDialog.Popup>
         </BaseAlertDialog.Viewport>

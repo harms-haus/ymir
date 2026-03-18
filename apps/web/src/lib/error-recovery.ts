@@ -26,24 +26,35 @@ export interface DbResetRequest {
 }
 
 export function handlePtyCrash(error: PtyCrashError, context?: ErrorRecoveryContext): void {
-  const toastStore = useToastStore.getState();
-  
-  toastStore.addNotification({
-    variant: 'error',
-    title: 'Terminal Session Crashed',
-    description: 'Restarting terminal session...',
-    duration: 4000,
-  });
+ const toastStore = useToastStore.getState();
 
-  const worktreeId = error.worktreeId || context?.worktreeId;
-  if (worktreeId) {
-    const client = getWebSocketClient();
-    client.send({
-      type: 'TerminalCreate',
-      worktreeId,
-      label: 'Terminal',
-    });
-  }
+ const worktreeId = error.worktreeId || context?.worktreeId;
+
+ if (worktreeId) {
+ toastStore.addNotification({
+ variant: 'error',
+ title: 'Terminal Session Crashed',
+ description: 'Restarting terminal session...',
+ duration: 4000,
+ });
+ } else {
+ toastStore.addNotification({
+ variant: 'error',
+ title: 'Terminal Session Crashed',
+ description: 'Terminal session lost — manual restart required',
+ duration: 4000,
+ });
+ console.warn('Terminal crash detected but no worktreeId available for recovery', { error, context });
+ }
+
+ if (worktreeId) {
+ const client = getWebSocketClient();
+ client.send({
+ type: 'TerminalCreate',
+ worktreeId,
+ label: 'Terminal',
+ });
+ }
 }
 
 export function handleGitFailure(error: GitFailureError, _context?: ErrorRecoveryContext): void {
