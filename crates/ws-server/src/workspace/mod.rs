@@ -12,6 +12,7 @@ use anyhow::{Context, Result};
 use git2::Repository;
 use std::path::Path;
 use std::sync::Arc;
+use tracing::{info, instrument};
 use uuid::Uuid;
 
 fn parse_workspace_timestamp(field: &str, value: &str) -> Result<u64> {
@@ -54,6 +55,7 @@ fn expand_tilde(path: &str) -> String {
 }
 
 /// Create a new workspace and initialize git repository if needed
+#[instrument(skip(state), fields(name = %msg.name, root_path = %msg.root_path))]
 pub async fn create(state: Arc<AppState>, msg: WorkspaceCreate) -> Result<WorkspaceCreated> {
     let expanded_root_path = expand_tilde(&msg.root_path);
     let root_path = Path::new(&expanded_root_path);
@@ -145,6 +147,7 @@ pub async fn create(state: Arc<AppState>, msg: WorkspaceCreate) -> Result<Worksp
 }
 
 /// Delete a workspace and clean up associated worktrees
+#[instrument(skip(state), fields(workspace_id = %msg.workspace_id))]
 pub async fn delete(state: Arc<AppState>, msg: WorkspaceDelete) -> Result<WorkspaceDeleted> {
     // Get workspace from database
     let workspace = state
@@ -233,6 +236,7 @@ pub async fn delete(state: Arc<AppState>, msg: WorkspaceDelete) -> Result<Worksp
 }
 
 /// List all workspaces
+#[instrument(skip(state))]
 pub async fn list(state: Arc<AppState>) -> Result<Vec<WorkspaceData>> {
     let workspaces = state
         .db
@@ -249,6 +253,7 @@ pub async fn list(state: Arc<AppState>) -> Result<Vec<WorkspaceData>> {
 }
 
 /// Get a single workspace by ID
+#[instrument(skip(state))]
 pub async fn get(state: Arc<AppState>, workspace_id: Uuid) -> Result<Option<WorkspaceData>> {
     let workspace = state
         .db

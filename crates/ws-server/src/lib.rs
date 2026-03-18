@@ -5,6 +5,7 @@ pub mod agent;
 pub mod db;
 pub mod git;
 pub mod hub;
+pub mod logging;
 pub mod protocol;
 pub mod pty;
 pub mod router;

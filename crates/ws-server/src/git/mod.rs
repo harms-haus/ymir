@@ -8,6 +8,7 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::Arc;
 use thiserror::Error;
+use tracing::instrument;
 use uuid::Uuid;
 
 pub struct GitOps {
@@ -25,6 +26,7 @@ impl GitOps {
         Self { db }
     }
 
+    #[instrument(skip(self), fields(worktree_id = %worktree_id))]
     pub async fn status(
         &self,
         worktree_id: Uuid,
@@ -74,6 +76,7 @@ impl GitOps {
         })
     }
 
+    #[instrument(skip(self), fields(worktree_id = %worktree_id))]
     pub async fn diff(
         &self,
         worktree_id: Uuid,
@@ -129,6 +132,7 @@ impl GitOps {
         })
     }
 
+    #[instrument(skip(self), fields(worktree_id = %worktree_id, message))]
     pub async fn commit(
         &self,
         worktree_id: Uuid,
@@ -183,6 +187,7 @@ impl GitOps {
         Ok(commit_hash)
     }
 
+    #[instrument(skip(self), fields(worktree_id = %worktree_id, squash))]
     pub async fn merge(
         &self,
         worktree_id: Uuid,
@@ -274,6 +279,7 @@ impl GitOps {
         Ok(format!("Merged {} ({})", feature_branch, merge_oid))
     }
 
+    #[instrument(skip(self), fields(worktree_id = %worktree_id, title))]
     pub async fn create_pr(
         &self,
         worktree_id: Uuid,

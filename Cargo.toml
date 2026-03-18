@@ -3,7 +3,7 @@ resolver = "2"
 members = [
     "crates/cli",
     "crates/ws-server",
-    # "apps/tauri/src-tauri",  # build after `npm run build` in apps/web
+    "apps/tauri/src-tauri",
 ]
 
 [workspace.package]

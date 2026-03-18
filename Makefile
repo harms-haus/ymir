@@ -5,29 +5,66 @@ VITE_PORT := 5173
 BUILD_DIR := build
 INSTALL_PREFIX := /usr/local
 
-.PHONY: debug build-prod install-prod clean kill help
+.PHONY: debug dev dev-tauri build-web-only build-tauri build build-prod install-prod clean kill help serve status config doctor
 
 help:
 	@echo "ymir Makefile targets:"
-	@echo "  debug        Kill old processes, rebuild, launch all servers"
-	@echo "  build-prod   Build all components to $(BUILD_DIR)/"
-	@echo "  install-prod Build and install to $(INSTALL_PREFIX)"
-	@echo "  clean        Remove all build artifacts"
-	@echo "  kill         Kill processes on configured ports"
+	@echo "  debug / dev        Kill old processes, rebuild, launch all servers"
+	@echo "  dev-tauri          Start Vite dev server and Tauri dev concurrently"
+	@echo "  build-web-only     Build web without Tauri"
+	@echo "  build-tauri        Build web and Tauri release binary"
+	@echo "  build              Build all Rust components"
+	@echo "  build-prod         Build all components to $(BUILD_DIR)/"
+	@echo "  install-prod       Build and install to $(INSTALL_PREFIX)"
+	@echo "  serve              Run ymir serve (production mode)"
+	@echo "  kill               Kill processes on configured ports"
+	@echo "  status             Check if ymir is running"
+	@echo "  config             Print current configuration"
+	@echo "  doctor             Run diagnostic checks"
+	@echo "  clean              Remove all build artifacts"
 
 kill:
 	@echo "[ymir] killing processes on ports $(WS_PORT) and $(VITE_PORT)..."
 	-@fuser -k $(WS_PORT)/tcp 2>/dev/null || true
 	-@fuser -k $(VITE_PORT)/tcp 2>/dev/null || true
 
-debug: kill
+build:
 	@echo "[ymir] building rust workspace..."
 	@cargo build
+
+build-web-only:
+	@echo "[ymir] building web app..."
+	@npm install --prefix apps/web
+	@npm run build --prefix apps/web
+
+dev-tauri: kill
+	@echo "[ymir] starting Vite dev server on port $(VITE_PORT)..."
+	@npm run dev --prefix apps/web &
+	@echo "[ymir] starting Tauri dev mode..."
+	@cargo tauri dev
+
+build-tauri: build-web-only
+	@echo "[ymir] building Tauri app..."
+	@cargo tauri build
+
+debug dev: kill build
 	@echo "[ymir] building web client..."
 	@npm install --prefix apps/web
 	@npm run build --prefix apps/web
 	@echo "[ymir] launching servers..."
-	@cargo run -p ymir
+	@cargo run -p ymir -- serve --dev
+
+serve:
+	@cargo run -p ymir -- serve
+
+status:
+	@cargo run -p ymir -- status
+
+config:
+	@cargo run -p ymir -- config
+
+doctor:
+	@cargo run -p ymir -- doctor
 
 build-prod: clean
 	@echo "[ymir] building rust workspace (release)..."

@@ -2859,7 +2859,7 @@ Max Concurrent: 7 (Waves 0, 1, 2)
 
 ## Wave 5: Integration
 
-- [ ] 29. Worktree Creation Flow
+- [x] 29. Worktree Creation Flow
 
   **What to do**:
   - Create `apps/web/src/components/dialogs/CreateWorktreeDialog.tsx` — new worktree dialog using Base UI Dialog:
@@ -2967,7 +2967,7 @@ Max Concurrent: 7 (Waves 0, 1, 2)
 
 ---
 
-- [ ] 30. Workspace Settings Dialog
+- [x] 30. Workspace Settings Dialog
 
   **What to do**:
   - Create `apps/web/src/components/dialogs/WorkspaceSettingsDialog.tsx` — workspace settings dialog using Base UI Dialog:
@@ -3067,7 +3067,7 @@ Max Concurrent: 7 (Waves 0, 1, 2)
 
 ---
 
-- [ ] 31. Alert Dialog for Destructive Actions
+- [x] 31. Alert Dialog for Destructive Actions
 
   **What to do**:
   - Create `apps/web/src/components/ui/AlertDialog.tsx` — reusable confirmation dialog wrapping Base UI AlertDialog:
@@ -3159,7 +3159,7 @@ Max Concurrent: 7 (Waves 0, 1, 2)
 
 ---
 
-- [ ] 32. WebSocket Reconnect + State Replay
+- [x] 32. WebSocket Reconnect + State Replay
 
   **What to do**:
   - Update `apps/web/src/lib/ws.ts` (from T8) with full reconnection logic:
@@ -3250,7 +3250,7 @@ Max Concurrent: 7 (Waves 0, 1, 2)
 
 ---
 
-- [ ] 33. Error Recovery (PTY Crash, Git Failure)
+- [x] 33. Error Recovery (PTY Crash, Git Failure)
 
   **What to do**:
   - Create `apps/web/src/lib/error-recovery.ts` — centralized error handling:
@@ -3338,7 +3338,7 @@ Max Concurrent: 7 (Waves 0, 1, 2)
 
 ---
 
-- [ ] 34. Status Bar (Connection Indicator)
+- [x] 34. Status Bar (Connection Indicator)
 
   **What to do**:
   - Update `apps/web/src/components/layout/StatusBar.tsx` (placeholder from T9) with connection indicator:
@@ -3410,7 +3410,7 @@ Max Concurrent: 7 (Waves 0, 1, 2)
 
 ## Wave 6: Tauri + Polish
 
-- [ ] 35. Tauri Build Config + Proxy Setup
+- [x] 35. Tauri Build Config + Proxy Setup
 
   **What to do**:
   - Update `apps/tauri/src-tauri/tauri.conf.json`:
@@ -3527,7 +3527,7 @@ Max Concurrent: 7 (Waves 0, 1, 2)
 
 ---
 
-- [ ] 36. Tauri Native Features
+- [x] 36. Tauri Native Features
 
   **What to do**:
   - Add IPC commands in `apps/tauri/src-tauri/src/commands.rs`:
@@ -3694,7 +3694,7 @@ Max Concurrent: 7 (Waves 0, 1, 2)
 
 ---
 
-- [ ] 37. Skeleton Loading States
+- [x] 37. Skeleton Loading States
 
   **What to do**:
   - Create `apps/web/src/components/ui/Skeleton.tsx` — reusable skeleton component:
@@ -3812,7 +3812,7 @@ Max Concurrent: 7 (Waves 0, 1, 2)
 
 ---
 
-- [ ] 38. Activity Logging Throughout
+- [x] 38. Activity Logging Throughout
 
   **What to do**:
   - Add `tracing` crate to `crates/ws-server/Cargo.toml`:
@@ -3975,7 +3975,7 @@ Max Concurrent: 7 (Waves 0, 1, 2)
 
 ---
 
-- [ ] 39. CLI Serve/Kill Commands
+- [x] 39. CLI Serve/Kill Commands
 
   **What to do**:
   - Update `crates/cli/src/main.rs` with full command implementations using `clap`:
