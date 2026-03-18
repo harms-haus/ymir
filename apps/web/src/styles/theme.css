@@ -78,6 +78,11 @@ body {
   50% { opacity: 0.8; transform: scale(1.1); }
 }
 
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* Apply animations to status dot classes (used by JS to add dynamic states) */
 .status-dot-pulse {
   animation: status-pulse 2s ease-in-out infinite;
@@ -93,4 +98,24 @@ body {
   background-color: hsl(var(--accent));
   color: hsl(var(--accent-foreground));
   outline: none;
+}
+
+/* Skeleton Loading Animation */
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.skeleton {
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Terminal skeleton line tinting */
+.terminal-skeleton-line {
+  background: linear-gradient(90deg, hsl(var(--status-working) / 0.15) 25%, hsl(var(--status-working) / 0.08) 50%, hsl(var(--status-working) / 0.15) 75%) !important;
+  background-size: 200% 100% !important;
 }

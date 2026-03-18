@@ -22,11 +22,16 @@ export function ContextMenu({ state, items, onAction }: ContextMenuProps) {
   }
 
   const visibleItems = items.filter((item) => {
-    if (targetType === 'workspace' && item.id !== 'create-worktree') {
-      return false
+    if (targetType === 'workspace') {
+      return item.id === 'create-worktree' || item.id === 'settings'
     }
-    if (targetType === 'worktree' && item.id === 'create-worktree') {
-      return false
+    if (targetType === 'worktree') {
+      if (item.id === 'create-worktree' || item.id === 'settings') {
+        return false
+      }
+      if (item.id === 'open-in-file-manager' || item.id === 'copy-path') {
+        return state.targetPath !== null
+      }
     }
     return true
   })

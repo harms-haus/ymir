@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { AppState, NotificationState, AgentTab } from './types/state';
+import { AppState, NotificationState, AgentTab, AlertDialogConfig } from './types/state';
 export type { AgentTab };
 import { ServerMessage, TerminalOutput } from './types/protocol';
+import { handleError } from './lib/error-recovery';
+import { showNotification } from './lib/tauri';
 
 // Terminal output callback registry (for routing TerminalOutput to TerminalProvider)
 let terminalOutputCallback: ((message: TerminalOutput) => void) | null = null;
@@ -42,8 +44,24 @@ export const useStore = create<AppState>()(
     body: '',
   },
 
-  // Action implementations
-      setWorkspaces: (workspaces) => set({ workspaces }),
+  createWorktreeDialog: {
+    isOpen: false,
+    workspaceId: null,
+  },
+
+  workspaceSettingsDialog: {
+    isOpen: false,
+    workspaceId: null,
+  },
+
+  dbResetDialog: {
+    isOpen: false,
+    errorMessage: '',
+  },
+
+  alertDialog: null,
+
+  setWorkspaces: (workspaces) => set({ workspaces }),
       
       setWorktrees: (worktrees) => set({ worktrees }),
       
@@ -272,6 +290,58 @@ export const useStore = create<AppState>()(
       set({
         prDialog: { isOpen: false, title: '', body: '' },
       }),
+
+  setCreateWorktreeDialogOpen: (isOpen, workspaceId) =>
+      set((state) => ({
+        createWorktreeDialog: {
+          ...state.createWorktreeDialog,
+          isOpen,
+          workspaceId: workspaceId ?? state.createWorktreeDialog.workspaceId,
+        },
+      })),
+
+  resetCreateWorktreeDialog: () =>
+      set({
+        createWorktreeDialog: { isOpen: false, workspaceId: null },
+      }),
+
+  setWorkspaceSettingsDialogOpen: (isOpen, workspaceId) =>
+      set((state) => ({
+        workspaceSettingsDialog: {
+          ...state.workspaceSettingsDialog,
+          isOpen,
+          workspaceId: workspaceId ?? state.workspaceSettingsDialog.workspaceId,
+        },
+      })),
+
+  resetWorkspaceSettingsDialog: () =>
+      set({
+        workspaceSettingsDialog: { isOpen: false, workspaceId: null },
+      }),
+
+  setDbResetDialogOpen: (isOpen, errorMessage) =>
+      set((state) => ({
+        dbResetDialog: {
+          ...state.dbResetDialog,
+          isOpen,
+          errorMessage: errorMessage ?? state.dbResetDialog.errorMessage,
+        },
+      })),
+
+  resetDbResetDialog: () =>
+      set({
+        dbResetDialog: { isOpen: false, errorMessage: '' },
+      }),
+
+  showAlertDialog: (config: AlertDialogConfig) =>
+    set({
+      alertDialog: { ...config, open: true, variant: config.variant ?? 'default' },
+    }),
+
+  hideAlertDialog: () =>
+    set((state) => ({
+      alertDialog: state.alertDialog ? { ...state.alertDialog, open: false } : null,
+    })),
   }),
   { name: 'ymir-app-store' }
   )
@@ -317,7 +387,20 @@ export const selectPRDialog = (state: AppState) => state.prDialog;
 
 export const selectPRDialogOpen = (state: AppState) => state.prDialog.isOpen;
 
-// Helper to update state from ServerMessage
+export const selectCreateWorktreeDialog = (state: AppState) => state.createWorktreeDialog;
+
+export const selectCreateWorktreeDialogOpen = (state: AppState) => state.createWorktreeDialog.isOpen;
+
+export const selectWorkspaceSettingsDialog = (state: AppState) => state.workspaceSettingsDialog;
+
+export const selectWorkspaceSettingsDialogOpen = (state: AppState) => state.workspaceSettingsDialog.isOpen;
+
+export const selectDbResetDialog = (state: AppState) => state.dbResetDialog;
+
+export const selectDbResetDialogOpen = (state: AppState) => state.dbResetDialog.isOpen;
+
+export const selectAlertDialog = (state: AppState) => state.alertDialog;
+
 export function updateStateFromServerMessage(message: ServerMessage): void {
   const { addWorkspace, updateWorkspace, removeWorkspace, addWorktree, updateWorktree, removeWorktree } = useStore.getState();
   const { updateAgentSession, addTerminalSession, addNotification } = useStore.getState();
@@ -384,14 +467,11 @@ export function updateStateFromServerMessage(message: ServerMessage): void {
         message: message.message,
         duration: 5000,
       } as any);
+      showNotification(message.title, message.message);
       break;
 
     case 'Error':
-      addNotification({
-        level: 'error',
-        message: message.message,
-        duration: 8000,
-      } as any);
+      handleError(message);
       break;
   }
 }

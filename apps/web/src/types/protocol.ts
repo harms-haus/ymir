@@ -32,6 +32,42 @@ export interface Error {
   details?: string;
 }
 
+export const ErrorCodes = {
+  PTY_CRASH: 'pty_crash',
+  GIT_FAILURE: 'git_failure',
+  AGENT_CRASH: 'agent_crash',
+  DB_ERROR: 'db_error',
+} as const;
+
+export type ErrorCode = typeof ErrorCodes[keyof typeof ErrorCodes];
+
+export interface PtyCrashError extends Error {
+  code: typeof ErrorCodes.PTY_CRASH;
+  sessionId: string;
+  worktreeId: string;
+}
+
+export interface GitFailureError extends Error {
+  code: typeof ErrorCodes.GIT_FAILURE;
+  worktreeId: string;
+  operation: 'merge' | 'commit' | 'push' | 'pull' | 'checkout' | 'other';
+  conflictFiles?: string[];
+}
+
+export interface AgentCrashError extends Error {
+  code: typeof ErrorCodes.AGENT_CRASH;
+  worktreeId: string;
+  agentType: string;
+  sessionId?: string;
+}
+
+export interface DbError extends Error {
+  code: typeof ErrorCodes.DB_ERROR;
+  operation: 'read' | 'write' | 'migration' | 'connection' | 'other';
+}
+
+export type ServerErrorMessage = PtyCrashError | GitFailureError | AgentCrashError | DbError | Error;
+
 export interface Notification {
   type: 'Notification';
   level: 'info' | 'warning' | 'error';
@@ -467,6 +503,22 @@ export function isError(message: AnyMessage | UnknownMessage): message is Error 
 
 export function isNotification(message: AnyMessage | UnknownMessage): message is Notification {
   return message.type === 'Notification';
+}
+
+export function isPtyCrashError(error: Error): error is PtyCrashError {
+  return error.code === ErrorCodes.PTY_CRASH;
+}
+
+export function isGitFailureError(error: Error): error is GitFailureError {
+  return error.code === ErrorCodes.GIT_FAILURE;
+}
+
+export function isAgentCrashError(error: Error): error is AgentCrashError {
+  return error.code === ErrorCodes.AGENT_CRASH;
+}
+
+export function isDbError(error: Error): error is DbError {
+  return error.code === ErrorCodes.DB_ERROR;
 }
 
 // Client message guards

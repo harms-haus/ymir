@@ -13,7 +13,7 @@ use anyhow::{Context, Result};
 use git2::{Repository, WorktreePruneOptions};
 use std::path::Path;
 use std::sync::Arc;
-use tracing::{debug, info, warn};
+use tracing::{debug, info, instrument, warn};
 use uuid::Uuid;
 
 fn git_worktree_name(workspace_id: &str, branch_name: &str) -> String {
@@ -49,6 +49,7 @@ fn remove_orphaned_git_worktree_metadata(repo_root: &Path, worktree_name: &str) 
 }
 
 /// Create a new git worktree for a workspace
+#[instrument(skip(state), fields(workspace_id = %msg.workspace_id, branch = %msg.branch_name))]
 pub async fn create(state: Arc<AppState>, msg: WorktreeCreate) -> Result<WorktreeCreated> {
     debug!("Creating worktree for workspace: {}", msg.workspace_id);
 
@@ -191,6 +192,7 @@ pub async fn create(state: Arc<AppState>, msg: WorktreeCreate) -> Result<Worktre
 }
 
 /// Delete a git worktree
+#[instrument(skip(state), fields(worktree_id = %msg.worktree_id))]
 pub async fn delete(state: Arc<AppState>, msg: WorktreeDelete) -> Result<WorktreeDeleted> {
     debug!("Deleting worktree: {}", msg.worktree_id);
 
@@ -285,6 +287,7 @@ pub async fn delete(state: Arc<AppState>, msg: WorktreeDelete) -> Result<Worktre
 }
 
 /// List worktrees for a workspace
+#[instrument(skip(state), fields(workspace_id = %msg.workspace_id))]
 pub async fn list(state: Arc<AppState>, msg: WorktreeList) -> Result<Vec<WorktreeData>> {
     let worktrees = state
         .db
@@ -311,6 +314,7 @@ pub async fn list(state: Arc<AppState>, msg: WorktreeList) -> Result<Vec<Worktre
 }
 
 /// Get worktree status
+#[instrument(skip(state))]
 pub async fn status(state: Arc<AppState>, worktree_id: Uuid) -> Result<WorktreeStatus> {
     let worktree = state
         .db

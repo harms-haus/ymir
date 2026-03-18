@@ -5,9 +5,11 @@ use crate::protocol::{
 };
 use crate::state::AppState;
 use std::sync::Arc;
+use tracing::instrument;
 use uuid::Uuid;
 
 /// Route a client message to the appropriate handler
+#[instrument(skip(state, message), fields(client_id = %client_id))]
 pub async fn route_message(
     state: Arc<AppState>,
     client_id: Uuid,
@@ -173,6 +175,7 @@ fn parse_agent_status(status: &str) -> crate::protocol::AgentStatus {
     }
 }
 
+#[instrument(skip(state))]
 async fn handle_get_state(state: Arc<AppState>, request_id: Uuid) -> ServerMessage {
     use crate::protocol::{
         AgentSessionData, StateSnapshot, TerminalSessionData, WorkspaceData, WorktreeData,
@@ -270,6 +273,7 @@ async fn handle_get_state(state: Arc<AppState>, request_id: Uuid) -> ServerMessa
     }))
 }
 
+#[instrument(skip(state))]
 async fn handle_git_status(state: Arc<AppState>, msg: crate::protocol::GitStatus) -> ServerMessage {
     let worktree_id = msg.worktree_id;
 
@@ -297,6 +301,7 @@ async fn handle_git_status(state: Arc<AppState>, msg: crate::protocol::GitStatus
     }
 }
 
+#[instrument(skip(state))]
 async fn handle_git_diff(state: Arc<AppState>, msg: crate::protocol::GitDiff) -> ServerMessage {
     let worktree_id = msg.worktree_id;
     let file_path = msg.file_path.as_deref();
@@ -329,6 +334,7 @@ async fn handle_git_diff(state: Arc<AppState>, msg: crate::protocol::GitDiff) ->
     }
 }
 
+#[instrument(skip(state))]
 async fn handle_git_commit(state: Arc<AppState>, msg: crate::protocol::GitCommit) -> ServerMessage {
     let worktree_id = msg.worktree_id;
     let message = msg.message;
@@ -368,6 +374,7 @@ async fn handle_git_commit(state: Arc<AppState>, msg: crate::protocol::GitCommit
     }
 }
 
+#[instrument(skip(state))]
 async fn handle_create_pr(state: Arc<AppState>, msg: crate::protocol::CreatePR) -> ServerMessage {
     let worktree_id = msg.worktree_id;
     let title = msg.title;

@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tracing::{debug, warn};
+use tracing::{debug, instrument, warn};
 
 /// Maximum file size to watch (5MB)
 const MAX_FILE_SIZE_BYTES: u64 = 5 * 1024 * 1024;
@@ -43,6 +43,7 @@ impl FileWatcher {
     }
 
     /// Start watching and return a receiver for file events
+    #[instrument(skip(self))]
     pub fn start(&mut self) -> Result<mpsc::Receiver<FileEvent>, notify::Error> {
         let (tx, rx) = mpsc::channel(100);
         let paused = self.paused.clone();
@@ -81,6 +82,7 @@ impl FileWatcher {
     }
 
     /// Stop watching
+    #[instrument(skip(self))]
     pub fn stop(self) -> Result<(), notify::Error> {
         if let Some(mut watcher) = self._watcher {
             let mut errors = Vec::new();

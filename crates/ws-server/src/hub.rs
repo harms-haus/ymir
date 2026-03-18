@@ -6,11 +6,12 @@ use crate::protocol::ServerMessage;
 use crate::state::{AppState, ClientState, CLIENT_INACTIVITY_TIMEOUT_SECS};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
-use tracing::{debug, info, warn};
+use tracing::{debug, info, instrument, warn};
 use uuid::Uuid;
 
 impl AppState {
     /// Register a new client connection
+    #[instrument(skip(self))]
     pub async fn connect(&self, client_id: Uuid) -> mpsc::Receiver<ServerMessage> {
         let (tx, rx) = mpsc::channel(256);
 
@@ -26,6 +27,7 @@ impl AppState {
     }
 
     /// Unregister a client connection
+    #[instrument(skip(self))]
     pub async fn disconnect(&self, client_id: Uuid) {
         if self.clients.write().await.remove(&client_id).is_some() {
             info!(%client_id, "Client disconnected");
@@ -33,6 +35,7 @@ impl AppState {
     }
 
     /// Broadcast a message to all connected clients
+    #[instrument(skip(self, message))]
     pub async fn broadcast(&self, message: ServerMessage) {
         let clients: Vec<_> = self
             .clients
@@ -56,6 +59,7 @@ impl AppState {
     }
 
     /// Send a message to a specific client
+    #[instrument(skip(self, message))]
     pub async fn send_to(&self, client_id: Uuid, message: ServerMessage) -> bool {
         let tx = self
             .clients

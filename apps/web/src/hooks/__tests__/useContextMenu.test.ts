@@ -17,13 +17,14 @@ describe('useContextMenu', () => {
   it('should initialize with closed menu state', () => {
     const { result } = renderHook(() => useContextMenu(mockCallbacks))
 
-    expect(result.current.state).toEqual({
-      isOpen: false,
-      x: 0,
-      y: 0,
-      targetId: null,
-      targetType: null,
-    })
+expect(result.current.state).toEqual({
+    isOpen: false,
+    x: 0,
+    y: 0,
+    targetId: null,
+    targetType: null,
+    targetPath: null,
+  })
   })
 
   it('should open menu on right-click for workspace', () => {
@@ -41,13 +42,14 @@ describe('useContextMenu', () => {
 
     expect(mockEvent.preventDefault).toHaveBeenCalled()
     expect(mockEvent.stopPropagation).toHaveBeenCalled()
-    expect(result.current.state).toEqual({
-      isOpen: true,
-      x: 100,
-      y: 200,
-      targetId: 'workspace-123',
-      targetType: 'workspace',
-    })
+expect(result.current.state).toEqual({
+    isOpen: true,
+    x: 100,
+    y: 200,
+    targetId: 'workspace-123',
+    targetType: 'workspace',
+    targetPath: null,
+  })
   })
 
   it('should open menu on right-click for worktree', () => {
@@ -63,13 +65,14 @@ describe('useContextMenu', () => {
       result.current.openMenu(mockEvent, 'worktree-456', 'worktree')
     })
 
-    expect(result.current.state).toEqual({
-      isOpen: true,
-      x: 150,
-      y: 250,
-      targetId: 'worktree-456',
-      targetType: 'worktree',
-    })
+expect(result.current.state).toEqual({
+    isOpen: true,
+    x: 150,
+    y: 250,
+    targetId: 'worktree-456',
+    targetType: 'worktree',
+    targetPath: null,
+  })
   })
 
   it('should close menu', () => {
@@ -91,13 +94,14 @@ describe('useContextMenu', () => {
       result.current.closeMenu()
     })
 
-    expect(result.current.state).toEqual({
-      isOpen: false,
-      x: 100,
-      y: 200,
-      targetId: null,
-      targetType: null,
-    })
+expect(result.current.state).toEqual({
+    isOpen: false,
+    x: 100,
+    y: 200,
+    targetId: null,
+    targetType: null,
+    targetPath: null,
+  })
   })
 
   it('should call create-worktree callback for workspace', () => {

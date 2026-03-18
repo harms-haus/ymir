@@ -6,6 +6,9 @@ import type { WorkspaceState, WorktreeState } from '../../types/state'
 import { useContextMenu, type ContextMenuCallbacks } from '../../hooks/useContextMenu'
 import { ContextMenu, type ContextMenuItem } from '../ui/ContextMenu'
 import type { Worktree as ProtocolWorktree } from '../../types/protocol'
+import { CreateWorktreeDialog } from '../dialogs/CreateWorktreeDialog'
+import { WorkspaceSettingsDialog } from '../dialogs/WorkspaceSettingsDialog'
+import { revealInFileManager, copyToClipboard } from '../../lib/tauri'
 
 export type TreeNodeType = 'workspace' | 'worktree'
 
@@ -246,12 +249,21 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
   const toggleWorkspaceExpanded = useStore((state) => state.toggleWorkspaceExpanded)
   const setActiveWorktree = useStore((state) => state.setActiveWorktree)
   const worktrees = useStore((state) => state.worktrees)
+  const createWorktreeDialog = useStore((state) => state.createWorktreeDialog)
+  const setCreateWorktreeDialogOpen = useStore((state) => state.setCreateWorktreeDialogOpen)
+  const workspaceSettingsDialog = useStore((state) => state.workspaceSettingsDialog)
+  const setWorkspaceSettingsDialogOpen = useStore((state) => state.setWorkspaceSettingsDialogOpen)
 
   const contextMenuItems: ContextMenuItem[] = [
     {
       id: 'create-worktree',
       label: 'Create Worktree',
       icon: 'ri-git-branch-line',
+    },
+    {
+      id: 'settings',
+      label: 'Settings',
+      icon: 'ri-settings-3-line',
     },
     {
       id: 'delete-worktree',
@@ -268,6 +280,16 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
       id: 'view-diff',
       label: 'View Diff',
       icon: 'ri-git-diff-line',
+    },
+    {
+      id: 'open-in-file-manager',
+      label: 'Open in File Manager',
+      icon: 'ri-folder-open-line',
+    },
+    {
+      id: 'copy-path',
+      label: 'Copy Path',
+      icon: 'ri-file-copy-line',
     },
   ]
 
@@ -287,11 +309,26 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
     console.log('View diff for worktree:', worktreeId)
   }, [])
 
+  const handleSettings = useCallback((workspaceId: string) => {
+    setWorkspaceSettingsDialogOpen(true, workspaceId)
+  }, [setWorkspaceSettingsDialogOpen])
+
+  const handleOpenInFileManager = useCallback((path: string) => {
+    revealInFileManager(path)
+  }, [])
+
+  const handleCopyPath = useCallback((path: string) => {
+    copyToClipboard(path)
+  }, [])
+
   const contextMenuCallbacks: ContextMenuCallbacks = {
     onCreateWorktree: handleCreateWorktree,
     onDeleteWorktree: handleDeleteWorktree,
     onMerge: handleMerge,
     onViewDiff: handleViewDiff,
+    onSettings: handleSettings,
+    onOpenInFileManager: handleOpenInFileManager,
+    onCopyPath: handleCopyPath,
   }
 
   const { state: contextMenuState, openMenu, closeMenu, handleAction } = useContextMenu(contextMenuCallbacks)
@@ -339,8 +376,8 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
   )
 
   const handleNewWorktree = useCallback((workspaceId: string) => {
-    console.log('New worktree for workspace:', workspaceId)
-  }, [])
+    setCreateWorktreeDialogOpen(true, workspaceId)
+  }, [setCreateWorktreeDialogOpen])
 
   if (workspaces.length === 0) {
     return null
@@ -381,7 +418,7 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
                 closeMenu()
                 handleSelectWorktree(worktree.id)
               }}
-              onContextMenu={(e) => openMenu(e, worktree.id, 'worktree')}
+              onContextMenu={(e) => openMenu(e, worktree.id, 'worktree', worktree.path)}
             />
           )
         })}
@@ -390,6 +427,16 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
         state={contextMenuState}
         items={contextMenuItems}
         onAction={handleAction}
+      />
+      <CreateWorktreeDialog
+        open={createWorktreeDialog.isOpen}
+        onOpenChange={(open) => setCreateWorktreeDialogOpen(open, createWorktreeDialog.workspaceId ?? undefined)}
+        workspaceId={createWorktreeDialog.workspaceId}
+      />
+      <WorkspaceSettingsDialog
+        open={workspaceSettingsDialog.isOpen}
+        onOpenChange={(open) => setWorkspaceSettingsDialogOpen(open, workspaceSettingsDialog.workspaceId ?? undefined)}
+        workspaceId={workspaceSettingsDialog.workspaceId}
       />
     </>
   )

@@ -12,7 +12,9 @@ use std::time::Duration;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
+use tracing_subscriber::prelude::*;
 use ymir_ws_server::db::Db;
+use ymir_ws_server::logging::ActivityLayer;
 use ymir_ws_server::protocol::{
   ClientMessage, ServerMessage, PROTOCOL_VERSION,
 };
@@ -23,10 +25,15 @@ const DEFAULT_PORT: u16 = 7319;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
-        )
+    let activity_layer = ActivityLayer::new();
+
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("ymir_ws_server=info"));
+
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(activity_layer.clone())
+        .with(tracing_subscriber::fmt::layer().json())
         .init();
 
     let port: u16 = std::env::var("YMIR_WS_PORT")
@@ -38,6 +45,9 @@ async fn main() -> anyhow::Result<()> {
 
     let db = Arc::new(Db::open(db_path).await?);
     let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
+
+    let activity_logger = Arc::new(ymir_ws_server::logging::ActivityLogger::new(db.clone()));
+    activity_layer.set_logger(activity_logger.clone()).await;
 
     let state = Arc::new(AppState::new(db, shutdown_rx.clone()));
 
@@ -55,7 +65,6 @@ async fn main() -> anyhow::Result<()> {
   let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await?;
   axum::serve(listener, app)
     .with_graceful_shutdown(async move {
-      // Wait for shutdown signal
       let _ = shutdown_rx.changed().await;
     })
     .await?;

@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tokio::time::interval;
+use tracing::instrument;
 use uuid::Uuid;
 
 const MAX_SESSIONS_PER_WORKTREE: usize = 10;
@@ -151,6 +152,7 @@ impl PtyManager {
         })
     }
 
+    #[instrument(skip(self), fields(worktree_id = %worktree_id))]
     pub fn spawn(
         &self,
         worktree_id: Uuid,
@@ -260,6 +262,7 @@ impl PtyManager {
         self.sessions.lock().unwrap().get(&session_id).cloned()
     }
 
+    #[instrument(skip(self))]
     pub fn write(&self, session_id: Uuid, data: &[u8]) -> Result<()> {
         let session = self
             .sessions
@@ -273,6 +276,7 @@ impl PtyManager {
         result
     }
 
+    #[instrument(skip(self))]
     pub fn resize(&self, session_id: Uuid, cols: u16, rows: u16) -> Result<()> {
         let session = self
             .sessions
@@ -286,6 +290,7 @@ impl PtyManager {
         result
     }
 
+    #[instrument(skip(self))]
     pub fn kill(&self, session_id: Uuid) -> Result<()> {
         let mut sessions = self.sessions.lock().unwrap();
         if let Some(session) = sessions.remove(&session_id) {
@@ -296,6 +301,7 @@ impl PtyManager {
         }
     }
 
+    #[instrument(skip(self))]
     pub fn cleanup_on_disconnect(&self, worktree_id: Uuid) {
         let session_ids: Vec<Uuid> = {
             let sessions = self.sessions.lock().unwrap();

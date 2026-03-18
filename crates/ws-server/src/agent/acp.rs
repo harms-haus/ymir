@@ -14,6 +14,7 @@ use tokio::process::{Child, ChildStdin};
 use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
+use tracing::instrument;
 use uuid::Uuid;
 
 /// Agent status enum representing the current state of an agent
@@ -81,6 +82,7 @@ pub struct AcpClient {
 
 impl AcpClient {
     /// Spawn a new agent subprocess and establish ACP connection
+    #[instrument(fields(agent_type = %agent_type, worktree_path = %worktree_path))]
     pub async fn spawn(agent_type: &str, worktree_path: &str) -> Result<Self> {
         let executable = match agent_type {
             "claude" => "claude-agent",
@@ -253,6 +255,7 @@ impl AcpClient {
 }
 
     /// Send a prompt to the agent
+    #[instrument(skip(self))]
     pub async fn send_prompt(&mut self, content: &str) -> Result<()> {
         let session_id = self.session_id.lock().await.clone()
             .ok_or_else(|| anyhow!("No active session"))?;
@@ -275,6 +278,7 @@ impl AcpClient {
     }
 
     /// Cancel the current agent operation
+    #[instrument(skip(self))]
     pub async fn cancel(&mut self) -> Result<()> {
         let session_id = self.session_id.lock().await.clone()
             .ok_or_else(|| anyhow!("No active session"))?;
@@ -301,6 +305,7 @@ impl AcpClient {
     }
 
     /// Kill the agent subprocess and clean up resources
+    #[instrument(skip(self))]
     pub async fn kill(&mut self) -> Result<()> {
         self.process.kill().await?;
         self.stdout_reader.abort();

@@ -75,7 +75,38 @@ export interface PRDialogState {
   body: string;
 }
 
-// Main application state shape
+// Create worktree dialog state
+export interface CreateWorktreeDialogState {
+  isOpen: boolean;
+  workspaceId: string | null;
+}
+
+export interface WorkspaceSettingsDialogState {
+  isOpen: boolean;
+  workspaceId: string | null;
+}
+
+export interface DbResetDialogState {
+  isOpen: boolean;
+  errorMessage: string;
+}
+
+export type AlertDialogVariant = 'default' | 'destructive';
+
+export interface AlertDialogConfig {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  cancelLabel?: string;
+  variant?: AlertDialogVariant;
+  onConfirm: () => void;
+  onCancel?: () => void;
+}
+
+export interface AlertDialogState extends AlertDialogConfig {
+  open: boolean;
+}
+
 export interface AppState {
   // Data slices
   workspaces: WorkspaceState[];
@@ -96,8 +127,16 @@ export interface AppState {
 
   // PR dialog state
   prDialog: PRDialogState;
-  
-  // Actions
+
+  // Create worktree dialog state
+  createWorktreeDialog: CreateWorktreeDialogState;
+
+  workspaceSettingsDialog: WorkspaceSettingsDialogState;
+
+  dbResetDialog: DbResetDialogState;
+
+  alertDialog: AlertDialogState | null;
+
   setWorkspaces: (workspaces: WorkspaceState[]) => void;
   setWorktrees: (worktrees: WorktreeState[]) => void;
   setAgentSessions: (sessions: AgentSessionState[]) => void;
@@ -147,4 +186,18 @@ export interface AppState {
   setPRDialogTitle: (title: string) => void;
   setPRDialogBody: (body: string) => void;
   resetPRDialog: () => void;
+
+  // Create worktree dialog actions
+  setCreateWorktreeDialogOpen: (isOpen: boolean, workspaceId?: string) => void;
+  resetCreateWorktreeDialog: () => void;
+
+  setWorkspaceSettingsDialogOpen: (isOpen: boolean, workspaceId?: string) => void;
+  resetWorkspaceSettingsDialog: () => void;
+
+  // DB reset dialog actions
+  setDbResetDialogOpen: (isOpen: boolean, errorMessage?: string) => void;
+  resetDbResetDialog: () => void;
+
+  showAlertDialog: (config: AlertDialogConfig) => void;
+  hideAlertDialog: () => void;
 }

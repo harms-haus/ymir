@@ -1,6 +1,6 @@
 import { encode, decode } from '@msgpack/msgpack';
-import { ClientMessage, ServerMessage, PROTOCOL_VERSION } from '../types/protocol';
-import { updateStateFromServerMessage } from '../store';
+import { ClientMessage, ServerMessage, PROTOCOL_VERSION, StateSnapshot } from '../types/protocol';
+import { updateStateFromServerMessage, useStore, useToastStore } from '../store';
 
 // Generate a UUID v4 for request IDs
 function generateId(): string {
@@ -79,8 +79,9 @@ export class YmirClient {
         this.flushMessageQueue();
         this.startHeartbeat();
 
-        // Only call reconnect handlers on true reconnections
+        // Show toast and call reconnect handlers on true reconnections
         if (isReconnection) {
+          this.showReconnectToast();
           this.reconnectHandlers.forEach(handler => {
             handler();
           });
@@ -126,7 +127,7 @@ export class YmirClient {
     }
   }
   
-  public disconnect(): void {
+  public disconnect(code: number = 1000): void {
     this.reconnectEnabled = false;
 
     if (this.reconnectTimer) {
@@ -135,11 +136,10 @@ export class YmirClient {
     }
 
     if (this.ws) {
-      this.ws.close();
+      this.ws.close(code);
       this.ws = null;
     }
 
-    // Remove beforeunload listener to prevent memory leaks
     if (this.beforeUnloadHandler && typeof window !== 'undefined') {
       window.removeEventListener('beforeunload', this.beforeUnloadHandler);
       this.beforeUnloadHandler = null;
@@ -164,9 +164,17 @@ export class YmirClient {
   }
   
   private getReconnectDelay(): number {
-    const baseDelay = Math.min(1000 * Math.pow(2, this.reconnectAttempts - 1), this.maxReconnectDelay);
-    const jitter = Math.random() * 1000;
-    return baseDelay + jitter;
+    // Exponential backoff: 1s, 2s, 4s, 8s, 16s, then cap at maxReconnectDelay
+    const backoffSequence = [1000, 2000, 4000, 8000, 16000];
+    const baseDelay = this.reconnectAttempts < backoffSequence.length
+      ? backoffSequence[this.reconnectAttempts]
+      : this.maxReconnectDelay;
+
+    // Add jitter: random between -20% and +20% of base delay
+    // This prevents thundering herd when server comes back online
+    const jitterRange = baseDelay * 0.2; // 20% of base delay
+    const jitter = (Math.random() * 2 - 1) * jitterRange; // -20% to +20%
+    return Math.min(baseDelay + jitter, this.maxReconnectDelay);
   }
   
   private updateStatus(status: ConnectionStatus): void {
@@ -222,6 +230,16 @@ export class YmirClient {
       this.heartbeatTimeoutTimer = null;
     }
   }
+
+  private showReconnectToast(): void {
+    const { addNotification } = useToastStore.getState();
+    addNotification({
+      variant: 'success',
+      title: 'Reconnected',
+      description: 'Connection to server restored',
+      duration: 3000,
+    });
+  }
   
   private encodeMessage(message: ClientMessage): ArrayBuffer {
     // Extract type and wrap remaining fields in data property
@@ -275,6 +293,8 @@ export class YmirClient {
     if (message.type === 'Pong') {
       console.log('[WS] [Heartbeat] Received Pong, clearing timeout');
       this.handlePong();
+    } else if (message.type === 'StateSnapshot') {
+      this.handleStateSnapshot(message);
     } else {
       updateStateFromServerMessage(message);
     }
@@ -285,6 +305,16 @@ export class YmirClient {
         handler(message);
       });
     }
+  }
+
+  private handleStateSnapshot(message: StateSnapshot): void {
+    const { stateFromSnapshot } = useStore.getState();
+    stateFromSnapshot({
+      workspaces: message.workspaces,
+      worktrees: message.worktrees,
+      agentSessions: message.agentSessions,
+      terminalSessions: message.terminalSessions,
+    });
   }
 
   private flushMessageQueue(): void {
