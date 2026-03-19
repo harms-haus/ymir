@@ -1,0 +1,13 @@
+
+> ymir-web@0.1.0 test:run
+> vitest run fixtureValidator
+
+
+[1m[46m RUN [49m[22m [36mv4.1.0 [39m[90m/home/blake/Documents/software/ymir/apps/web[39m
+
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m19 passed[39m[22m[90m (19)[39m
+[2m   Start at [22m 21:52:56
+[2m   Duration [22m 396ms[2m (transform 27ms, setup 33ms, import 22ms, tests 8ms, environment 273ms)[22m
+

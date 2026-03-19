@@ -2,6 +2,7 @@
 target/
 **/*.rs.bk
 Cargo.lock
+test-fixtures/
 
 # === Node ===
 node_modules/
