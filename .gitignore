@@ -45,3 +45,4 @@ apps/tauri/src-tauri/gen/
 
 # === TypeScript build artifacts ===
 *.tsbuildinfo
+.dual-graph/

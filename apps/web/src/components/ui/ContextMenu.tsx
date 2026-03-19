@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { ContextMenu as BaseContextMenu } from '@base-ui/react/context-menu'
 import type { ContextMenuState, ContextMenuAction } from '../../hooks/useContextMenu'
 
@@ -12,10 +13,12 @@ export interface ContextMenuProps {
   state: ContextMenuState
   items: ContextMenuItem[]
   onAction: (action: ContextMenuAction) => void
+  closeMenu?: () => void
 }
 
-export function ContextMenu({ state, items, onAction }: ContextMenuProps) {
+export function ContextMenu({ state, items, onAction, closeMenu }: ContextMenuProps) {
   const { isOpen, x, y, targetType } = state
+  const popupRef = useRef<HTMLDivElement>(null)
 
   if (!isOpen) {
     return null
@@ -41,7 +44,14 @@ export function ContextMenu({ state, items, onAction }: ContextMenuProps) {
   }
 
   return (
-    <BaseContextMenu.Root open={isOpen} onOpenChange={() => {}}>
+    <BaseContextMenu.Root
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open && closeMenu) {
+          closeMenu()
+        }
+      }}
+    >
       <BaseContextMenu.Portal>
         <BaseContextMenu.Positioner
           style={{
@@ -52,6 +62,7 @@ export function ContextMenu({ state, items, onAction }: ContextMenuProps) {
           }}
         >
           <BaseContextMenu.Popup
+            ref={popupRef}
             style={{
               backgroundColor: 'hsl(var(--card))',
               border: '1px solid hsl(var(--border))',

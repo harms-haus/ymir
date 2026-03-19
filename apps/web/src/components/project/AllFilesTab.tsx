@@ -323,6 +323,7 @@ export function AllFilesTab() {
         state={contextMenuState}
         items={contextMenuItems as any}
         onAction={handleContextMenuAction as any}
+        closeMenu={closeMenu}
       />
     </div>
   );

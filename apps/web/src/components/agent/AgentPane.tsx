@@ -47,7 +47,7 @@ export function AgentPane({ worktreeId, agentSession }: AgentPaneProps) {
   const creationInProgressRef = useRef(false);
 
   const handleSpawnAgent = useCallback(() => {
-    const agentType = 'claude';
+    const agentType = 'opencode';
 
     const message: AgentSpawn = {
       type: 'AgentSpawn',
