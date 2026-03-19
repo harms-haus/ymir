@@ -30,7 +30,7 @@ function callMessageHandler(event: MessageEvent) {
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { YmirClient, getWebSocketClient, resetWebSocketClient } from '../ws';
 import { encode, decode } from '@msgpack/msgpack';
-import type { ServerMessage, StateSnapshot } from '../../types/protocol';
+import type { ServerMessage, StateSnapshot } from '../../types/generated/protocol';
 import { useToastStore, useStore } from '../../store';
 
 const wsMock = vi.fn(function WebSocketMock(this: any, _url: string) {

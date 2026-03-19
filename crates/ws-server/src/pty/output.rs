@@ -1,6 +1,7 @@
 //! PTY output reader task
 
 use std::io::Read;
+use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::task::JoinHandle;
@@ -8,16 +9,17 @@ use tracing::{debug, error, info, instrument, warn};
 use uuid::Uuid;
 
 use crate::protocol::{ServerMessage, ServerMessagePayload, TerminalOutput};
+use crate::state::AppState;
 
 const READ_BUFFER_SIZE: usize = 4096;
 
 const READ_TIMEOUT_MS: u64 = 100;
 
-#[instrument(skip(reader, broadcast_tx), fields(session_id = %session_id))]
+#[instrument(skip(reader, state), fields(session_id = %session_id))]
 pub fn spawn_output_reader(
     session_id: Uuid,
     mut reader: Box<dyn Read + Send>,
-    broadcast_tx: tokio::sync::broadcast::Sender<ServerMessage>,
+    state: Arc<AppState>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         info!("PTY output reader started");
@@ -56,14 +58,8 @@ pub fn spawn_output_reader(
                             },
                         ));
 
-                        match broadcast_tx.send(output_msg) {
-                            Ok(_) => {
-                                debug!(bytes = data.len(), "Broadcast terminal output");
-                            }
-                            Err(e) => {
-                                warn!("Failed to broadcast terminal output: {}", e);
-                            }
-                        }
+                        state.broadcast(output_msg).await;
+                        debug!(bytes = data.len(), "Broadcast terminal output");
                     }
                 }
                 Err(e) => {
@@ -87,7 +83,7 @@ pub fn spawn_output_reader(
                         data: lossy_str.to_string(),
                     },
                 ));
-                let _ = broadcast_tx.send(output_msg);
+                state.broadcast(output_msg).await;
             }
         }
 

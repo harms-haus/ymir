@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { useStore } from '../store';
 import { getWebSocketClient } from '../lib/ws';
-import type { AgentStatus } from '../types/protocol';
+import type { AgentStatus } from '../types/generated/protocol';
 
 export type StatusDotStatus = 'working' | 'waiting' | 'idle';
 
@@ -87,7 +87,7 @@ function mapAgentStatusToStatusDot(agentStatus: AgentStatus): StatusDotStatus {
   }
 }
 
-export function useAgentList(worktreeId: string | null): import('../types/protocol').AgentSession[] {
+export function useAgentList(worktreeId: string | null): import('../types/generated/protocol').AgentSession[] {
   const allSessions = useStore((state) => state.agentSessions);
   return useMemo(
     () => (worktreeId ? allSessions.filter((as) => as.worktreeId === worktreeId) : []),
@@ -97,7 +97,7 @@ export function useAgentList(worktreeId: string | null): import('../types/protoc
 
 export function useWorkspaceAgentStatusSummary(
   workspaceId: string,
-  worktrees: import('../types/protocol').Worktree[]
+  worktrees: import('../types/generated/protocol').Worktree[]
 ): { working: number; waiting: number; idle: number } {
   const allSessions = useStore((state) => state.agentSessions);
 

@@ -397,6 +397,11 @@ export interface TerminalCreated {
   shell: string;
 }
 
+export interface TerminalRemoved {
+  type: 'TerminalRemoved';
+  sessionId: string;
+}
+
 // File events
 export interface FileContentMessage {
   type: 'FileContent';
@@ -464,6 +469,7 @@ export type ServerMessage =
   | AgentPrompt
   | TerminalOutput
   | TerminalCreated
+  | TerminalRemoved
   | FileContentMessage
   | GitStatusResult
   | GitDiffResult
@@ -668,6 +674,10 @@ export function isTerminalCreated(message: AnyMessage | UnknownMessage): message
   return message.type === 'TerminalCreated';
 }
 
+export function isTerminalRemoved(message: AnyMessage | UnknownMessage): message is TerminalRemoved {
+  return message.type === 'TerminalRemoved';
+}
+
 export function isFileContent(message: AnyMessage | UnknownMessage): message is FileContentMessage {
   return message.type === 'FileContent';
 }
@@ -728,7 +738,7 @@ export function decodeMessage(data: ArrayBuffer | Uint8Array): AnyMessage | Unkn
       'WorkspaceCreated', 'WorkspaceDeleted', 'WorkspaceUpdated',
       'WorktreeCreated', 'WorktreeDeleted', 'WorktreeStatus',
       'AgentStatusUpdate', 'AgentOutput', 'AgentPrompt',
-      'TerminalOutput', 'TerminalCreated',
+      'TerminalOutput', 'TerminalCreated', 'TerminalRemoved',
       'FileContent',
       'GitStatusResult', 'GitDiffResult',
       'Error', 'Pong', 'Notification',

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useWebSocketClient } from '../../hooks/useWebSocket';
 import { useAgentStatus } from '../../hooks/useAgentStatus';
-import { AgentOutput, AgentPrompt, AgentStatus } from '../../types/protocol';
+import { AgentOutput, AgentPrompt, AgentStatus } from '../../types/generated/protocol';
 
 interface AgentMessage {
   id: string;

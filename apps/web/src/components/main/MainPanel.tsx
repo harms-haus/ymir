@@ -37,20 +37,20 @@ export function MainPanel() {
 
         <Separator id="agent-terminal" className="panel-handle-vertical" />
 
-        <Panel
-          id="terminal"
-          defaultSize={40}
-          minSize={100}
-          className="panel terminal-panel"
-        >
-          <div className="panel-content h-full">
-            {activeWorktree ? (
-              <TerminalPane worktreeId={activeWorktree.id} />
-            ) : (
-              <p className="placeholder-text">Select a worktree to view terminal</p>
-            )}
-          </div>
-        </Panel>
+      <Panel
+        id="terminal"
+        defaultSize={40}
+        minSize={100}
+        className="panel terminal-panel"
+      >
+        <div className="panel-content terminal-panel-content">
+          {activeWorktree ? (
+            <TerminalPane worktreeId={activeWorktree.id} />
+          ) : (
+            <p className="placeholder-text">Select a worktree to view terminal</p>
+          )}
+        </div>
+      </Panel>
       </Group>
     </div>
   )

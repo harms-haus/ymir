@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import ReactDiffViewer from 'react-diff-viewer-continued';
 import { useWebSocketClient } from '../../hooks/useWebSocket';
-import { GitDiff, GitDiffResult } from '../../types/protocol';
+import { GitDiff, GitDiffResult } from '../../types/generated/protocol';
 
 interface DiffTabProps {
   filePath: string;

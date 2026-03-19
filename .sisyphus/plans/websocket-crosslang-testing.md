@@ -677,7 +677,7 @@ session_id = task(
 
 ### Wave 3: Fixture Verification
 
-- [ ] 46. Verify all fixtures created and valid
+- [x] 46. Verify all fixtures created and valid
 
   **What to do**:
   - Verify all 42+ `.msgpack` fixture files exist in `test-fixtures/`
@@ -724,7 +724,7 @@ session_id = task(
 
 ### Wave 4: Migration
 
-- [ ] 47. Update TypeScript imports
+- [x] 47. Update TypeScript imports
 
   **What to do**:
   - Update all imports in `apps/web/src/` to use generated types
@@ -750,7 +750,7 @@ session_id = task(
 
   **Commit**: YES (group with 48, 49)
 
-- [ ] 48. Atomic replacement of manual types
+- [x] 48. Atomic replacement of manual types
 
   **What to do**:
   - Rename `apps/web/src/types/protocol.ts` to `protocol.ts.bak`
@@ -771,7 +771,7 @@ session_id = task(
 
   **Commit**: YES (group with 47, 49)
 
-- [ ] 49. Remove manual protocol.ts
+- [x] 49. Remove manual protocol.ts
 
   **What to do**:
   - Delete `apps/web/src/types/protocol.ts.bak`
@@ -796,7 +796,7 @@ session_id = task(
 
 ### Wave 5: Finalization
 
-- [ ] 50. Documentation update
+- [x] 50. Documentation update
 
   **What to do**:
   - Update ARCHITECTURE.md with ts-rs workflow
@@ -834,19 +834,19 @@ session_id = task(
 
 ## Final Verification Wave
 
-- [ ] F1. **Full test suite pass** - `oracle`
+- [x] F1. **Full test suite pass** - `oracle`
   - Run complete test suite: `cargo test --workspace`
   - Run TypeScript tests: `npm run test:run`
   - Verify no regressions
   - Output: All tests pass
 
-- [ ] F2. **Schema drift check** - `deep`
+- [x] F2. **Schema drift check** - `deep`
   - Generate fresh TypeScript from Rust
   - Compare against committed types
   - Verify no uncommitted drift
   - Output: `No drift detected`
 
-- [ ] F3. **Manual QA validation** - `unspecified-high`
+- [x] F3. **Manual QA validation** - `unspecified-high`
   - Start development servers
   - Test WebSocket connection
   - Send/receive each message type

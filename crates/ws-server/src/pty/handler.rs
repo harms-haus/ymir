@@ -65,7 +65,7 @@ pub async fn handle_terminal_create(
     let output_handle = spawn_output_reader(
         session_id,
         reader,
-        state.broadcast_tx.clone(),
+        Arc::clone(&state),
     );
     pty_manager.register_output_reader(session_id, output_handle);
 
@@ -93,17 +93,6 @@ pub async fn handle_terminal_create(
             shell: shell.clone(),
         });
     }
-
-    let broadcast_msg = ServerMessage::new(ServerMessagePayload::TerminalCreated(
-        crate::protocol::TerminalCreated {
-            session_id,
-            worktree_id: msg.worktree_id,
-            label: msg.label.clone(),
-            shell: shell.clone(),
-        },
-    ));
-
-    let _ = state.broadcast_tx.send(broadcast_msg);
 
     ServerMessage::new(ServerMessagePayload::TerminalCreated(
         crate::protocol::TerminalCreated {
@@ -196,12 +185,15 @@ pub async fn handle_terminal_kill(
     };
 
     if let Err(e) = pty_manager.kill(msg.session_id) {
-        return ServerMessage::new(ServerMessagePayload::Error(Error {
-            code: "PTY_KILL_ERROR".to_string(),
-            message: e.to_string(),
-            details: None,
+        if !e.to_string().contains("not found") {
+            return ServerMessage::new(ServerMessagePayload::Error(Error {
+                code: "PTY_KILL_ERROR".to_string(),
+                message: e.to_string(),
+                details: None,
                     request_id: None,
-        }));
+            }));
+        }
+        tracing::warn!("PTY session not found (may be stale): {}", msg.session_id);
     }
 
     {
@@ -212,6 +204,16 @@ pub async fn handle_terminal_kill(
     if let Err(e) = state.db.delete_terminal_session(&msg.session_id.to_string()).await {
         tracing::warn!("Failed to delete terminal session from database: {}", e);
     }
+
+    tracing::info!("Broadcasting TerminalRemoved for session: {}", msg.session_id);
+    let broadcast_msg = ServerMessage::new(ServerMessagePayload::TerminalRemoved(
+        crate::protocol::TerminalRemoved {
+            session_id: msg.session_id,
+        },
+    ));
+
+    state.broadcast(broadcast_msg).await;
+    tracing::info!("Successfully broadcast TerminalRemoved");
 
     ServerMessage::new(ServerMessagePayload::Ack(crate::protocol::Ack {
         message_id: msg.session_id,

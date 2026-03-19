@@ -3,9 +3,11 @@ import { Tabs } from '@base-ui/react';
 import { useStore, selectTerminalSessionsByWorktreeId } from '../../store';
 import { useWebSocketClient } from '../../hooks/useWebSocket';
 import { Terminal, type TerminalRef } from './TerminalView';
-import { TerminalCreate, TerminalOutput } from '../../types/protocol';
+import { TerminalCreate, TerminalOutput } from '../../types/generated/protocol';
 import TerminalIcon from '@mui/icons-material/Terminal';
+import AddIcon from '@mui/icons-material/Add';
 import { useShallow } from 'zustand/react/shallow';
+import '../../styles/terminal.css';
 
 interface TerminalTab {
   sessionId: string;
@@ -34,7 +36,7 @@ function TerminalPanel({ tab }: TerminalPanelProps) {
   return (
     <Tabs.Panel
       value={tab.sessionId}
-      className="h-full data-[inactive]:hidden"
+      className="terminal-tab-content"
     >
       <Terminal terminalSessionId={tab.sessionId} ref={terminalRef} />
     </Tabs.Panel>
@@ -83,15 +85,7 @@ export function TerminalPane({ worktreeId }: TerminalPaneProps) {
       type: 'TerminalKill',
       sessionId,
     });
-
-    if (activeTab === sessionId) {
-      const remainingTabs = tabs.filter(tab => tab.sessionId !== sessionId);
-      if (remainingTabs.length > 0) {
-        setActiveTab(remainingTabs[0].sessionId);
-      } else {
-        setActiveTab(null);
-      }
-    }
+    // No local state update - let TerminalRemoved message flow handle it
   };
 
   const handleCreateTab = useCallback(() => {
@@ -117,29 +111,20 @@ export function TerminalPane({ worktreeId }: TerminalPaneProps) {
     }
   }, [worktreeId, tabs.length, handleCreateTab]);
 
-  return (
-    <div className="flex flex-col h-full">
+   return (
+    <div className="terminal-pane">
       <Tabs.Root
         value={activeTab || (tabs.length === 0 ? 'empty' : undefined)}
         onValueChange={(value: string | null) => setActiveTab(value)}
-        className="flex flex-col h-full"
       >
-        <Tabs.List className="flex items-center border-b border-border bg-background px-2">
+        <Tabs.List className="terminal-tabs-list">
           {tabs.map((tab) => (
             <Tabs.Tab
               key={tab.sessionId}
               value={tab.sessionId}
               onMouseDown={(e: React.MouseEvent) => handleTabMouseDown(tab.sessionId, e)}
-              className={`
-                flex items-center gap-2 px-3 py-2 text-sm font-medium
-                border-b-2 border-transparent
-                hover:bg-muted/50 hover:border-border
-                data-[selected]:text-foreground data-[selected]:border-primary
-                text-muted-foreground
-                cursor-pointer select-none
-              `}
-            >
-              <TerminalIcon className="w-4 h-4" />
+              className="terminal-tab">
+              <TerminalIcon className="terminal-tab-icon" />
               <span>{tab.label}</span>
               <div
                 role="button"
@@ -154,7 +139,7 @@ export function TerminalPane({ worktreeId }: TerminalPaneProps) {
                     handleCloseTab(tab.sessionId);
                   }
                 }}
-                className="ml-1 p-1 rounded hover:bg-muted opacity-50 hover:opacity-100 cursor-pointer"
+                className="terminal-tab-close"
                 aria-label="Close tab"
               >
                 ×
@@ -165,29 +150,27 @@ export function TerminalPane({ worktreeId }: TerminalPaneProps) {
           <button
             type="button"
             onClick={handleCreateTab}
-            className="ml-2 p-2 rounded hover:bg-muted opacity-50 hover:opacity-100"
+            className="terminal-add-tab"
             aria-label="Create new terminal"
             title="Create new terminal"
           >
-            +
+            <AddIcon className="terminal-add-icon" />
           </button>
         </Tabs.List>
 
-        <div className="flex-1 overflow-hidden">
-          {tabs.length === 0 ? (
-            <Tabs.Panel value="empty" className="h-full">
-              <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                <TerminalIcon className="w-12 h-12 mb-4 opacity-50" />
-                <p className="text-lg mb-2">No terminals</p>
-                <p className="text-sm">Click + to create one</p>
-              </div>
-            </Tabs.Panel>
-          ) : (
-            tabs.map((tab) => (
-              <TerminalPanel key={tab.sessionId} tab={tab} />
-            ))
-          )}
-        </div>
+        {tabs.length === 0 ? (
+          <Tabs.Panel value="empty">
+            <div className="terminal-empty-state">
+              <TerminalIcon className="terminal-empty-icon" />
+              <p className="terminal-empty-message">No terminals</p>
+              <p className="terminal-empty-hint">Click + to create one</p>
+            </div>
+          </Tabs.Panel>
+        ) : (
+          tabs.map((tab) => (
+            <TerminalPanel key={tab.sessionId} tab={tab} />
+          ))
+        )}
       </Tabs.Root>
     </div>
   );

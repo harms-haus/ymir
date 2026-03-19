@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AgentChat } from '../AgentChat';
 import { useWebSocketClient } from '../../../hooks/useWebSocket';
 import { useAgentStatus } from '../../../hooks/useAgentStatus';
-import { AgentOutput, AgentPrompt } from '../../../types/protocol';
+import { AgentOutput, AgentPrompt } from '../../../types/generated/protocol';
 
 vi.mock('../../../hooks/useWebSocket');
 vi.mock('../../../hooks/useAgentStatus');

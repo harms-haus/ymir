@@ -4,7 +4,7 @@ import { useStore, selectActiveAgentTabId, selectAgentTabsByWorktreeId, AgentTab
 import { useWebSocketClient } from '../../hooks/useWebSocket';
 import { AgentChat } from './AgentChat';
 import { DiffTab } from '../editor/DiffTab';
-import { AgentSession, AgentSend, AgentSpawn } from '../../types/protocol';
+import { AgentSession, AgentSend, AgentSpawn } from '../../types/generated/protocol';
 
 interface AgentPaneProps {
   worktreeId: string;

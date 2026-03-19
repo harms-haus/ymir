@@ -9,7 +9,7 @@ import {
   isGitFailureError,
   isAgentCrashError,
   isDbError,
-} from '../types/protocol';
+} from '../types/generated/protocol';
 import { getWebSocketClient } from './ws';
 import { useToastStore, useStore } from '../store';
 import { showNotification } from './tauri';

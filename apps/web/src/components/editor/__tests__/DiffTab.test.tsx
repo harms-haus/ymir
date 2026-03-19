@@ -2,7 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DiffTab } from '../DiffTab';
 import { useWebSocketClient } from '../../../hooks/useWebSocket';
-import { GitDiffResult } from '../../../types/protocol';
+import { GitDiffResult } from '../../../types/generated/protocol';
 
 vi.mock('../../../hooks/useWebSocket');
 

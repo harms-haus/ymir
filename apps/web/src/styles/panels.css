@@ -64,6 +64,13 @@
   padding: 0;
 }
 
+/* Terminal panel needs overflow: hidden to allow proper shrinking */
+.terminal-panel .panel-content {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
 /* Placeholder text */
 .placeholder-text {
   color: hsl(var(--muted-foreground));

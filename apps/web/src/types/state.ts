@@ -3,7 +3,7 @@
  * Defines the shape of the global state managed by the WebSocket client
  */
 
-import { AgentStatus } from './protocol';
+import { AgentStatus } from './generated/protocol';
 
 // Workspace and Worktree state (simplified from protocol types)
 export interface WorkspaceState {

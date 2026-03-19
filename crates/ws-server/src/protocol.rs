@@ -123,6 +123,7 @@ pub enum ServerMessagePayload {
     AgentPrompt(AgentPrompt),
     TerminalOutput(TerminalOutput),
     TerminalCreated(TerminalCreated),
+    TerminalRemoved(TerminalRemoved),
     FileContent(FileContent),
     GitStatusResult(GitStatusResult),
     GitDiffResult(GitDiffResult),
@@ -138,6 +139,7 @@ pub enum ServerMessagePayload {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct Ack {
+    #[serde(with = "uuid_str")]
     #[ts(type = "string")]
     pub message_id: Uuid,
     pub status: AckStatus,
@@ -174,6 +176,7 @@ pub struct WorkspaceDelete {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct WorkspaceRename {
+    #[serde(with = "uuid_str")]
     #[ts(type = "string")]
     pub workspace_id: Uuid,
     pub new_name: String,
@@ -183,12 +186,14 @@ pub struct WorkspaceRename {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct WorkspaceUpdate {
+    #[serde(with = "uuid_str")]
     #[ts(type = "string")]
     pub workspace_id: Uuid,
     pub color: Option<String>,
     pub icon: Option<String>,
     pub worktree_base_dir: Option<String>,
     pub settings: Option<String>,
+    #[serde(with = "optional_uuid_str")]
     #[ts(type = "string")]
     pub request_id: Option<Uuid>,
 }
@@ -197,10 +202,12 @@ pub struct WorkspaceUpdate {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct WorktreeCreate {
+    #[serde(with = "uuid_str")]
     #[ts(type = "string")]
     pub workspace_id: Uuid,
     pub branch_name: String,
     pub agent_type: Option<String>,
+    #[serde(with = "optional_uuid_str")]
     #[ts(as = "Option<String>")]
     pub request_id: Option<Uuid>,
     pub use_existing_branch: Option<bool>,
@@ -219,6 +226,7 @@ pub struct WorktreeDelete {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct WorktreeMerge {
+    #[serde(with = "uuid_str")]
     #[ts(type = "string")]
     pub worktree_id: Uuid,
     pub squash: bool,
@@ -229,6 +237,7 @@ pub struct WorktreeMerge {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct WorktreeList {
+    #[serde(with = "uuid_str")]
     #[ts(as = "String")]
     pub workspace_id: Uuid,
 }
@@ -237,6 +246,7 @@ pub struct WorktreeList {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct AgentSpawn {
+    #[serde(with = "uuid_str")]
     #[ts(type = "string")]
     pub worktree_id: Uuid,
     pub agent_type: String,
@@ -246,6 +256,7 @@ pub struct AgentSpawn {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct AgentSend {
+    #[serde(with = "uuid_str")]
     #[ts(type = "string")]
     pub worktree_id: Uuid,
     pub message: String,
@@ -255,6 +266,7 @@ pub struct AgentSend {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct AgentCancel {
+    #[serde(with = "uuid_str")]
     #[ts(type = "string")]
     pub worktree_id: Uuid,
 }
@@ -263,6 +275,7 @@ pub struct AgentCancel {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct TerminalInput {
+    #[serde(with = "uuid_str")]
     #[ts(type = "string")]
     pub session_id: Uuid,
     pub data: String,
@@ -272,6 +285,7 @@ pub struct TerminalInput {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct TerminalResize {
+    #[serde(with = "uuid_str")]
     #[ts(type = "string")]
     pub session_id: Uuid,
     pub cols: u16,
@@ -282,6 +296,7 @@ pub struct TerminalResize {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct TerminalCreate {
+    #[serde(with = "uuid_str")]
     #[ts(type = "string")]
     pub worktree_id: Uuid,
     pub label: Option<String>,
@@ -292,6 +307,7 @@ pub struct TerminalCreate {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct FileRead {
+    #[serde(with = "uuid_str")]
     #[ts(type = "string")]
     pub worktree_id: Uuid,
     pub path: String,
@@ -301,6 +317,7 @@ pub struct FileRead {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct FileWrite {
+    #[serde(with = "uuid_str")]
     #[ts(type = "string")]
     pub worktree_id: Uuid,
     pub path: String,
@@ -311,6 +328,7 @@ pub struct FileWrite {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct GitStatus {
+    #[serde(with = "uuid_str")]
     #[ts(type = "string")]
     pub worktree_id: Uuid,
 }
@@ -319,6 +337,7 @@ pub struct GitStatus {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct GitDiff {
+    #[serde(with = "uuid_str")]
     #[ts(type = "string")]
     pub worktree_id: Uuid,
     pub file_path: Option<String>,
@@ -328,6 +347,7 @@ pub struct GitDiff {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct GitCommit {
+    #[serde(with = "uuid_str")]
     #[ts(type = "string")]
     pub worktree_id: Uuid,
     pub message: String,
@@ -338,6 +358,7 @@ pub struct GitCommit {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct CreatePR {
+    #[serde(with = "uuid_str")]
     #[ts(type = "string")]
     pub worktree_id: Uuid,
     pub title: String,
@@ -585,7 +606,17 @@ pub struct TerminalCreated {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
+pub struct TerminalRemoved {
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub session_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct TerminalKill {
+    #[serde(with = "uuid_str")]
     #[ts(type = "string")]
     pub session_id: Uuid,
 }
@@ -629,6 +660,7 @@ pub struct Error {
     pub code: String,
     pub message: String,
     pub details: Option<String>,
+    #[serde(with = "optional_uuid_str")]
     #[ts(as = "Option<String>")]
     #[serde(default)]
     pub request_id: Option<Uuid>,
@@ -1130,6 +1162,14 @@ mod tests {
             worktree_id: Uuid::new_v4(),
             label: Some("term".to_string()),
             shell: "/bin/bash".to_string(),
+        }));
+        test_roundtrip(msg);
+    }
+
+    #[test]
+    fn test_terminal_removed_roundtrip() {
+        let msg = ServerMessage::new(ServerMessagePayload::TerminalRemoved(TerminalRemoved {
+            session_id: Uuid::new_v4(),
         }));
         test_roundtrip(msg);
     }
