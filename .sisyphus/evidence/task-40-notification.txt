@@ -1,0 +1,68 @@
+# Task 40: Notification - Schema Generation and Fixture Creation
+
+## Date: 2026-03-19
+
+## Completed Successfully
+
+### What was done:
+1. Added `#[derive(ts_rs::TS)]` and `#[ts(export)]` to Rust Notification struct
+2. Added `#[derive(ts_rs::TS)]` and `#[ts(export)]` to Rust NotificationLevel enum
+3. Created TypeScript binding at `bindings/Notification.ts`
+4. Created TypeScript binding at `bindings/NotificationLevel.ts`
+5. Created binary fixture at `test-fixtures/Notification.msgpack` (85 bytes)
+6. Added test case `test_notification_fixture()` to test_fixtures.rs
+7. Fixed Error struct Default implementation (added manual impl)
+8. Fixed Error usages throughout codebase (added `request_id: None,` field)
+
+### Notification Schema:
+- **Rust**: `struct Notification { level: NotificationLevel, title: String, message: String }`
+- **TypeScript (manual)**: `{ type: 'Notification', level: 'info' | 'warning' | 'error', title: string, message: string }`
+- **Generated binding**: `{ level: NotificationLevel, title: string, message: string }`
+
+### NotificationLevel Schema:
+- **Rust**: `enum NotificationLevel { Info, Warning, Error }`
+- **Generated TypeScript**: `"Info" | "Warning" | "Error"`
+
+### Key Pattern:
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Notification {
+    pub level: NotificationLevel,
+    pub title: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[ts(export)]
+pub enum NotificationLevel {
+    Info,
+    Warning,
+    Error,
+}
+```
+
+### Schema Mismatch (NOT FIXED):
+- Rust enum uses PascalCase: `Info`, `Warning`, `Error`
+- TypeScript manual definition uses lowercase: `'info' | 'warning' | 'error'`
+- This is a known mismatch, out of scope for this task
+
+### Files Modified:
+- `crates/ws-server/src/protocol.rs` - Added ts-rs derive (lines 628-652)
+- `crates/ws-server/src/protocol.rs` - Fixed Error Default impl (lines 616-628)
+- `crates/ws-server/src/test_fixtures.rs` - Added fixture test (lines 859-882)
+- `crates/ws-server/bindings/Notification.ts` - Created TypeScript binding
+- `crates/ws-server/bindings/NotificationLevel.ts` - Created TypeScript binding
+- `test-fixtures/Notification.msgpack` - Created binary fixture (85 bytes)
+
+### Related Fixes:
+- Fixed Error struct by adding manual `impl Default for Error`
+- Fixed Error usages in `router.rs`, `agent/handler.rs`, `pty/handler.rs` by adding `request_id: None,` field
+
+### Test Results:
+- `test_notification_fixture ... ok`
+- All 200 tests passed
+
+### Evidence:
+- Evidence saved to: `.sisyphus/evidence/task-40-notification.txt`

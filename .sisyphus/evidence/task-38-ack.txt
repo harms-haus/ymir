@@ -1,0 +1,82 @@
+# Task 38: Ack Type - Evidence
+
+## Summary
+Successfully added ts-rs derive macros to Rust Ack/AckStatus types and created TypeScript bindings and test fixtures.
+
+## Changes Made
+
+### 1. Rust Protocol (crates/ws-server/src/protocol.rs)
+
+Added ts-rs derive macros to Ack struct and AckStatus enum:
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Ack {
+    #[ts(type = "string")]
+    pub message_id: Uuid,
+    pub status: AckStatus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[ts(export)]
+pub enum AckStatus {
+    Success,
+    Error(String),
+}
+```
+
+### 2. TypeScript Bindings (crates/ws-server/bindings/Ack.ts)
+
+Created TypeScript type definitions matching the Rust types:
+
+```typescript
+export type Ack = { messageId: string, status: AckStatus, };
+export type AckStatus = { Success: void } | { Error: string };
+```
+
+### 3. Test Fixtures
+
+Created MessagePack binary fixtures:
+- `test-fixtures/Ack.msgpack` (84 bytes) - Ack with Success status
+- `test-fixtures/AckError.msgpack` (102 bytes) - Ack with Error status
+
+### 4. Test Cases (crates/ws-server/src/test_fixtures.rs)
+
+Added two test functions:
+- `test_ack_fixture()` - Tests Ack with AckStatus::Success
+- `test_ack_error_fixture()` - Tests Ack with AckStatus::Error variant
+
+## Verification
+
+### Schema Synthesis
+- **Rust**: `message_id: Uuid`, `status: AckStatus` (enum with Success/Error variants)
+- **TypeScript**: `messageId: string`, `status: AckStatus` (union type)
+- Fields match between implementations
+
+### Compilation Note
+The crate has pre-existing compilation errors unrelated to Ack changes:
+- Error struct has new `request_id` field that's missing in handler files
+- These errors are in agent/handler.rs, pty/handler.rs, and router.rs
+
+### Files Modified
+1. crates/ws-server/src/protocol.rs - Added ts-rs derives
+2. crates/ws-server/src/test_fixtures.rs - Added Ack test cases
+3. crates/ws-server/bindings/Ack.ts - Created TypeScript bindings
+4. test-fixtures/Ack.msgpack - Created fixture
+5. test-fixtures/AckError.msgpack - Created fixture
+
+## Cross-Language Compatibility
+
+The Ack type is used for bidirectional acknowledgment messages:
+- Server sends Ack after processing client requests
+- Client can send Ack as acknowledgment back
+
+Message format:
+- `version`: u32 (protocol version)
+- `type`: "Ack"
+- `messageId`: string (UUID)
+- `status`: Success | Error(string)
+
+Generated: Wed Mar 18 23:55:00 UTC 2026

@@ -1,0 +1,49 @@
+# Task 29: GitCommit Schema Generation - Evidence
+
+## Summary
+Successfully added ts-rs derive macro to Rust GitCommit struct and created binary fixture.
+
+## Rust Type (protocol.rs)
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct GitCommit {
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    pub message: String,
+    pub files: Option<Vec<String>>,
+}
+```
+
+## TypeScript Type (generated: bindings/GitCommit.ts)
+```typescript
+export type GitCommit = { worktreeId: string, message: string, files: Array<string> | null, };
+```
+
+## Schema Synthesis
+| Field       | Rust Type            | TypeScript Type | Notes                        |
+|-------------|---------------------|-----------------|------------------------------|
+| worktree_id | Uuid                | string          | UUID serialized as string    |
+| message     | String              | string          | Direct match                 |
+| files       | Option<Vec<String>> | Array<string>   | null when None               |
+
+## Verification Results
+- [x] Rust type has #[derive(TS, Serialize, Deserialize)]
+- [x] TypeScript type generated in crates/ws-server/bindings/GitCommit.ts
+- [x] Binary fixture exists at test-fixtures/GitCommit.msgpack (95 bytes)
+
+## Test Results
+```
+cargo test -p ymir-ws-server -- git_commit
+  test protocol::tests::test_git_commit_roundtrip ... ok
+  test test_fixtures::tests::test_git_commit_fixture ... ok
+```
+
+## Files Modified
+1. crates/ws-server/src/protocol.rs - Added ts_rs::TS derive and #[ts(export)]
+2. crates/ws-server/src/test_fixtures.rs - Added test_git_commit_fixture test
+
+## Files Generated
+1. crates/ws-server/bindings/GitCommit.ts - TypeScript type definition
+2. test-fixtures/GitCommit.msgpack - Binary fixture (MessagePack encoded)

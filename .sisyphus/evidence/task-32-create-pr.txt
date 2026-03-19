@@ -1,0 +1,68 @@
+# Task 32: CreatePR - Schema Generation and Fixture Creation
+
+## Date: 2026-03-18
+
+## Completed Successfully
+
+### What was done:
+1. Added `#[derive(ts_rs::TS)]` and `#[ts(export)]` to Rust CreatePR struct
+2. Added `#[ts(type = "string")]` to worktree_id Uuid field
+3. TypeScript binding already existed at `bindings/CreatePR.ts`
+4. Created binary fixture at `test-fixtures/CreatePR.msgpack` (91 bytes)
+5. Added test case `test_create_pr_fixture()` to test_fixtures.rs
+
+### CreatePR Schema:
+
+**Rust (protocol.rs lines 334-342):**
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct CreatePR {
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    pub title: String,
+    pub body: Option<String>,
+}
+```
+
+**TypeScript (bindings/CreatePR.ts):**
+```typescript
+export type CreatePR = { worktreeId: string, title: string, body: string | null, };
+```
+
+**TypeScript (apps/web/src/types/protocol.ts):**
+```typescript
+export interface CreatePR {
+  type: 'CreatePR';
+  worktreeId: string;
+  title: string;
+  body?: string;
+}
+```
+
+### Schema Synthesis:
+- **Rust**: `worktree_id: Uuid, title: String, body: Option<String>`
+- **TypeScript**: `worktreeId: string, title: string, body?: string`
+- **Generated binding**: `worktreeId: string, title: string, body: string | null`
+
+### Key Observations:
+- ts-rs generates `body: string | null` for `Option<String>`
+- Manual TypeScript uses `body?: string` (optional)
+- Both are valid representations of "optional string"
+- The `type: 'CreatePR'` discriminator comes from the enum wrapper
+
+### Files Modified:
+- `crates/ws-server/src/protocol.rs` - Added ts-rs derive (lines 334-342)
+- `crates/ws-server/src/test_fixtures.rs` - Added fixture test (lines 633-655)
+- `crates/ws-server/bindings/CreatePR.ts` - Already existed
+- `test-fixtures/CreatePR.msgpack` - Created binary fixture (91 bytes)
+
+### Test Results:
+- `test_create_pr_fixture ... ok`
+- All 180 tests passed
+
+### Evidence:
+- Fixture file: test-fixtures/CreatePR.msgpack (91 bytes)
+- Test command: cargo test -p ymir-ws-server test_create_pr_fixture
+- All tests passed

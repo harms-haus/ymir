@@ -1,0 +1,76 @@
+# Task 13: AgentSend - Evidence
+
+## Date: 2026-03-18
+
+## Task Completed Successfully
+
+### What was done:
+
+#### 1. Discovered Rust usage:
+- Found `AgentSend` struct in `crates/ws-server/src/protocol.rs` (lines 240-245)
+- Used by `handle_agent_send` in `crates/ws-server/src/agent/handler.rs`
+- Handled via `ClientMessagePayload::AgentSend` in `crates/ws-server/src/router.rs`
+
+#### 2. Discovered TypeScript usage:
+- Found `AgentSend` interface in `apps/web/src/types/protocol.ts` (lines 222-226)
+- Used in `apps/web/src/lib/api.ts` (lines 128-133) - `sendToAgent()` function
+- Used in `apps/web/src/components/agent/AgentPane.tsx` (lines 116-117)
+
+#### 3. Synthesized schema:
+
+**Rust struct:**
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AgentSend {
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    pub message: String,
+}
+```
+
+**TypeScript interface:**
+```typescript
+export interface AgentSend {
+  type: 'AgentSend';
+  worktreeId: string;
+  message: string;
+}
+```
+
+**Key differences addressed:**
+- `Uuid` field requires `#[ts(type = "string")]` for TypeScript generation
+- `type: 'AgentSend'` discriminator is handled by the Rust enum wrapper, not the struct
+
+#### 4. Added ts-rs derive:
+- Added `ts_rs::TS` to derive macro
+- Added `#[ts(export)]` attribute
+- Added `#[ts(type = "string")]` to `worktree_id` field
+
+#### 5. Created TypeScript binding:
+- Created `crates/ws-server/bindings/AgentSend.ts`:
+```typescript
+export type AgentSend = { worktreeId: string, message: string, };
+```
+
+#### 6. Created binary fixture:
+- Created `test-fixtures/AgentSend.msgpack`
+- Fixture contains valid MessagePack with ClientMessage envelope
+- Fields: Version=1, type='AgentSend', worktreeId=UUID, message='Hello, agent!'
+
+### Files modified:
+- `crates/ws-server/src/protocol.rs` - Added ts-rs derive to AgentSend
+- `crates/ws-server/src/test_fixtures.rs` - Added AgentSend fixture test
+- `crates/ws-server/bindings/AgentSend.ts` - Created TypeScript binding
+- `test-fixtures/AgentSend.msgpack` - Created binary fixture
+
+### Verification:
+- `cargo check -p ymir-ws-server` - PASSED (exit code 0)
+- TypeScript binding follows ts-rs output pattern
+- Binary fixture is valid MessagePack
+
+### Notes:
+- Test suite cannot compile due to pre-existing issues in WorktreeCreate (missing fields)
+- Manual fixture created via Python msgpack since cargo test cannot run
+- ts-rs bindings directory: `crates/ws-server/bindings/`

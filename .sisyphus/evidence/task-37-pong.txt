@@ -1,0 +1,43 @@
+# Task 37: Pong - Schema Generation and Fixture Creation
+
+## Date: 2026-03-19
+
+## Completed Successfully
+
+### What was done:
+1. Added `#[derive(ts_rs::TS)]` and `#[ts(export)]` to Rust Pong struct
+2. Added `#[ts(type = "number")]` to timestamp field (u64 -> number in TypeScript)
+3. Created TypeScript binding at `bindings/Pong.ts`
+4. Created binary fixture at `test-fixtures/Pong.msgpack` (29 bytes)
+5. Added test case `test_pong_fixture()` to test_fixtures.rs
+
+### Pong Schema:
+- **Rust**: `struct Pong { timestamp: u64 }`
+- **TypeScript**: `{ type: 'Pong', timestamp: number }`
+- The `type` discriminator comes from the enum wrapper, not the struct
+
+### Key Pattern:
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Pong {
+    #[ts(type = "number")]
+    pub timestamp: u64,
+}
+```
+
+### Files Modified:
+- `crates/ws-server/src/protocol.rs` - Added ts-rs derive (lines 364-370)
+- `crates/ws-server/src/test_fixtures.rs` - Added fixture test (lines 762-780)
+- `crates/ws-server/bindings/Pong.ts` - Created TypeScript binding
+- `test-fixtures/Pong.msgpack` - Created binary fixture (29 bytes)
+
+### Test Results:
+- `test_pong_fixture ... ok`
+- `protocol::export_bindings_pong ... ok`
+- All 188 tests passed
+
+### Evidence:
+- TypeScript binding: `{ timestamp: number }`
+- Fixture file: 29 bytes MessagePack binary

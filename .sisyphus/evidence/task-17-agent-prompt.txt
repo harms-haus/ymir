@@ -1,0 +1,74 @@
+# Task 17: AgentPrompt - Schema Generation and Fixture Creation
+
+## Date: 2026-03-19
+
+## Completed Successfully
+
+### What was done:
+1. Added `#[derive(ts_rs::TS)]` and `#[ts(export)]` to Rust AgentPrompt struct
+2. Added `#[ts(type = "string")]` to worktree_id Uuid field
+3. Created TypeScript binding at `bindings/AgentPrompt.ts`
+4. Created binary fixture at `test-fixtures/AgentPrompt.msgpack`
+5. Added test case `test_agent_prompt_fixture()` to test_fixtures.rs
+
+### AgentPrompt Schema:
+
+**Rust (protocol.rs lines 498-506):**
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AgentPrompt {
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    pub prompt: String,
+}
+```
+
+**TypeScript (bindings/AgentPrompt.ts):**
+```typescript
+export type AgentPrompt = { worktreeId: string, prompt: string, };
+```
+
+**Expected from protocol.ts (apps/web/src/types/protocol.ts lines 379-383):**
+```typescript
+export interface AgentPrompt {
+  type: 'AgentPrompt';
+  worktreeId: string;
+  prompt: string;
+}
+```
+
+### Field Mapping:
+- Rust `worktree_id: Uuid` → TypeScript `worktreeId: string` (with #[ts(type = "string")])
+- Rust `prompt: String` → TypeScript `prompt: string`
+- All fields match 1:1 between Rust and TypeScript
+
+### Files Modified/Created:
+- `crates/ws-server/src/protocol.rs` - Added ts-rs derive (lines 498-506)
+- `crates/ws-server/src/test_fixtures.rs` - Added fixture test (lines 290-312)
+- `crates/ws-server/bindings/AgentPrompt.ts` - Created TypeScript binding
+- `test-fixtures/AgentPrompt.msgpack` - Created binary fixture (98 bytes)
+
+### Test Results:
+```
+running 2 tests
+test test_fixtures::tests::test_agent_prompt_fixture ... ok
+test protocol::tests::test_agent_prompt_roundtrip ... ok
+test result: ok. 2 passed; 0 failed
+```
+
+### Fixture Verification:
+```bash
+$ hexdump -C test-fixtures/AgentPrompt.msgpack
+00000000  83 a7 76 65 72 73 69 6f  6e 01 a4 74 79 70 65 ab  |..version..type.|
+00000010  41 67 65 6e 74 50 72 6f  6d 70 74 a4 64 61 74 61  |AgentPrompt.data|
+...
+```
+Fixture contains proper MessagePack-encoded ServerMessage with AgentPrompt payload.
+
+### Evidence:
+- Evidence saved to: `.sisyphus/evidence/task-17-agent-prompt.txt`
+- All tests pass: 2/2
+- Build: cargo test -p ymir-ws-server test_agent_prompt (exit code 0)

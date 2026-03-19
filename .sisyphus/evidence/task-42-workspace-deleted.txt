@@ -1,0 +1,56 @@
+# Task 42: WorkspaceDeleted - Schema Generation and Fixture Creation
+
+## Date: 2026-03-19
+
+## Completed Successfully
+
+### What was done:
+1. Added `#[derive(ts_rs::TS)]` and `#[ts(export)]` to Rust WorkspaceDeleted struct
+2. Added `#[serde(rename_all = "camelCase")]` attribute
+3. Added `#[ts(type = "string")]` to workspace_id Uuid field
+4. Created TypeScript binding at `bindings/WorkspaceDeleted.ts`
+5. Created binary fixture at `test-fixtures/WorkspaceDeleted.msgpack` (76 bytes)
+6. Added test case `test_workspace_deleted_fixture()` to test_fixtures.rs
+
+### Schema Synthesis:
+
+**Rust WorkspaceDeleted (protocol.rs lines 484-492):**
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct WorkspaceDeleted {
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub workspace_id: Uuid,
+}
+```
+
+**TypeScript WorkspaceDeleted (protocol.ts lines 334-337):**
+```typescript
+export interface WorkspaceDeleted {
+  type: 'WorkspaceDeleted';
+  workspaceId: string;
+}
+```
+
+**Generated binding:**
+```typescript
+export type WorkspaceDeleted = { workspaceId: string, };
+```
+
+Note: The `type: 'WorkspaceDeleted'` discriminator is handled by the Rust enum wrapper `ServerMessagePayload::WorkspaceDeleted(WorkspaceDeleted)`, not by the struct itself.
+
+### Files Modified:
+- `crates/ws-server/src/protocol.rs` - Added ts-rs derive (lines 484-492)
+- `crates/ws-server/src/test_fixtures.rs` - Added fixture test (lines 913-930)
+- `crates/ws-server/bindings/WorkspaceDeleted.ts` - Created TypeScript binding
+- `test-fixtures/WorkspaceDeleted.msgpack` - Created binary fixture (76 bytes)
+
+### Test Results:
+- `test_workspace_deleted_fixture ... ok`
+- `test_workspace_deleted_roundtrip ... ok`
+- All 204 tests passed
+
+### Evidence:
+- Evidence saved to: `.sisyphus/evidence/task-42-workspace-deleted.txt`

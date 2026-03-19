@@ -22,6 +22,7 @@ pub async fn handle_agent_spawn(
                     code: "WORKTREE_NOT_FOUND".to_string(),
                     message: format!("Worktree {} not found", msg.worktree_id),
                     details: None,
+                    request_id: None,
                 }));
             }
         }
@@ -34,6 +35,7 @@ pub async fn handle_agent_spawn(
                 code: "AGENT_SPAWN_ERROR".to_string(),
                 message: format!("Failed to spawn agent: {}", e),
                 details: None,
+                    request_id: None,
             }));
         }
     };
@@ -58,6 +60,7 @@ pub async fn handle_agent_spawn(
             code: "AGENT_DB_ERROR".to_string(),
             message: format!("Failed to store agent session: {}", e),
             details: None,
+                    request_id: None,
         }));
     }
 
@@ -107,6 +110,7 @@ pub async fn handle_agent_send(
                     code: "AGENT_NOT_FOUND".to_string(),
                     message: format!("No agent running for worktree {}", msg.worktree_id),
                     details: None,
+                    request_id: None,
                 }));
             }
         }
@@ -119,6 +123,7 @@ pub async fn handle_agent_send(
             code: "AGENT_SEND_ERROR".to_string(),
             message: format!("Failed to send message to agent: {}", e),
             details: None,
+                    request_id: None,
         }));
     }
 
@@ -142,6 +147,7 @@ pub async fn handle_agent_cancel(
                     code: "AGENT_NOT_FOUND".to_string(),
                     message: format!("No agent running for worktree {}", msg.worktree_id),
                     details: None,
+                    request_id: None,
                 }));
             }
         }

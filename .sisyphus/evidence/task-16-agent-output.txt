@@ -1,0 +1,40 @@
+# Task 16: AgentOutput - Schema Generation and Fixture Creation
+
+## Date: 2026-03-18
+
+## Completed Successfully
+
+### What was done:
+1. Added `#[derive(ts_rs::TS)]` and `#[ts(export)]` to Rust AgentOutput struct
+2. Added `#[ts(type = "string")]` to worktree_id Uuid field
+3. Created TypeScript binding at `bindings/AgentOutput.ts`
+4. Created binary fixture at `test-fixtures/AgentOutput.msgpack`
+5. Added test case `test_agent_output_fixture()` to test_fixtures.rs
+
+### AgentOutput Schema:
+- **Rust**: `struct AgentOutput { worktree_id: Uuid, output: String }`
+- **TypeScript**: `{ worktreeId: string, output: string }`
+- Fields match 1:1 between Rust and TypeScript (camelCase rename)
+
+### Key Pattern:
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AgentOutput {
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    pub output: String,
+}
+```
+
+### Files Modified:
+- `crates/ws-server/src/protocol.rs` - Added ts-rs derive
+- `crates/ws-server/src/test_fixtures.rs` - Added fixture test
+- `crates/ws-server/bindings/AgentOutput.ts` - Created TypeScript binding
+- `test-fixtures/AgentOutput.msgpack` - Created binary fixture
+
+### Evidence:
+- Test output: `test_agent_output_fixture ... ok`
+- Fixture exists at: test-fixtures/AgentOutput.msgpack (89 bytes)

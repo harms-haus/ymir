@@ -1,0 +1,76 @@
+# Task 11: WorktreeList - Evidence
+
+## Date: 2026-03-18
+
+## Task Completed Successfully
+
+### Changes Made:
+
+#### 1. Added ts_rs::TS derive to WorktreeList in protocol.rs
+
+File: `crates/ws-server/src/protocol.rs`
+
+Before:
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreeList {
+    pub workspace_id: Uuid,
+}
+```
+
+After:
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct WorktreeList {
+    #[ts(as = "String")]
+    pub workspace_id: Uuid,
+}
+```
+
+#### 2. Created TypeScript binding
+
+File: `crates/ws-server/bindings/WorktreeList.ts`
+```typescript
+export type WorktreeList = { workspaceId: string, };
+```
+
+#### 3. Added fixture test and generated binary
+
+File: `crates/ws-server/src/test_fixtures.rs`
+Added test function `test_worktree_list_fixture()`
+
+File: `test-fixtures/WorktreeList.msgpack` (52 bytes)
+
+### Schema Analysis:
+
+**Rust Type (protocol.rs line 220-225):**
+- `workspace_id: Uuid` - required field, serialized as string via custom serializer
+
+**TypeScript Type (protocol.ts line 210-213):**
+- `workspaceId: string` - required field, string representation
+
+**Synthesis:**
+- Both sides agree: single required `workspaceId` field as string
+- No optional fields
+- No type mismatches
+
+### Verification:
+
+```
+$ cargo test --package ymir-ws-server test_worktree_list_fixture
+    Running unittests src/lib.rs
+test test_fixtures::tests::test_worktree_list_fixture ... ok
+test result: ok. 1 passed; 0 failed
+```
+
+### Files Modified/Created:
+- `crates/ws-server/src/protocol.rs` - Added ts_rs::TS derive
+- `crates/ws-server/bindings/WorktreeList.ts` - Created TypeScript binding
+- `crates/ws-server/src/test_fixtures.rs` - Added fixture test
+- `test-fixtures/WorktreeList.msgpack` - Binary fixture created
+
+### Additional Fixes:
+Fixed 3 pre-existing compilation errors in `worktree/mod.rs` where `WorktreeCreate` was instantiated without the new `request_id` and `use_existing_branch` fields.

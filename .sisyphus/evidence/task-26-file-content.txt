@@ -1,0 +1,64 @@
+# Task 26: FileContent - Schema Generation and Fixture Creation
+
+## Date: 2026-03-19
+
+## Completed Successfully
+
+### What was done:
+1. Added `#[derive(ts_rs::TS)]` and `#[ts(export)]` to Rust FileContent struct
+2. Added `#[ts(type = "string")]` to worktree_id Uuid field
+3. Created TypeScript binding at `bindings/FileContent.ts`
+4. Created binary fixture at `test-fixtures/FileContent.msgpack`
+5. Added test case `test_file_content_fixture()` to test_fixtures.rs
+
+### FileContent Schema:
+
+**Rust (protocol.rs lines 546-554):**
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct FileContent {
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    pub path: String,
+    pub content: String,
+}
+```
+
+**TypeScript (bindings/FileContent.ts):**
+```typescript
+export type FileContent = { worktreeId: string, path: string, content: string, };
+```
+
+**TypeScript (protocol.ts lines 401-406):**
+```typescript
+export interface FileContentMessage {
+  type: 'FileContent';
+  worktreeId: string;
+  path: string;
+  content: string;
+}
+```
+
+### Schema Synthesis:
+- Fields match 1:1 between Rust and TypeScript
+- worktree_id → worktreeId (Uuid → string via uuid_str serializer)
+- path → path (String → string)
+- content → content (String → string)
+- camelCase naming preserved via serde attribute
+
+### Files Modified:
+- `crates/ws-server/src/protocol.rs` - Added ts-rs derive (lines 546-554)
+- `crates/ws-server/src/test_fixtures.rs` - Added fixture test (lines 526-550)
+- `crates/ws-server/bindings/FileContent.ts` - Created TypeScript binding
+- `test-fixtures/FileContent.msgpack` - Created binary fixture (96 bytes)
+
+### Test Results:
+- `test_file_content_fixture ... ok`
+- All tests passed
+
+### Evidence:
+- Fixture file created at test-fixtures/FileContent.msgpack
+- TypeScript binding at crates/ws-server/bindings/FileContent.ts

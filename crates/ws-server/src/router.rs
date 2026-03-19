@@ -45,6 +45,7 @@ pub async fn route_message(
                     code: "WORKSPACE_CREATE_ERROR".to_string(),
                     message: e.to_string(),
                     details: None,
+                    request_id: None,
                 }))),
             }
         }
@@ -58,6 +59,7 @@ pub async fn route_message(
                     code: "WORKSPACE_DELETE_ERROR".to_string(),
                     message: e.to_string(),
                     details: None,
+                    request_id: None,
                 }))),
             }
         }
@@ -71,6 +73,7 @@ pub async fn route_message(
                     code: "WORKTREE_CREATE_ERROR".to_string(),
                     message: e.to_string(),
                     details: None,
+                    request_id: None,
                 }))),
             }
         }
@@ -84,6 +87,7 @@ pub async fn route_message(
                     code: "WORKTREE_DELETE_ERROR".to_string(),
                     message: e.to_string(),
                     details: None,
+                    request_id: None,
                 }))),
             }
         }
@@ -101,6 +105,7 @@ pub async fn route_message(
                     code: "WORKTREE_LIST_ERROR".to_string(),
                     message: e.to_string(),
                     details: None,
+                    request_id: None,
                 }))),
             }
         }
@@ -183,6 +188,7 @@ fn not_implemented(payload: ClientMessagePayload) -> ServerMessage {
         code: "NOT_IMPLEMENTED".to_string(),
         message: format!("{} handler not implemented yet", msg_type),
         details: None,
+                    request_id: None,
     }))
 }
 
@@ -214,6 +220,7 @@ async fn handle_get_state(state: Arc<AppState>, request_id: Uuid) -> ServerMessa
                 code: "GET_STATE_ERROR".to_string(),
                 message: e.to_string(),
                 details: None,
+                    request_id: None,
             }));
         }
     };
@@ -234,6 +241,7 @@ async fn handle_get_state(state: Arc<AppState>, request_id: Uuid) -> ServerMessa
                     code: "GET_STATE_ERROR".to_string(),
                     message: e.to_string(),
                     details: None,
+                    request_id: None,
                 }));
             }
         };
@@ -252,6 +260,7 @@ async fn handle_get_state(state: Arc<AppState>, request_id: Uuid) -> ServerMessa
                     code: "GET_STATE_ERROR".to_string(),
                     message: e.to_string(),
                     details: None,
+                    request_id: None,
                 }));
             }
         };
@@ -275,6 +284,7 @@ async fn handle_get_state(state: Arc<AppState>, request_id: Uuid) -> ServerMessa
                     code: "GET_STATE_ERROR".to_string(),
                     message: e.to_string(),
                     details: None,
+                    request_id: None,
                 }));
             }
         };
@@ -312,6 +322,7 @@ async fn handle_git_status(state: Arc<AppState>, msg: crate::protocol::GitStatus
                     code: "WORKTREE_NOT_FOUND".to_string(),
                     message: format!("Worktree {} not found", worktree_id),
                     details: None,
+                    request_id: None,
                 }));
             }
         }
@@ -323,6 +334,7 @@ async fn handle_git_status(state: Arc<AppState>, msg: crate::protocol::GitStatus
             code: "GIT_STATUS_ERROR".to_string(),
             message: e.to_string(),
             details: None,
+                    request_id: None,
         })),
     }
 }
@@ -341,6 +353,7 @@ async fn handle_git_diff(state: Arc<AppState>, msg: crate::protocol::GitDiff) ->
                     code: "WORKTREE_NOT_FOUND".to_string(),
                     message: format!("Worktree {} not found", worktree_id),
                     details: None,
+                    request_id: None,
                 }));
             }
         }
@@ -356,6 +369,7 @@ async fn handle_git_diff(state: Arc<AppState>, msg: crate::protocol::GitDiff) ->
             code: "GIT_DIFF_ERROR".to_string(),
             message: e.to_string(),
             details: None,
+                    request_id: None,
         })),
     }
 }
@@ -375,6 +389,7 @@ async fn handle_git_commit(state: Arc<AppState>, msg: crate::protocol::GitCommit
                     code: "WORKTREE_NOT_FOUND".to_string(),
                     message: format!("Worktree {} not found", worktree_id),
                     details: None,
+                    request_id: None,
                 }));
             }
         }
@@ -396,6 +411,7 @@ async fn handle_git_commit(state: Arc<AppState>, msg: crate::protocol::GitCommit
             code: "GIT_COMMIT_ERROR".to_string(),
             message: e.to_string(),
             details: None,
+                    request_id: None,
         })),
     }
 }
@@ -415,6 +431,7 @@ async fn handle_create_pr(state: Arc<AppState>, msg: crate::protocol::CreatePR) 
                     code: "WORKTREE_NOT_FOUND".to_string(),
                     message: format!("Worktree {} not found", worktree_id),
                     details: None,
+                    request_id: None,
                 }));
             }
         }
@@ -436,6 +453,7 @@ async fn handle_create_pr(state: Arc<AppState>, msg: crate::protocol::CreatePR) 
             code: "CREATE_PR_ERROR".to_string(),
             message: e.to_string(),
             details: None,
+                    request_id: None,
         })),
     }
 }

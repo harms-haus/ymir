@@ -1,0 +1,69 @@
+# Task 36 - Ping Type Discovery and Fixture Generation
+
+## Date: 2026-03-18
+
+## Discovery Results
+
+### Rust Type (crates/ws-server/src/protocol.rs)
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Ping {
+    #[ts(type = "number")]
+    pub timestamp: u64,
+}
+```
+
+### TypeScript Type (apps/web/src/types/protocol.ts)
+```typescript
+export interface Ping {
+  type: 'Ping';
+  timestamp: number;
+}
+```
+
+### Schema Synthesis
+- **Field**: timestamp
+- **Rust type**: u64 (with #[ts(type = "number")])
+- **TypeScript type**: number
+- **Notes**: The `type: 'Ping'` discriminator is handled by #[serde(tag = "type")] on the enum variants
+
+## Changes Made
+
+### 1. protocol.rs - Added ts-rs derive
+- Added `ts_rs::TS` to derive macro
+- Added `#[ts(export)]` attribute
+- Added `#[ts(type = "number")]` for timestamp field (matches Pong pattern)
+
+### 2. test_fixtures.rs - Added fixture test
+- Added `test_ping_fixture()` test function
+- Creates ClientMessage with Ping payload (timestamp: 12345)
+- Writes to test-fixtures/Ping.msgpack
+
+## Generated Artifacts
+
+### TypeScript Binding
+File: `crates/ws-server/bindings/Ping.ts`
+```typescript
+export type Ping = { timestamp: number, };
+```
+
+### Binary Fixture
+File: `test-fixtures/Ping.msgpack`
+Size: 29 bytes
+Content: MessagePack-encoded ClientMessage with Ping payload
+
+## Test Results
+```
+running 2 tests
+test protocol::tests::test_ping_roundtrip ... ok
+test test_fixtures::tests::test_ping_fixture ... ok
+
+test result: ok. 2 passed; 0 failed
+```
+
+## Verification
+- [x] Rust type has #[derive(TS, Serialize, Deserialize)]
+- [x] TypeScript type generated in crates/ws-server/bindings/Ping.ts
+- [x] Binary fixture exists at test-fixtures/Ping.msgpack

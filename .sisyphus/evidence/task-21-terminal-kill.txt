@@ -1,0 +1,43 @@
+# Task 21: TerminalKill - Schema Generation and Fixture Creation
+
+## Date: 2026-03-19
+
+## Completed Successfully
+
+### What was done:
+1. Added `#[derive(ts_rs::TS)]` and `#[ts(export)]` to Rust TerminalKill struct
+2. Added `#[ts(type = "string")]` to session_id Uuid field
+3. Created TypeScript binding at `bindings/TerminalKill.ts`
+4. Created binary fixture at `test-fixtures/TerminalKill.msgpack`
+5. Added test case `test_terminal_kill_fixture()` to test_fixtures.rs
+
+### TerminalKill Schema:
+- **Rust**: `struct TerminalKill { session_id: Uuid }`
+- **TypeScript**: `{ sessionId: string }`
+- Fields match 1:1 between Rust and TypeScript (camelCase rename)
+
+### Key Pattern:
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TerminalKill {
+    #[ts(type = "string")]
+    pub session_id: Uuid,
+}
+```
+
+### Files Modified:
+- `crates/ws-server/src/protocol.rs` - Added ts-rs derive (lines 527-534)
+- `crates/ws-server/src/test_fixtures.rs` - Added fixture test (lines 394-415)
+- `crates/ws-server/bindings/TerminalKill.ts` - Created TypeScript binding
+- `test-fixtures/TerminalKill.msgpack` - Created binary fixture (52 bytes)
+
+### Evidence:
+- Test output: `test_terminal_kill_fixture ... ok`
+- Binary fixture: `/home/blake/Documents/software/ymir/test-fixtures/TerminalKill.msgpack`
+- TypeScript binding: `/home/blake/Documents/software/ymir/crates/ws-server/bindings/TerminalKill.ts`
+
+### Verification:
+- Rust test passes: `cargo test -p ymir-ws-server test_terminal_kill_fixture`
+- All pre-existing warnings are unrelated to this change
