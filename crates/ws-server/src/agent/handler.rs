@@ -28,21 +28,10 @@ pub async fn handle_agent_spawn(
         }
     };
 
-    let mut agent_client = match AcpClient::spawn(&msg.agent_type, &worktree_path).await {
-        Ok(client) => client,
-        Err(e) => {
-            return ServerMessage::new(ServerMessagePayload::Error(Error {
-                code: "AGENT_SPAWN_ERROR".to_string(),
-                message: format!("Failed to spawn agent: {}", e),
-                details: None,
-                    request_id: None,
-            }));
-        }
-    };
-
     let acp_session_id = None;
     let session_id = Uuid::new_v4();
     let now = chrono::Utc::now().to_rfc3339();
+    let started_at = parse_timestamp(&now);
 
     let db_session = AgentSession {
         id: session_id.to_string(),
@@ -55,7 +44,6 @@ pub async fn handle_agent_spawn(
 
     if let Err(e) = state.db.create_agent_session(&db_session).await {
         tracing::error!("Failed to store agent session in database: {}", e);
-        let _ = agent_client.kill().await;
         return ServerMessage::new(ServerMessagePayload::Error(Error {
             code: "AGENT_DB_ERROR".to_string(),
             message: format!("Failed to store agent session: {}", e),
@@ -74,26 +62,52 @@ pub async fn handle_agent_spawn(
         });
     }
 
-    {
-        let mut agent_clients = state.agent_clients.write().await;
-        agent_clients.insert(msg.worktree_id, Arc::new(tokio::sync::Mutex::new(agent_client)));
-    }
-
     let broadcast_msg = ServerMessage::new(ServerMessagePayload::AgentStatusUpdate(
         AgentStatusUpdate {
+            id: session_id,
             worktree_id: msg.worktree_id,
+            agent_type: msg.agent_type.clone(),
             status: AgentStatus::Idle,
+            started_at,
         },
     ));
 
-    state.broadcast(broadcast_msg).await;
+    state.broadcast(broadcast_msg.clone()).await;
 
-    ServerMessage::new(ServerMessagePayload::AgentStatusUpdate(
-        AgentStatusUpdate {
-            worktree_id: msg.worktree_id,
-            status: AgentStatus::Idle,
-        },
-    ))
+    let session_id_ref = session_id;
+    let worktree_id_ref = msg.worktree_id;
+    let agent_type_ref = msg.agent_type.clone();
+    let state_ref = state.clone();
+    let worktree_path_ref = worktree_path;
+
+    tokio::spawn(async move {
+        match AcpClient::spawn(&agent_type_ref, &worktree_path_ref).await {
+            Ok(agent_client) => {
+                let mut agent_clients = state_ref.agent_clients.write().await;
+                agent_clients.insert(worktree_id_ref, Arc::new(tokio::sync::Mutex::new(agent_client)));
+            }
+            Err(e) => {
+                tracing::error!("Failed to spawn agent process: {}", e);
+                if let Err(db_err) = state_ref.db.update_agent_session(
+                    &session_id_ref.to_string(),
+                    "error"
+                ).await {
+                    tracing::error!("Failed to update agent session status: {}", db_err);
+                }
+                let mut agents = state_ref.agents.write().await;
+                agents.remove(&session_id_ref);
+            }
+        }
+    });
+
+    broadcast_msg
+}
+
+fn parse_timestamp(timestamp: &str) -> u64 {
+    chrono::DateTime::parse_from_rfc3339(timestamp)
+        .ok()
+        .and_then(|dt| u64::try_from(dt.timestamp()).ok())
+        .unwrap_or(0)
 }
 
 #[instrument(skip(state, msg), fields(worktree_id = %msg.worktree_id))]
@@ -165,18 +179,18 @@ pub async fn handle_agent_cancel(
         agent_clients.remove(&msg.worktree_id);
     }
 
-    let session_id_opt = {
+    let session_data_opt = {
         let agents = state.agents.read().await;
         agents.iter().find_map(|(id, state)| {
             if state.worktree_id == msg.worktree_id {
-                Some(*id)
+                Some((*id, state.agent_type.clone(), state.status.clone()))
             } else {
                 None
             }
         })
     };
 
-    if let Some(session_id) = session_id_opt {
+    if let Some((session_id, agent_type, _)) = session_data_opt {
         {
             let mut agents = state.agents.write().await;
             agents.remove(&session_id);
@@ -185,16 +199,19 @@ pub async fn handle_agent_cancel(
         if let Err(e) = state.db.delete_agent_session(&session_id.to_string()).await {
             tracing::warn!("Failed to delete agent session from database: {}", e);
         }
+
+        let broadcast_msg = ServerMessage::new(ServerMessagePayload::AgentStatusUpdate(
+            AgentStatusUpdate {
+                id: session_id,
+                worktree_id: msg.worktree_id,
+                agent_type,
+                status: AgentStatus::Idle,
+                started_at: 0,
+            },
+        ));
+
+        state.broadcast(broadcast_msg).await;
     }
-
-    let broadcast_msg = ServerMessage::new(ServerMessagePayload::AgentStatusUpdate(
-        AgentStatusUpdate {
-            worktree_id: msg.worktree_id,
-            status: AgentStatus::Idle,
-        },
-    ));
-
-    state.broadcast(broadcast_msg).await;
 
     ServerMessage::new(ServerMessagePayload::Ack(crate::protocol::Ack {
         message_id: msg.worktree_id,

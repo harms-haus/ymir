@@ -366,8 +366,11 @@ export interface WorktreeStatus {
 // Agent events
 export interface AgentStatusUpdate {
   type: 'AgentStatusUpdate';
+  id: string;
   worktreeId: string;
+  agentType: string;
   status: AgentStatus;
+  startedAt: number;
 }
 
 export interface AgentOutput {

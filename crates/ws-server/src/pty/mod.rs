@@ -177,6 +177,7 @@ impl PtyManager {
     pub fn spawn(
         &self,
         worktree_id: Uuid,
+        worktree_path: &str,
         label: Option<String>,
         shell: Option<String>,
     ) -> Result<(Uuid, mpsc::UnboundedReceiver<Vec<u8>>)> {
@@ -206,7 +207,8 @@ impl PtyManager {
             pixel_height: 0,
         })?;
 
-        let cmd = CommandBuilder::new(&shell_path);
+        let mut cmd = CommandBuilder::new(&shell_path);
+        cmd.cwd(worktree_path);
         let child = pair.slave.spawn_command(cmd)?;
 
         let master = pair.master;
@@ -436,7 +438,7 @@ mod tests {
         let manager = PtyManager::new();
         let worktree_id = Uuid::new_v4();
 
-        let result = manager.spawn(worktree_id, Some("test-session".to_string()), None);
+        let result = manager.spawn(worktree_id, "/tmp/test-worktree", Some("test-session".to_string()), None);
         assert!(result.is_ok());
 
         let (session_id, _rx) = result.unwrap();
@@ -451,11 +453,11 @@ mod tests {
         let worktree_id = Uuid::new_v4();
 
         for i in 0..MAX_SESSIONS_PER_WORKTREE {
-            let result = manager.spawn(worktree_id, Some(format!("session-{}", i)), None);
+            let result = manager.spawn(worktree_id, "/tmp/test-worktree", Some(format!("session-{}", i)), None);
             assert!(result.is_ok(), "Failed to create session {}", i);
         }
 
-        let result = manager.spawn(worktree_id, Some("extra-session".to_string()), None);
+        let result = manager.spawn(worktree_id, "/tmp/test-worktree", Some("extra-session".to_string()), None);
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
@@ -473,7 +475,7 @@ mod tests {
         let manager = PtyManager::new();
         let worktree_id = Uuid::new_v4();
 
-        let result = manager.spawn(worktree_id, Some("ttl-test".to_string()), None);
+        let result = manager.spawn(worktree_id, "/tmp/test-worktree", Some("ttl-test".to_string()), None);
         assert!(result.is_ok());
 
         let (session_id, _rx) = result.unwrap();
@@ -495,6 +497,7 @@ mod tests {
 
         let result = manager.spawn(
             worktree_id,
+            "/tmp/test-worktree",
             Some("io-test".to_string()),
             Some("/bin/sh".to_string()),
         );
@@ -515,7 +518,7 @@ mod tests {
         let manager = PtyManager::new();
         let worktree_id = Uuid::new_v4();
 
-        let result = manager.spawn(worktree_id, Some("resize-test".to_string()), None);
+        let result = manager.spawn(worktree_id, "/tmp/test-worktree", Some("resize-test".to_string()), None);
         assert!(result.is_ok());
 
         let (session_id, _rx) = result.unwrap();
@@ -531,7 +534,7 @@ mod tests {
         let manager = PtyManager::new();
         let worktree_id = Uuid::new_v4();
 
-        let result = manager.spawn(worktree_id, Some("kill-test".to_string()), None);
+        let result = manager.spawn(worktree_id, "/tmp/test-worktree", Some("kill-test".to_string()), None);
         assert!(result.is_ok());
 
         let (session_id, _rx) = result.unwrap();
@@ -548,7 +551,7 @@ mod tests {
         let worktree_id = Uuid::new_v4();
 
         for i in 0..3 {
-            let result = manager.spawn(worktree_id, Some(format!("session-{}", i)), None);
+            let result = manager.spawn(worktree_id, "/tmp/test-worktree", Some(format!("session-{}", i)), None);
             assert!(result.is_ok());
         }
 

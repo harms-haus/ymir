@@ -555,8 +555,14 @@ pub struct WorktreeStatus {
 pub struct AgentStatusUpdate {
     #[serde(with = "uuid_str")]
     #[ts(type = "string")]
+    pub id: Uuid,
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
     pub worktree_id: Uuid,
+    pub agent_type: String,
     pub status: AgentStatus,
+    #[ts(type = "number")]
+    pub started_at: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
@@ -1122,8 +1128,11 @@ mod tests {
     #[test]
     fn test_agent_status_update_roundtrip() {
         let msg = ServerMessage::new(ServerMessagePayload::AgentStatusUpdate(AgentStatusUpdate {
+            id: Uuid::new_v4(),
             worktree_id: Uuid::new_v4(),
+            agent_type: "test-agent".to_string(),
             status: AgentStatus::Working,
+            started_at: 12345,
         }));
         test_roundtrip(msg);
     }

@@ -465,8 +465,11 @@ mod tests {
         use uuid::Uuid;
 
         let msg = ServerMessage::new(ServerMessagePayload::AgentStatusUpdate(AgentStatusUpdate {
+            id: Uuid::new_v4(),
             worktree_id: Uuid::new_v4(),
+            agent_type: "test-agent".to_string(),
             status: AgentStatus::Working,
+            started_at: 1234567890,
         }));
 
         let path = write_fixture("AgentStatusUpdate", &msg)?;

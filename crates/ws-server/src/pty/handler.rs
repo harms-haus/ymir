@@ -25,7 +25,20 @@ pub async fn handle_terminal_create(
         }
     };
 
-    let (session_id, _rx) = match pty_manager.spawn(msg.worktree_id, msg.label.clone(), msg.shell.clone()) {
+    // Get worktree path for setting terminal working directory
+    let worktree_path = match state.worktrees.read().await.get(&msg.worktree_id) {
+        Some(wt) => wt.path.clone(),
+        None => {
+            return ServerMessage::new(ServerMessagePayload::Error(Error {
+                code: "WORKTREE_NOT_FOUND".to_string(),
+                message: format!("Worktree {} not found", msg.worktree_id),
+                details: None,
+                    request_id: None,
+            }));
+        }
+    };
+
+    let (session_id, _rx) = match pty_manager.spawn(msg.worktree_id, &worktree_path, msg.label.clone(), msg.shell.clone()) {
         Ok(result) => result,
         Err(e) => {
             return ServerMessage::new(ServerMessagePayload::Error(Error {

@@ -450,6 +450,7 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
         state={contextMenuState}
         items={contextMenuItems}
         onAction={handleAction}
+        closeMenu={closeMenu}
       />
       <CreateWorktreeDialog
         open={createWorktreeDialog.isOpen}

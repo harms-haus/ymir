@@ -465,10 +465,20 @@ export function updateStateFromServerMessage(message: ServerMessage): void {
       break;
     
     case 'AgentStatusUpdate': {
-      const existingSession = useStore.getState().agentSessions.find(as => as.worktreeId === message.worktreeId);
+      const existingSession = useStore.getState().agentSessions.find(as => as.id === message.id);
       if (existingSession) {
-        updateAgentSession(message.worktreeId, {
+        updateAgentSession(message.id, {
           status: message.status,
+        } as any);
+      } else {
+        const addAgentSession = useStore.getState().addAgentSession;
+        addAgentSession({
+          id: message.id,
+          worktreeId: message.worktreeId,
+          agentType: message.agentType,
+          status: message.status,
+          acpSessionId: undefined,
+          startedAt: message.startedAt,
         } as any);
       }
       break;
