@@ -3,7 +3,7 @@ import { ClientMessage, ServerMessage, PROTOCOL_VERSION, StateSnapshot } from '.
 import { updateStateFromServerMessage, useStore, useToastStore } from '../store';
 
 // Generate a UUID v4 for request IDs
-function generateId(): string {
+export function generateId(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
   }

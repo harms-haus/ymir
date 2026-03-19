@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Dialog } from '@base-ui/react/dialog';
 import { RadioGroup } from '@base-ui/react/radio-group';
 import { useStore } from '../../store';
-import { getWebSocketClient } from '../../lib/ws';
+import { getWebSocketClient, generateId } from '../../lib/ws';
 import type { WorktreeCreate, WorktreeCreated, Error as ErrorMessage } from '../../types/generated/protocol';
 
 type AgentOption = 'claude' | 'opencode' | 'pi' | 'none';
@@ -98,7 +98,7 @@ export function CreateWorktreeDialog({ open, onOpenChange, workspaceId }: Create
 
     setIsSubmitting(true);
 
-    const requestId = `create-worktree-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    const requestId = generateId();
     currentRequestIdRef.current = requestId;
 
     try {
@@ -157,16 +157,16 @@ export function CreateWorktreeDialog({ open, onOpenChange, workspaceId }: Create
       unsubscribeCreatedRef.current = unsubscribeCreated;
       unsubscribeErrorRef.current = unsubscribeError;
 
-      const message: WorktreeCreate = {
-        type: 'WorktreeCreate',
-        workspaceId,
-        branchName: branchName.trim(),
-        agentType: selectedAgent === 'none' ? undefined : selectedAgent,
-        requestId,
-        useExistingBranch,
-      };
+const message: WorktreeCreate = {
+      type: 'WorktreeCreate',
+      workspaceId,
+      branchName: branchName.trim(),
+      agentType: selectedAgent === 'none' ? undefined : selectedAgent,
+      requestId,
+      useExistingBranch,
+    };
 
-      client.send(message);
+    client.send(message);
 
       submitTimeoutRef.current = setTimeout(() => {
         setIsSubmitting(false);

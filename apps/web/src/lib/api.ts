@@ -1,4 +1,4 @@
-import { getWebSocketClient } from './ws';
+import { getWebSocketClient, generateId } from './ws';
 import { 
   WorkspaceCreate, 
   WorkspaceDelete, 
@@ -256,7 +256,7 @@ export function getState(): void {
   const client = getWebSocketClient();
   const message: GetState = {
     type: 'GetState',
-    requestId: crypto.randomUUID(),
+    requestId: generateId(),
   };
   client.send(message);
 }
