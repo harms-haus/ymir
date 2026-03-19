@@ -1,0 +1,92 @@
+# Task 22: TerminalOutput Schema Discovery and Generation
+
+## Completed: 2026-03-18
+
+## Schema Synthesis
+
+### Rust Definition (crates/ws-server/src/protocol.rs lines 508-516)
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TerminalOutput {
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub session_id: Uuid,
+    pub data: String,
+}
+```
+
+### TypeScript Definition (apps/web/src/types/protocol.ts lines 386-390)
+```typescript
+export interface TerminalOutput {
+  type: 'TerminalOutput';
+  sessionId: string;
+  data: string;
+}
+```
+
+## Field Analysis
+
+| Field      | Rust Type      | TS Type | Optional | Notes                           |
+|------------|----------------|---------|----------|----------------------------------|
+| session_id | Uuid           | string  | No       | Serialized via uuid_str          |
+| data       | String         | string  | No       | Terminal output data             |
+
+## Usage Discovery
+
+### Rust Handlers (crates/ws-server/src/pty/output.rs)
+- Used in spawn_output_reader() to broadcast PTY output
+- Creates ServerMessage::new(ServerMessagePayload::TerminalOutput(...))
+
+### TypeScript Usage
+- apps/web/src/components/terminal/TerminalView.tsx
+- apps/web/src/components/terminal/TerminalProvider.tsx
+- apps/web/src/components/terminal/TerminalPane.tsx
+- apps/web/src/store.ts
+- apps/web/src/types/__tests__/protocol.test.ts
+
+## Generated Artifacts
+
+### TypeScript Bindings
+File: crates/ws-server/bindings/TerminalOutput.ts
+```typescript
+export type TerminalOutput = { sessionId: string, data: string, };
+```
+
+### Binary Fixture
+File: test-fixtures/TerminalOutput.msgpack
+- Size: 92 bytes
+- Contains ServerMessage wrapper with TerminalOutput payload
+
+## Test Results
+
+### Cargo Test Output
+```
+running 2 tests
+test protocol::tests::test_terminal_output_roundtrip ... ok
+test test_fixtures::tests::test_terminal_output_fixture ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured
+```
+
+### Full Test Suite
+```
+running 157 tests
+test result: ok. 157 passed; 0 failed; 0 ignored; 0 measured
+```
+
+## Changes Made
+
+1. Added `#[derive(ts_rs::TS)]` and `#[ts(export)]` to TerminalOutput struct
+2. Added `#[ts(type = "string")]` to session_id field
+3. Added test_terminal_output_fixture() test in test_fixtures.rs
+4. Generated TerminalOutput.ts bindings via cargo test
+5. Generated TerminalOutput.msgpack fixture via cargo test
+
+## Verification Checklist
+
+- [x] Rust type has #[derive(TS, Serialize, Deserialize)]
+- [x] TypeScript type generated in crates/ws-server/bindings/TerminalOutput.ts
+- [x] Binary fixture exists at test-fixtures/TerminalOutput.msgpack
+- [x] Evidence saved to .sisyphus/evidence/task-22-terminal-output.txt

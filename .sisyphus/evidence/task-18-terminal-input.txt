@@ -1,0 +1,62 @@
+# Task 18: TerminalInput - Schema Generation and Fixture Creation
+
+## Date: 2026-03-18
+
+## Completed Successfully
+
+### What was done:
+
+1. Added `#[derive(ts_rs::TS)]` and `#[ts(export)]` to Rust TerminalInput struct
+2. Added `#[ts(type = "string")]` to session_id Uuid field
+3. Created TypeScript binding at `bindings/TerminalInput.ts`
+4. Created binary fixture at `test-fixtures/TerminalInput.msgpack`
+5. Added test case `test_terminal_input_fixture()` to test_fixtures.rs
+
+### TerminalInput Schema:
+
+**Rust (protocol.rs):**
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TerminalInput {
+    #[ts(type = "string")]
+    pub session_id: Uuid,
+    pub data: String,
+}
+```
+
+**TypeScript (protocol.ts):**
+```typescript
+export interface TerminalInput {
+  type: 'TerminalInput';
+  sessionId: string;
+  data: string;
+}
+```
+
+**Generated Binding (bindings/TerminalInput.ts):**
+```typescript
+export type TerminalInput = { sessionId: string, data: string, };
+```
+
+### Field Mapping:
+| Rust Field | TypeScript Field | Type |
+|------------|------------------|------|
+| session_id | sessionId | Uuid → string |
+| data | data | String → string |
+
+### Files Modified/Created:
+- `crates/ws-server/src/protocol.rs` - Added ts-rs derive and #[ts(type)] attribute
+- `crates/ws-server/src/test_fixtures.rs` - Added fixture test
+- `crates/ws-server/bindings/TerminalInput.ts` - Created TypeScript binding
+- `test-fixtures/TerminalInput.msgpack` - Created binary fixture (61 bytes)
+
+### Test Results:
+- test_terminal_input_fixture: PASSED
+- test_terminal_input_roundtrip: PASSED
+
+### Evidence:
+- Fixture file created: test-fixtures/TerminalInput.msgpack (61 bytes)
+- TypeScript binding matches expected schema
+- MessagePack serialization roundtrip verified

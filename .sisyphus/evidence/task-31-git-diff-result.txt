@@ -1,0 +1,67 @@
+# Task 31: GitDiffResult Schema Discovery and Fixture Creation
+
+## Schema Synthesis
+
+### Rust Definition (crates/ws-server/src/protocol.rs)
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct GitDiffResult {
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    pub file_path: Option<String>,
+    pub diff: String,
+}
+```
+
+### TypeScript Definition (apps/web/src/types/protocol.ts)
+```typescript
+export interface GitDiffResult {
+  type: 'GitDiffResult';
+  worktreeId: string;
+  filePath?: string;
+  diff: string;
+}
+```
+
+### Unified Schema
+Fields:
+- worktreeId: string (UUID as string)
+- filePath?: string (optional, camelCase)
+- diff: string
+
+Note: The TypeScript interface includes `type: 'GitDiffResult'` as a discriminator, but the generated TS binding only includes the data fields. The discriminator is handled by the discriminated union type.
+
+## Changes Made
+
+### 1. Added ts-rs derive to Rust struct
+File: crates/ws-server/src/protocol.rs
+- Added `ts_rs::TS` to derive macro
+- Added `#[ts(export)]` attribute
+- Added `#[ts(type = "string")]` on worktree_id field for UUID serialization
+
+### 2. Generated TypeScript binding
+File: crates/ws-server/bindings/GitDiffResult.ts
+```typescript
+export type GitDiffResult = { worktreeId: string, filePath: string | null, diff: string, };
+```
+
+### 3. Created test fixture
+File: test-fixtures/GitDiffResult.msgpack
+- Binary MessagePack fixture created via write_fixture() test
+- Contains sample GitDiffResult with:
+  - worktree_id: Uuid::new_v4()
+  - file_path: Some("src/main.rs")
+  - diff: sample diff content
+
+## Test Results
+- `cargo test test_git_diff_result_fixture` - PASSED
+- `cargo test export_bindings_gitdiffresult` - PASSED
+- All 177 tests passed
+
+## Evidence of Completion
+- [x] Rust type has #[derive(TS, Serialize, Deserialize)]
+- [x] TypeScript type generated in crates/ws-server/bindings/GitDiffResult.ts
+- [x] Binary fixture exists at test-fixtures/GitDiffResult.msgpack

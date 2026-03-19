@@ -3,49 +3,93 @@ import { writeFileSync, unlinkSync, existsSync, mkdirSync } from 'fs';
 import { encode } from '@msgpack/msgpack';
 import { validateFixture, validateFixtures, ValidationResult } from './fixtureValidator';
 import type { WorkspaceCreate, WorktreeCreate, AgentSpawn, TerminalCreate } from '../types/protocol';
+import { readFileSync } from 'fs';
 
 describe('fixtureValidator', () => {
   const FIXTURE_DIR = 'test-fixtures-temp';
 
-  beforeEach(() => {
-    // Create temporary fixture directory
-    if (!existsSync(FIXTURE_DIR)) {
-      mkdirSync(FIXTURE_DIR, { recursive: true });
-    }
+  it('should validate WorkspaceCreate.msgpack fixture', async () => {
+    const fixturePath = '../../../test-fixtures/WorkspaceCreate.msgpack';
+
+    const result = await validateFixture(fixturePath);
+
+    expect(result.valid).toBe(true);
+    expect(result.messageType).toBe('WorkspaceCreate');
+    expect(result.details).toBeDefined();
+
+    const details = result.details as any;
+    expect(details.version).toBe(1);
+    expect(details.type).toBe('WorkspaceCreate');
+    expect(details.data).toBeDefined();
+    expect(Array.isArray(details.data)).toBe(true);
+
+    expect(details.data[0]).toBe('test-workspace');
+    expect(details.data[1]).toBe('/path/to/workspace');
+    expect(details.data[2]).toBe('#ff0000');
+    expect(details.data[3]).toBe('folder');
+    expect(details.data[4]).toBe('.worktrees');
   });
 
-  afterEach(() => {
-    // Clean up temporary fixture directory
-    try {
-      // Note: In real tests, you'd clean up all created files
-      // For now, we'll just leave them for inspection if needed
-    } catch (error) {
-      // Ignore cleanup errors
+  it('should validate WorkspaceRename.msgpack fixture', async () => {
+    const fixturePath = '../../../test-fixtures/WorkspaceRename.msgpack';
+
+    const result = await validateFixture(fixturePath);
+
+    if (!result.valid) {
+      console.log('Validation failed:', result.error);
     }
+    expect(result.valid).toBe(true);
+    expect(result.messageType).toBe('WorkspaceRename');
+    expect(result.details).toBeDefined();
+
+    const details = result.details as any;
+    expect(details.version).toBe(1);
+    expect(details.type).toBe('WorkspaceRename');
+    expect(details.data).toBeDefined();
+    expect(Array.isArray(details.data)).toBe(true);
+    expect(details.data).toHaveLength(2);
   });
 
-  describe('validateFixture', () => {
-    it('should validate a WorkspaceCreate message', async () => {
-      const message: WorkspaceCreate = {
-        type: 'WorkspaceCreate',
-        name: 'Test Workspace',
-        rootPath: '/path/to/workspace',
-        color: '#ff0000',
-        icon: 'folder',
-      };
+describe('validateFixture', () => {
+  it('should validate a WorkspaceCreate message', async () => {
+    const message: WorkspaceCreate = {
+      type: 'WorkspaceCreate',
+      name: 'Test Workspace',
+      rootPath: '/path/to/workspace',
+      color: '#ff0000',
+      icon: 'folder',
+    };
 
-      const encoded = encode(message);
-      const fixturePath = `${FIXTURE_DIR}/workspace_create.msgpack`;
-      writeFileSync(fixturePath, encoded);
+    const encoded = encode(message);
+    const fixturePath = `${FIXTURE_DIR}/workspace_create.msgpack`;
+    writeFileSync(fixturePath, encoded);
 
-      const result = await validateFixture(fixturePath);
+    const result = await validateFixture(fixturePath);
 
-      expect(result.valid).toBe(true);
-      expect(result.messageType).toBe('WorkspaceCreate');
-      expect(result.details).toEqual(message);
-    });
+    expect(result.valid).toBe(true);
+    expect(result.messageType).toBe('WorkspaceCreate');
+    expect(result.details).toEqual(message);
+  });
 
-    it('should validate a WorktreeCreate message', async () => {
+  it('should validate a WorkspaceRename message', async () => {
+    const message = {
+      type: 'WorkspaceRename' as const,
+      workspaceId: 'ws-123',
+      newName: 'Renamed Workspace',
+    };
+
+    const encoded = encode(message);
+    const fixturePath = `${FIXTURE_DIR}/workspace_rename.msgpack`;
+    writeFileSync(fixturePath, encoded);
+
+    const result = await validateFixture(fixturePath);
+
+    expect(result.valid).toBe(true);
+    expect(result.messageType).toBe('WorkspaceRename');
+    expect(result.details).toEqual(message);
+  });
+
+  it('should validate a WorktreeCreate message', async () => {
       const message: WorktreeCreate = {
         type: 'WorktreeCreate',
         workspaceId: 'ws-123',

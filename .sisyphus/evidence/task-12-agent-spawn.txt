@@ -1,0 +1,58 @@
+# Task 12: AgentSpawn - Schema Generation and Fixture Creation
+
+## Date: 2026-03-18
+
+## Completed Successfully
+
+### Changes Made:
+
+#### 1. Added ts-rs Derive to Rust AgentSpawn (protocol.rs lines 226-232)
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AgentSpawn {
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    pub agent_type: String,
+}
+```
+
+Key changes:
+- Added `ts_rs::TS` to derive macro
+- Added `#[ts(export)]` attribute for TypeScript export
+- Added `#[ts(type = "string")]` to worktree_id field for proper Uuid serialization
+
+#### 2. Created TypeScript Binding (bindings/AgentSpawn.ts)
+```typescript
+export type AgentSpawn = { worktreeId: string, agentType: string, };
+```
+
+This matches the Rust schema exactly with:
+- worktreeId: string (Uuid serialized as string)
+- agentType: string
+
+#### 3. Created Binary Fixture (test-fixtures/AgentSpawn.msgpack)
+- 103 bytes MessagePack file
+- Contains ClientMessage with version=1, type="AgentSpawn"
+- Data: { worktreeId: uuid, agentType: "coder" }
+
+#### 4. Added Test Case (test_fixtures.rs)
+Added `test_agent_spawn_fixture()` test that validates roundtrip serialization.
+
+### Schema Comparison:
+
+| Field | Rust Type | TS Type | Notes |
+|-------|-----------|---------|-------|
+| worktree_id/worktreeId | Uuid | string | #[ts(type = "string")] |
+| agent_type/agentType | String | string | Direct match |
+
+### Verification:
+- [x] Rust struct has #[derive(TS, Serialize, Deserialize)]
+- [x] TypeScript type generated in bindings/AgentSpawn.ts
+- [x] Binary fixture exists at test-fixtures/AgentSpawn.msgpack
+- [x] Evidence saved to .sisyphus/evidence/task-12-agent-spawn.txt
+
+### Build Status:
+- lib compiles successfully: `cargo check -p ymir-ws-server --lib` ✓
+- Note: Pre-existing errors in worktree/mod.rs block full test run (unrelated to AgentSpawn)

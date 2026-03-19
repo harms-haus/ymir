@@ -1,0 +1,60 @@
+# Task 28: GitDiff - Schema Generation and Fixture Creation
+
+## Date: 2026-03-18
+
+## Completed Successfully
+
+### What was done:
+1. Added `#[derive(ts_rs::TS)]` and `#[ts(export)]` to Rust GitDiff struct
+2. Added `#[ts(type = "string")]` to worktree_id Uuid field
+3. Created TypeScript binding at `bindings/GitDiff.ts`
+4. Created binary fixture at `test-fixtures/GitDiff.msgpack`
+5. Added test case `test_git_diff_fixture()` to test_fixtures.rs
+
+### GitDiff Schema:
+- **Rust**: `struct GitDiff { worktree_id: Uuid, file_path: Option<String> }`
+- **TypeScript**: `{ worktreeId: string, filePath: string | null }`
+- Fields match 1:1 between Rust and TypeScript (camelCase rename, Uuid → string, Option<T> → T | null)
+
+### Key Pattern:
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct GitDiff {
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    pub file_path: Option<String>,
+}
+```
+
+### Generated TypeScript Binding (bindings/GitDiff.ts):
+```typescript
+export type GitDiff = { worktreeId: string, filePath: string | null, };
+```
+
+### Files Modified:
+- `crates/ws-server/src/protocol.rs` - Added ts-rs derive (lines 313-320)
+- `crates/ws-server/src/test_fixtures.rs` - Added fixture test (lines 548-571)
+- `crates/ws-server/bindings/GitDiff.ts` - Created TypeScript binding
+- `test-fixtures/GitDiff.msgpack` - Created binary fixture (59 bytes)
+
+### Test Results:
+- `test_git_diff_fixture ... ok`
+- `test_git_diff_roundtrip ... ok`
+- `test_git_diff_result_roundtrip ... ok`
+- All tests passed (3/3)
+
+### Verification Evidence:
+- Fixture file exists: test-fixtures/GitDiff.msgpack (59 bytes)
+- TypeScript binding generated: crates/ws-server/bindings/GitDiff.ts
+- Cargo test passed: cargo test -p ymir-ws-server test_git_diff
+
+### Schema Comparison:
+| Field       | Rust Type      | TS Type         | Notes                    |
+|-------------|----------------|-----------------|--------------------------|
+| worktree_id | Uuid           | string          | Converted via uuid_str   |
+| file_path   | Option<String> | string \| null  | Option<T> → T \| null    |
+
+### Evidence:
+- Evidence saved to: .sisyphus/evidence/task-28-git-diff.txt

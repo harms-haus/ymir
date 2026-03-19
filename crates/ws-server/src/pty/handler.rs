@@ -20,6 +20,7 @@ pub async fn handle_terminal_create(
                 code: "PTY_MANAGER_NOT_INITIALIZED".to_string(),
                 message: "PTY manager is not initialized".to_string(),
                 details: None,
+                    request_id: None,
             }));
         }
     };
@@ -31,6 +32,7 @@ pub async fn handle_terminal_create(
                 code: "PTY_SPAWN_ERROR".to_string(),
                 message: e.to_string(),
                 details: None,
+                    request_id: None,
             }));
         }
     };
@@ -45,6 +47,7 @@ pub async fn handle_terminal_create(
                         code: "PTY_READER_ERROR".to_string(),
                         message: format!("Failed to get PTY reader: {}", e),
                         details: None,
+                    request_id: None,
                     }));
                 }
             }
@@ -54,6 +57,7 @@ pub async fn handle_terminal_create(
                 code: "PTY_SESSION_NOT_FOUND".to_string(),
                 message: "PTY session not found after creation".to_string(),
                 details: None,
+                    request_id: None,
             }));
         }
     };
@@ -123,6 +127,7 @@ pub async fn handle_terminal_input(
                 code: "PTY_MANAGER_NOT_INITIALIZED".to_string(),
                 message: "PTY manager is not initialized".to_string(),
                 details: None,
+                    request_id: None,
             }));
         }
     };
@@ -132,6 +137,7 @@ pub async fn handle_terminal_input(
             code: "PTY_WRITE_ERROR".to_string(),
             message: e.to_string(),
             details: None,
+                    request_id: None,
         }));
     }
 
@@ -153,6 +159,7 @@ pub async fn handle_terminal_resize(
                 code: "PTY_MANAGER_NOT_INITIALIZED".to_string(),
                 message: "PTY manager is not initialized".to_string(),
                 details: None,
+                    request_id: None,
             }));
         }
     };
@@ -162,6 +169,7 @@ pub async fn handle_terminal_resize(
             code: "PTY_RESIZE_ERROR".to_string(),
             message: e.to_string(),
             details: None,
+                    request_id: None,
         }));
     }
 
@@ -182,6 +190,7 @@ pub async fn handle_terminal_kill(
                 code: "PTY_MANAGER_NOT_INITIALIZED".to_string(),
                 message: "PTY manager is not initialized".to_string(),
                 details: None,
+                    request_id: None,
             }));
         }
     };
@@ -191,6 +200,7 @@ pub async fn handle_terminal_kill(
             code: "PTY_KILL_ERROR".to_string(),
             message: e.to_string(),
             details: None,
+                    request_id: None,
         }));
     }
 
@@ -220,6 +230,7 @@ pub async fn handle_terminal_list(
                 code: "PTY_MANAGER_NOT_INITIALIZED".to_string(),
                 message: "PTY manager is not initialized".to_string(),
                 details: None,
+                    request_id: None,
             }));
         }
     };

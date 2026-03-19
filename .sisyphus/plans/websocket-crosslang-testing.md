@@ -420,7 +420,7 @@ session_id = task(
 )
 ```
 
-- [ ] 4. WorkspaceCreate - Discover, generate schema, and create fixture
+- [x] 4. WorkspaceCreate - Discover, generate schema, and create fixture
 
   **What to do**:
   - Spawn subagent session to:
@@ -509,167 +509,167 @@ session_id = task(
 
   **Commit**: NO (group with Wave 2 completion)
 
-- [ ] 5. WorkspaceDelete - Discover usage and generate schema
+- [x] 5. WorkspaceDelete - Discover usage and generate schema
   **Pattern**: Same as Task 4 for WorkspaceDelete
   **Parallel Group**: Wave 2 Group A
 
-- [ ] 6. WorkspaceRename - Discover usage and generate schema
+- [x] 6. WorkspaceRename - Discover usage and generate schema
   **Pattern**: Same as Task 4 for WorkspaceRename
   **Parallel Group**: Wave 2 Group A
 
-- [ ] 7. WorkspaceUpdate - Discover usage and generate schema
+- [x] 7. WorkspaceUpdate - Discover usage and generate schema
   **Pattern**: Same as Task 4 for WorkspaceUpdate
   **Parallel Group**: Wave 2 Group A
 
-- [ ] 8. WorktreeCreate - Discover usage and generate schema
+- [x] 8. WorktreeCreate - Discover usage and generate schema
   **Pattern**: Same as Task 4 for WorktreeCreate
   **Parallel Group**: Wave 2 Group A
 
-- [ ] 9. WorktreeDelete - Discover usage and generate schema
+- [x] 9. WorktreeDelete - Discover usage and generate schema
   **Pattern**: Same as Task 4 for WorktreeDelete
   **Parallel Group**: Wave 2 Group A
 
-- [ ] 10. WorktreeMerge - Discover usage and generate schema
+- [x] 10. WorktreeMerge - Discover usage and generate schema
   **Pattern**: Same as Task 4 for WorktreeMerge
   **Parallel Group**: Wave 2 Group A
 
-- [ ] 11. WorktreeList - Discover usage and generate schema
+- [x] 11. WorktreeList - Discover usage and generate schema
   **Pattern**: Same as Task 4 for WorktreeList
   **Parallel Group**: Wave 2 Group A
 
-- [ ] 12. AgentSpawn - Discover usage and generate schema
+- [x] 12. AgentSpawn - Discover usage and generate schema
   **Pattern**: Same as Task 4 for AgentSpawn
   **Parallel Group**: Wave 2 Group A
 
-- [ ] 13. AgentSend - Discover usage and generate schema
+- [x] 13. AgentSend - Discover usage and generate schema
   **Pattern**: Same as Task 4 for AgentSend
   **Parallel Group**: Wave 2 Group A
 
-- [ ] 14. AgentCancel - Discover usage and generate schema
+- [x] 14. AgentCancel - Discover usage and generate schema
   **Pattern**: Same as Task 4 for AgentCancel
   **Parallel Group**: Wave 2 Group A
 
-- [ ] 15. AgentStatusUpdate - Discover usage and generate schema
+- [x] 15. AgentStatusUpdate - Discover usage and generate schema
   **Pattern**: Same as Task 4 for AgentStatusUpdate
   **Parallel Group**: Wave 2 Group A
 
-- [ ] 16. AgentOutput - Discover usage and generate schema
+- [x] 16. AgentOutput - Discover usage and generate schema
   **Pattern**: Same as Task 4 for AgentOutput
   **Parallel Group**: Wave 2 Group B
 
-- [ ] 17. AgentPrompt - Discover usage and generate schema
+- [x] 17. AgentPrompt - Discover usage and generate schema
   **Pattern**: Same as Task 4 for AgentPrompt
   **Parallel Group**: Wave 2 Group B
 
-- [ ] 18. TerminalInput - Discover usage and generate schema
+- [x] 18. TerminalInput - Discover usage and generate schema
   **Pattern**: Same as Task 4 for TerminalInput
   **Parallel Group**: Wave 2 Group B
 
-- [ ] 19. TerminalResize - Discover usage and generate schema
+- [x] 19. TerminalResize - Discover usage and generate schema
   **Pattern**: Same as Task 4 for TerminalResize
   **Parallel Group**: Wave 2 Group B
 
-- [ ] 20. TerminalCreate - Discover usage and generate schema
+- [x] 20. TerminalCreate - Discover usage and generate schema
   **Pattern**: Same as Task 4 for TerminalCreate
   **Parallel Group**: Wave 2 Group B
 
-- [ ] 21. TerminalKill - Discover usage and generate schema
+- [x] 21. TerminalKill - Discover usage and generate schema
   **Pattern**: Same as Task 4 for TerminalKill
   **Parallel Group**: Wave 2 Group B
 
-- [ ] 22. TerminalOutput - Discover usage and generate schema
+- [x] 22. TerminalOutput - Discover usage and generate schema
   **Pattern**: Same as Task 4 for TerminalOutput
   **Parallel Group**: Wave 2 Group B
 
-- [ ] 23. TerminalCreated - Discover usage and generate schema
+- [x] 23. TerminalCreated - Discover usage and generate schema
   **Pattern**: Same as Task 4 for TerminalCreated
   **Parallel Group**: Wave 2 Group B
 
-- [ ] 24. FileRead - Discover usage and generate schema
+- [x] 24. FileRead - Discover usage and generate schema
   **Pattern**: Same as Task 4 for FileRead
   **Parallel Group**: Wave 2 Group B
 
-- [ ] 25. FileWrite - Discover usage and generate schema
+- [x] 25. FileWrite - Discover usage and generate schema
   **Pattern**: Same as Task 4 for FileWrite
   **Parallel Group**: Wave 2 Group B
 
-- [ ] 26. FileContent - Discover usage and generate schema
+- [x] 26. FileContent - Discover usage and generate schema
   **Pattern**: Same as Task 4 for FileContent
   **Parallel Group**: Wave 2 Group B
 
-- [ ] 27. GitStatus - Discover usage and generate schema
+- [x] 27. GitStatus - Discover usage and generate schema
   **Pattern**: Same as Task 4 for GitStatus
   **Parallel Group**: Wave 2 Group B
 
-- [ ] 28. GitDiff - Discover usage and generate schema
+- [x] 28. GitDiff - Discover usage and generate schema
   **Pattern**: Same as Task 4 for GitDiff
   **Parallel Group**: Wave 2 Group C
 
-- [ ] 29. GitCommit - Discover usage and generate schema
+- [x] 29. GitCommit - Discover usage and generate schema
   **Pattern**: Same as Task 4 for GitCommit
   **Parallel Group**: Wave 2 Group C
 
-- [ ] 30. GitStatusResult - Discover usage and generate schema
+- [x] 30. GitStatusResult - Discover usage and generate schema
   **Pattern**: Same as Task 4 for GitStatusResult
   **Parallel Group**: Wave 2 Group C
 
-- [ ] 31. GitDiffResult - Discover usage and generate schema
+- [x] 31. GitDiffResult - Discover usage and generate schema
   **Pattern**: Same as Task 4 for GitDiffResult
   **Parallel Group**: Wave 2 Group C
 
-- [ ] 32. CreatePR - Discover usage and generate schema
+- [x] 32. CreatePR - Discover usage and generate schema
   **Pattern**: Same as Task 4 for CreatePR
   **Parallel Group**: Wave 2 Group C
 
-- [ ] 33. StateSnapshot - Discover usage and generate schema
+- [x] 33. StateSnapshot - Discover usage and generate schema
   **Pattern**: Same as Task 4 for StateSnapshot
   **Parallel Group**: Wave 2 Group C
 
-- [ ] 34. GetState - Discover usage and generate schema
+- [x] 34. GetState - Discover usage and generate schema
   **Pattern**: Same as Task 4 for GetState
   **Parallel Group**: Wave 2 Group C
 
-- [ ] 35. UpdateSettings - Discover usage and generate schema
+- [x] 35. UpdateSettings - Discover usage and generate schema
   **Pattern**: Same as Task 4 for UpdateSettings
   **Parallel Group**: Wave 2 Group C
 
-- [ ] 36. Ping - Discover usage and generate schema
+- [x] 36. Ping - Discover usage and generate schema
   **Pattern**: Same as Task 4 for Ping
   **Parallel Group**: Wave 2 Group C
 
-- [ ] 37. Pong - Discover usage and generate schema
+- [x] 37. Pong - Discover usage and generate schema
   **Pattern**: Same as Task 4 for Pong
   **Parallel Group**: Wave 2 Group C
 
-- [ ] 38. Ack - Discover usage and generate schema
+- [x] 38. Ack - Discover usage and generate schema
   **Pattern**: Same as Task 4 for Ack
   **Parallel Group**: Wave 2 Group C
 
-- [ ] 39. Error - Discover usage and generate schema
+- [x] 39. Error - Discover usage and generate schema
   **Pattern**: Same as Task 4 for Error
   **Parallel Group**: Wave 2 Group C
 
-- [ ] 40. Notification - Discover usage and generate schema
+- [x] 40. Notification - Discover usage and generate schema
   **Pattern**: Same as Task 4 for Notification
   **Parallel Group**: Wave 2 Group C
 
-- [ ] 41. WorkspaceCreated - Discover usage and generate schema
+- [x] 41. WorkspaceCreated - Discover usage and generate schema
   **Pattern**: Same as Task 4 for WorkspaceCreated
   **Parallel Group**: Wave 2 Group C
 
-- [ ] 42. WorkspaceDeleted - Discover usage and generate schema
+- [x] 42. WorkspaceDeleted - Discover usage and generate schema
   **Pattern**: Same as Task 4 for WorkspaceDeleted
   **Parallel Group**: Wave 2 Group C
 
-- [ ] 43. WorkspaceUpdated - Discover usage and generate schema
+- [x] 43. WorkspaceUpdated - Discover usage and generate schema
   **Pattern**: Same as Task 4 for WorkspaceUpdated
   **Parallel Group**: Wave 2 Group C
 
-- [ ] 44. WorktreeCreated - Discover usage and generate schema
+- [x] 44. WorktreeCreated - Discover usage and generate schema
   **Pattern**: Same as Task 4 for WorktreeCreated
   **Parallel Group**: Wave 2 Group C
 
-- [ ] 45. WorktreeDeleted - Discover usage and generate schema
+- [x] 45. WorktreeDeleted - Discover usage and generate schema
   **Pattern**: Same as Task 4 for WorktreeDeleted
   **Parallel Group**: Wave 2 Group C
 

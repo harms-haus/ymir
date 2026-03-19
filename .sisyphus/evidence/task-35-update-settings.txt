@@ -1,0 +1,42 @@
+# Task 35: UpdateSettings - Schema Generation and Fixture Creation
+
+## Date: 2026-03-19
+
+## Completed Successfully
+
+### What was done:
+1. Added #[derive(ts_rs::TS)] and #[ts(export)] to Rust UpdateSettings struct
+2. Created TypeScript binding at bindings/UpdateSettings.ts
+3. Created binary fixture at test-fixtures/UpdateSettings.msgpack (47 bytes)
+4. Added test case test_update_settings_fixture() to test_fixtures.rs
+
+### UpdateSettings Schema:
+- **Rust**: struct UpdateSettings { key: String, value: String }
+- **TypeScript**: interface UpdateSettings { key: string; value: string }
+- Fields match 1:1 between Rust and TypeScript (camelCase rename)
+
+### Key Pattern:
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct UpdateSettings {
+    pub key: String,
+    pub value: String,
+}
+```
+
+### Files Modified:
+- crates/ws-server/src/protocol.rs - Added ts-rs derive (lines 350-355)
+- crates/ws-server/src/test_fixtures.rs - Added fixture test (lines 741-761)
+- crates/ws-server/bindings/UpdateSettings.ts - Created TypeScript binding
+- test-fixtures/UpdateSettings.msgpack - Created binary fixture (47 bytes)
+
+### Test Results:
+- test_update_settings_fixture ... ok
+- All 187 tests passed
+
+### Evidence:
+- Fixture created: ls -la test-fixtures/UpdateSettings.msgpack
+- cargo test --package ymir-ws-server --lib: 187 passed
+

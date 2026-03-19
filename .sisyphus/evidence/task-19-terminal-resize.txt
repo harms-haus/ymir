@@ -1,0 +1,48 @@
+# TerminalResize TypeScript Binding & Fixture - Evidence
+
+## Task Completed: 2026-03-18
+
+## 1. Rust Type Definition (protocol.rs)
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TerminalResize {
+    #[ts(type = "string")]
+    pub session_id: Uuid,
+    pub cols: u16,
+    pub rows: u16,
+}
+```
+
+## 2. TypeScript Type Generated (bindings/TerminalResize.ts)
+```typescript
+export type TerminalResize = { sessionId: string, cols: number, rows: number, };
+```
+
+## 3. TypeScript Interface (protocol.ts - for reference)
+```typescript
+export interface TerminalResize {
+  type: 'TerminalResize';
+  sessionId: string;
+  cols: number;
+  rows: number;
+}
+```
+
+## 4. Binary Fixture
+- Path: test-fixtures/TerminalResize.msgpack
+- Size: 56 bytes
+- Contains: ClientMessage wrapping TerminalResize with session_id, cols=120, rows=40
+
+## 5. Test Results
+- test_terminal_resize_fixture ... ok
+- All 152 tests passed
+
+## 6. Schema Synthesis
+Both Rust and TypeScript define identical fields:
+- sessionId: string (Rust Uuid -> TypeScript string via #[ts(type = "string")])
+- cols: number
+- rows: number
+
+The ts-rs generated type matches the manual TypeScript interface (minus the type discriminator which is added by the enum wrapper).

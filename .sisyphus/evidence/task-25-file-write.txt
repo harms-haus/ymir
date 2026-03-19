@@ -1,0 +1,111 @@
+# Task 25: FileWrite Type Generation and Fixture Creation
+
+## Date: 2026-03-18
+
+## Objective
+Discover actual usage in both Rust and TypeScript, synthesize the correct schema, add ts-rs derive macro, and create a binary fixture.
+
+## Schema Synthesis
+
+### Rust Definition (protocol.rs:297-303)
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct FileWrite {
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    pub path: String,
+    pub content: String,
+}
+```
+
+### TypeScript Definition (protocol.ts:266-272)
+```typescript
+export interface FileWrite {
+  type: 'FileWrite';
+  worktreeId: string;
+  path: string;
+  content: string;
+  encoding?: 'utf8' | 'base64';
+}
+```
+
+### Unified Schema
+- `worktreeId: string` (Uuid serialized as string)
+- `path: string`
+- `content: string`
+- Note: TypeScript has optional `encoding?: 'utf8' | 'base64'` field not present in Rust
+
+## Changes Made
+
+### 1. protocol.rs
+Added `#[derive(ts_rs::TS)]` and `#[ts(export)]` to FileWrite struct:
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct FileWrite {
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    pub path: String,
+    pub content: String,
+}
+```
+
+### 2. test_fixtures.rs
+Added FileWrite fixture test:
+```rust
+#[test]
+fn test_file_write_fixture() -> Result<()> {
+    use crate::protocol::{ClientMessage, ClientMessagePayload, FileWrite};
+    use uuid::Uuid;
+
+    let msg = ClientMessage::new(ClientMessagePayload::FileWrite(FileWrite {
+        worktree_id: Uuid::new_v4(),
+        path: "src/main.rs".to_string(),
+        content: "fn main() {}".to_string(),
+    }));
+
+    let path = write_fixture("FileWrite", &msg)?;
+    // ... assertions
+}
+```
+
+## Generated Artifacts
+
+### TypeScript Binding
+File: `crates/ws-server/bindings/FileWrite.ts`
+```typescript
+export type FileWrite = { worktreeId: string, path: string, content: string, };
+```
+
+### Binary Fixture
+File: `test-fixtures/FileWrite.msgpack` (74 bytes)
+
+## Verification
+
+### Tests Passed
+```
+cargo test -p ymir-ws-server
+- test_file_write_fixture ... ok
+- All 165 tests passed
+```
+
+## Usage Locations
+
+### Rust
+- `crates/ws-server/src/protocol.rs`:97 - ClientMessagePayload::FileWrite variant
+- `crates/ws-server/src/protocol.rs`:297-303 - FileWrite struct definition
+- `crates/ws-server/src/protocol.rs`:798-804 - test_file_write_roundtrip test
+- `crates/ws-server/src/router.rs`:139,172 - Router handling
+
+### TypeScript
+- `apps/web/src/lib/api.ts:18,191-192` - API import and usage
+- `apps/web/src/types/protocol.ts:266-272` - Type definition
+- `apps/web/src/types/protocol.ts:443` - ClientMessage union
+- `apps/web/src/types/protocol.ts:594-596` - isFileWrite type guard
+- `apps/web/src/components/editor/EditorTab.tsx:5,137-138` - Editor component usage
+- `apps/web/src/components/editor/__tests__/EditorTab.test.tsx:194,204` - Tests
+- `apps/web/src/types/__tests__/protocol.test.ts:68` - Protocol tests
+- `apps/web/src/test/fixtureValidator.ts:113` - Fixture validation

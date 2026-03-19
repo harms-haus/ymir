@@ -415,6 +415,8 @@ mod tests {
             workspace_id,
             branch_name: branch_name.clone(),
             agent_type: Some("coder".to_string()),
+            request_id: None,
+            use_existing_branch: None,
         };
 
         let result = create(state.clone(), msg).await;
@@ -451,6 +453,8 @@ mod tests {
             workspace_id,
             branch_name: branch_name.clone(),
             agent_type: None,
+            request_id: None,
+            use_existing_branch: None,
         };
 
         let created = create(state.clone(), create_msg)
@@ -505,6 +509,8 @@ mod tests {
             workspace_id,
             branch_name,
             agent_type: None,
+            request_id: None,
+            use_existing_branch: None,
         };
 
         let result = create(state.clone(), msg).await;
@@ -531,6 +537,8 @@ mod tests {
             workspace_id,
             branch_name: branch_name.clone(),
             agent_type: None,
+            request_id: None,
+            use_existing_branch: None,
         };
 
         let created = create(state.clone(), create_msg)
@@ -601,6 +609,8 @@ mod tests {
                 workspace_id,
                 branch_name: format!("feature/test-{}", i),
                 agent_type: None,
+                request_id: None,
+                use_existing_branch: None,
             };
             create(state.clone(), msg)
                 .await
@@ -631,6 +641,8 @@ mod tests {
             workspace_id,
             branch_name: branch_name.clone(),
             agent_type: None,
+            request_id: None,
+            use_existing_branch: None,
         };
 
         let created = create(state.clone(), create_msg)

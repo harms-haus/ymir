@@ -1,0 +1,62 @@
+# Task 27: GitStatus - Evidence
+
+## Summary
+Successfully added ts-rs derive to Rust GitStatus struct and created binary fixture.
+
+## Schema Discovery
+
+### Rust Definition (crates/ws-server/src/protocol.rs)
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct GitStatus {
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+}
+```
+
+### TypeScript Interface (apps/web/src/types/protocol.ts)
+```typescript
+export interface GitStatus {
+  type: 'GitStatus';
+  worktreeId: string;
+}
+```
+
+### Synthesized Schema
+- `worktreeId: string` - required field (UUID serialized as string)
+- The `type: 'GitStatus'` discriminator comes from the enum wrapper, not the struct
+
+## Changes Made
+
+### 1. protocol.rs (line 307-315)
+Added `#[derive(ts_rs::TS)]`, `#[ts(export)]`, and `#[ts(type = "string")]` to GitStatus struct.
+
+### 2. test_fixtures.rs (line 525-542)
+Added `test_git_status_fixture()` test function.
+
+## Generated Outputs
+
+### TypeScript Binding (crates/ws-server/bindings/GitStatus.ts)
+```typescript
+export type GitStatus = { worktreeId: string, };
+```
+
+### Binary Fixture (test-fixtures/GitStatus.msgpack)
+- Size: 49 bytes
+- MessagePack format with version header and enum tag
+
+## Test Results
+```
+running 1 test
+test test_fixtures::tests::test_git_status_fixture ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored
+```
+
+## Notes
+- GitStatus is a client-to-server message (ClientMessagePayload::GitStatus)
+- Handler: `handle_git_status()` in crates/ws-server/src/router.rs
+- GitStatusResult (server response) has a schema mismatch with TypeScript tests
+  - TypeScript test includes `entries` array but Rust struct doesn't have it
+  - This was NOT fixed as the task only covered GitStatus (the request), not GitStatusResult

@@ -1,0 +1,51 @@
+# Task 44: WorktreeCreated - Schema Generation and Fixture Creation
+
+## Date: 2026-03-19
+
+## Completed Successfully
+
+### What was done:
+1. Added `#[derive(ts_rs::TS)]` and `#[ts(export)]` to Rust WorktreeCreated struct
+2. Added `#[serde(rename_all = "camelCase")]` attribute
+3. Created TypeScript binding at `bindings/WorktreeCreated.ts`
+4. Created binary fixture at `test-fixtures/WorktreeCreated.msgpack` (149 bytes)
+5. Added test case `test_worktree_created_fixture()` to test_fixtures.rs
+
+### WorktreeCreated Schema:
+
+**Rust WorktreeCreated (protocol.rs lines 499-502):**
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct WorktreeCreated {
+    pub worktree: WorktreeData,
+}
+```
+
+**Generated TypeScript binding (bindings/WorktreeCreated.ts):**
+```typescript
+export type WorktreeCreated = { worktree: WorktreeData, };
+```
+
+**TypeScript (manual in apps/web/src/types/protocol.ts):**
+- `type: 'WorktreeCreated'` - enum discriminant (not in struct)
+- `worktree: Worktree` - references Worktree interface
+
+The `WorktreeData` type is already exported by ts-rs and matches the TypeScript `Worktree` interface 1:1.
+
+### Files Modified:
+- `crates/ws-server/src/protocol.rs` - Added ts-rs derive (lines 499-502)
+- `crates/ws-server/src/test_fixtures.rs` - Added fixture test (lines 984-1010)
+- `crates/ws-server/bindings/WorktreeCreated.ts` - Created TypeScript binding
+- `test-fixtures/WorktreeCreated.msgpack` - Created binary fixture (149 bytes)
+
+### Test Results:
+- `test_worktree_created_fixture ... ok`
+- `protocol::export_bindings_worktreecreated ... ok`
+- All 208 tests passed
+
+### Evidence:
+- TypeScript binding: `crates/ws-server/bindings/WorktreeCreated.ts`
+- Binary fixture: `test-fixtures/WorktreeCreated.msgpack`
+- Tests: 208 passed
