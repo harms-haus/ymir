@@ -385,6 +385,12 @@ export interface AgentPrompt {
   prompt: string;
 }
 
+export interface AgentRemoved {
+  type: 'AgentRemoved';
+  id: string;
+  worktreeId: string;
+}
+
 // Terminal events
 export interface TerminalOutput {
   type: 'TerminalOutput';
@@ -470,6 +476,7 @@ export type ServerMessage =
   | AgentStatusUpdate
   | AgentOutput
   | AgentPrompt
+  | AgentRemoved
   | TerminalOutput
   | TerminalCreated
   | TerminalRemoved
@@ -667,6 +674,10 @@ export function isAgentOutput(message: AnyMessage | UnknownMessage): message is 
 
 export function isAgentPrompt(message: AnyMessage | UnknownMessage): message is AgentPrompt {
   return message.type === 'AgentPrompt';
+}
+
+export function isAgentRemoved(message: AnyMessage | UnknownMessage): message is AgentRemoved {
+  return message.type === 'AgentRemoved';
 }
 
 export function isTerminalOutput(message: AnyMessage | UnknownMessage): message is TerminalOutput {

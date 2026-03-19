@@ -152,66 +152,62 @@ pub async fn handle_agent_cancel(
     state: Arc<AppState>,
     msg: crate::protocol::AgentCancel,
 ) -> ServerMessage {
-    let agent_client_arc = {
-        let agent_clients = state.agent_clients.read().await;
-        match agent_clients.get(&msg.worktree_id) {
-            Some(client) => client.clone(),
-            None => {
-                return ServerMessage::new(ServerMessagePayload::Error(Error {
-                    code: "AGENT_NOT_FOUND".to_string(),
-                    message: format!("No agent running for worktree {}", msg.worktree_id),
-                    details: None,
-                    request_id: None,
-                }));
-            }
-        }
-    };
-
-    {
-        let mut agent_client = agent_client_arc.lock().await;
-        if let Err(e) = agent_client.kill().await {
-            tracing::warn!("Failed to kill agent process: {}", e);
-        }
-    }
-
-    {
-        let mut agent_clients = state.agent_clients.write().await;
-        agent_clients.remove(&msg.worktree_id);
-    }
-
     let session_data_opt = {
         let agents = state.agents.read().await;
-        agents.iter().find_map(|(id, state)| {
-            if state.worktree_id == msg.worktree_id {
-                Some((*id, state.agent_type.clone(), state.status.clone()))
+        agents.iter().find_map(|(id, agent_state)| {
+            if agent_state.worktree_id == msg.worktree_id {
+                Some((*id, agent_state.agent_type.clone()))
             } else {
                 None
             }
         })
     };
 
-    if let Some((session_id, agent_type, _)) = session_data_opt {
-        {
-            let mut agents = state.agents.write().await;
-            agents.remove(&session_id);
+    let (session_id, agent_type) = match session_data_opt {
+        Some(data) => data,
+        None => {
+            return ServerMessage::new(ServerMessagePayload::Error(Error {
+                code: "AGENT_NOT_FOUND".to_string(),
+                message: format!("No agent session for worktree {}", msg.worktree_id),
+                details: None,
+                request_id: None,
+            }));
         }
+    };
 
-        if let Err(e) = state.db.delete_agent_session(&session_id.to_string()).await {
-            tracing::warn!("Failed to delete agent session from database: {}", e);
+    let agent_client_arc = {
+        let agent_clients = state.agent_clients.read().await;
+        agent_clients.get(&msg.worktree_id).cloned()
+    };
+
+    if let Some(agent_client_arc) = agent_client_arc {
+        let mut agent_client = agent_client_arc.lock().await;
+        if let Err(e) = agent_client.kill().await {
+            tracing::warn!("Failed to kill agent process: {}", e);
         }
+        drop(agent_client);
 
-        let broadcast_msg = ServerMessage::new(ServerMessagePayload::AgentStatusUpdate(
-            AgentStatusUpdate {
-                id: session_id,
-                worktree_id: msg.worktree_id,
-                agent_type,
-                status: AgentStatus::Idle,
-                started_at: 0,
-            },
-        ));
-
-        state.broadcast(broadcast_msg).await;
+        let mut agent_clients = state.agent_clients.write().await;
+        agent_clients.remove(&msg.worktree_id);
     }
+
+    {
+        let mut agents = state.agents.write().await;
+        agents.remove(&session_id);
+    }
+
+    if let Err(e) = state.db.delete_agent_session(&session_id.to_string()).await {
+        tracing::warn!("Failed to delete agent session from database: {}", e);
+    }
+
+    let broadcast_msg = ServerMessage::new(ServerMessagePayload::AgentRemoved(
+        crate::protocol::AgentRemoved {
+            id: session_id,
+            worktree_id: msg.worktree_id,
+        },
+    ));
+
+    state.broadcast(broadcast_msg).await;
 
     ServerMessage::new(ServerMessagePayload::Ack(crate::protocol::Ack {
         message_id: msg.worktree_id,

@@ -121,6 +121,7 @@ pub enum ServerMessagePayload {
     AgentStatusUpdate(AgentStatusUpdate),
     AgentOutput(AgentOutput),
     AgentPrompt(AgentPrompt),
+    AgentRemoved(AgentRemoved),
     TerminalOutput(TerminalOutput),
     TerminalCreated(TerminalCreated),
     TerminalRemoved(TerminalRemoved),
@@ -563,6 +564,18 @@ pub struct AgentStatusUpdate {
     pub status: AgentStatus,
     #[ts(type = "number")]
     pub started_at: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AgentRemoved {
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub id: Uuid,
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
