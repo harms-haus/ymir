@@ -4,12 +4,14 @@
 //! for the WebSocket server, including database connections, in-memory registries,
 //! and communication channels.
 
+use crate::agent::AcpClient;
 use crate::db::Db;
 use crate::git::GitOps;
 use crate::protocol::ServerMessage;
+use crate::pty::PtyManager;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{broadcast, mpsc, watch, RwLock};
+use tokio::sync::{broadcast, mpsc, watch, Mutex, RwLock};
 use uuid::Uuid;
 
 /// Disconnect clients inactive for this many seconds
@@ -64,7 +66,6 @@ pub struct ClientState {
 }
 
 /// The central application state shared across all handlers
-#[derive(Debug)]
 pub struct AppState {
     /// Database connection (shared)
     pub db: Arc<Db>,
@@ -78,8 +79,11 @@ pub struct AppState {
     /// Active worktrees
     pub worktrees: RwLock<HashMap<Uuid, WorktreeState>>,
 
-    /// Running agent sessions
+    /// Running agent sessions (metadata)
     pub agents: RwLock<HashMap<Uuid, AgentState>>,
+
+    /// Active agent clients (keyed by worktree_id)
+    pub agent_clients: RwLock<HashMap<Uuid, Arc<Mutex<AcpClient>>>>,
 
     /// Active PTY sessions
     pub terminals: RwLock<HashMap<Uuid, TerminalState>>,
@@ -92,6 +96,25 @@ pub struct AppState {
 
     /// Graceful shutdown signal (true = shutdown requested)
     pub shutdown_rx: watch::Receiver<bool>,
+
+    /// PTY manager for terminal sessions (optional for flexibility)
+    pub pty_manager: Option<Arc<PtyManager>>,
+}
+
+impl std::fmt::Debug for AppState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AppState")
+            .field("db", &"Arc<Db>")
+            .field("git_ops", &"Arc<GitOps>")
+            .field("workspaces", &self.workspaces.try_read().map(|g| g.len()))
+            .field("worktrees", &self.worktrees.try_read().map(|g| g.len()))
+            .field("agents", &self.agents.try_read().map(|g| g.len()))
+            .field("agent_clients", &self.agent_clients.try_read().map(|g| g.len()))
+            .field("terminals", &self.terminals.try_read().map(|g| g.len()))
+            .field("clients", &self.clients.try_read().map(|g| g.len()))
+            .field("pty_manager", &self.pty_manager.is_some())
+            .finish()
+    }
 }
 
 impl AppState {
@@ -106,11 +129,77 @@ impl AppState {
             workspaces: RwLock::new(HashMap::new()),
             worktrees: RwLock::new(HashMap::new()),
             agents: RwLock::new(HashMap::new()),
+            agent_clients: RwLock::new(HashMap::new()),
             terminals: RwLock::new(HashMap::new()),
             clients: RwLock::new(HashMap::new()),
             broadcast_tx,
             shutdown_rx,
+            pty_manager: None,
         }
+    }
+
+    /// Create an AppState with PtyManager enabled
+    pub fn with_pty_manager(db: Arc<Db>, shutdown_rx: watch::Receiver<bool>) -> Self {
+        let mut state = Self::new(db, shutdown_rx);
+        state.pty_manager = Some(PtyManager::new());
+        state
+    }
+
+    /// Initialize in-memory state from database
+    pub async fn initialize_from_db(&self) {
+        // Load workspaces
+        match self.db.list_workspaces().await {
+            Ok(db_workspaces) => {
+                let mut workspaces = self.workspaces.write().await;
+                for ws in db_workspaces {
+                    if let Ok(id) = uuid::Uuid::parse_str(&ws.id) {
+                        workspaces.insert(
+                            id,
+                            WorkspaceState {
+                                id,
+                                name: ws.name,
+                                root_path: ws.root_path,
+                                color: if ws.color.is_empty() { None } else { Some(ws.color) },
+                                icon: if ws.icon.is_empty() { None } else { Some(ws.icon) },
+                                worktree_base_dir: if ws.worktree_base_dir.is_empty() { None } else { Some(ws.worktree_base_dir) },
+                            },
+                        );
+                    }
+                }
+            }
+            Err(e) => tracing::warn!("Failed to load workspaces from DB: {}", e),
+        }
+
+        // Load all worktrees
+        match self.db.list_workspaces().await {
+            Ok(db_workspaces) => {
+                let mut worktrees = self.worktrees.write().await;
+                for ws in db_workspaces {
+                    if let Ok(workspace_id) = uuid::Uuid::parse_str(&ws.id) {
+                        if let Ok(wts) = self.db.list_worktrees(&ws.id).await {
+                            for wt in wts {
+                                if let Ok(id) = uuid::Uuid::parse_str(&wt.id) {
+                                    worktrees.insert(
+                                        id,
+                                        WorktreeState {
+                                            id,
+                                            workspace_id,
+                                            branch_name: wt.branch_name,
+                                            path: wt.path,
+                                            status: wt.status,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Err(e) => tracing::warn!("Failed to load worktrees from DB: {}", e),
+        }
+
+
+        tracing::info!("Initialized in-memory state from database");
     }
 
     /// Create an AppState for testing with an in-memory database
@@ -120,7 +209,7 @@ impl AppState {
             .await
             .expect("Failed to create in-memory db");
         let (_shutdown_tx, shutdown_rx) = watch::channel(false);
-        Self::new(Arc::new(db), shutdown_rx)
+        Self::with_pty_manager(Arc::new(db), shutdown_rx)
     }
 }
 

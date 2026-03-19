@@ -1,7 +1,7 @@
 //! PTY session manager for terminal emulation
-//!
-//! This module provides cross-platform PTY session management with TTL enforcement,
-//! session limits, and proper resource cleanup.
+
+pub mod handler;
+mod output;
 
 use anyhow::{anyhow, Result};
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
@@ -10,9 +10,15 @@ use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
 use tokio::time::interval;
 use tracing::instrument;
 use uuid::Uuid;
+
+pub use handler::{
+    handle_terminal_create, handle_terminal_input, handle_terminal_kill, handle_terminal_resize,
+};
+pub use output::spawn_output_reader;
 
 const MAX_SESSIONS_PER_WORKTREE: usize = 10;
 const SESSION_TTL: Duration = Duration::from_secs(3600);
@@ -126,16 +132,30 @@ impl PtySession {
     pub fn output_tx(&self) -> mpsc::UnboundedSender<Vec<u8>> {
         self.tx.clone()
     }
+
+    pub fn take_reader(&mut self) -> Result<Box<dyn Read + Send>> {
+        self.master.try_clone_reader()
+    }
 }
 
 pub struct PtyManager {
     sessions: Arc<Mutex<HashMap<Uuid, Arc<Mutex<PtySession>>>>>,
-    _ttl_handle: Option<tokio::task::JoinHandle<()>>,
+    output_readers: Arc<Mutex<HashMap<Uuid, JoinHandle<()>>>>,
+    _ttl_handle: Option<JoinHandle<()>>,
+}
+
+impl std::fmt::Debug for PtyManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PtyManager")
+            .field("session_count", &self.sessions.lock().unwrap().len())
+            .finish()
+    }
 }
 
 impl PtyManager {
     pub fn new() -> Arc<Self> {
         let sessions = Arc::new(Mutex::new(HashMap::new()));
+        let output_readers = Arc::new(Mutex::new(HashMap::new()));
         let sessions_clone = sessions.clone();
 
         let ttl_handle = tokio::spawn(async move {
@@ -148,6 +168,7 @@ impl PtyManager {
 
         Arc::new(Self {
             sessions,
+            output_readers,
             _ttl_handle: Some(ttl_handle),
         })
     }
@@ -292,6 +313,10 @@ impl PtyManager {
 
     #[instrument(skip(self))]
     pub fn kill(&self, session_id: Uuid) -> Result<()> {
+        if let Some(handle) = self.output_readers.lock().unwrap().remove(&session_id) {
+            handle.abort();
+        }
+
         let mut sessions = self.sessions.lock().unwrap();
         if let Some(session) = sessions.remove(&session_id) {
             session.lock().unwrap().kill()?;
@@ -299,6 +324,10 @@ impl PtyManager {
         } else {
             Err(anyhow!("Session {} not found", session_id))
         }
+    }
+
+    pub fn register_output_reader(&self, session_id: Uuid, handle: JoinHandle<()>) {
+        self.output_readers.lock().unwrap().insert(session_id, handle);
     }
 
     #[instrument(skip(self))]
@@ -315,6 +344,10 @@ impl PtyManager {
         };
 
         for session_id in session_ids {
+            if let Some(handle) = self.output_readers.lock().unwrap().remove(&session_id) {
+                handle.abort();
+            }
+
             let session = {
                 let mut sessions = self.sessions.lock().unwrap();
                 sessions.remove(&session_id)
@@ -380,6 +413,10 @@ impl Drop for PtyManager {
     fn drop(&mut self) {
         if let Some(ttl_handle) = self._ttl_handle.take() {
             ttl_handle.abort();
+        }
+
+        for (_, handle) in self.output_readers.lock().unwrap().drain() {
+            handle.abort();
         }
 
         let mut sessions = self.sessions.lock().unwrap();

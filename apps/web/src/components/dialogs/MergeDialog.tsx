@@ -5,7 +5,7 @@ import { getWebSocketClient } from '../../lib/ws';
 import type { WorktreeMerge } from '../../types/protocol';
 
 interface MergeDialogProps {
-  worktreeId: string;
+  worktreeId?: string;
   mergeType: 'merge' | 'squash';
   branchName: string;
   mainBranch: string;
@@ -29,7 +29,7 @@ export function MergeDialog({
   const mergeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleConfirm = useCallback(async () => {
-    if (isSubmitting) return;
+    if (isSubmitting || !worktreeId) return;
 
     setIsSubmitting(true);
 

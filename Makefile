@@ -5,11 +5,12 @@ VITE_PORT := 5173
 BUILD_DIR := build
 INSTALL_PREFIX := /usr/local
 
-.PHONY: debug dev dev-tauri build-web-only build-tauri build build-prod install-prod clean kill help serve status config doctor
+.PHONY: debug debug-host dev dev-tauri build-web-only build-tauri build build-prod install-prod clean kill help serve status config doctor
 
 help:
 	@echo "ymir Makefile targets:"
 	@echo "  debug / dev        Kill old processes, rebuild, launch all servers"
+	@echo "  debug-host         Same as debug, but host Vite on 0.0.0.0"
 	@echo "  dev-tauri          Start Vite dev server and Tauri dev concurrently"
 	@echo "  build-web-only     Build web without Tauri"
 	@echo "  build-tauri        Build web and Tauri release binary"
@@ -41,11 +42,13 @@ dev-tauri: kill
 	@echo "[ymir] starting Vite dev server on port $(VITE_PORT)..."
 	@npm run dev --prefix apps/web &
 	@echo "[ymir] starting Tauri dev mode..."
-	@cargo tauri dev
+	# NVIDIA/Wayland: Disable GPU compositing to avoid GBM buffer errors
+	@WEBKIT_DISABLE_COMPOSITING_MODE=1 GDK_BACKEND=wayland cargo tauri dev || (echo "Wayland failed, trying X11 fallback..." && WEBKIT_DISABLE_COMPOSITING_MODE=1 GDK_BACKEND=x11 cargo tauri dev)
 
 build-tauri: build-web-only
-	@echo "[ymir] building Tauri app..."
-	@cargo tauri build
+	echo "[ymir] building Tauri app..."
+	# NVIDIA/Wayland: Use X11 + disable GPU compositing for builds
+	@WEBKIT_DISABLE_COMPOSITING_MODE=1 GDK_BACKEND=x11 cargo tauri build
 
 debug dev: kill build
 	@echo "[ymir] building web client..."
@@ -53,6 +56,13 @@ debug dev: kill build
 	@npm run build --prefix apps/web
 	@echo "[ymir] launching servers..."
 	@cargo run -p ymir -- serve --dev
+
+debug-host: kill build
+	@echo "[ymir] building web client..."
+	@npm install --prefix apps/web
+	@npm run build --prefix apps/web
+	@echo "[ymir] launching servers (hosting on 0.0.0.0)..."
+	@cargo run -p ymir -- serve --dev --host
 
 serve:
 	@cargo run -p ymir -- serve

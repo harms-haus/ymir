@@ -5,6 +5,7 @@ import { useWebSocketClient } from '../../hooks/useWebSocket';
 import { Terminal, type TerminalRef } from './TerminalView';
 import { TerminalCreate, TerminalOutput } from '../../types/protocol';
 import TerminalIcon from '@mui/icons-material/Terminal';
+import { useShallow } from 'zustand/react/shallow';
 
 interface TerminalTab {
   sessionId: string;
@@ -46,7 +47,9 @@ interface TerminalPaneProps {
 
 export function TerminalPane({ worktreeId }: TerminalPaneProps) {
   const client = useWebSocketClient();
-  const terminalSessions = useStore(selectTerminalSessionsByWorktreeId(worktreeId));
+  const terminalSessions = useStore(
+    useShallow((state) => selectTerminalSessionsByWorktreeId(worktreeId)(state))
+  );
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [tabs, setTabs] = useState<TerminalTab[]>([]);
   const creationInFlightRef = useRef(false);
@@ -114,26 +117,16 @@ export function TerminalPane({ worktreeId }: TerminalPaneProps) {
     }
   }, [worktreeId, tabs.length, handleCreateTab]);
 
-  if (tabs.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-        <TerminalIcon className="w-12 h-12 mb-4 opacity-50" />
-        <p className="text-lg mb-2">No terminals</p>
-        <p className="text-sm">Click + to create one</p>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col h-full">
       <Tabs.Root
-        value={activeTab || undefined}
+        value={activeTab || (tabs.length === 0 ? 'empty' : undefined)}
         onValueChange={(value: string | null) => setActiveTab(value)}
         className="flex flex-col h-full"
       >
         <Tabs.List className="flex items-center border-b border-border bg-background px-2">
           {tabs.map((tab) => (
-              <Tabs.Tab
+            <Tabs.Tab
               key={tab.sessionId}
               value={tab.sessionId}
               onMouseDown={(e: React.MouseEvent) => handleTabMouseDown(tab.sessionId, e)}
@@ -148,20 +141,27 @@ export function TerminalPane({ worktreeId }: TerminalPaneProps) {
             >
               <TerminalIcon className="w-4 h-4" />
               <span>{tab.label}</span>
-              <button
-                type="button"
+              <div
+                role="button"
+                tabIndex={0}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleCloseTab(tab.sessionId);
                 }}
-                className="ml-1 p-1 rounded hover:bg-muted opacity-50 hover:opacity-100"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.stopPropagation();
+                    handleCloseTab(tab.sessionId);
+                  }
+                }}
+                className="ml-1 p-1 rounded hover:bg-muted opacity-50 hover:opacity-100 cursor-pointer"
                 aria-label="Close tab"
               >
                 ×
-              </button>
+              </div>
             </Tabs.Tab>
           ))}
-          
+
           <button
             type="button"
             onClick={handleCreateTab}
@@ -174,9 +174,19 @@ export function TerminalPane({ worktreeId }: TerminalPaneProps) {
         </Tabs.List>
 
         <div className="flex-1 overflow-hidden">
-          {tabs.map((tab) => (
-            <TerminalPanel key={tab.sessionId} tab={tab} />
-          ))}
+          {tabs.length === 0 ? (
+            <Tabs.Panel value="empty" className="h-full">
+              <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                <TerminalIcon className="w-12 h-12 mb-4 opacity-50" />
+                <p className="text-lg mb-2">No terminals</p>
+                <p className="text-sm">Click + to create one</p>
+              </div>
+            </Tabs.Panel>
+          ) : (
+            tabs.map((tab) => (
+              <TerminalPanel key={tab.sessionId} tab={tab} />
+            ))
+          )}
         </div>
       </Tabs.Root>
     </div>

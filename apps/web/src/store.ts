@@ -1,10 +1,15 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { AppState, NotificationState, AgentTab, AlertDialogConfig } from './types/state';
+import { AppState, NotificationState, AgentTab, AlertDialogConfig, AgentSessionState, TerminalSessionState } from './types/state';
 export type { AgentTab };
 import { ServerMessage, TerminalOutput } from './types/protocol';
 import { handleError } from './lib/error-recovery';
 import { showNotification } from './lib/tauri';
+
+// Stable empty array reference to prevent infinite re-renders
+const EMPTY_AGENT_TABS: AgentTab[] = [];
+const EMPTY_TERMINAL_SESSIONS: TerminalSessionState[] = [];
+const EMPTY_AGENT_SESSIONS: AgentSessionState[] = [];
 
 // Terminal output callback registry (for routing TerminalOutput to TerminalProvider)
 let terminalOutputCallback: ((message: TerminalOutput) => void) | null = null;
@@ -52,6 +57,14 @@ export const useStore = create<AppState>()(
   workspaceSettingsDialog: {
     isOpen: false,
     workspaceId: null,
+  },
+
+  mergeDialog: {
+    isOpen: false,
+    worktreeId: null,
+    branchName: '',
+    mainBranch: 'main',
+    mergeType: 'merge',
   },
 
   dbResetDialog: {
@@ -319,6 +332,23 @@ export const useStore = create<AppState>()(
         workspaceSettingsDialog: { isOpen: false, workspaceId: null },
       }),
 
+  setMergeDialogOpen: (isOpen, worktreeId, branchName, mainBranch, mergeType) =>
+      set((state) => ({
+        mergeDialog: {
+          ...state.mergeDialog,
+          isOpen,
+          worktreeId: worktreeId ?? state.mergeDialog.worktreeId,
+          branchName: branchName ?? state.mergeDialog.branchName,
+          mainBranch: mainBranch ?? state.mergeDialog.mainBranch,
+          mergeType: mergeType ?? state.mergeDialog.mergeType,
+        },
+      })),
+
+  resetMergeDialog: () =>
+      set({
+        mergeDialog: { isOpen: false, worktreeId: null, branchName: '', mainBranch: 'main', mergeType: 'merge' },
+      }),
+
   setDbResetDialogOpen: (isOpen, errorMessage) =>
       set((state) => ({
         dbResetDialog: {
@@ -360,11 +390,15 @@ export const selectWorktreesByWorkspaceId = (workspaceId: string) => (state: App
 export const selectAgentSessionById = (sessionId: string) => (state: AppState) =>
   state.agentSessions.find((as) => as.id === sessionId);
 
-export const selectAgentSessionsByWorktreeId = (worktreeId: string) => (state: AppState) =>
-  state.agentSessions.filter((as) => as.worktreeId === worktreeId);
+export const selectAgentSessionsByWorktreeId = (worktreeId: string) => (state: AppState) => {
+  const sessions = state.agentSessions.filter((as) => as.worktreeId === worktreeId);
+  return sessions.length > 0 ? sessions : EMPTY_AGENT_SESSIONS;
+};
 
-export const selectTerminalSessionsByWorktreeId = (worktreeId: string) => (state: AppState) =>
-  state.terminalSessions.filter((ts) => ts.worktreeId === worktreeId);
+export const selectTerminalSessionsByWorktreeId = (worktreeId: string) => (state: AppState) => {
+  const sessions = state.terminalSessions.filter((ts) => ts.worktreeId === worktreeId);
+  return sessions.length > 0 ? sessions : EMPTY_TERMINAL_SESSIONS;
+};
 
 export const selectActiveWorktree = (state: AppState) => {
   if (!state.activeWorktreeId) return null;
@@ -378,7 +412,7 @@ export const selectActiveWorkspace = (state: AppState) => {
 };
 
 export const selectAgentTabsByWorktreeId = (worktreeId: string) => (state: AppState) =>
-  state.agentTabs.get(worktreeId) || [];
+  state.agentTabs.get(worktreeId) ?? EMPTY_AGENT_TABS;
 
 export const selectActiveAgentTabId = (worktreeId: string) => (state: AppState) =>
   state.activeAgentTabId.get(worktreeId) || null;

@@ -5,9 +5,12 @@ import { useStore } from '../../store'
 import type { WorkspaceState, WorktreeState } from '../../types/state'
 import { useContextMenu, type ContextMenuCallbacks } from '../../hooks/useContextMenu'
 import { ContextMenu, type ContextMenuItem } from '../ui/ContextMenu'
+import { AlertDialog } from '../ui/AlertDialog'
 import type { Worktree as ProtocolWorktree } from '../../types/protocol'
 import { CreateWorktreeDialog } from '../dialogs/CreateWorktreeDialog'
 import { WorkspaceSettingsDialog } from '../dialogs/WorkspaceSettingsDialog'
+import { MergeDialog } from '../dialogs/MergeDialog'
+import { deleteWorktree } from '../../lib/api'
 import { revealInFileManager, copyToClipboard } from '../../lib/tauri'
 
 export type TreeNodeType = 'workspace' | 'worktree'
@@ -253,6 +256,13 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
   const setCreateWorktreeDialogOpen = useStore((state) => state.setCreateWorktreeDialogOpen)
   const workspaceSettingsDialog = useStore((state) => state.workspaceSettingsDialog)
   const setWorkspaceSettingsDialogOpen = useStore((state) => state.setWorkspaceSettingsDialogOpen)
+  const mergeDialog = useStore((state) => state.mergeDialog)
+  const setMergeDialogOpen = useStore((state) => state.setMergeDialogOpen)
+  const resetMergeDialog = useStore((state) => state.resetMergeDialog)
+  const showAlertDialog = useStore((state) => state.showAlertDialog)
+  const removeWorktree = useStore((state) => state.removeWorktree)
+  const alertDialog = useStore((state) => state.alertDialog)
+  const hideAlertDialog = useStore((state) => state.hideAlertDialog)
 
   const contextMenuItems: ContextMenuItem[] = [
     {
@@ -294,20 +304,33 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
   ]
 
   const handleCreateWorktree = useCallback((workspaceId: string) => {
-    console.log('Create worktree for workspace:', workspaceId)
-  }, [])
+    setCreateWorktreeDialogOpen(true, workspaceId)
+  }, [setCreateWorktreeDialogOpen])
 
   const handleDeleteWorktree = useCallback((worktreeId: string) => {
-    console.log('Delete worktree:', worktreeId)
-  }, [])
+    showAlertDialog({
+      title: 'Delete Worktree',
+      description: 'Are you sure you want to delete this worktree? This action cannot be undone.',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      variant: 'destructive',
+      onConfirm: () => {
+        deleteWorktree(worktreeId)
+        removeWorktree(worktreeId)
+      },
+    })
+  }, [showAlertDialog, removeWorktree])
 
   const handleMerge = useCallback((worktreeId: string) => {
-    console.log('Merge worktree:', worktreeId)
-  }, [])
+    const worktree = worktrees.find(wt => wt.id === worktreeId)
+    if (!worktree) return
+    
+    setMergeDialogOpen(true, worktreeId, worktree.branchName, 'main', 'merge')
+  }, [worktrees, setMergeDialogOpen])
 
   const handleViewDiff = useCallback((worktreeId: string) => {
-    console.log('View diff for worktree:', worktreeId)
-  }, [])
+    setActiveWorktree(worktreeId)
+  }, [setActiveWorktree])
 
   const handleSettings = useCallback((workspaceId: string) => {
     setWorkspaceSettingsDialogOpen(true, workspaceId)
@@ -438,6 +461,32 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
         onOpenChange={(open) => setWorkspaceSettingsDialogOpen(open, workspaceSettingsDialog.workspaceId ?? undefined)}
         workspaceId={workspaceSettingsDialog.workspaceId}
       />
+      <MergeDialog
+        open={mergeDialog.isOpen}
+        onOpenChange={(open) => {
+          if (!open) resetMergeDialog()
+          else setMergeDialogOpen(true, mergeDialog.worktreeId ?? undefined, mergeDialog.branchName, mergeDialog.mainBranch, mergeDialog.mergeType)
+        }}
+        worktreeId={mergeDialog.worktreeId ?? ''}
+        branchName={mergeDialog.branchName}
+        mainBranch={mergeDialog.mainBranch}
+        mergeType={mergeDialog.mergeType}
+      />
+      {alertDialog && (
+        <AlertDialog
+          open={alertDialog.open}
+          onOpenChange={(open) => {
+            if (!open) hideAlertDialog()
+          }}
+          title={alertDialog.title}
+          description={alertDialog.description}
+          confirmLabel={alertDialog.confirmLabel}
+          cancelLabel={alertDialog.cancelLabel}
+          variant={alertDialog.variant}
+          onConfirm={alertDialog.onConfirm}
+          onCancel={alertDialog.onCancel}
+        />
+      )}
     </>
   )
 }

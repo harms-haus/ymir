@@ -64,6 +64,7 @@ pub enum ClientMessagePayload {
     TerminalInput(TerminalInput),
     TerminalResize(TerminalResize),
     TerminalCreate(TerminalCreate),
+    TerminalKill(TerminalKill),
     FileRead(FileRead),
     FileWrite(FileWrite),
     GitStatus(GitStatus),
@@ -106,6 +107,7 @@ pub enum ServerMessagePayload {
 
 /// Bidirectional messages (can be sent by either side)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct Ack {
     pub message_id: Uuid,
     pub status: AckStatus,
@@ -118,6 +120,7 @@ pub enum AckStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkspaceCreate {
     pub name: String,
     pub root_path: String,
@@ -127,17 +130,20 @@ pub struct WorkspaceCreate {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkspaceDelete {
     pub workspace_id: Uuid,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkspaceRename {
     pub workspace_id: Uuid,
     pub new_name: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkspaceUpdate {
     pub workspace_id: Uuid,
     pub color: Option<String>,
@@ -147,6 +153,7 @@ pub struct WorkspaceUpdate {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct WorktreeCreate {
     pub workspace_id: Uuid,
     pub branch_name: String,
@@ -154,11 +161,13 @@ pub struct WorktreeCreate {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct WorktreeDelete {
     pub worktree_id: Uuid,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct WorktreeMerge {
     pub worktree_id: Uuid,
     pub squash: bool,
@@ -166,34 +175,40 @@ pub struct WorktreeMerge {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct WorktreeList {
     pub workspace_id: Uuid,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentSpawn {
     pub worktree_id: Uuid,
     pub agent_type: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentSend {
     pub worktree_id: Uuid,
     pub message: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentCancel {
     pub worktree_id: Uuid,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct TerminalInput {
     pub session_id: Uuid,
     pub data: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct TerminalResize {
     pub session_id: Uuid,
     pub cols: u16,
@@ -201,6 +216,7 @@ pub struct TerminalResize {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct TerminalCreate {
     pub worktree_id: Uuid,
     pub label: Option<String>,
@@ -208,12 +224,14 @@ pub struct TerminalCreate {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct FileRead {
     pub worktree_id: Uuid,
     pub path: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct FileWrite {
     pub worktree_id: Uuid,
     pub path: String,
@@ -221,17 +239,20 @@ pub struct FileWrite {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct GitStatus {
     pub worktree_id: Uuid,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct GitDiff {
     pub worktree_id: Uuid,
     pub file_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct GitCommit {
     pub worktree_id: Uuid,
     pub message: String,
@@ -239,6 +260,7 @@ pub struct GitCommit {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct CreatePR {
     pub worktree_id: Uuid,
     pub title: String,
@@ -246,18 +268,27 @@ pub struct CreatePR {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct GetState {
     pub request_id: Uuid,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateSettings {
     pub key: String,
     pub value: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct Ping {
+    pub timestamp: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Pong {
     pub timestamp: u64,
 }
 
@@ -430,6 +461,13 @@ pub struct TerminalCreated {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
+pub struct TerminalKill {
+    #[serde(with = "uuid_str")]
+    pub session_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct FileContent {
     #[serde(with = "uuid_str")]
     pub worktree_id: Uuid,
@@ -459,11 +497,6 @@ pub struct Error {
     pub code: String,
     pub message: String,
     pub details: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct Pong {
-    pub timestamp: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

@@ -30,20 +30,17 @@ export function StatusDot({ status, size = 8 }: StatusDotProps) {
   const config = statusConfig[status]
 
   return (
-    <button
-      type="button"
+    <span
+      role="img"
+      aria-label={config.label}
       style={{
         position: 'relative',
         display: 'inline-flex',
-        background: 'none',
-        border: 'none',
         padding: 0,
         margin: 0,
-        cursor: 'default',
       }}
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
-      title={config.label}
     >
       <span
         style={{
@@ -58,6 +55,7 @@ export function StatusDot({ status, size = 8 }: StatusDotProps) {
       />
       {showTooltip && (
         <span
+          role="tooltip"
           style={{
             position: 'absolute',
             bottom: '100%',
@@ -78,6 +76,6 @@ export function StatusDot({ status, size = 8 }: StatusDotProps) {
           {config.label}
         </span>
       )}
-    </button>
+    </span>
   )
 }

@@ -33,7 +33,7 @@ export function CreateWorktreeDialog({ open, onOpenChange, workspaceId }: Create
 
   const [branchName, setBranchName] = useState('');
   const [useExistingBranch, setUseExistingBranch] = useState(false);
-  const [selectedAgent, setSelectedAgent] = useState<AgentOption | null>(null);
+  const [selectedAgent, setSelectedAgent] = useState<AgentOption | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isBranchInputFocused, setIsBranchInputFocused] = useState(false);
 
@@ -46,7 +46,7 @@ export function CreateWorktreeDialog({ open, onOpenChange, workspaceId }: Create
     if (open) {
       setBranchName('');
       setUseExistingBranch(false);
-      setSelectedAgent(null);
+      setSelectedAgent(undefined);
       setIsSubmitting(false);
     }
 
@@ -351,7 +351,6 @@ export function CreateWorktreeDialog({ open, onOpenChange, workspaceId }: Create
                 Start with agent
               </div>
               <RadioGroup
-                value={selectedAgent ?? undefined}
                 onValueChange={(value) => setSelectedAgent(value as AgentOption)}
                 aria-labelledby="agent-selector-label"
                 style={radioGroupStyle}

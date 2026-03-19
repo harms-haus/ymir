@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Tabs } from '@base-ui/react';
-import { useStore, selectAgentTabsByWorktreeId, selectActiveAgentTabId, AgentTab } from '../../store';
+import { useStore, selectActiveAgentTabId, selectAgentTabsByWorktreeId, AgentTab } from '../../store';
 import { useWebSocketClient } from '../../hooks/useWebSocket';
 import { AgentChat } from './AgentChat';
 import { DiffTab } from '../editor/DiffTab';
-import { AgentSession, AgentSend } from '../../types/protocol';
+import { AgentSession, AgentSend, AgentSpawn } from '../../types/protocol';
 
 interface AgentPaneProps {
   worktreeId: string;
@@ -44,6 +44,20 @@ export function AgentPane({ worktreeId, agentSession }: AgentPaneProps) {
   const activeTabId = useStore(selectActiveAgentTabId(worktreeId));
   const { addAgentTab, removeAgentTab, setActiveAgentTab } = useStore();
   const [localActiveTab, setLocalActiveTab] = useState<string | null>(activeTabId);
+  const creationInProgressRef = useRef(false);
+  const nextAgentIdRef = useRef(1);
+
+  const handleSpawnAgent = useCallback(() => {
+    const agentType = `agent-${nextAgentIdRef.current++}`;
+
+    const message: AgentSpawn = {
+      type: 'AgentSpawn',
+      worktreeId,
+      agentType,
+    };
+
+    client.send(message);
+  }, [worktreeId, client]);
 
   useEffect(() => {
     if (tabs.length === 0 && agentSession) {
@@ -56,6 +70,16 @@ export function AgentPane({ worktreeId, agentSession }: AgentPaneProps) {
       addAgentTab(worktreeId, agentTab);
     }
   }, [worktreeId, agentSession, tabs.length, addAgentTab]);
+
+  useEffect(() => {
+    // Only auto-spawn if there's no agent session AND no tabs
+    if (tabs.length === 0 && worktreeId && !agentSession && !creationInProgressRef.current) {
+      creationInProgressRef.current = true;
+      Promise.resolve(handleSpawnAgent()).finally(() => {
+        creationInProgressRef.current = false;
+      });
+    }
+  }, [worktreeId, tabs.length, agentSession, handleSpawnAgent]);
 
   useEffect(() => {
     if (activeTabId && tabs.some((t) => t.id === activeTabId)) {
@@ -97,20 +121,10 @@ export function AgentPane({ worktreeId, agentSession }: AgentPaneProps) {
     client.send(sendMessage);
   }, [worktreeId, agentSession, client]);
 
-  if (tabs.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-        <i className="ri-robot-line text-4xl mb-4 opacity-50" />
-        <p className="text-lg mb-2">No agent session</p>
-        <p className="text-sm">Spawn an agent to start chatting</p>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col h-full">
       <Tabs.Root
-        value={localActiveTab || undefined}
+        value={localActiveTab || (tabs.length === 0 ? 'empty' : undefined)}
         onValueChange={handleTabChange}
         className="flex flex-col h-full"
       >
@@ -127,59 +141,86 @@ export function AgentPane({ worktreeId, agentSession }: AgentPaneProps) {
                 data-[selected]:text-foreground data-[selected]:border-primary
                 text-muted-foreground
                 cursor-pointer select-none whitespace-nowrap
-              `}
+                `}
             >
               <i className={`${getTabIcon(tab.type)} text-base`} />
               <span>{getTabLabel(tab)}</span>
-              <button
-                type="button"
+              <div
+                role="button"
+                tabIndex={0}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleCloseTab(tab.id);
                 }}
-                className="ml-1 p-1 rounded opacity-50 hover:opacity-100 hover:bg-muted/50"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.stopPropagation();
+                    handleCloseTab(tab.id);
+                  }
+                }}
+                className="ml-1 p-1 rounded opacity-50 hover:opacity-100 hover:bg-muted/50 cursor-pointer"
                 aria-label="Close tab"
               >
                 ×
-              </button>
+              </div>
             </Tabs.Tab>
           ))}
+
+          <button
+            type="button"
+            onClick={handleSpawnAgent}
+            className="ml-2 p-2 rounded hover:bg-muted opacity-50 hover:opacity-100"
+            aria-label="Create new agent"
+            title="Create new agent"
+          >
+            +
+          </button>
         </Tabs.List>
 
-      <div className="flex-1 overflow-hidden">
-        {tabs.map((tab) => (
-          <Tabs.Panel
-            key={tab.id}
-            value={tab.id}
-            className="h-full data-[inactive]:hidden"
-          >
-            {tab.type === 'agent' && agentSession && (
-              <AgentChat
-                sessionId={agentSession.id}
-                agentType={agentSession.agentType}
-                worktreeId={worktreeId}
-                onSendMessage={handleSendMessage}
-              />
-            )}
-              {tab.type === 'agent' && !agentSession && (
-                <div className="flex items-center justify-center h-full text-muted-foreground">
-                  <p>No active agent session</p>
-                </div>
-              )}
-            {tab.type === 'diff' && tab.filePath && (
-              <DiffTab
-                filePath={tab.filePath}
-                worktreeId={worktreeId}
-                sessionId={tab.sessionId}
-              />
-            )}
-              {tab.type === 'editor' && (
-                <div className="flex items-center justify-center h-full text-muted-foreground">
-                  <p>Editor placeholder (T24)</p>
-                </div>
-              )}
+        <div className="flex-1 overflow-hidden">
+          {tabs.length === 0 ? (
+            <Tabs.Panel value="empty" className="h-full">
+              <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                <i className="ri-robot-line text-4xl mb-4 opacity-50" />
+                <p className="text-lg mb-2">No agent session</p>
+                <p className="text-sm">Click + to create one</p>
+              </div>
             </Tabs.Panel>
-          ))}
+          ) : (
+            tabs.map((tab) => (
+              <Tabs.Panel
+                key={tab.id}
+                value={tab.id}
+                className="h-full data-[inactive]:hidden"
+              >
+                {tab.type === 'agent' && agentSession && (
+                  <AgentChat
+                    sessionId={agentSession.id}
+                    agentType={agentSession.agentType}
+                    worktreeId={worktreeId}
+                    onSendMessage={handleSendMessage}
+                  />
+                )}
+                {tab.type === 'agent' && !agentSession && (
+                  <div className="flex items-center justify-center h-full text-muted-foreground">
+                    <p>No active agent session</p>
+                  </div>
+                )}
+                {tab.type === 'diff' && tab.filePath && (
+                  <DiffTab
+                    filePath={tab.filePath}
+                    worktreeId={worktreeId}
+                    sessionId={tab.sessionId}
+                  />
+                )}
+                {tab.type === 'editor' && (
+                  <div className="flex items-center justify-center h-full text-muted-foreground">
+                    <p>Editor placeholder (T24)</p>
+                  </div>
+                )}
+              </Tabs.Panel>
+            ))
+          )}
         </div>
       </Tabs.Root>
     </div>
