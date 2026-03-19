@@ -224,7 +224,7 @@ Wave FINAL (Verification):
 
 ### Wave 1: Foundation
 
-- [ ] 1. Add ts-rs dependency to Rust
+- [x] 1. Add ts-rs dependency to Rust
 
   **What to do**:
   - Add `ts-rs = "10.0"` to `crates/ws-server/Cargo.toml` dev-dependencies
@@ -269,7 +269,7 @@ Wave FINAL (Verification):
   - Message: `chore(deps): add ts-rs for TypeScript generation`
   - Files: `crates/ws-server/Cargo.toml`
 
-- [ ] 2. Create binary fixture infrastructure (Rust module)
+- [x] 2. Create binary fixture infrastructure (Rust module)
 
   **What to do**:
   - Create `crates/ws-server/src/test_fixtures.rs` module
@@ -333,7 +333,7 @@ Wave FINAL (Verification):
     - `crates/ws-server/src/lib.rs` (add module)
     - `.gitignore`
 
-- [ ] 3. Create TypeScript fixture validator
+- [x] 3. Create TypeScript fixture validator
 
   **What to do**:
   - Create `apps/web/src/test/fixtureValidator.ts`

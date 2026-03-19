@@ -14,5 +14,8 @@ pub mod watcher;
 pub mod workspace;
 pub mod worktree;
 
+#[cfg(test)]
+pub mod test_fixtures;
+
 pub const DEFAULT_PORT: u16 = 7319;
 pub const VITE_PROXY_PORT: u16 = 5173;
