@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { writeFileSync, unlinkSync, existsSync, mkdirSync } from 'fs';
 import { encode } from '@msgpack/msgpack';
 import { validateFixture, validateFixtures, ValidationResult } from './fixtureValidator';
-import type { WorkspaceCreate, WorktreeCreate, AgentSpawn, TerminalCreate } from '../types/protocol';
+import type { WorkspaceCreate, WorktreeCreate, AgentSpawn, TerminalCreate } from '../types/generated/protocol';
 import { readFileSync } from 'fs';
 
 describe('fixtureValidator', () => {

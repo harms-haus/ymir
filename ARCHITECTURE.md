@@ -107,6 +107,105 @@ The WebSocket server. This is the source of truth for the entire system.
 
 ---
 
+## Cross-Language Type Safety with ts-rs
+
+The protocol types in `crates/ws-server/src/protocol.rs` are shared between Rust (server) and TypeScript (client). We use [ts-rs](https://github.com/Aleph-Alpha/ts-rs) to generate TypeScript interfaces from Rust structs, ensuring type definitions stay synchronized across the stack.
+
+### Setup
+
+ts-rs is added as a dev-dependency in `crates/ws-server/Cargo.toml`:
+
+```toml
+[dev-dependencies]
+ts-rs = { version = "10.0", features = ["serde-compat"] }
+```
+
+### Derive Macro Pattern
+
+Each protocol struct derives `ts_rs::TS` and uses the `#[ts(export)]` attribute to generate TypeScript bindings:
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AgentSpawn {
+    #[ts(type = "string")]  // Uuid -> string in TypeScript
+    pub worktree_id: Uuid,
+    pub agent_type: String,
+}
+```
+
+Key attributes:
+
+- `#[ts(export)]` - Generates a `.ts` file for this type
+- `#[ts(type = "string")]` - Required for `Uuid` fields (TypeScript has no UUID type)
+- `#[serde(rename_all = "camelCase")]` - Ensures field names match TypeScript conventions
+
+### Generated Output
+
+TypeScript bindings are written to `crates/ws-server/bindings/`:
+
+```
+crates/ws-server/bindings/
+├── AgentSpawn.ts
+├── TerminalInput.ts
+├── GitStatus.ts
+├── StateSnapshot.ts
+└── ... (50+ generated files)
+```
+
+Each generated file exports a TypeScript interface:
+
+```typescript
+// bindings/AgentSpawn.ts
+export interface AgentSpawn { worktreeId: string; agentType: string; }
+```
+
+### Binary Fixture Testing
+
+To verify serialization compatibility between Rust and TypeScript, we create MessagePack fixtures:
+
+1. **Infrastructure** (`crates/ws-server/src/test_fixtures.rs`):
+   - `fixture_dir()` - Returns path to `test-fixtures/` directory
+   - `write_fixture(name, data)` - Serializes data to `.msgpack` file
+
+2. **Test pattern** for each message type:
+
+```rust
+#[test]
+fn test_agent_spawn_fixture() {
+    let msg = AgentSpawn {
+        worktree_id: Uuid::nil(),
+        agent_type: "claude".to_string(),
+    };
+    let path = write_fixture("AgentSpawn", &msg).unwrap();
+    assert!(path.exists());
+}
+```
+
+3. **Fixtures stored** in `test-fixtures/` (gitignored):
+
+```
+test-fixtures/
+├── AgentSpawn.msgpack
+├── TerminalInput.msgpack
+└── ...
+```
+
+The TypeScript client can parse these fixtures to verify deserialization matches Rust.
+
+### Manual Protocol File
+
+The generated bindings are raw type definitions. The actual TypeScript protocol file (`apps/web/src/types/generated/protocol.ts`) wraps these with:
+
+- Type discriminators for message routing (`type: 'AgentSpawn'`)
+- Type guards for runtime validation
+- `encodeMessage()` / `decodeMessage()` helpers for MessagePack
+
+This hybrid approach keeps generated types synchronized while maintaining the message wrapper structure.
+
+---
+
 ## `apps/` — Frontend
 
 ### `apps/web/`

@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { Dialog } from '@base-ui/react/dialog';
 import { useStore } from '../../store';
 import { getWebSocketClient } from '../../lib/ws';
-import type { WorktreeMerge } from '../../types/protocol';
+import type { WorktreeMerge } from '../../types/generated/protocol';
 
 interface MergeDialogProps {
   worktreeId?: string;

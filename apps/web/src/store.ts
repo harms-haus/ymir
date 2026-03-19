@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { AppState, NotificationState, AgentTab, AlertDialogConfig, AgentSessionState, TerminalSessionState } from './types/state';
 export type { AgentTab };
-import { ServerMessage, TerminalOutput } from './types/protocol';
+import { ServerMessage, TerminalOutput } from './types/generated/protocol';
 import { handleError } from './lib/error-recovery';
 import { showNotification } from './lib/tauri';
 
@@ -437,7 +437,7 @@ export const selectAlertDialog = (state: AppState) => state.alertDialog;
 
 export function updateStateFromServerMessage(message: ServerMessage): void {
   const { addWorkspace, updateWorkspace, removeWorkspace, addWorktree, updateWorktree, removeWorktree } = useStore.getState();
-  const { updateAgentSession, addTerminalSession, addNotification } = useStore.getState();
+  const { updateAgentSession, addTerminalSession, removeTerminalSession, addNotification } = useStore.getState();
 
   switch (message.type) {
     case 'WorkspaceCreated':
@@ -494,7 +494,11 @@ export function updateStateFromServerMessage(message: ServerMessage): void {
         terminalOutputCallback(message);
       }
       break;
-    
+
+    case 'TerminalRemoved':
+      removeTerminalSession(message.sessionId);
+      break;
+
     case 'Notification':
       addNotification({
         level: message.level,

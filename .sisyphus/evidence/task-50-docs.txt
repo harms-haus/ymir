@@ -1,0 +1,52 @@
+# Task 50: Update ARCHITECTURE.md with ts-rs Workflow
+
+## Date: 2026-03-19
+
+## Completed Successfully
+
+### What was done:
+
+1. Added new section "Cross-Language Type Safety with ts-rs" to ARCHITECTURE.md
+2. Inserted after the `crates/ws-server/` section and before the `apps/` section
+3. Documented all aspects of the ts-rs TypeScript generation workflow
+
+### Section Contents:
+
+#### Setup
+- ts-rs v10.0 as dev-dependency in ws-server Cargo.toml
+- serde-compat feature for serde integration
+
+#### Derive Macro Pattern
+- `#[derive(ts_rs::TS)]` on structs
+- `#[ts(export)]` attribute for generating TypeScript files
+- `#[ts(type = "string")]` for Uuid fields
+- `#[serde(rename_all = "camelCase")]` for field naming conventions
+
+#### Generated Output
+- Location: `crates/ws-server/bindings/`
+- 50+ generated TypeScript interface files
+- Example output shown for AgentSpawn
+
+#### Binary Fixture Testing
+- Infrastructure in `test_fixtures.rs`
+- `fixture_dir()` and `write_fixture()` functions
+- Test pattern for creating MessagePack fixtures
+- Fixtures stored in gitignored `test-fixtures/` directory
+- Purpose: verify serialization compatibility between Rust and TypeScript
+
+#### Manual Protocol File
+- Generated bindings wrapped in `apps/web/src/types/generated/protocol.ts`
+- Type discriminators, type guards, encode/decode helpers
+- Hybrid approach: generated types + manual message wrappers
+
+### File Modified:
+- ARCHITECTURE.md - Added ~70 lines documenting ts-rs workflow (inserted between lines 108-110)
+
+### Insertion Point:
+- After `crates/ws-server/` section (line 108)
+- Before `apps/` section (line 110)
+- Maintains document structure and flow
+
+### Evidence:
+- This file serves as evidence of the documentation update
+- ARCHITECTURE.md now contains comprehensive ts-rs workflow documentation for future maintainers

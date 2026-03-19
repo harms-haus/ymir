@@ -1,5 +1,5 @@
 import { encode, decode } from '@msgpack/msgpack';
-import { ClientMessage, ServerMessage, PROTOCOL_VERSION, StateSnapshot } from '../types/protocol';
+import { ClientMessage, ServerMessage, PROTOCOL_VERSION, StateSnapshot } from '../types/generated/protocol';
 import { updateStateFromServerMessage, useStore, useToastStore } from '../store';
 
 // Generate a UUID v4 for request IDs

@@ -1,0 +1,20 @@
+TASK: Fix protocol.test.ts import path
+
+PROBLEM:
+- Task 47 moved protocol.ts to generated/protocol.ts
+- protocol.test.ts still imported from old path "../protocol"
+- This caused the entire test file to fail to load
+
+FIX APPLIED:
+- File: apps/web/src/types/__tests__/protocol.test.ts
+- Line 57: Changed import from '../protocol' to '../generated/protocol'
+- Import statement: } from '../generated/protocol';
+
+VERIFICATION:
+- Ran: cd apps/web && npm test -- protocol.test.ts
+- Result: 36/36 tests passed (Test Files: 1 passed)
+- All protocol tests now execute successfully
+- No import errors
+
+STATUS: COMPLETED
+Date: 2026-03-19

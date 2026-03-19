@@ -1,0 +1,82 @@
+TASK 48 EVIDENCE: Atomic Replacement of Manual Types
+===================================================
+
+Date: 2026-03-19
+
+## Actions Performed:
+
+### STEP 1: Backup Manual Types
+✓ Renamed apps/web/src/types/protocol.ts to apps/web/src/types/protocol.ts.bak
+  - Original file: 803 lines, 20,162 bytes
+  - Backup preserved for reference and rollback
+
+### STEP 2: Update Imports
+Updated all TypeScript files to import from generated/protocol instead of protocol:
+✓ Updated 27 import statements across files:
+  - Components: WorkspaceTree.tsx, ChangesTab.tsx, TerminalPane.tsx, TerminalProvider.tsx, TerminalView.tsx
+  - Dialogs: CreatePRDialog.tsx, MergeDialog.tsx, CreateWorktreeDialog.tsx, WorkspaceSettingsDialog.tsx
+  - Agent: AgentPane.tsx, AgentChat.tsx, AgentChat.test.tsx
+  - Editor: DiffTab.tsx, EditorTab.tsx, DiffTab.test.tsx
+  - Hooks: useAgentStatus.ts (including dynamic imports on lines 90, 100)
+  - Store: store.ts
+  - Lib: ws.test.ts, error-recovery.test.ts
+  - Types: state.ts (line 6)
+
+Import path changes:
+  - from './types/protocol' → from './types/generated/protocol'
+  - from '../types/protocol' → from '../types/generated/protocol'
+  - from '../../types/protocol' → from '../../types/generated/protocol'
+  - from '../../../types/protocol' → from '../../../types/generated/protocol'
+
+### STEP 3: Verify Compilation
+TypeScript compilation status:
+✓ No protocol-related errors
+✓ All imports resolve correctly to generated/protocol.ts
+⚠ Pre-existing errors (unrelated to protocol imports):
+  - src/test/fixtureValidator.ts(1,30): Cannot find module 'fs' (Node.js types config issue)
+  - src/test/fixtureValidator.ts(6,3): 'ClientMessage' declared but never used
+  - src/test/fixtureValidator.ts(7,3): 'ServerMessage' declared but never used
+  - src/test/fixtureValidator.ts(138,115): Property 'type' does not exist on type 'never'
+
+These errors existed before Task 48 and are not caused by protocol type replacement.
+
+### STEP 4: Verify Files
+✓ protocol.ts.bak exists at apps/web/src/types/protocol.ts.bak (20,162 bytes)
+✓ protocol.ts no longer exists
+✓ generated/protocol.ts exists and contains 803 lines of type definitions
+✓ No remaining imports from old protocol path (verified with grep)
+
+## File Structure After Change:
+apps/web/src/types/
+├── generated/
+│   └── protocol.ts          (803 lines - active type definitions)
+├── protocol.ts.bak         (20,162 bytes - backup of manual types)
+├── state.ts                (updated import on line 6)
+└── __tests__/
+
+## Import Pattern Verification:
+Old: import { ... } from '../types/protocol'
+New: import { ... } from '../types/generated/protocol'
+
+All 27 import statements successfully updated.
+No index.ts file in types/ directory (not required - imports work directly).
+
+## Outcome:
+✓ Manual types successfully backed up
+✓ All imports updated to use generated/protocol.ts
+✓ TypeScript compiles without protocol-related errors
+✓ App ready to use generated types exclusively
+
+## Note on types/index.ts:
+The task specification mentioned updating types/index.ts to export from generated/protocol.ts.
+However, no types/index.ts file exists in the codebase, and all imports work correctly
+by directly importing from '../types/generated/protocol'. This is a common pattern in
+TypeScript projects when you have clear separation of type modules.
+
+## Related Files:
+- Task 47 evidence: .sisyphus/evidence/task-47-imports.txt
+- Generated types: apps/web/src/types/generated/protocol.ts
+- Backup: apps/web/src/types/protocol.ts.bak
+
+## Next Step:
+Task 49 will remove protocol.ts.bak after successful verification of generated types.

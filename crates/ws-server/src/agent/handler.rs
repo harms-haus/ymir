@@ -86,7 +86,7 @@ pub async fn handle_agent_spawn(
         },
     ));
 
-    let _ = state.broadcast_tx.send(broadcast_msg);
+    state.broadcast(broadcast_msg).await;
 
     ServerMessage::new(ServerMessagePayload::AgentStatusUpdate(
         AgentStatusUpdate {
@@ -194,7 +194,7 @@ pub async fn handle_agent_cancel(
         },
     ));
 
-    let _ = state.broadcast_tx.send(broadcast_msg);
+    state.broadcast(broadcast_msg).await;
 
     ServerMessage::new(ServerMessagePayload::Ack(crate::protocol::Ack {
         message_id: msg.worktree_id,

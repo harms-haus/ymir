@@ -7,7 +7,7 @@ import {
   useTerminal,
 } from '../TerminalProvider';
 import { setTerminalOutputCallback } from '../../../store';
-import type { TerminalOutput } from '../../../types/protocol';
+import type { TerminalOutput } from '../../../types/generated/protocol';
 
 vi.mock('../../../store', () => ({
   setTerminalOutputCallback: vi.fn(),

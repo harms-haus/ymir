@@ -28,7 +28,7 @@ import { useAgentStatus, useAgentList } from '../useAgentStatus';
 import { useStore } from '../../store';
 import { resetWebSocketClient, getWebSocketClient } from '../../lib/ws';
 import { encode } from '@msgpack/msgpack';
-import type { AgentStatusUpdate, AgentOutput, AgentSession } from '../../types/protocol';
+import type { AgentStatusUpdate, AgentOutput, AgentSession } from '../../types/generated/protocol';
 
 const wsMock = vi.fn(function WebSocketMock(this: any, _url: string) {
   currentMockWebSocket = createMockWebSocket();

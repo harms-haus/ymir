@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Dialog } from '@base-ui/react/dialog';
 import { useStore, selectActiveWorktree } from '../../store';
 import { getWebSocketClient } from '../../lib/ws';
-import type { CreatePR } from '../../types/protocol';
+import type { CreatePR } from '../../types/generated/protocol';
 
 interface CreatePRDialogProps {
   open: boolean;

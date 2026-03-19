@@ -22,7 +22,7 @@ import {
   CreatePR, 
   UpdateSettings,
   GetState
-} from '../types/protocol';
+} from '../types/generated/protocol';
 
 // Workspace API
 export function createWorkspace(name: string, rootPath: string, color?: string, icon?: string): void {

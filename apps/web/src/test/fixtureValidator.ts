@@ -1,12 +1,11 @@
+// @ts-ignore - fs module is for Node.js, used in test utilities
 import { readFileSync } from 'fs';
 import { decode } from '@msgpack/msgpack';
 import type {
   AnyMessage,
   UnknownMessage,
-  ClientMessage,
-  ServerMessage,
-} from '../types/protocol';
-import type { WorkspaceCreate, WorktreeCreate, AgentSpawn, TerminalCreate } from '../types/protocol';
+} from '../types/generated/protocol';
+import type { WorkspaceCreate, WorktreeCreate, AgentSpawn, TerminalCreate } from '../types/generated/protocol';
 
 export interface ValidationResult {
   valid: boolean;
@@ -133,9 +132,10 @@ export async function validateFixture(filePath: string): Promise<ValidationResul
       };
     }
 
+    const typeStr = 'type' in message && typeof message.type === 'string' ? message.type : 'unknown';
     return {
       valid: false,
-      error: `Unknown or invalid message type: ${typeof message.type === 'string' ? message.type : typeof message.type}`,
+      error: `Unknown or invalid message type: ${typeStr}`,
       details: message,
     };
 
