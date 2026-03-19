@@ -264,6 +264,20 @@ async fn handle_get_state(state: Arc<AppState>, request_id: Uuid) -> ServerMessa
                 }));
             }
         };
+
+        // Populate in-memory agents map from database
+        for session in &db_agent_sessions {
+            let session_id = Uuid::parse_str(&session.id).unwrap_or_else(|_| Uuid::new_v4());
+            let worktree_id = Uuid::parse_str(&session.worktree_id).unwrap_or(worktree.id);
+            let mut agents = state.agents.write().await;
+            agents.insert(session_id, crate::state::AgentState {
+                id: session_id,
+                worktree_id,
+                agent_type: session.agent_type.clone(),
+                status: session.status.clone(),
+            });
+        }
+
         agent_sessions.extend(
             db_agent_sessions
                 .into_iter()

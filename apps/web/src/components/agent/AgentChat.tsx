@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useWebSocketClient } from '../../hooks/useWebSocket';
 import { useAgentStatus } from '../../hooks/useAgentStatus';
 import { AgentOutput, AgentPrompt, AgentStatus } from '../../types/generated/protocol';
+import '../../styles/agent.css';
 
 interface AgentMessage {
   id: string;
@@ -39,18 +40,18 @@ function getAgentSubtitle(agentType: string): string {
   return agentSubtitles[agentType.toLowerCase()] || 'Agent';
 }
 
-function getStatusDotColor(status: AgentStatus): string {
+function getStatusDotClass(status: AgentStatus): string {
   switch (status) {
     case 'working':
-      return 'bg-green-500';
+      return 'working';
     case 'waiting':
-      return 'bg-yellow-500';
+      return 'waiting';
     case 'idle':
-      return 'bg-gray-500';
+      return 'idle';
     case 'error':
-      return 'bg-red-500';
+      return 'error';
     default:
-      return 'bg-gray-500';
+      return 'idle';
   }
 }
 
@@ -131,14 +132,11 @@ export function AgentChat({ sessionId: _sessionId, agentType, worktreeId, onSend
   }, [handleSubmit]);
 
   return (
-    <div className="flex flex-col h-full">
-      <div
-        className="flex-1 overflow-y-auto p-4 space-y-4"
-        style={{ borderLeft: '3px solid hsl(var(--primary))' }}
-      >
+    <div className="agent-chat">
+      <div className="agent-chat-messages">
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-muted-foreground opacity-50">
-            <i className="ri-robot-line text-4xl mb-4" />
+          <div className="agent-chat-empty">
+            <i className="ri-robot-line agent-chat-empty-icon" />
             <p>Start a conversation with {agentName}</p>
           </div>
         )}
@@ -146,63 +144,55 @@ export function AgentChat({ sessionId: _sessionId, agentType, worktreeId, onSend
         {messages.map((msg) => (
           <div
             key={msg.id}
-            className={`flex ${
-              msg.type === 'user' ? 'justify-end' : 'justify-start'
-            }`}
+            className={`${msg.type === 'user' ? 'agent-chat-message user-wrapper' : msg.type === 'system' ? 'agent-chat-message system-wrapper' : 'agent-chat-message agent-wrapper'}`}
           >
             <div
-              className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                msg.type === 'user'
-                  ? 'bg-primary text-primary-foreground'
-                  : msg.type === 'system'
-                  ? 'bg-muted text-muted-foreground text-sm italic'
-                  : 'bg-secondary text-secondary-foreground'
-              }`}
+              className={`agent-chat-message ${msg.type === 'user' ? 'user' : msg.type === 'system' ? 'system' : 'agent'}`}
             >
-              <pre className="whitespace-pre-wrap font-sans text-sm">{msg.content}</pre>
+              <pre className="agent-chat-message-content">{msg.content}</pre>
             </div>
           </div>
         ))}
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="border-t border-border p-4 bg-background">
-        <div className="flex items-center gap-2 mb-2">
-          <div className={`w-2 h-2 rounded-full ${getStatusDotColor(agentStatus)}`} />
-          <span className="text-xs text-muted-foreground capitalize">{agentStatus}</span>
+      <div className="agent-chat-input-area">
+        <div className="agent-chat-status">
+          <div className={`agent-chat-status-dot ${getStatusDotClass(agentStatus)}`} />
+          <span className="agent-chat-status-text">{agentStatus}</span>
           {agentStatusInfo?.taskSummary && (
-            <span className="text-xs text-muted-foreground ml-2">{agentStatusInfo.taskSummary}</span>
+            <span className="agent-chat-status-task">{agentStatusInfo.taskSummary}</span>
           )}
         </div>
 
-        <div className="flex gap-2">
+        <div className="agent-chat-input-wrapper">
           <textarea
             ref={inputRef}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={`Ask ${agentName.toLowerCase()}...`}
-            className="flex-1 min-h-[60px] max-h-[120px] resize-y rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="agent-chat-input"
             rows={2}
           />
           <button
             type="button"
             onClick={handleSubmit}
             disabled={!inputValue.trim()}
-            className="self-end px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="agent-chat-send-button"
           >
             Send
           </button>
         </div>
 
-        <div className="flex justify-between items-center mt-2 text-xs text-muted-foreground">
-          <div className="flex gap-4">
+        <div className="agent-chat-footer">
+          <div className="agent-chat-info">
             <span>{agentName} ({agentSubtitle})</span>
           </div>
-          <span>tab: switch agents</span>
+          <span className="agent-chat-tab-hint">tab: switch agents</span>
         </div>
 
-        <div className="mt-2 text-xs text-muted-foreground/70 text-right">
+        <div className="agent-chat-tip">
           Tip: Use instructions in config to load additional rules files
         </div>
       </div>

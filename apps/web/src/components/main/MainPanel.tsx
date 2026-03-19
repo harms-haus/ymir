@@ -2,17 +2,9 @@ import { Panel, Group, Separator } from 'react-resizable-panels'
 import { useStore, selectActiveWorktree } from '../../store'
 import { AgentPane } from '../agent/AgentPane'
 import { TerminalPane } from '../terminal/TerminalPane'
-import { useShallow } from 'zustand/react/shallow'
 
 export function MainPanel() {
   const activeWorktree = useStore(selectActiveWorktree)
-  const activeAgentSession = useStore(
-    useShallow((state) =>
-      activeWorktree
-        ? state.agentSessions.find((as) => as.worktreeId === activeWorktree.id)
-        : undefined
-    )
-  )
 
   return (
     <div className="main-container">
@@ -25,10 +17,7 @@ export function MainPanel() {
         >
           <div className="panel-content h-full">
             {activeWorktree ? (
-              <AgentPane
-                worktreeId={activeWorktree.id}
-                agentSession={activeAgentSession}
-              />
+              <AgentPane worktreeId={activeWorktree.id} />
             ) : (
               <p className="placeholder-text">Select a worktree to view agent</p>
             )}

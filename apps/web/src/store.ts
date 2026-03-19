@@ -232,6 +232,10 @@ export const useStore = create<AppState>()(
       set((state) => {
         const newTabs = new Map(state.agentTabs);
         const existingTabs = newTabs.get(worktreeId) || [];
+        // Prevent duplicate tabs
+        if (existingTabs.some((t) => t.id === tab.id)) {
+          return { agentTabs: state.agentTabs, activeAgentTabId: state.activeAgentTabId };
+        }
         newTabs.set(worktreeId, [...existingTabs, tab]);
 
         const newActiveTabId = new Map(state.activeAgentTabId);
@@ -487,6 +491,12 @@ export function updateStateFromServerMessage(message: ServerMessage): void {
     case 'AgentOutput':
       // Agent output is handled separately (not stored in main state)
       break;
+    
+    case 'AgentRemoved': {
+      const removeAgentSession = useStore.getState().removeAgentSession;
+      removeAgentSession(message.id);
+      break;
+    }
     
     case 'TerminalCreated':
       addTerminalSession({
