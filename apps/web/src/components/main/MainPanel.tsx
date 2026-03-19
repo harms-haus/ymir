@@ -23,9 +23,6 @@ export function MainPanel() {
           minSize={100}
           className="panel agent-panel"
         >
-          <div className="panel-header">
-            <h2>Agent</h2>
-          </div>
           <div className="panel-content h-full">
             {activeWorktree ? (
               <AgentPane
@@ -46,9 +43,6 @@ export function MainPanel() {
           minSize={100}
           className="panel terminal-panel"
         >
-          <div className="panel-header">
-            <h2>Terminal</h2>
-          </div>
           <div className="panel-content h-full">
             {activeWorktree ? (
               <TerminalPane worktreeId={activeWorktree.id} />

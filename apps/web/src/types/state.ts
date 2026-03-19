@@ -86,6 +86,14 @@ export interface WorkspaceSettingsDialogState {
   workspaceId: string | null;
 }
 
+export interface MergeDialogState {
+  isOpen: boolean;
+  worktreeId: string | null;
+  branchName: string;
+  mainBranch: string;
+  mergeType: 'merge' | 'squash';
+}
+
 export interface DbResetDialogState {
   isOpen: boolean;
   errorMessage: string;
@@ -132,6 +140,8 @@ export interface AppState {
   createWorktreeDialog: CreateWorktreeDialogState;
 
   workspaceSettingsDialog: WorkspaceSettingsDialogState;
+
+  mergeDialog: MergeDialogState;
 
   dbResetDialog: DbResetDialogState;
 
@@ -193,6 +203,9 @@ export interface AppState {
 
   setWorkspaceSettingsDialogOpen: (isOpen: boolean, workspaceId?: string) => void;
   resetWorkspaceSettingsDialog: () => void;
+
+  setMergeDialogOpen: (isOpen: boolean, worktreeId?: string, branchName?: string, mainBranch?: string, mergeType?: 'merge' | 'squash') => void;
+  resetMergeDialog: () => void;
 
   // DB reset dialog actions
   setDbResetDialogOpen: (isOpen: boolean, errorMessage?: string) => void;

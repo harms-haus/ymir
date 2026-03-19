@@ -4,7 +4,15 @@ import { updateStateFromServerMessage, useStore, useToastStore } from '../store'
 
 // Generate a UUID v4 for request IDs
 function generateId(): string {
-  return crypto.randomUUID();
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback for environments without crypto.randomUUID
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
 }
 
 export type ConnectionStatus = 'connecting' | 'open' | 'closed' | 'reconnecting';
@@ -246,46 +254,25 @@ export class YmirClient {
     // Backend expects: { version, type, data: { ...payload } }
     const { type, ...payload } = message;
     
-    // Convert camelCase field names to snake_case for Rust compatibility
-    const snakeCasePayload = this.toSnakeCaseKeys(payload);
-    
+    // Backend serde uses camelCase, so keep field names as-is
     const messageWithVersion = {
       version: PROTOCOL_VERSION,
       type,
-      data: snakeCasePayload
+      data: payload
     };
     const encoded = encode(messageWithVersion);
     return encoded.buffer.slice(encoded.byteOffset, encoded.byteOffset + encoded.byteLength);
   }
   
-  private toSnakeCaseKeys(obj: Record<string, unknown>): Record<string, unknown> {
-    const result: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(obj)) {
-      const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-      result[snakeKey] = value;
-    }
-    return result;
-  }
-  
   private decodeMessage(data: ArrayBuffer): ServerMessage {
     const uint8Array = new Uint8Array(data);
     const decoded = decode(uint8Array) as { version: number; type: string; data: Record<string, unknown> };
-    // Convert snake_case field names to camelCase for TypeScript compatibility
-    const camelCaseData = this.toCamelCaseKeys(decoded.data);
+    // Backend serde uses camelCase, so no conversion needed
     // Flatten nested structure: { version, type, data } -> { type, ...data }
     return {
       type: decoded.type,
-      ...camelCaseData
+      ...decoded.data
     } as ServerMessage;
-  }
-  
-  private toCamelCaseKeys(obj: Record<string, unknown>): Record<string, unknown> {
-    const result: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(obj)) {
-      const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
-      result[camelKey] = value;
-    }
-    return result;
   }
   
   private handleMessage(message: ServerMessage): void {

@@ -3,6 +3,10 @@
 use crate::protocol::{
     ClientMessage, ClientMessagePayload, Error, ServerMessage, ServerMessagePayload,
 };
+use crate::agent::{handle_agent_cancel, handle_agent_send, handle_agent_spawn};
+use crate::pty::{
+    handle_terminal_create, handle_terminal_input, handle_terminal_kill, handle_terminal_resize,
+};
 use crate::state::AppState;
 use std::sync::Arc;
 use tracing::instrument;
@@ -100,15 +104,37 @@ pub async fn route_message(
                 }))),
             }
         }
+        ClientMessagePayload::TerminalCreate(msg) => {
+            Some(handle_terminal_create(state.clone(), msg).await)
+        }
+
+        ClientMessagePayload::TerminalKill(msg) => {
+            Some(handle_terminal_kill(state.clone(), msg).await)
+        }
+
+        ClientMessagePayload::TerminalInput(msg) => {
+            Some(handle_terminal_input(state.clone(), msg).await)
+        }
+
+        ClientMessagePayload::TerminalResize(msg) => {
+            Some(handle_terminal_resize(state.clone(), msg).await)
+        }
+
+        ClientMessagePayload::AgentSpawn(msg) => {
+            Some(handle_agent_spawn(state.clone(), msg).await)
+        }
+
+        ClientMessagePayload::AgentSend(msg) => {
+            Some(handle_agent_send(state.clone(), msg).await)
+        }
+
+        ClientMessagePayload::AgentCancel(msg) => {
+            Some(handle_agent_cancel(state.clone(), msg).await)
+        }
+
         ClientMessagePayload::WorkspaceRename(_)
         | ClientMessagePayload::WorkspaceUpdate(_)
         | ClientMessagePayload::WorktreeMerge(_)
-        | ClientMessagePayload::AgentSpawn(_)
-        | ClientMessagePayload::AgentSend(_)
-        | ClientMessagePayload::AgentCancel(_)
-        | ClientMessagePayload::TerminalInput(_)
-        | ClientMessagePayload::TerminalResize(_)
-        | ClientMessagePayload::TerminalCreate(_)
         | ClientMessagePayload::FileRead(_)
         | ClientMessagePayload::FileWrite(_)
         | ClientMessagePayload::UpdateSettings(_) => Some(not_implemented(message.payload)),

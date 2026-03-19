@@ -50,6 +50,10 @@ struct ServeArgs {
     #[arg(short, long)]
     dev: bool,
 
+    /// Host Vite dev server on 0.0.0.0 (requires --dev)
+    #[arg(long)]
+    host: bool,
+
     /// Override WebSocket server port
     #[arg(short, long, default_value_t = WS_PORT_DEFAULT)]
     port: u16,
@@ -73,7 +77,7 @@ async fn main() -> anyhow::Result<ExitCode> {
         Some(Commands::Config) => config(),
         Some(Commands::Status) => status().await,
         Some(Commands::Doctor) => doctor().await,
-        None => serve(ServeArgs { dev: false, port: WS_PORT_DEFAULT, web_app_path: None }).await,
+        None => serve(ServeArgs { dev: false, host: false, port: WS_PORT_DEFAULT, web_app_path: None }).await,
     }
 }
 
@@ -143,9 +147,14 @@ async fn serve(args: ServeArgs) -> anyhow::Result<ExitCode> {
 
     // Optionally spawn Vite dev server
     let mut vite_child = if args.dev {
+        let port_str = vite_port.to_string();
+        let mut vite_args = vec!["vite", "--port", &port_str];
+        if args.host {
+            vite_args.push("--host");
+        }
         Some(
             Command::new("npx")
-                .args(["vite", "--port", &vite_port.to_string()])
+                .args(&vite_args)
                 .current_dir(&web_app_path)
                 .kill_on_drop(true)
                 .spawn()?
