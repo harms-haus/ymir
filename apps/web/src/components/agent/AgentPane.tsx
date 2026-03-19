@@ -45,10 +45,9 @@ export function AgentPane({ worktreeId, agentSession }: AgentPaneProps) {
   const { addAgentTab, removeAgentTab, setActiveAgentTab } = useStore();
   const [localActiveTab, setLocalActiveTab] = useState<string | null>(activeTabId);
   const creationInProgressRef = useRef(false);
-  const nextAgentIdRef = useRef(1);
 
   const handleSpawnAgent = useCallback(() => {
-    const agentType = `agent-${nextAgentIdRef.current++}`;
+    const agentType = 'claude';
 
     const message: AgentSpawn = {
       type: 'AgentSpawn',
