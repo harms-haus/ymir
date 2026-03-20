@@ -331,8 +331,8 @@ export function createStatusCardSchema(
     description: card.message,
     severity: card.recoverable ? 'warning' : 'error',
     sequence: card.sequence,
-}
   };
+}
 
 /**
  * Create status card schema from session status string

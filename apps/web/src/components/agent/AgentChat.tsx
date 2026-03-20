@@ -103,11 +103,13 @@ function AgentChatContent({
             </div>
           </ThreadPrimitive.If>
           <ThreadPrimitive.Messages>
-            {({ message }) => (
-              <MessagePrimitive.Root key={message.id}>
-                {message.role === 'user' ? <UserMessage /> : <AgentMessage />}
-              </MessagePrimitive.Root>
-            )}
+            {({ message }) =>
+              message.role === 'user' ? (
+                <UserMessage key={message.id} />
+              ) : (
+                <AgentMessage key={message.id} />
+              )
+            }
           </ThreadPrimitive.Messages>
         </ThreadPrimitive.Root>
       </div>

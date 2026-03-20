@@ -1,0 +1,142 @@
+/* Unified tabs styles - used by both Agent and Terminal panes */
+
+/* ===== Tabs List Container ===== */
+.tabs-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+  padding: 0 0.5rem;
+  overflow-x: auto;
+  flex-shrink: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+/* Base UI Composite list container inside Tabs.List */
+.tabs-list > [data-orientation] {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0;
+}
+
+/* ===== Individual Tab ===== */
+.tab {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-bottom: 2px solid transparent;
+  border-right: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  border-top: none;
+  border-left: none;
+  outline: none;
+  flex-shrink: 0;
+}
+
+.tab:last-of-type {
+  border-right: none;
+}
+
+.tab:hover {
+  background: hsl(var(--muted) / 0.5);
+  border-bottom-color: hsl(var(--border));
+}
+
+.tab[aria-selected="true"],
+.tab[data-selected="true"] {
+  color: hsl(var(--foreground));
+  border-bottom-color: hsl(var(--primary));
+}
+
+/* ===== Tab Icon ===== */
+.tab-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* ===== Tab Label ===== */
+.tab-label {
+  white-space: nowrap;
+}
+
+/* ===== Tab Close Button ===== */
+.tab-close {
+  margin-left: 0.25rem;
+  padding: 0.25rem;
+  border-radius: 0.25rem;
+  opacity: 0.5;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tab-close:hover {
+  background: hsl(var(--muted) / 0.5);
+  opacity: 1;
+}
+
+.tab-close:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: -2px;
+}
+
+/* ===== New Tab (+) Button ===== */
+.new-tab-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 0.25rem;
+  padding: 0.375rem;
+  border-radius: 0.25rem;
+  opacity: 0.5;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background: transparent;
+  border: none;
+  color: hsl(var(--muted-foreground));
+  font-size: 1.25rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.new-tab-button:hover {
+  opacity: 1;
+  background: hsl(var(--muted) / 0.5);
+  color: hsl(var(--foreground));
+}
+
+.new-tab-button:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: -2px;
+}
+
+/* ===== Legacy Class Mappings ===== */
+/* These allow existing components using old class names to work */
+
+/* Agent pane legacy classes */
+.agent-tabs-list { composes: tabs-list; }
+.agent-tab { composes: tab; }
+.agent-tab-icon { composes: tab-icon; }
+.agent-tab-label { composes: tab-label; }
+.agent-tab-close { composes: tab-close; }
+.agent-new-tab-button { composes: new-tab-button; }
+
+/* Terminal pane legacy classes */
+.terminal-tabs-list { composes: tabs-list; }
+.terminal-tab { composes: tab; }
+.terminal-tab-icon { composes: tab-icon; }
+.terminal-tab-close { composes: tab-close; }
+.terminal-add-tab { composes: new-tab-button; }

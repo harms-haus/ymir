@@ -1050,6 +1050,10 @@ describe('YmirClient', () => {
     });
 
     it('AgentRemoved message matches Rust AgentRemoved struct', () => {
+      client = new YmirClient({ url: 'ws://localhost:7319' });
+      Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
+      callOpenHandler();
+
       const agentRemovedMessage = {
         type: 'AgentRemoved' as const,
         id: 'session-uuid',
@@ -1064,6 +1068,10 @@ describe('YmirClient', () => {
     });
 
     it('Ack message matches Rust Ack struct with status', () => {
+      client = new YmirClient({ url: 'ws://localhost:7319' });
+      Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
+      callOpenHandler();
+
       const ackMessage = {
         type: 'Ack' as const,
         messageId: 'msg-uuid',
@@ -1078,6 +1086,10 @@ describe('YmirClient', () => {
     });
 
     it('AgentStatusUpdate message matches Rust AgentStatusUpdate struct', () => {
+      client = new YmirClient({ url: 'ws://localhost:7319' });
+      Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
+      callOpenHandler();
+
       const statusUpdateMessage = {
         type: 'AgentStatusUpdate' as const,
         id: 'session-uuid',

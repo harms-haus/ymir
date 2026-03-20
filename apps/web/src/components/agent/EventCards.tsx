@@ -319,43 +319,76 @@ interface EventContentPartProps {
   onPermissionAction?: (action: PermissionCardSchema['actions'][keyof PermissionCardSchema['actions']]) => void;
 }
 
+const VALID_TOOL_STATUSES = ['Started', 'InProgress', 'Completed', 'Error'] as const;
+type ValidToolStatus = typeof VALID_TOOL_STATUSES[number];
+
+function isValidToolStatus(status: unknown): status is ValidToolStatus {
+  return typeof status === 'string' && VALID_TOOL_STATUSES.includes(status as ValidToolStatus);
+}
+
+function safeToolStatus(status: unknown): ValidToolStatus {
+  return isValidToolStatus(status) ? status : 'Started';
+}
+
 export function EventContentPart({ part, onPermissionAction }: EventContentPartProps) {
   if (part.type === 'data' && part.name === 'permission' && part.data) {
-    const data = part.data as { toolUseId: string; toolName: string };
-    const schema: PermissionCardSchema = {
-      type: 'permission',
-      toolUseId: data.toolUseId,
-      toolName: data.toolName,
-      reason: `The agent wants to use the ${data.toolName} tool`,
-      inputSummary: '',
-      isPending: true,
-      sequence: 0,
-      actions: {
-        allow: { type: 'allow', toolUseId: data.toolUseId },
-        allowAlways: { type: 'allow-always', toolUseId: data.toolUseId, toolName: data.toolName },
-        deny: { type: 'deny', toolUseId: data.toolUseId },
-        denyAlways: { type: 'deny-always', toolUseId: data.toolUseId, toolName: data.toolName },
-      },
-    };
-    return <PermissionCard schema={schema} onAction={onPermissionAction} />;
+    const data = part.data;
+    if (
+      typeof data === 'object' &&
+      data !== null &&
+      'toolUseId' in data &&
+      'toolName' in data &&
+      typeof (data as Record<string, unknown>).toolUseId === 'string' &&
+      typeof (data as Record<string, unknown>).toolName === 'string'
+    ) {
+      const validData = data as { toolUseId: string; toolName: string };
+      const schema: PermissionCardSchema = {
+        type: 'permission',
+        toolUseId: validData.toolUseId,
+        toolName: validData.toolName,
+        reason: `The agent wants to use the ${validData.toolName} tool`,
+        inputSummary: '',
+        isPending: true,
+        sequence: 0,
+        actions: {
+          allow: { type: 'allow', toolUseId: validData.toolUseId },
+          allowAlways: { type: 'allow-always', toolUseId: validData.toolUseId, toolName: validData.toolName },
+          deny: { type: 'deny', toolUseId: validData.toolUseId },
+          denyAlways: { type: 'deny-always', toolUseId: validData.toolUseId, toolName: validData.toolName },
+        },
+      };
+      return <PermissionCard schema={schema} onAction={onPermissionAction} />;
+    }
+    return null;
   }
 
   if (part.type === 'tool-call') {
-    const toolPart = part as unknown as {
-      toolCallId: string;
-      toolName: string;
-      status?: string;
-      result?: { result: string };
-    };
-    const schema: ToolCardSchema = {
-      type: 'tool',
-      toolUseId: toolPart.toolCallId,
-      toolName: toolPart.toolName,
-      status: (toolPart.status as 'Started' | 'InProgress' | 'Completed' | 'Error') || 'Started',
-      outputSummary: toolPart.result?.result,
-      updatedAt: Date.now(),
-    };
-    return <ToolCard schema={schema} />;
+    const toolPart = part;
+    if (
+      typeof toolPart === 'object' &&
+      toolPart !== null &&
+      'toolCallId' in toolPart &&
+      'toolName' in toolPart &&
+      typeof (toolPart as Record<string, unknown>).toolCallId === 'string' &&
+      typeof (toolPart as Record<string, unknown>).toolName === 'string'
+    ) {
+      const validPart = toolPart as {
+        toolCallId: string;
+        toolName: string;
+        status?: unknown;
+        result?: { result: string };
+      };
+      const schema: ToolCardSchema = {
+        type: 'tool',
+        toolUseId: validPart.toolCallId,
+        toolName: validPart.toolName,
+        status: safeToolStatus(validPart.status),
+        outputSummary: validPart.result?.result,
+        updatedAt: Date.now(),
+      };
+      return <ToolCard schema={schema} />;
+    }
+    return null;
   }
 
   return null;

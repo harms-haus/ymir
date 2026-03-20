@@ -5,6 +5,7 @@ import { useWebSocketClient } from '../../hooks/useWebSocket';
 import { AgentChat } from './AgentChat';
 import { DiffTab } from '../editor/DiffTab';
 import { AgentCancel, AgentSend, AgentSpawn } from '../../types/generated/protocol';
+import '../../styles/tabs.css';
 import '../../styles/agent.css';
 
 interface AgentPaneProps {
@@ -144,47 +145,47 @@ export function AgentPane({ worktreeId }: AgentPaneProps) {
         value={currentActiveTab}
         onValueChange={handleTabChange}
       >
-        <Tabs.List className="agent-tabs-list">
-          {tabs.map((tab) => (
-            <Tabs.Tab
-              key={tab.id}
-              value={tab.id}
-              onMouseDown={(e) => handleTabMouseDown(tab.id, e)}
-              className="agent-tab"
-            >
-              <i className={`${getTabIcon(tab.type)} agent-tab-icon`} />
-              <span className="agent-tab-label">{getTabLabel(tab)}</span>
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={(e) => {
+      <Tabs.List className="tabs-list">
+        {tabs.map((tab) => (
+          <Tabs.Tab
+            key={tab.id}
+            value={tab.id}
+            onMouseDown={(e) => handleTabMouseDown(tab.id, e)}
+            className="tab"
+          >
+            <i className={`${getTabIcon(tab.type)} tab-icon`} />
+            <span className="tab-label">{getTabLabel(tab)}</span>
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCloseTab(tab.id);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
                   e.stopPropagation();
                   handleCloseTab(tab.id);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.stopPropagation();
-                    handleCloseTab(tab.id);
-                  }
-                }}
-                className="agent-tab-close"
-                aria-label="Close tab"
-              >
-                ×
-              </span>
-            </Tabs.Tab>
-          ))}
+                }
+              }}
+              className="tab-close"
+              aria-label="Close tab"
+            >
+              ×
+            </span>
+          </Tabs.Tab>
+        ))}
 
-          <button
-            type="button"
-            onClick={handleSpawnAgent}
-            className="agent-new-tab-button"
-            aria-label="Create new agent"
-            title="Create new agent"
-          >
-            +
-          </button>
-        </Tabs.List>
+        <button
+          type="button"
+          onClick={handleSpawnAgent}
+          className="new-tab-button"
+          aria-label="Create new agent"
+          title="Create new agent"
+        >
+          +
+        </button>
+      </Tabs.List>
 
         <div className="agent-panel-content">
           {tabs.length === 0 ? (

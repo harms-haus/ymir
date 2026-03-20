@@ -15,4 +15,4 @@ acpSessionId: string,
 /**
  * The last sequence number successfully processed
  */
-lastSequence: bigint, };
+lastSequence: number, };

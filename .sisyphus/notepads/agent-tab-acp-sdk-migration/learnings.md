@@ -1766,3 +1766,125 @@ Replaced the custom-styled composer shell in `AgentChat.tsx` with a styled versi
 - Status and agent info inside textarea container footer
 - Send button as icon in circular button
 - Cleaner, more compact design
+
+## Scoped Fixes Session (2026-03-20)
+
+### Files Changed
+
+1. **apps/web/src/components/agent/AgentChat.tsx**
+   - Removed double MessagePrimitive.Root nesting - ThreadPrimitive.Messages callback no longer wraps UserMessage/AgentMessage in an outer MessagePrimitive.Root
+
+2. **apps/web/src/components/agent/AgentRuntimeProvider.tsx**
+   - Safe stringify of structured part.data (handles non-string values with JSON.stringify)
+   - Dynamic assistant status: `running` for last assistant message, `complete` otherwise
+
+3. **apps/web/src/components/agent/EventCards.tsx**
+   - Added VALID_TOOL_STATUSES array and safeToolStatus helper
+   - Runtime type validation before constructing PermissionCardSchema/ToolCardSchema
+   - No more unsafe `as` casts
+
+4. **apps/web/src/components/agent/__tests__/AgentChat.test.tsx**
+   - Unknown-content fallback test now uses truly unknown type and asserts `[Unknown content type]` fallback
+
+5. **apps/web/src/components/agent/card-schema.ts**
+   - Fixed malformed return/object closure in createStatusCardSchema (extra `};` removed)
+
+6. **apps/web/src/components/agent/runtimeBoundary.ts**
+   - Added explicit image branch in default case of mapContentPart, checking for image/imageUrl/base64 fields
+
+7. **apps/web/src/components/project/__tests__/ChangesTab.test.tsx**
+   - Removed mock of component under test
+   - Implemented real assertion for "No worktree selected" render
+
+8. **apps/web/src/hooks/__tests__/useAgentStatus.test.ts**
+   - Removed unnecessary sleep delay in AgentOutput test
+
+9. **apps/web/src/lib/__tests__/ws.test.ts**
+   - AgentRemoved/Ack/AgentStatusUpdate parity tests now initialize client+open socket before testing
+
+10. **apps/web/src/lib/ws.ts**
+    - Added dedicated acpEventHandlers Map for ACP event callbacks
+    - Added public onAcpEvent API for subscribing to ACP event types
+    - Fixed correlationId validation to reject null
+    - AcpWireEvent dispatch now uses typed ACP handlers instead of generic messageHandlers with any cast
+
+11. **apps/web/src/styles/agent.css**
+    - Added focus-visible styles for .au-composer-send (excluding disabled)
+    - Added focus-visible styles for .event-card-btn and allow/deny variants
+
+12. **apps/web/vitest.config.ts**
+    - Replaced deprecated singleThread with singleFork (valid vitest v4+ option)
+
+13. **crates/ws-server/src/protocol.rs**
+    - AcpAck.last_sequence: Added #[ts(type = "number")] to avoid bigint in TS bindings
+    - AcpError.worktree_id: Changed #[ts(type = "string")] to #[ts(type = "string | null")] for correct Option handling
+
+14. **crates/ws-server/src/agent/handler.rs**
+    - When acp_handle is None in spawn path, now returns explicit error instead of misleading success
+    - Cleans up session from agents map and database before returning error
+
+### Findings Already Fixed (No Changes Needed)
+
+- The manual `apps/web/src/types/generated/protocol.ts` already correctly defines AcpSequence as `number` (not bigint) and AcpError.worktreeId as optional string
+
+### Build Verification
+
+- TypeScript: Passes (no errors)
+- Build: Passes successfully
+- Rust: Compiles with only unused import warnings
+
+### Notes
+
+- Vitest v4 deprecated `singleThread` option, use `singleFork` instead
+- assistant-ui MessageStatus uses `running` not `in_progress` for streaming status
+- Test environment memory issues unrelated to code changes
+
+## QA Fixes Session (2026-03-20)
+
+### Additional Fixes Applied
+
+1. **useAgentStatus.test.ts**
+   - Fake timers need `vi.runAllTimersAsync()` instead of `waitFor` which uses real timers
+   - Must restore timers after test to avoid affecting other tests
+
+2. **ChangesTab.test.tsx**
+   - Mock must handle both `useStore(selector)` and `useStore()` call patterns
+   - Return mockStoreState for no-selector calls, and apply selector for function calls
+
+3. **vitest.config.ts**
+   - Vitest v4 uses `maxWorkers: 1, isolate: false` instead of deprecated `singleThread`
+
+4. **AgentRuntimeProvider.tsx**
+   - `safeStringify()` helper handles undefined/null/object/primitive safely
+   - Status is `running` only when last assistant message AND streaming is active
+   - Pass `isStreaming` to convertAccumulatedMessage for dynamic status
+
+5. **AgentChat.tsx**
+   - ThreadPrimitive.Messages callback should return keyed element directly
+   - No wrapper div: `{message.role === 'user' ? <UserMessage key={message.id} /> : <AgentMessage key={message.id} />}`
+
+6. **runtimeBoundary.ts**
+   - Added `AccumulatedImageContent` type to state.ts
+   - Explicit `case 'image'` in switch for proper type narrowing
+
+7. **ws.ts**
+   - `onAcpEvent` overloaded: `onAcpEvent(callback)` for all events, `onAcpEvent(type, callback)` for specific types
+   - Uses `'*'` internally for catch-all subscription
+
+8. **bindings**
+   - AcpAck.lastSequence: `number` (not bigint)
+   - AcpError.worktreeId: `string | null` (nullable)
+
+### Test Verification
+
+All tests pass individually:
+- AgentChat.test.tsx: 93 passed
+- ChangesTab.test.tsx: 1 passed
+- useAgentStatus.test.ts: 72 passed
+- ws.test.ts: 50 passed
+
+### Build Verification
+
+- TypeScript: Passes
+- Web build: Passes (2.40s)
+- Rust check: Passes (with unused import warnings)

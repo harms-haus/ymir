@@ -5,8 +5,8 @@ import { useWebSocketClient } from '../../hooks/useWebSocket';
 import { Terminal, type TerminalRef } from './TerminalView';
 import { TerminalCreate, TerminalOutput } from '../../types/generated/protocol';
 import TerminalIcon from '@mui/icons-material/Terminal';
-import AddIcon from '@mui/icons-material/Add';
 import { useShallow } from 'zustand/react/shallow';
+import '../../styles/tabs.css';
 import '../../styles/terminal.css';
 
 interface TerminalTab {
@@ -117,46 +117,46 @@ export function TerminalPane({ worktreeId }: TerminalPaneProps) {
         value={activeTab || (tabs.length === 0 ? 'empty' : undefined)}
         onValueChange={(value: string | null) => setActiveTab(value)}
       >
-        <Tabs.List className="terminal-tabs-list">
-          {tabs.map((tab) => (
-            <Tabs.Tab
-              key={tab.sessionId}
-              value={tab.sessionId}
-              onMouseDown={(e: React.MouseEvent) => handleTabMouseDown(tab.sessionId, e)}
-              className="terminal-tab">
-              <TerminalIcon className="terminal-tab-icon" />
-              <span>{tab.label}</span>
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={(e) => {
+      <Tabs.List className="tabs-list">
+        {tabs.map((tab) => (
+          <Tabs.Tab
+            key={tab.sessionId}
+            value={tab.sessionId}
+            onMouseDown={(e: React.MouseEvent) => handleTabMouseDown(tab.sessionId, e)}
+            className="tab">
+            <TerminalIcon className="tab-icon" />
+            <span className="tab-label">{tab.label}</span>
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCloseTab(tab.sessionId);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
                   e.stopPropagation();
                   handleCloseTab(tab.sessionId);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.stopPropagation();
-                    handleCloseTab(tab.sessionId);
-                  }
-                }}
-                className="terminal-tab-close"
-                aria-label="Close tab"
-              >
-                ×
-              </div>
-            </Tabs.Tab>
-          ))}
+                }
+              }}
+              className="tab-close"
+              aria-label="Close tab"
+            >
+              ×
+            </div>
+          </Tabs.Tab>
+        ))}
 
-          <button
-            type="button"
-            onClick={handleCreateTab}
-            className="terminal-add-tab"
-            aria-label="Create new terminal"
-            title="Create new terminal"
-          >
-            <AddIcon className="terminal-add-icon" />
-          </button>
-        </Tabs.List>
+        <button
+          type="button"
+          onClick={handleCreateTab}
+          className="new-tab-button"
+          aria-label="Create new terminal"
+          title="Create new terminal"
+        >
+          +
+        </button>
+      </Tabs.List>
 
         {tabs.length === 0 ? (
           <Tabs.Panel value="empty">

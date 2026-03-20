@@ -987,7 +987,7 @@ pub enum AcpContextUpdateType {
 pub struct AcpError {
     /// The worktree ID (if applicable)
     #[serde(with = "optional_uuid_str", default)]
-    #[ts(type = "string")]
+    #[ts(type = "string | null")]
     pub worktree_id: Option<Uuid>,
     /// The ACP session ID (if applicable)
     #[serde(default)]
@@ -1073,6 +1073,7 @@ pub struct AcpAck {
     /// The ACP session ID
     pub acp_session_id: String,
     /// The last sequence number successfully processed
+    #[ts(type = "number")]
     pub last_sequence: AcpSequence,
 }
 

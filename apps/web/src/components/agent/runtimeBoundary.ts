@@ -188,8 +188,13 @@ function mapContentPart(part: AccumulatedContentPart): RuntimeContentPart {
         recoverable: part.recoverable,
       };
 
+    case 'image':
+      return {
+        type: 'image',
+        image: part.image ?? part.imageUrl ?? part.base64 ?? '',
+      };
+
     default:
-      // Safe fallback for unknown content types
       return {
         type: 'text',
         text: '[Unknown content type]',

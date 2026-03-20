@@ -42,6 +42,7 @@ export class YmirClient {
   
   private messageQueue: ClientMessage[] = [];
   private messageHandlers = new Map<ServerMessage['type'], Set<(message: ServerMessage) => void>>();
+  private acpEventHandlers = new Map<string, Set<(envelope: AcpEventEnvelope) => void>>();
   private statusHandlers = new Set<(status: ConnectionStatus) => void>();
   private disconnectHandlers = new Set<() => void>();
   private reconnectHandlers = new Set<() => void>();
@@ -309,9 +310,11 @@ export class YmirClient {
       return null;
     }
 
-    if (envelope.correlationId !== undefined && typeof envelope.correlationId !== 'object') {
-      console.error('[WS] [ACP] Malformed envelope: invalid correlationId');
-      return null;
+    if (envelope.correlationId !== undefined) {
+      if (envelope.correlationId === null || typeof envelope.correlationId !== 'object') {
+        console.error('[WS] [ACP] Malformed envelope: invalid correlationId');
+        return null;
+      }
     }
 
     return envelope as AcpEventEnvelope;
@@ -328,10 +331,16 @@ export class YmirClient {
       const envelope = this.decodeAcpEnvelope(message);
       if (envelope) {
         console.log('[WS] [ACP] Decoded envelope:', envelope.eventType, envelope.sequence);
-        const handlers = this.messageHandlers.get(message.type);
+        const handlers = this.acpEventHandlers.get(envelope.eventType);
         if (handlers) {
           handlers.forEach(handler => {
-            handler(envelope as any);
+            handler(envelope);
+          });
+        }
+        const allHandlers = this.acpEventHandlers.get('*');
+        if (allHandlers) {
+          allHandlers.forEach(handler => {
+            handler(envelope);
           });
         }
         return;
@@ -422,6 +431,40 @@ export class YmirClient {
       handlers.delete(wrappedCallback);
       if (handlers.size === 0) {
         this.messageHandlers.delete(type);
+      }
+    };
+  }
+
+  onAcpEvent(
+    eventTypeOrCallback: AcpEventEnvelope['eventType'] | '*' | ((envelope: AcpEventEnvelope) => void),
+    callback?: (envelope: AcpEventEnvelope) => void
+  ): () => void {
+    if (typeof eventTypeOrCallback === 'function') {
+      const cb = eventTypeOrCallback;
+      const handlers = this.acpEventHandlers.get('*') || new Set();
+      handlers.add(cb);
+      this.acpEventHandlers.set('*', handlers);
+
+      return () => {
+        handlers.delete(cb);
+        if (handlers.size === 0) {
+          this.acpEventHandlers.delete('*');
+        }
+      };
+    }
+
+    const eventType = eventTypeOrCallback;
+    if (!callback) {
+      throw new Error('Callback is required when eventType is provided');
+    }
+    const handlers = this.acpEventHandlers.get(eventType) || new Set();
+    handlers.add(callback);
+    this.acpEventHandlers.set(eventType, handlers);
+
+    return () => {
+      handlers.delete(callback);
+      if (handlers.size === 0) {
+        this.acpEventHandlers.delete(eventType);
       }
     };
   }
