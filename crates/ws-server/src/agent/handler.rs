@@ -1,6 +1,59 @@
 //! Agent client integration for WebSocket server
+//!
+//! # Agent Lifecycle Rules
+//!
+//! ## Worktree-CWD Launch Rule
+//!
+//! Agent processes are launched in the currently selected worktree's CWD. The CWD is determined
+//! by the `WorktreeState.path` field from the in-memory worktrees registry, NOT by UI selection.
+//!
+//! **Flow:**
+//! 1. Client sends `AgentSpawn` message with `worktree_id`
+//! 2. `get_worktree_path()` looks up the worktree in `state.worktrees`
+//! 3. Retrieves `worktree.path` from `WorktreeState` (source of truth)
+//! 4. Passes path to `AcpClient::spawn()` which sets `current_dir` for subprocess
+//!
+//! ## Lifecycle State Transitions
+//!
+//! ### Spawn
+//! 1. Validate worktree exists → get CWD from `WorktreeState.path`
+//! 2. Create DB session record
+//! 3. Add to `state.agents` (session_id → AgentState)
+//! 4. Spawn agent process in worktree CWD via tokio::spawn
+//! 5. On success: store client in `state.agent_clients[worktree_id]`
+//! 6. Broadcast `AgentStatusUpdate` to all clients
+//!
+//! **Enforcement:** One agent per worktree (agent_clients keyed by worktree_id)
+//!
+//! ### Cancel
+//! 1. Find session by `worktree_id` in `state.agents`
+//! 2. Kill agent process via `AcpClient::kill()`
+//! 3. Remove from `state.agent_clients`
+//! 4. Remove from `state.agents`
+//! 5. Delete from database
+//! 6. Broadcast `AgentRemoved` to all clients
+//!
+//! ### Worktree Deletion (Cleanup)
+//! When a worktree is deleted:
+//! 1. Database FK cascade removes agent_sessions row
+//! 2. `cleanup_agents_for_worktree()` must be called to:
+//!    - Kill running agent process
+//!    - Remove from `state.agent_clients`
+//!    - Remove from `state.agents`
+//!
+//! ### Worktree Switch
+//! No automatic cancellation. The agent continues running in the original worktree CWD.
+//! The UI shows the agent for the worktree it belongs to, not the active worktree.
+//!
+//! ### Reconnect
+//! On WebSocket reconnect, the web client requests full state snapshot.
+//! Server returns all worktrees and their associated sessions from DB.
+//! Orphaned processes (from server crash) are not automatically cleaned up.
+//!
+//! ### Stale Sessions
+//! No automatic timeout. Sessions persist until explicitly cancelled or worktree deleted.
+//! Server restart requires re-sync via `initialize_from_db()` which loads DB state.
 
-use crate::agent::AcpClient;
 use crate::db::AgentSession;
 use crate::protocol::{AckStatus, AgentStatus, AgentStatusUpdate, Error, ServerMessage, ServerMessagePayload};
 use crate::state::AppState;
@@ -74,17 +127,24 @@ pub async fn handle_agent_spawn(
 
     state.broadcast(broadcast_msg.clone()).await;
 
+    let acp_handle = match &state.acp_handle {
+        Some(handle) => handle.clone(),
+        None => {
+            tracing::error!("ACP runtime not initialized");
+            return broadcast_msg;
+        }
+    };
+
     let session_id_ref = session_id;
     let worktree_id_ref = msg.worktree_id;
-    let agent_type_ref = msg.agent_type.clone();
     let state_ref = state.clone();
+    let agent_type_ref = msg.agent_type.clone();
     let worktree_path_ref = worktree_path;
 
     tokio::spawn(async move {
-        match AcpClient::spawn(&agent_type_ref, &worktree_path_ref).await {
-            Ok(agent_client) => {
-                let mut agent_clients = state_ref.agent_clients.write().await;
-                agent_clients.insert(worktree_id_ref, Arc::new(tokio::sync::Mutex::new(agent_client)));
+        match acp_handle.spawn_agent(worktree_id_ref, &agent_type_ref, &worktree_path_ref).await {
+            Ok(()) => {
+                tracing::info!("Agent spawned successfully for worktree {}", worktree_id_ref);
             }
             Err(e) => {
                 tracing::error!("Failed to spawn agent process: {}", e);
@@ -110,34 +170,71 @@ fn parse_timestamp(timestamp: &str) -> u64 {
         .unwrap_or(0)
 }
 
+/// Get the worktree path (CWD) for agent spawning.
+///
+/// Returns the `WorktreeState.path` from the in-memory registry.
+/// This is the source of truth for agent CWD, not UI selection.
+#[instrument(skip(state))]
+pub async fn get_worktree_path(state: &AppState, worktree_id: Uuid) -> Option<String> {
+    let worktrees = state.worktrees.read().await;
+    worktrees.get(&worktree_id).map(|w| w.path.clone())
+}
+
+pub async fn cleanup_agents_for_worktree(state: &AppState, worktree_id: Uuid) {
+    let session_ids: Vec<Uuid> = {
+        let agents = state.agents.read().await;
+        agents
+            .iter()
+            .filter(|(_, agent)| agent.worktree_id == worktree_id)
+            .map(|(id, _)| *id)
+            .collect()
+    };
+
+    if let Some(handle) = &state.acp_handle {
+        let _ = handle.kill(worktree_id).await;
+    }
+
+    {
+        let mut agents = state.agents.write().await;
+        for session_id in &session_ids {
+            agents.remove(session_id);
+        }
+    }
+
+    for session_id in session_ids {
+        let broadcast_msg = ServerMessage::new(ServerMessagePayload::AgentRemoved(
+            crate::protocol::AgentRemoved {
+                id: session_id,
+                worktree_id,
+            },
+        ));
+        state.broadcast(broadcast_msg).await;
+    }
+}
+
 #[instrument(skip(state, msg), fields(worktree_id = %msg.worktree_id))]
 pub async fn handle_agent_send(
     state: Arc<AppState>,
     msg: crate::protocol::AgentSend,
 ) -> ServerMessage {
-    let agent_client_arc = {
-        let agent_clients = state.agent_clients.read().await;
-        match agent_clients.get(&msg.worktree_id) {
-            Some(client) => client.clone(),
-            None => {
-                return ServerMessage::new(ServerMessagePayload::Error(Error {
-                    code: "AGENT_NOT_FOUND".to_string(),
-                    message: format!("No agent running for worktree {}", msg.worktree_id),
-                    details: None,
-                    request_id: None,
-                }));
-            }
+    let handle = match &state.acp_handle {
+        Some(h) => h.clone(),
+        None => {
+            return ServerMessage::new(ServerMessagePayload::Error(Error {
+                code: "ACP_NOT_INITIALIZED".to_string(),
+                message: "ACP runtime not initialized".to_string(),
+                details: None,
+                request_id: None,
+            }));
         }
     };
 
-    let mut agent_client = agent_client_arc.lock().await;
-    
-    if let Err(e) = agent_client.send_prompt(&msg.message).await {
+    if let Err(e) = handle.send_prompt(msg.worktree_id, &msg.message).await {
         return ServerMessage::new(ServerMessagePayload::Error(Error {
             code: "AGENT_SEND_ERROR".to_string(),
             message: format!("Failed to send message to agent: {}", e),
             details: None,
-                    request_id: None,
+            request_id: None,
         }));
     }
 
@@ -156,15 +253,15 @@ pub async fn handle_agent_cancel(
         let agents = state.agents.read().await;
         agents.iter().find_map(|(id, agent_state)| {
             if agent_state.worktree_id == msg.worktree_id {
-                Some((*id, agent_state.agent_type.clone()))
+                Some(*id)
             } else {
                 None
             }
         })
     };
 
-    let (session_id, agent_type) = match session_data_opt {
-        Some(data) => data,
+    let session_id = match session_data_opt {
+        Some(id) => id,
         None => {
             return ServerMessage::new(ServerMessagePayload::Error(Error {
                 code: "AGENT_NOT_FOUND".to_string(),
@@ -175,20 +272,8 @@ pub async fn handle_agent_cancel(
         }
     };
 
-    let agent_client_arc = {
-        let agent_clients = state.agent_clients.read().await;
-        agent_clients.get(&msg.worktree_id).cloned()
-    };
-
-    if let Some(agent_client_arc) = agent_client_arc {
-        let mut agent_client = agent_client_arc.lock().await;
-        if let Err(e) = agent_client.kill().await {
-            tracing::warn!("Failed to kill agent process: {}", e);
-        }
-        drop(agent_client);
-
-        let mut agent_clients = state.agent_clients.write().await;
-        agent_clients.remove(&msg.worktree_id);
+    if let Some(handle) = &state.acp_handle {
+        let _ = handle.kill(msg.worktree_id).await;
     }
 
     {
@@ -213,4 +298,169 @@ pub async fn handle_agent_cancel(
         message_id: msg.worktree_id,
         status: AckStatus::Success,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::{AgentState, WorktreeState};
+    use std::sync::Arc;
+
+    async fn create_test_state() -> Arc<AppState> {
+        Arc::new(AppState::new_test().await)
+    }
+
+    #[tokio::test]
+    async fn test_get_worktree_path_returns_path_from_state() {
+        let state = create_test_state().await;
+        let worktree_id = Uuid::new_v4();
+        let workspace_id = Uuid::new_v4();
+        let expected_path = "/path/to/worktree".to_string();
+
+        state.worktrees.write().await.insert(
+            worktree_id,
+            WorktreeState {
+                id: worktree_id,
+                workspace_id,
+                branch_name: "main".to_string(),
+                path: expected_path.clone(),
+                status: "active".to_string(),
+            },
+        );
+
+        let result = get_worktree_path(&state, worktree_id).await;
+        assert_eq!(result, Some(expected_path));
+    }
+
+    #[tokio::test]
+    async fn test_get_worktree_path_returns_none_for_missing_worktree() {
+        let state = create_test_state().await;
+        let missing_worktree_id = Uuid::new_v4();
+
+        let result = get_worktree_path(&state, missing_worktree_id).await;
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_agents_for_worktree_removes_sessions() {
+        let state = create_test_state().await;
+        let worktree_id = Uuid::new_v4();
+        let session_id = Uuid::new_v4();
+
+        state.agents.write().await.insert(
+            session_id,
+            AgentState {
+                id: session_id,
+                worktree_id,
+                agent_type: "test".to_string(),
+                status: "idle".to_string(),
+            },
+        );
+
+        cleanup_agents_for_worktree(&state, worktree_id).await;
+
+        assert!(state.agents.read().await.get(&session_id).is_none());
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_agents_for_worktree_noops_for_missing_worktree() {
+        let state = create_test_state().await;
+        let worktree_id = Uuid::new_v4();
+
+        cleanup_agents_for_worktree(&state, worktree_id).await;
+
+        assert!(state.agents.read().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_agents_for_worktree_preserves_other_worktree_sessions() {
+        let state = create_test_state().await;
+        let worktree_to_delete = Uuid::new_v4();
+        let worktree_to_keep = Uuid::new_v4();
+        let session_to_delete = Uuid::new_v4();
+        let session_to_keep = Uuid::new_v4();
+
+        state.agents.write().await.insert(
+            session_to_delete,
+            AgentState {
+                id: session_to_delete,
+                worktree_id: worktree_to_delete,
+                agent_type: "test".to_string(),
+                status: "idle".to_string(),
+            },
+        );
+
+        state.agents.write().await.insert(
+            session_to_keep,
+            AgentState {
+                id: session_to_keep,
+                worktree_id: worktree_to_keep,
+                agent_type: "test".to_string(),
+                status: "idle".to_string(),
+            },
+        );
+
+        cleanup_agents_for_worktree(&state, worktree_to_delete).await;
+
+        assert!(state.agents.read().await.get(&session_to_delete).is_none());
+        assert!(state.agents.read().await.get(&session_to_keep).is_some());
+    }
+
+    #[tokio::test]
+    async fn test_find_agent_session_for_worktree() {
+        let state = create_test_state().await;
+        let worktree_id = Uuid::new_v4();
+        let session_id = Uuid::new_v4();
+
+        state.agents.write().await.insert(
+            session_id,
+            AgentState {
+                id: session_id,
+                worktree_id,
+                agent_type: "test".to_string(),
+                status: "idle".to_string(),
+            },
+        );
+
+        let found = state.find_agent_session_for_worktree(worktree_id).await;
+        assert_eq!(found, Some(session_id));
+
+        let not_found = state.find_agent_session_for_worktree(Uuid::new_v4()).await;
+        assert!(not_found.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_spawn_fails_for_missing_worktree() {
+        let state = create_test_state().await;
+        let msg = crate::protocol::AgentSpawn {
+            worktree_id: Uuid::new_v4(),
+            agent_type: "test".to_string(),
+        };
+
+        let result = handle_agent_spawn(state, msg).await;
+
+        match result.payload {
+            ServerMessagePayload::Error(e) => {
+                assert_eq!(e.code, "WORKTREE_NOT_FOUND");
+            }
+            _ => panic!("Expected error response"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_cancel_fails_for_missing_session() {
+        let state = create_test_state().await;
+        let msg = crate::protocol::AgentCancel {
+            worktree_id: Uuid::new_v4(),
+        };
+
+        let result = handle_agent_cancel(state, msg).await;
+
+        match result.payload {
+            ServerMessagePayload::Error(e) => {
+                assert_eq!(e.code, "AGENT_NOT_FOUND");
+            }
+            _ => panic!("Expected error response"),
+        }
+    }
 }

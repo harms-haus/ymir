@@ -4,14 +4,14 @@
 //! for the WebSocket server, including database connections, in-memory registries,
 //! and communication channels.
 
-use crate::agent::AcpClient;
+use crate::agent::AcpHandle;
 use crate::db::Db;
 use crate::git::GitOps;
 use crate::protocol::ServerMessage;
 use crate::pty::PtyManager;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{broadcast, mpsc, watch, Mutex, RwLock};
+use tokio::sync::{broadcast, mpsc, watch, RwLock};
 use uuid::Uuid;
 
 /// Disconnect clients inactive for this many seconds
@@ -82,8 +82,8 @@ pub struct AppState {
     /// Running agent sessions (metadata)
     pub agents: RwLock<HashMap<Uuid, AgentState>>,
 
-    /// Active agent clients (keyed by worktree_id)
-    pub agent_clients: RwLock<HashMap<Uuid, Arc<Mutex<AcpClient>>>>,
+    /// Handle to ACP runtime (manages all agent clients internally)
+    pub acp_handle: Option<AcpHandle>,
 
     /// Active PTY sessions
     pub terminals: RwLock<HashMap<Uuid, TerminalState>>,
@@ -109,7 +109,7 @@ impl std::fmt::Debug for AppState {
             .field("workspaces", &self.workspaces.try_read().map(|g| g.len()))
             .field("worktrees", &self.worktrees.try_read().map(|g| g.len()))
             .field("agents", &self.agents.try_read().map(|g| g.len()))
-            .field("agent_clients", &self.agent_clients.try_read().map(|g| g.len()))
+            .field("acp_handle", &self.acp_handle.is_some())
             .field("terminals", &self.terminals.try_read().map(|g| g.len()))
             .field("clients", &self.clients.try_read().map(|g| g.len()))
             .field("pty_manager", &self.pty_manager.is_some())
@@ -118,7 +118,6 @@ impl std::fmt::Debug for AppState {
 }
 
 impl AppState {
-    /// Create a new AppState with the given database
     pub fn new(db: Arc<Db>, shutdown_rx: watch::Receiver<bool>) -> Self {
         let (broadcast_tx, _) = broadcast::channel(1024);
         let git_ops = Arc::new(GitOps::new(db.clone()));
@@ -129,7 +128,7 @@ impl AppState {
             workspaces: RwLock::new(HashMap::new()),
             worktrees: RwLock::new(HashMap::new()),
             agents: RwLock::new(HashMap::new()),
-            agent_clients: RwLock::new(HashMap::new()),
+            acp_handle: None,
             terminals: RwLock::new(HashMap::new()),
             clients: RwLock::new(HashMap::new()),
             broadcast_tx,
@@ -138,9 +137,17 @@ impl AppState {
         }
     }
 
-    /// Create an AppState with PtyManager enabled
     pub fn with_pty_manager(db: Arc<Db>, shutdown_rx: watch::Receiver<bool>) -> Self {
         let mut state = Self::new(db, shutdown_rx);
+        state.pty_manager = Some(PtyManager::new());
+        state
+    }
+
+    pub fn with_acp(db: Arc<Db>, shutdown_rx: watch::Receiver<bool>) -> Self {
+        use crate::agent::start_acp_runtime;
+        let mut state = Self::new(db, shutdown_rx);
+        let (handle, _join) = start_acp_runtime();
+        state.acp_handle = Some(handle);
         state.pty_manager = Some(PtyManager::new());
         state
     }
@@ -202,14 +209,23 @@ impl AppState {
         tracing::info!("Initialized in-memory state from database");
     }
 
-    /// Create an AppState for testing with an in-memory database
     #[cfg(test)]
     pub async fn new_test() -> Self {
         let db = Db::in_memory()
             .await
             .expect("Failed to create in-memory db");
         let (_shutdown_tx, shutdown_rx) = watch::channel(false);
-        Self::with_pty_manager(Arc::new(db), shutdown_rx)
+        Self::with_acp(Arc::new(db), shutdown_rx)
+    }
+
+    /// Find agent session ID for a worktree.
+    /// Returns None if no agent session exists for the worktree.
+    pub async fn find_agent_session_for_worktree(&self, worktree_id: Uuid) -> Option<Uuid> {
+        let agents = self.agents.read().await;
+        agents
+            .iter()
+            .find(|(_, agent)| agent.worktree_id == worktree_id)
+            .map(|(id, _)| *id)
     }
 }
 
@@ -221,12 +237,12 @@ mod tests {
     async fn test_app_state_creation() {
         let state = AppState::new_test().await;
 
-        // Verify initial state is empty
         assert!(state.workspaces.read().await.is_empty());
         assert!(state.worktrees.read().await.is_empty());
         assert!(state.agents.read().await.is_empty());
         assert!(state.terminals.read().await.is_empty());
         assert!(state.clients.read().await.is_empty());
+        assert!(state.acp_handle.is_some());
     }
 
 #[tokio::test]

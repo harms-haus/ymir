@@ -3,6 +3,20 @@
 //! This module defines all message types for the Ymir protocol, including
 //! client-to-server requests, server-to-client responses, and bidirectional messages.
 //! All messages include a version header for protocol compatibility.
+//!
+//! # WS-ACP Wire Contract
+//!
+//! The WS-ACP wire contract defines a stateless event vocabulary for communication
+//! between the Rust ACP bridge and the TypeScript side. Key properties:
+//!
+//! - **Ordering**: Events carry monotonically increasing sequence numbers per session
+//! - **Idempotency**: Events with duplicate sequence numbers are safe to replay
+//! - **Resumability**: Client can request replay from last known sequence via `AcpResumeRequest`
+//! - **Error Envelopes**: All failures are captured in structured `AcpError` types
+//!
+//! The ACP bridge translates between ACP JSON-RPC (over stdio) and these WebSocket
+//! events. The TypeScript client accumulates these events into UI-appropriate structures.
+//! This layer does NOT contain assistant-ui message parts or accumulated UI state.
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use uuid::Uuid;
@@ -738,6 +752,329 @@ pub enum NotificationLevel {
     Error,
 }
 
+// ============================================================================
+// WS-ACP Wire Contract Types
+// ============================================================================
+//
+// Stateless event vocabulary for communication between the Rust ACP bridge
+// and the TypeScript side. These types are independent from assistant-ui
+// message parts and accumulated UI state.
+//
+// Ordering: sequence numbers are monotonically increasing per session
+// Idempotency: duplicate sequence numbers are safe to replay
+// Resumability: client can request replay from last known sequence
+// Error Envelopes: all failures captured in structured AcpError
+
+/// Sequence number for ordering WS-ACP events within a session.
+/// Monotonically increasing, starting from 1.
+pub type AcpSequence = u64;
+
+/// Correlation ID for matching requests to responses.
+/// Used for request-response patterns in the ACP bridge.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, ts_rs::TS)]
+#[ts(export)]
+pub struct AcpCorrelationId(pub String);
+
+/// Envelope for all WS-ACP events with ordering and correlation metadata.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AcpEventEnvelope {
+    /// Monotonically increasing sequence number for this event
+    pub sequence: AcpSequence,
+    /// Correlation ID for request-response matching (if applicable)
+    #[serde(default)]
+    pub correlation_id: Option<AcpCorrelationId>,
+    /// Unix timestamp in milliseconds
+    pub timestamp: u64,
+    /// The actual event payload
+    #[serde(flatten)]
+    pub event: AcpEvent,
+}
+
+/// WS-ACP event types - stateless vocabulary for ACP bridge communication.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(tag = "eventType", content = "data")]
+#[ts(export)]
+pub enum AcpEvent {
+    /// Session initialized successfully
+    SessionInit(AcpSessionInit),
+    /// Session status changed (working/waiting/complete/error)
+    SessionStatus(AcpSessionStatusEvent),
+    /// Streaming prompt response chunk
+    PromptChunk(AcpPromptChunk),
+    /// Prompt completed
+    PromptComplete(AcpPromptComplete),
+    /// Tool use started/progress/completed
+    ToolUse(AcpToolUseEvent),
+    /// Context update from agent
+    ContextUpdate(AcpContextUpdate),
+    /// Error from ACP bridge
+    Error(AcpError),
+    /// Resume marker for checkpoint/resume
+    ResumeMarker(AcpResumeMarker),
+}
+
+/// Session initialization result from ACP bridge.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AcpSessionInit {
+    /// The ACP session ID from the agent
+    pub acp_session_id: String,
+    /// Agent capabilities
+    pub capabilities: AcpAgentCapabilities,
+}
+
+/// Agent capabilities reported during initialization.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AcpAgentCapabilities {
+    pub supports_tool_use: bool,
+    pub supports_context_update: bool,
+    pub supports_cancellation: bool,
+}
+
+/// Session status event.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AcpSessionStatusEvent {
+    /// The worktree ID this session belongs to
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    /// The ACP session ID
+    pub acp_session_id: String,
+    /// Current status
+    pub status: AcpSessionStatus,
+}
+
+/// Session status values.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[ts(export)]
+pub enum AcpSessionStatus {
+    Working,
+    Waiting,
+    Complete,
+    Cancelled,
+}
+
+/// Streaming prompt response chunk.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AcpPromptChunk {
+    /// The worktree ID
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    /// The ACP session ID
+    pub acp_session_id: String,
+    /// Chunk content (text or structured data)
+    pub content: AcpChunkContent,
+    /// True if this is the final chunk for this content item
+    pub is_final: bool,
+}
+
+/// Content types for prompt chunks.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(tag = "type", content = "data")]
+#[ts(export)]
+pub enum AcpChunkContent {
+    /// Text content
+    Text(String),
+    /// Structured content (JSON string)
+    Structured(String),
+}
+
+/// Prompt completion event.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AcpPromptComplete {
+    /// The worktree ID
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    /// The ACP session ID
+    pub acp_session_id: String,
+    /// Reason for completion
+    pub reason: AcpPromptCompleteReason,
+}
+
+/// Reason for prompt completion.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[ts(export)]
+pub enum AcpPromptCompleteReason {
+    Normal,
+    Cancelled,
+    Error,
+}
+
+/// Tool use event from ACP agent.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AcpToolUseEvent {
+    /// The worktree ID
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    /// The ACP session ID
+    pub acp_session_id: String,
+    /// Tool use ID for correlation
+    pub tool_use_id: String,
+    /// Tool name
+    pub tool_name: String,
+    /// Current status of the tool use
+    pub status: AcpToolUseStatus,
+    /// Input to the tool (JSON string) - present when status is Started
+    #[serde(default)]
+    pub input: Option<String>,
+    /// Output from the tool (JSON string) - present when status is Completed
+    #[serde(default)]
+    pub output: Option<String>,
+    /// Error message - present when status is Error
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+/// Tool use status values.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[ts(export)]
+pub enum AcpToolUseStatus {
+    Started,
+    InProgress,
+    Completed,
+    Error,
+}
+
+/// Context update event from ACP agent.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AcpContextUpdate {
+    /// The worktree ID
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    /// The ACP session ID
+    pub acp_session_id: String,
+    /// Context update type
+    pub update_type: AcpContextUpdateType,
+    /// Context data (JSON string)
+    pub data: String,
+}
+
+/// Context update type values.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[ts(export)]
+pub enum AcpContextUpdateType {
+    FileRead,
+    FileWritten,
+    CommandExecuted,
+    BrowserAction,
+    MemoryUpdate,
+}
+
+/// Structured error from ACP bridge.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AcpError {
+    /// The worktree ID (if applicable)
+    #[serde(with = "optional_uuid_str", default)]
+    #[ts(type = "string")]
+    pub worktree_id: Option<Uuid>,
+    /// The ACP session ID (if applicable)
+    #[serde(default)]
+    pub acp_session_id: Option<String>,
+    /// Error code for programmatic handling
+    pub code: AcpErrorCode,
+    /// Human-readable error message
+    pub message: String,
+    /// Additional details (JSON string)
+    #[serde(default)]
+    pub details: Option<String>,
+    /// Whether this error is recoverable
+    pub recoverable: bool,
+}
+
+/// ACP error codes for programmatic handling.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[ts(export)]
+pub enum AcpErrorCode {
+    /// Agent process crashed
+    AgentCrash,
+    /// Agent initialization failed
+    InitFailed,
+    /// Session not found
+    SessionNotFound,
+    /// Prompt failed
+    PromptFailed,
+    /// Tool execution failed
+    ToolFailed,
+    /// Cancellation failed
+    CancelFailed,
+    /// Timeout exceeded
+    Timeout,
+    /// Invalid request
+    InvalidRequest,
+    /// Internal error
+    Internal,
+}
+
+/// Resume marker for checkpoint/resume functionality.
+/// Sent periodically to allow clients to resume from a known point.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AcpResumeMarker {
+    /// The worktree ID
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    /// The ACP session ID
+    pub acp_session_id: String,
+    /// The last sequence number that can be resumed from
+    pub last_sequence: AcpSequence,
+    /// Checkpoint data for resumption (opaque to client)
+    #[serde(default)]
+    pub checkpoint: Option<String>,
+}
+
+/// Request to resume from a known sequence number.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AcpResumeRequest {
+    /// The worktree ID
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    /// The ACP session ID
+    pub acp_session_id: String,
+    /// The sequence number to resume from
+    pub from_sequence: AcpSequence,
+}
+
+/// Acknowledgment for WS-ACP events with last processed sequence.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AcpAck {
+    /// The worktree ID
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    /// The ACP session ID
+    pub acp_session_id: String,
+    /// The last sequence number successfully processed
+    pub last_sequence: AcpSequence,
+}
+
 // Helper functions for creating messages with version header
 
 impl ClientMessage {
@@ -1275,6 +1612,223 @@ mod tests {
             message: "Message".to_string(),
         }));
         test_roundtrip(msg);
+    }
+
+    // WS-ACP Wire Contract Tests
+
+    #[test]
+    fn test_acp_correlation_id_roundtrip() {
+        let id = AcpCorrelationId("corr-123".to_string());
+        let encoded = rmp_serde::to_vec(&id).expect("Failed to encode");
+        let decoded: AcpCorrelationId = rmp_serde::from_slice(&encoded).expect("Failed to decode");
+        assert_eq!(id, decoded);
+    }
+
+    #[test]
+    fn test_acp_event_envelope_roundtrip() {
+        let envelope = AcpEventEnvelope {
+            sequence: 1,
+            correlation_id: Some(AcpCorrelationId("corr-123".to_string())),
+            timestamp: 1234567890,
+            event: AcpEvent::SessionInit(AcpSessionInit {
+                acp_session_id: "session-123".to_string(),
+                capabilities: AcpAgentCapabilities {
+                    supports_tool_use: true,
+                    supports_context_update: true,
+                    supports_cancellation: true,
+                },
+            }),
+        };
+        test_roundtrip(envelope);
+    }
+
+    #[test]
+    fn test_acp_session_init_roundtrip() {
+        let event = AcpSessionInit {
+            acp_session_id: "session-123".to_string(),
+            capabilities: AcpAgentCapabilities {
+                supports_tool_use: true,
+                supports_context_update: false,
+                supports_cancellation: true,
+            },
+        };
+        test_roundtrip(event);
+    }
+
+    #[test]
+    fn test_acp_session_status_event_roundtrip() {
+        let event = AcpSessionStatusEvent {
+            worktree_id: Uuid::new_v4(),
+            acp_session_id: "session-123".to_string(),
+            status: AcpSessionStatus::Working,
+        };
+        test_roundtrip(event);
+    }
+
+    #[test]
+    fn test_acp_prompt_chunk_text_roundtrip() {
+        let event = AcpPromptChunk {
+            worktree_id: Uuid::new_v4(),
+            acp_session_id: "session-123".to_string(),
+            content: AcpChunkContent::Text("Hello, world!".to_string()),
+            is_final: false,
+        };
+        test_roundtrip(event);
+    }
+
+    #[test]
+    fn test_acp_prompt_chunk_structured_roundtrip() {
+        let event = AcpPromptChunk {
+            worktree_id: Uuid::new_v4(),
+            acp_session_id: "session-123".to_string(),
+            content: AcpChunkContent::Structured(r#"{"key":"value"}"#.to_string()),
+            is_final: true,
+        };
+        test_roundtrip(event);
+    }
+
+    #[test]
+    fn test_acp_prompt_complete_roundtrip() {
+        let event = AcpPromptComplete {
+            worktree_id: Uuid::new_v4(),
+            acp_session_id: "session-123".to_string(),
+            reason: AcpPromptCompleteReason::Normal,
+        };
+        test_roundtrip(event);
+    }
+
+    #[test]
+    fn test_acp_tool_use_event_roundtrip() {
+        let event = AcpToolUseEvent {
+            worktree_id: Uuid::new_v4(),
+            acp_session_id: "session-123".to_string(),
+            tool_use_id: "tool-1".to_string(),
+            tool_name: "read_file".to_string(),
+            status: AcpToolUseStatus::Started,
+            input: Some(r#"{"path":"test.ts"}"#.to_string()),
+            output: None,
+            error: None,
+        };
+        test_roundtrip(event);
+    }
+
+    #[test]
+    fn test_acp_context_update_roundtrip() {
+        let event = AcpContextUpdate {
+            worktree_id: Uuid::new_v4(),
+            acp_session_id: "session-123".to_string(),
+            update_type: AcpContextUpdateType::FileRead,
+            data: r#"{"path":"test.ts"}"#.to_string(),
+        };
+        test_roundtrip(event);
+    }
+
+    #[test]
+    fn test_acp_error_roundtrip() {
+        let event = AcpError {
+            worktree_id: Some(Uuid::new_v4()),
+            acp_session_id: Some("session-123".to_string()),
+            code: AcpErrorCode::AgentCrash,
+            message: "Agent process crashed".to_string(),
+            details: Some(r#"{"exitCode":1}"#.to_string()),
+            recoverable: false,
+        };
+        test_roundtrip(event);
+    }
+
+    #[test]
+    fn test_acp_resume_marker_roundtrip() {
+        let marker = AcpResumeMarker {
+            worktree_id: Uuid::new_v4(),
+            acp_session_id: "session-123".to_string(),
+            last_sequence: 42,
+            checkpoint: Some("base64-checkpoint".to_string()),
+        };
+        test_roundtrip(marker);
+    }
+
+    #[test]
+    fn test_acp_resume_request_roundtrip() {
+        let request = AcpResumeRequest {
+            worktree_id: Uuid::new_v4(),
+            acp_session_id: "session-123".to_string(),
+            from_sequence: 10,
+        };
+        test_roundtrip(request);
+    }
+
+    #[test]
+    fn test_acp_ack_roundtrip() {
+        let ack = AcpAck {
+            worktree_id: Uuid::new_v4(),
+            acp_session_id: "session-123".to_string(),
+            last_sequence: 42,
+        };
+        test_roundtrip(ack);
+    }
+
+    #[test]
+    fn test_acp_event_variants_roundtrip() {
+        let events = vec![
+            AcpEvent::SessionInit(AcpSessionInit {
+                acp_session_id: "s1".to_string(),
+                capabilities: AcpAgentCapabilities {
+                    supports_tool_use: true,
+                    supports_context_update: true,
+                    supports_cancellation: true,
+                },
+            }),
+            AcpEvent::SessionStatus(AcpSessionStatusEvent {
+                worktree_id: Uuid::new_v4(),
+                acp_session_id: "s1".to_string(),
+                status: AcpSessionStatus::Working,
+            }),
+            AcpEvent::PromptChunk(AcpPromptChunk {
+                worktree_id: Uuid::new_v4(),
+                acp_session_id: "s1".to_string(),
+                content: AcpChunkContent::Text("test".to_string()),
+                is_final: true,
+            }),
+            AcpEvent::PromptComplete(AcpPromptComplete {
+                worktree_id: Uuid::new_v4(),
+                acp_session_id: "s1".to_string(),
+                reason: AcpPromptCompleteReason::Normal,
+            }),
+            AcpEvent::ToolUse(AcpToolUseEvent {
+                worktree_id: Uuid::new_v4(),
+                acp_session_id: "s1".to_string(),
+                tool_use_id: "t1".to_string(),
+                tool_name: "test".to_string(),
+                status: AcpToolUseStatus::Completed,
+                input: None,
+                output: Some("result".to_string()),
+                error: None,
+            }),
+            AcpEvent::ContextUpdate(AcpContextUpdate {
+                worktree_id: Uuid::new_v4(),
+                acp_session_id: "s1".to_string(),
+                update_type: AcpContextUpdateType::FileWritten,
+                data: "{}".to_string(),
+            }),
+            AcpEvent::Error(AcpError {
+                worktree_id: None,
+                acp_session_id: None,
+                code: AcpErrorCode::Internal,
+                message: "error".to_string(),
+                details: None,
+                recoverable: true,
+            }),
+            AcpEvent::ResumeMarker(AcpResumeMarker {
+                worktree_id: Uuid::new_v4(),
+                acp_session_id: "s1".to_string(),
+                last_sequence: 1,
+                checkpoint: None,
+            }),
+        ];
+
+        for event in events {
+            test_roundtrip(event);
+        }
     }
 
     fn test_roundtrip<T>(original: T)

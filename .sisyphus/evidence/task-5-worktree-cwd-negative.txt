@@ -1,0 +1,63 @@
+warning: unused import: `FileList`
+ --> crates/ws-server/src/router.rs:5:5
+  |
+5 |     FileList, FileListResult,
+  |     ^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `info`
+  --> crates/ws-server/src/workspace/mod.rs:15:15
+   |
+15 | use tracing::{info, instrument};
+   |               ^^^^
+
+warning: unused variable: `agent_type`
+   --> crates/ws-server/src/agent/handler.rs:274:22
+    |
+274 |     let (session_id, agent_type) = match session_data_opt {
+    |                      ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_agent_type`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `JsonRpcResponse` is never constructed
+  --> crates/ws-server/src/agent/acp.rs:49:8
+   |
+49 | struct JsonRpcResponse {
+   |        ^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `JsonRpcError` is never constructed
+  --> crates/ws-server/src/agent/acp.rs:58:8
+   |
+58 | struct JsonRpcError {
+   |        ^^^^^^^^^^^^
+
+warning: `ymir-ws-server` (lib) generated 5 warnings (run `cargo fix --lib -p ymir-ws-server` to apply 3 suggestions)
+warning: `ymir-ws-server` (lib test) generated 5 warnings (5 duplicates)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running unittests src/lib.rs (target/debug/deps/ymir_ws_server-b8f9d116996e8e04)
+
+running 12 tests
+test agent::acp::tests::test_request_id_generation ... ok
+test agent::acp::tests::test_acp_handshake ... ok
+test agent::acp::tests::test_acp_status_transitions ... ok
+test agent::acp::tests::test_json_rpc_structures ... ok
+test agent::handler::tests::test_cleanup_agents_for_worktree_preserves_other_worktree_sessions ... ok
+test agent::handler::tests::test_find_agent_session_for_worktree ... ok
+test agent::handler::tests::test_spawn_fails_for_missing_worktree ... ok
+test agent::handler::tests::test_cancel_fails_for_missing_session ... ok
+test agent::handler::tests::test_cleanup_agents_for_worktree_noops_for_missing_worktree ... ok
+test agent::handler::tests::test_get_worktree_path_returns_none_for_missing_worktree ... ok
+test agent::handler::tests::test_cleanup_agents_for_worktree_removes_sessions ... ok
+test agent::handler::tests::test_get_worktree_path_returns_path_from_state ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 243 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/ymir_ws_server-84892d6f3599f897)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+

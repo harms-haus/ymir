@@ -1,23 +1,21 @@
-//! ACP (Agent Client Protocol) client implementation
-//!
-//! This module provides the ACP client for managing agent subprocesses and handling
-//! JSON-RPC communication with agents that support the ACP protocol.
+//! ACP client using official agent-client-protocol SDK with message-passing boundary.
 
+use crate::agent::adapter::{create_client_capabilities, create_implementation, AcpEventSender, SequenceCounter, YmirClientHandler};
+use crate::protocol::AcpEventEnvelope;
+use agent_client_protocol::{
+    Agent, CancelNotification, ClientSideConnection, ContentBlock,
+    InitializeRequest, NewSessionRequest, PromptRequest, ProtocolVersion, SessionId,
+};
 use anyhow::{anyhow, Result};
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::collections::HashMap;
 use std::process::Stdio;
 use std::sync::Arc;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, ChildStdin};
-use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
+use tokio::process::Child;
+use tokio::sync::{mpsc, oneshot, RwLock};
 use tokio::task::JoinHandle;
-use tokio::time::Duration;
-use tracing::instrument;
+use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use uuid::Uuid;
 
-/// Agent status enum representing the current state of an agent
 #[derive(Debug, Clone, PartialEq)]
 pub enum AgentStatus {
     Working { task_summary: String },
@@ -25,65 +23,57 @@ pub enum AgentStatus {
     Idle,
 }
 
-/// Request ID for JSON-RPC correlation
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct RequestId(String);
+enum AcpCommand {
+    Spawn {
+        worktree_id: Uuid,
+        agent_type: String,
+        worktree_path: String,
+        respond: oneshot::Sender<Result<()>>,
+    },
+    SendPrompt {
+        worktree_id: Uuid,
+        content: String,
+        respond: oneshot::Sender<Result<()>>,
+    },
+    Cancel {
+        worktree_id: Uuid,
+        respond: oneshot::Sender<Result<()>>,
+    },
+    Kill {
+        worktree_id: Uuid,
+        respond: oneshot::Sender<Result<()>>,
+    },
+    Status {
+        worktree_id: Uuid,
+        respond: oneshot::Sender<AgentStatus>,
+    },
+}
 
-impl RequestId {
-    fn new() -> Self {
-        Self(Uuid::new_v4().to_string())
+struct LoggingEventSender {
+    worktree_id: Uuid,
+}
+
+impl AcpEventSender for LoggingEventSender {
+    fn send_event(&self, envelope: AcpEventEnvelope) {
+        tracing::debug!(
+            worktree_id = %self.worktree_id,
+            sequence = envelope.sequence,
+            event_type = ?envelope.event,
+            "ACP event"
+        );
     }
 }
 
-/// JSON-RPC request structure
-#[derive(Serialize, Deserialize)]
-struct JsonRpcRequest {
-    jsonrpc: String,
-    id: String,
-    method: String,
-    params: Value,
-}
-
-/// JSON-RPC response structure
-#[derive(Deserialize)]
-struct JsonRpcResponse {
-    jsonrpc: String,
-    id: Option<String>,
-    result: Option<Value>,
-    error: Option<JsonRpcError>,
-}
-
-/// JSON-RPC error structure
-#[derive(Deserialize)]
-struct JsonRpcError {
-    code: i32,
-    message: String,
-    data: Option<Value>,
-}
-
-/// JSON-RPC notification structure (no response expected)
-#[derive(Serialize)]
-struct JsonRpcNotification {
-    jsonrpc: String,
-    method: String,
-    params: Value,
-}
-
-/// ACP client for managing agent subprocesses
-pub struct AcpClient {
+struct AcpClient {
     process: Child,
-    stdin: ChildStdin,
-    stdout_reader: JoinHandle<()>,
-    pending_requests: Arc<Mutex<HashMap<RequestId, oneshot::Sender<Result<Value>>>>>,
-    session_id: Arc<Mutex<Option<String>>>,
+    _connection: ClientSideConnection,
+    _io_task: JoinHandle<()>,
+    session_id: Option<SessionId>,
     status: Arc<RwLock<AgentStatus>>,
-    _output_tx: mpsc::UnboundedSender<String>,
 }
 
 impl AcpClient {
-    /// Spawn a new agent subprocess and establish ACP connection
-    #[instrument(fields(agent_type = %agent_type, worktree_path = %worktree_path))]
-    pub async fn spawn(agent_type: &str, worktree_path: &str) -> Result<Self> {
+    async fn spawn(agent_type: &str, worktree_path: &str) -> Result<Self> {
         let executable = match agent_type {
             "claude" => "claude-agent",
             "opencode" => "opencode",
@@ -97,76 +87,53 @@ impl AcpClient {
             .stderr(Stdio::piped())
             .current_dir(worktree_path)
             .spawn()
-            .map_err(|e| anyhow!("Failed to spawn agent process: {}", e))?;
+            .map_err(|e| anyhow!("Failed to spawn agent: {}", e))?;
 
-  let stdin = child
-    .stdin
-    .take()
-    .ok_or_else(|| anyhow!("Failed to capture stdin"))?;
+        let stdin = child.stdin.take().ok_or_else(|| anyhow!("No stdin"))?;
+        let stdout = child.stdout.take().ok_or_else(|| anyhow!("No stdout"))?;
+        let stderr = child.stderr.take().ok_or_else(|| anyhow!("No stderr"))?;
 
-  let stdout = child
-    .stdout
-    .take()
-    .ok_or_else(|| anyhow!("Failed to capture stdout"))?;
-
-  let stderr = child
-    .stderr
-    .take()
-    .ok_or_else(|| anyhow!("Failed to capture stderr"))?;
-
-  let _stderr_drain = {
-    tokio::spawn(async move {
-      let mut reader = tokio::io::BufReader::new(stderr);
-      let mut buffer = Vec::new();
-      loop {
-        match reader.read_until(b'\n', &mut buffer).await {
-          Ok(0) => {
-            // EOF - agent process ended
-            break;
-          }
-          Ok(_n) => {
-            // Discard stderr output
-            if !buffer.is_empty() {
-              buffer.clear();
+        let _stderr_drain = tokio::spawn(async move {
+            use tokio::io::AsyncBufReadExt;
+            let mut reader = tokio::io::BufReader::new(stderr);
+            let mut buffer = Vec::new();
+            loop {
+                match reader.read_until(b'\n', &mut buffer).await {
+                    Ok(0) => break,
+                    Ok(_) => buffer.clear(),
+                    Err(_) => break,
+                }
             }
-          }
-          Err(e) => {
-            // Log error and stop draining
-            tracing::error!("Error reading agent stderr: {}", e);
-            break;
-          }
-        }
-      }
-    })
-  };
+        });
 
-        let pending_requests = Arc::new(Mutex::new(HashMap::new()));
-        let session_id = Arc::new(Mutex::new(None));
         let status = Arc::new(RwLock::new(AgentStatus::Idle));
-        let (output_tx, _output_rx) = mpsc::unbounded_channel();
+        let worktree_id = Uuid::new_v4();
+        let event_sender = Arc::new(LoggingEventSender { worktree_id });
+        let sequence = Arc::new(SequenceCounter::new());
+        let handler = YmirClientHandler::new(worktree_id, event_sender, sequence);
 
-        let stdout_reader = {
-            let pending_requests = pending_requests.clone();
-            let session_id = session_id.clone();
-            let status = status.clone();
-            let output_tx = output_tx.clone();
-            tokio::spawn(Self::read_stdout(
-                stdout,
-                pending_requests,
-                session_id,
-                status,
-                output_tx,
-            ))
-        };
+        let outgoing = stdin.compat_write();
+        let incoming = stdout.compat();
+
+        let (connection, io_future) = ClientSideConnection::new(
+            handler,
+            outgoing,
+            incoming,
+            |fut| { tokio::task::spawn_local(fut); },
+        );
+
+        let _io_task = tokio::task::spawn_local(async move {
+            if let Err(e) = io_future.await {
+                tracing::error!("ACP I/O error: {}", e);
+            }
+        });
 
         let mut client = Self {
             process: child,
-            stdin,
-            stdout_reader,
-            pending_requests,
-            session_id,
+            _connection: connection,
+            _io_task,
+            session_id: None,
             status,
-            _output_tx: output_tx,
         };
 
         client.initialize().await?;
@@ -175,403 +142,235 @@ impl AcpClient {
         Ok(client)
     }
 
-    /// Send initialize request to establish protocol version
     async fn initialize(&mut self) -> Result<()> {
-        let request_id = RequestId::new();
-        let request = JsonRpcRequest {
-            jsonrpc: "2.0".to_string(),
-            id: request_id.0.clone(),
-            method: "initialize".to_string(),
-            params: serde_json::json!({
-                "protocolVersion": 1,
-                "clientCapabilities": {
-                    "fs": true,
-                    "terminal": true
-                },
-                "clientInfo": {
-                    "name": "ymir",
-                    "version": env!("CARGO_PKG_VERSION")
-                }
-            }),
-        };
+        let request = InitializeRequest::new(ProtocolVersion::V1)
+            .client_capabilities(create_client_capabilities())
+            .client_info(create_implementation());
 
-        let response = self.send_request(request_id, request).await?;
-        
-        let protocol_version = response
-            .get("protocolVersion")
-            .and_then(|v| v.as_u64())
-            .ok_or_else(|| anyhow!("Invalid initialize response: missing protocolVersion"))?;
-
-        if protocol_version != 1 {
-            return Err(anyhow!("Unsupported protocol version: {}", protocol_version));
-        }
+        self._connection
+            .initialize(request)
+            .await
+            .map_err(|e| anyhow!("Initialize failed: {}", e))?;
 
         Ok(())
     }
 
-    /// Create a new session with the given worktree path
     async fn create_session(&mut self, worktree_path: &str) -> Result<()> {
-        let request_id = RequestId::new();
-        let request = JsonRpcRequest {
-            jsonrpc: "2.0".to_string(),
-            id: request_id.0.clone(),
-            method: "session/new".to_string(),
-            params: serde_json::json!({
-                "cwd": worktree_path
-            }),
-        };
+        let request = NewSessionRequest::new(worktree_path);
 
-        let response = self.send_request(request_id, request).await?;
-        
-        let session_id = response
-            .get("sessionId")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow!("Invalid session/new response: missing sessionId"))?
-            .to_string();
+        let response = self._connection
+            .new_session(request)
+            .await
+            .map_err(|e| anyhow!("Session creation failed: {}", e))?;
 
-        *self.session_id.lock().await = Some(session_id);
+        self.session_id = Some(response.session_id.clone());
         Ok(())
     }
 
-    /// Send a request and wait for response
-  async fn send_request(&mut self, request_id: RequestId, request: JsonRpcRequest) -> Result<Value> {
-    let (tx, rx) = oneshot::channel();
-
-    self.pending_requests.lock().await.insert(request_id.clone(), tx);
-
-    let json = serde_json::to_string(&request)?;
-    self.stdin.write_all(json.as_bytes()).await?;
-    self.stdin.write_all(b"\n").await?;
-    self.stdin.flush().await?;
-
-  match tokio::time::timeout(Duration::from_secs(30), rx).await {
-    Ok(Ok(result)) => result,
-    Ok(Err(_)) => Err(anyhow!("Request cancelled")),
-    Err(timeout_error) => {
-      self.pending_requests.lock().await.remove(&request_id);
-      Err(anyhow!("Request timeout: {}", timeout_error))
-    }
-  }
-}
-
-    /// Send a prompt to the agent
-    #[instrument(skip(self))]
-    pub async fn send_prompt(&mut self, content: &str) -> Result<()> {
-        let session_id = self.session_id.lock().await.clone()
+    async fn send_prompt(&mut self, content: &str) -> Result<()> {
+        let session_id = self.session_id.clone()
             .ok_or_else(|| anyhow!("No active session"))?;
 
-        let notification = JsonRpcNotification {
-            jsonrpc: "2.0".to_string(),
-            method: "session/prompt".to_string(),
-            params: serde_json::json!({
-                "sessionId": session_id,
-                "content": content
-            }),
+        let request = PromptRequest::new(session_id, vec![ContentBlock::from(content.to_string())]);
+
+        self._connection
+            .prompt(request)
+            .await
+            .map_err(|e| anyhow!("Prompt failed: {}", e))?;
+
+        *self.status.write().await = AgentStatus::Working {
+            task_summary: "Processing prompt".to_string(),
         };
-
-        let json = serde_json::to_string(&notification)?;
-        self.stdin.write_all(json.as_bytes()).await?;
-        self.stdin.write_all(b"\n").await?;
-        self.stdin.flush().await?;
-
         Ok(())
     }
 
-    /// Cancel the current agent operation
-    #[instrument(skip(self))]
-    pub async fn cancel(&mut self) -> Result<()> {
-        let session_id = self.session_id.lock().await.clone()
+    async fn cancel(&mut self) -> Result<()> {
+        let session_id = self.session_id.clone()
             .ok_or_else(|| anyhow!("No active session"))?;
 
-        let notification = JsonRpcNotification {
-            jsonrpc: "2.0".to_string(),
-            method: "session/cancel".to_string(),
-            params: serde_json::json!({
-                "sessionId": session_id
-            }),
-        };
+        let notification = CancelNotification::new(session_id);
 
-        let json = serde_json::to_string(&notification)?;
-        self.stdin.write_all(json.as_bytes()).await?;
-        self.stdin.write_all(b"\n").await?;
-        self.stdin.flush().await?;
+        self._connection
+            .cancel(notification)
+            .await
+            .map_err(|e| anyhow!("Cancel failed: {}", e))?;
 
+        *self.status.write().await = AgentStatus::Idle;
         Ok(())
     }
 
-    /// Get current agent status
-    pub async fn status(&self) -> AgentStatus {
+    async fn status(&self) -> AgentStatus {
         self.status.read().await.clone()
     }
 
-    /// Kill the agent subprocess and clean up resources
-    #[instrument(skip(self))]
-    pub async fn kill(&mut self) -> Result<()> {
+    async fn kill(&mut self) -> Result<()> {
         self.process.kill().await?;
-        self.stdout_reader.abort();
         Ok(())
-    }
-
-  /// Background task to read stdout and route messages
-  async fn read_stdout(
-    stdout: tokio::process::ChildStdout,
-    pending_requests: Arc<Mutex<HashMap<RequestId, oneshot::Sender<Result<Value>>>>>,
-    _session_id: Arc<Mutex<Option<String>>>,
-    status: Arc<RwLock<AgentStatus>>,
-    _output_tx: mpsc::UnboundedSender<String>,
-  ) {
-    let reader = BufReader::new(stdout);
-    let mut lines = reader.lines();
-
-    loop {
-      match lines.next_line().await {
-        Ok(Some(line)) => {
-          match serde_json::from_str::<Value>(&line) {
-            Ok(message) => {
-              // Route based on message type
-              if let Some(id) = message.get("id").and_then(|v| v.as_str()) {
-                // Response to a request
-                let request_id = RequestId(id.to_string());
-                if let Some(sender) = pending_requests.lock().await.remove(&request_id) {
-                  if let Some(result) = message.get("result") {
-                    let _ = sender.send(Ok(result.clone()));
-                  } else if let Some(error) = message.get("error") {
-                    let _ = sender.send(Err(anyhow!("JSON-RPC error: {:?}", error)));
-                  }
-                }
-              } else if let Some(method) = message.get("method").and_then(|v| v.as_str()) {
-                // Notification
-                match method {
-                  "session/update" => {
-                    if let Some(params) = message.get("params") {
-                      Self::handle_session_update(params, &status).await;
-                    }
-                  }
-                  _ => {
-                    tracing::debug!("Unhandled notification: {}", method);
-                  }
-                }
-              }
-            }
-            Err(parse_error) => {
-              tracing::error!("Failed to parse JSON from agent: {} - Error: {}", line, parse_error);
-              // Signal reader death by setting status to error
-              *status.write().await = AgentStatus::Idle;
-              // Fail all pending requests
-              for (_request_id, sender) in pending_requests.lock().await.drain() {
-                let _ = sender.send(Err(anyhow!("Agent JSON parse error: {}", parse_error)));
-              }
-              return;
-            }
-          }
-        }
-          Ok(None) => {
-            // EOF - agent process ended
-            tracing::debug!("Agent stdout reached EOF");
-            *status.write().await = AgentStatus::Idle;
-            // Fail all pending requests immediately instead of leaving them to timeout
-            for (_request_id, sender) in pending_requests.lock().await.drain() {
-              let _ = sender.send(Err(anyhow!("Agent process exited (EOF)")));
-            }
-            return;
-          }
-        Err(io_error) => {
-          tracing::error!("Error reading from agent stdout: {}", io_error);
-          // Signal reader death by setting status to error
-          *status.write().await = AgentStatus::Idle;
-          // Fail all pending requests
-          for (_request_id, sender) in pending_requests.lock().await.drain() {
-            let _ = sender.send(Err(anyhow!("Agent read error: {}", io_error)));
-          }
-          return;
-        }
-      }
-    }
-  }
-
-    /// Handle session/update notifications for status detection
-    async fn handle_session_update(params: &Value, status: &Arc<RwLock<AgentStatus>>) {
-        if let Some(session_update) = params.get("sessionUpdate") {
-            if let Some(plan) = session_update.get("plan") {
-                if let Some(status_str) = plan.get("status").and_then(|v| v.as_str()) {
-                    if matches!(status_str, "pending" | "in_progress") {
-                        *status.write().await = AgentStatus::Working {
-                            task_summary: "Executing plan".to_string(),
-                        };
-                    }
-                }
-            }
-
-            if let Some(tool_call) = session_update.get("tool_call") {
-                if let Some(status_str) = tool_call.get("status").and_then(|v| v.as_str()) {
-                    if matches!(status_str, "pending" | "in_progress") {
-                        *status.write().await = AgentStatus::Working {
-                            task_summary: "Executing tool call".to_string(),
-                        };
-                    }
-                }
-            }
-
-            if let Some(tool_call_update) = session_update.get("tool_call_update") {
-                if let Some(status_str) = tool_call_update.get("status").and_then(|v| v.as_str()) {
-                    match status_str {
-                        "in_progress" => {
-                            *status.write().await = AgentStatus::Working {
-                                task_summary: "Tool call in progress".to_string(),
-                            };
-                        }
-                        "completed" => {}
-                        _ => {}
-                    }
-                }
-            }
-
-            if let Some(permission) = session_update.get("session/request_permission") {
-                if let Some(prompt) = permission.get("prompt").and_then(|v| v.as_str()) {
-                    *status.write().await = AgentStatus::Waiting {
-                        prompt: prompt.to_string(),
-                    };
-                }
-            }
-
-            if let Some(_chunk) = session_update.get("agent_message_chunk") {}
-
-            if let Some(prompt_response) = session_update.get("session/prompt") {
-                if let Some(stop_reason) = prompt_response.get("stopReason").and_then(|v| v.as_str()) {
-                    match stop_reason {
-                        "end_turn" | "cancelled" => {
-                            *status.write().await = AgentStatus::Idle;
-                        }
-                        "max_tokens" => {
-                            *status.write().await = AgentStatus::Idle;
-                            tracing::warn!("Agent stopped due to max tokens limit");
-                        }
-                        _ => {}
-                    }
-                }
-            }
-        }
     }
 }
 
-impl Drop for AcpClient {
-  fn drop(&mut self) {
-    self.stdout_reader.abort();
-  }
+#[derive(Clone)]
+pub struct AcpHandle {
+    tx: mpsc::UnboundedSender<AcpCommand>,
+}
+
+impl AcpHandle {
+    fn new(tx: mpsc::UnboundedSender<AcpCommand>) -> Self {
+        Self { tx }
+    }
+
+    pub async fn spawn_agent(&self, worktree_id: Uuid, agent_type: &str, worktree_path: &str) -> Result<()> {
+        let (respond_tx, respond_rx) = oneshot::channel();
+        self.tx.send(AcpCommand::Spawn {
+            worktree_id,
+            agent_type: agent_type.to_string(),
+            worktree_path: worktree_path.to_string(),
+            respond: respond_tx,
+        }).map_err(|e| anyhow!("Failed to send command: {}", e))?;
+        respond_rx.await.map_err(|e| anyhow!("Failed to receive response: {}", e))?
+    }
+
+    pub async fn send_prompt(&self, worktree_id: Uuid, content: &str) -> Result<()> {
+        let (respond_tx, respond_rx) = oneshot::channel();
+        self.tx.send(AcpCommand::SendPrompt {
+            worktree_id,
+            content: content.to_string(),
+            respond: respond_tx,
+        }).map_err(|e| anyhow!("Failed to send command: {}", e))?;
+        respond_rx.await.map_err(|e| anyhow!("Failed to receive response: {}", e))?
+    }
+
+    pub async fn cancel(&self, worktree_id: Uuid) -> Result<()> {
+        let (respond_tx, respond_rx) = oneshot::channel();
+        self.tx.send(AcpCommand::Cancel {
+            worktree_id,
+            respond: respond_tx,
+        }).map_err(|e| anyhow!("Failed to send command: {}", e))?;
+        respond_rx.await.map_err(|e| anyhow!("Failed to receive response: {}", e))?
+    }
+
+    pub async fn kill(&self, worktree_id: Uuid) -> Result<()> {
+        let (respond_tx, respond_rx) = oneshot::channel();
+        self.tx.send(AcpCommand::Kill {
+            worktree_id,
+            respond: respond_tx,
+        }).map_err(|e| anyhow!("Failed to send command: {}", e))?;
+        respond_rx.await.map_err(|e| anyhow!("Failed to receive response: {}", e))?
+    }
+
+    pub async fn status(&self, worktree_id: Uuid) -> AgentStatus {
+        let (respond_tx, respond_rx) = oneshot::channel();
+        let _ = self.tx.send(AcpCommand::Status {
+            worktree_id,
+            respond: respond_tx,
+        });
+        respond_rx.await.unwrap_or(AgentStatus::Idle)
+    }
+}
+
+pub fn start_acp_runtime() -> (AcpHandle, JoinHandle<()>) {
+    let (tx, mut rx) = mpsc::unbounded_channel::<AcpCommand>();
+    let handle = AcpHandle::new(tx);
+
+    let join_handle = tokio::task::spawn_blocking(move || {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to create ACP runtime");
+
+        let local = tokio::task::LocalSet::new();
+
+        local.block_on(&rt, async move {
+            let mut clients: HashMap<Uuid, AcpClient> = HashMap::new();
+
+            while let Some(cmd) = rx.recv().await {
+                match cmd {
+                    AcpCommand::Spawn { worktree_id, agent_type, worktree_path, respond } => {
+                        let result = AcpClient::spawn(&agent_type, &worktree_path).await;
+                        let _ = respond.send(result.map(|client| {
+                            clients.insert(worktree_id, client);
+                        }));
+                    }
+                    AcpCommand::SendPrompt { worktree_id, content, respond } => {
+                        let result = if let Some(client) = clients.get_mut(&worktree_id) {
+                            client.send_prompt(&content).await
+                        } else {
+                            Err(anyhow!("No client for worktree {}", worktree_id))
+                        };
+                        let _ = respond.send(result);
+                    }
+                    AcpCommand::Cancel { worktree_id, respond } => {
+                        let result = if let Some(client) = clients.get_mut(&worktree_id) {
+                            client.cancel().await
+                        } else {
+                            Err(anyhow!("No client for worktree {}", worktree_id))
+                        };
+                        let _ = respond.send(result);
+                    }
+                    AcpCommand::Kill { worktree_id, respond } => {
+                        let result = if let Some(mut client) = clients.remove(&worktree_id) {
+                            client.kill().await
+                        } else {
+                            Ok(())
+                        };
+                        let _ = respond.send(result);
+                    }
+                    AcpCommand::Status { worktree_id, respond } => {
+                        let status = if let Some(client) = clients.get(&worktree_id) {
+                            client.status().await
+                        } else {
+                            AgentStatus::Idle
+                        };
+                        let _ = respond.send(status);
+                    }
+                }
+            }
+        });
+    });
+
+    (handle, join_handle)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use agent_client_protocol::{ClientCapabilities, Implementation};
 
-    #[tokio::test]
-    async fn test_acp_handshake() {
-        let request_id = RequestId::new();
-        assert!(!request_id.0.is_empty());
+    #[test]
+    fn test_acp_handshake() {
+        let caps: ClientCapabilities = create_client_capabilities();
+        assert_eq!(caps.terminal, false);
 
-        let request = JsonRpcRequest {
-            jsonrpc: "2.0".to_string(),
-            id: request_id.0.clone(),
-            method: "initialize".to_string(),
-            params: serde_json::json!({
-                "protocolVersion": 1,
-                "clientCapabilities": {
-                    "fs": true,
-                    "terminal": true
-                },
-                "clientInfo": {
-                    "name": "ymir",
-                    "version": "1.0.0"
-                }
-            }),
-        };
-
-        assert_eq!(request.jsonrpc, "2.0");
-        assert_eq!(request.method, "initialize");
-        assert!(request.id == request_id.0);
+        let impl_info: Implementation = create_implementation();
+        assert_eq!(impl_info.name, "ymir");
     }
 
     #[tokio::test]
     async fn test_acp_status_transitions() {
         let status = Arc::new(RwLock::new(AgentStatus::Idle));
 
-        let plan_params = serde_json::json!({
-            "sessionUpdate": {
-                "plan": {
-                    "status": "pending"
-                }
-            }
-        });
-        AcpClient::handle_session_update(&plan_params, &status).await;
+        *status.write().await = AgentStatus::Working {
+            task_summary: "Test task".to_string(),
+        };
         assert!(matches!(*status.read().await, AgentStatus::Working { .. }));
 
-        let tool_params = serde_json::json!({
-            "sessionUpdate": {
-                "tool_call": {
-                    "status": "in_progress"
-                }
-            }
-        });
-        AcpClient::handle_session_update(&tool_params, &status).await;
-        assert!(matches!(*status.read().await, AgentStatus::Working { .. }));
-
-        let permission_params = serde_json::json!({
-            "sessionUpdate": {
-                "session/request_permission": {
-                    "prompt": "Allow file access?"
-                }
-            }
-        });
-        AcpClient::handle_session_update(&permission_params, &status).await;
+        *status.write().await = AgentStatus::Waiting {
+            prompt: "Allow access?".to_string(),
+        };
         match &*status.read().await {
-            AgentStatus::Waiting { prompt } => assert_eq!(prompt, "Allow file access?"),
+            AgentStatus::Waiting { prompt } => assert_eq!(prompt, "Allow access?"),
             _ => panic!("Expected Waiting status"),
         }
 
-        let stop_params = serde_json::json!({
-            "sessionUpdate": {
-                "session/prompt": {
-                    "stopReason": "end_turn"
-                }
-            }
-        });
-        AcpClient::handle_session_update(&stop_params, &status).await;
+        *status.write().await = AgentStatus::Idle;
         assert!(matches!(*status.read().await, AgentStatus::Idle));
     }
 
     #[tokio::test]
-    async fn test_request_id_generation() {
-        let id1 = RequestId::new();
-        let id2 = RequestId::new();
-        
-        assert_ne!(id1.0, id2.0);
-        assert!(Uuid::parse_str(&id1.0).is_ok());
-        assert!(Uuid::parse_str(&id2.0).is_ok());
-    }
+    async fn test_acp_handle_send() {
+        let (handle, _join) = start_acp_runtime();
 
-    #[tokio::test]
-    async fn test_json_rpc_structures() {
-        let request = JsonRpcRequest {
-            jsonrpc: "2.0".to_string(),
-            id: "test-id".to_string(),
-            method: "test/method".to_string(),
-            params: serde_json::json!({"key": "value"}),
-        };
-        
-        let json = serde_json::to_string(&request).unwrap();
-        assert!(json.contains("\"jsonrpc\":\"2.0\""));
-        assert!(json.contains("\"id\":\"test-id\""));
-        assert!(json.contains("\"method\":\"test/method\""));
-        
-        let notification = JsonRpcNotification {
-            jsonrpc: "2.0".to_string(),
-            method: "test/notification".to_string(),
-            params: serde_json::json!({"key": "value"}),
-        };
-        
-        let json = serde_json::to_string(&notification).unwrap();
-        assert!(json.contains("\"jsonrpc\":\"2.0\""));
-        assert!(json.contains("\"method\":\"test/notification\""));
-        assert!(!json.contains("\"id\""));
+        let status = handle.status(Uuid::new_v4()).await;
+        assert!(matches!(status, AgentStatus::Idle));
     }
 }

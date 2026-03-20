@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { AppState, NotificationState, AgentTab, AlertDialogConfig, AgentSessionState, TerminalSessionState } from './types/state';
+import { AppState, NotificationState, AgentTab, AlertDialogConfig, AgentSessionState, TerminalSessionState, AcpAccumulatorState, AcpAccumulatorAction, AccumulatedThread, AccumulatedTextContent, AccumulatedToolCard, AccumulatedContextCard, AccumulatedErrorCard, MAX_TOOL_OUTPUT_LENGTH, MAX_ACCUMULATED_MESSAGES, createInitialAccumulatorState, ThreadAccumulatedState } from './types/state';
 export type { AgentTab };
-import { ServerMessage, TerminalOutput } from './types/generated/protocol';
+import { ServerMessage, TerminalOutput, isAcpSessionInit, isAcpSessionStatus, isAcpPromptChunk, isAcpPromptComplete, isAcpToolUse, isAcpContextUpdate, isAcpError, isAcpResumeMarker } from './types/generated/protocol';
 import { handleError } from './lib/error-recovery';
 import { showNotification } from './lib/tauri';
 
@@ -20,6 +20,321 @@ export function setTerminalOutputCallback(callback: ((message: TerminalOutput) =
 
 export function getTerminalOutputCallback(): ((message: TerminalOutput) => void) | null {
   return terminalOutputCallback;
+}
+
+// ----------------------------------------------------------------------------
+// ACP Event Accumulator Reducer
+// ----------------------------------------------------------------------------
+//
+// Pure reducer function for ACP event accumulation.
+// Connection-scoped: state is flushed on reconnect.
+// Derived state: NOT the source of truth for worktree/session identity.
+
+function generateMessageId(sequence: number): string {
+  return `msg-${sequence}`;
+}
+
+function createEmptyThread(worktreeId: string, acpSessionId: string, connectionGeneration: number): AccumulatedThread {
+  return {
+    worktreeId,
+    acpSessionId,
+    messages: [],
+    sessionStatus: 'Working',
+    lastSequence: 0,
+    connectionGeneration,
+    isStreaming: false,
+  };
+}
+
+function truncateToolOutput(output: string | undefined): string | undefined {
+  if (!output) return undefined;
+  if (output.length <= MAX_TOOL_OUTPUT_LENGTH) return output;
+  return output.slice(0, MAX_TOOL_OUTPUT_LENGTH) + '...[truncated]';
+}
+
+export function acpAccumulatorReducer(
+  state: AcpAccumulatorState,
+  action: AcpAccumulatorAction
+): AcpAccumulatorState {
+  switch (action.type) {
+    case 'CONNECTION_RECONNECTED': {
+      const newGeneration = state.connectionGeneration + 1;
+      return {
+        connectionGeneration: newGeneration,
+        threads: new Map(),
+        pendingCorrelations: new Map(),
+        lastFlushTimestamp: Date.now(),
+      };
+    }
+
+    case 'FLUSH_ALL': {
+      return {
+        ...state,
+        threads: new Map(),
+        pendingCorrelations: new Map(),
+        lastFlushTimestamp: Date.now(),
+      };
+    }
+
+    case 'FLUSH_THREAD': {
+      const newThreads = new Map(state.threads);
+      newThreads.delete(action.worktreeId);
+      return {
+        ...state,
+        threads: newThreads,
+      };
+    }
+
+    case 'REBUILD_FROM_SNAPSHOT': {
+      const thread = createEmptyThread(action.worktreeId, action.acpSessionId, state.connectionGeneration);
+      const newThreads = new Map(state.threads);
+      newThreads.set(action.worktreeId, thread);
+      return {
+        ...state,
+        threads: newThreads,
+      };
+    }
+
+    case 'SET_STREAMING': {
+      const thread = state.threads.get(action.worktreeId);
+      if (!thread) return state;
+      
+      const newThreads = new Map(state.threads);
+      newThreads.set(action.worktreeId, {
+        ...thread,
+        isStreaming: action.isStreaming,
+      });
+      return {
+        ...state,
+        threads: newThreads,
+      };
+    }
+
+    case 'EVENT_RECEIVED': {
+      const { envelope, worktreeId } = action;
+      const eventType = envelope.eventType;
+      const data = envelope.data;
+      const sequence = envelope.sequence;
+
+      let thread = state.threads.get(worktreeId);
+
+      if (isAcpSessionInit({ eventType, data } as any)) {
+        const sessionData = data as any;
+        if (!thread) {
+          thread = createEmptyThread(worktreeId, sessionData.acpSessionId, state.connectionGeneration);
+        }
+        const newThreads = new Map(state.threads);
+        newThreads.set(worktreeId, { ...thread, acpSessionId: sessionData.acpSessionId });
+        return { ...state, threads: newThreads };
+      }
+
+      if (!thread) return state;
+
+      const newThreads = new Map(state.threads);
+      let updatedThread = { ...thread };
+      let changed = false;
+
+      if (isAcpSessionStatus({ eventType, data } as any)) {
+        const statusData = data as any;
+        updatedThread.sessionStatus = statusData.status;
+        changed = true;
+      }
+
+      else if (isAcpPromptChunk({ eventType, data } as any)) {
+        const chunkData = data as any;
+        updatedThread.isStreaming = !chunkData.isFinal;
+        
+        let lastMessage = updatedThread.messages[updatedThread.messages.length - 1];
+        if (!lastMessage || lastMessage.role !== 'assistant') {
+          lastMessage = {
+            id: generateMessageId(sequence),
+            role: 'assistant',
+            parts: [],
+            createdAt: Date.now(),
+            lastSequence: sequence,
+          };
+          updatedThread.messages = [...updatedThread.messages, lastMessage];
+        }
+
+        let textPart = lastMessage.parts.find((p): p is AccumulatedTextContent => 
+          p.type === 'text'
+        ) as AccumulatedTextContent | undefined;
+
+        const content = chunkData.content;
+        const textContent = content?.type === 'Text' ? content.data : '';
+
+        if (textPart) {
+          const newParts = lastMessage.parts.map(p => 
+            p.type === 'text' 
+              ? { ...p, text: p.text + textContent, isStreaming: !chunkData.isFinal }
+              : p
+          );
+          updatedThread.messages = updatedThread.messages.map((m, i) =>
+            i === updatedThread.messages.length - 1
+              ? { ...m, parts: newParts, lastSequence: sequence }
+              : m
+          );
+        } else {
+          const newTextPart: AccumulatedTextContent = {
+            type: 'text',
+            text: textContent,
+            isStreaming: !chunkData.isFinal,
+          };
+          const newParts = [...lastMessage.parts, newTextPart];
+          updatedThread.messages = updatedThread.messages.map((m, i) =>
+            i === updatedThread.messages.length - 1
+              ? { ...m, parts: newParts, lastSequence: sequence }
+              : m
+          );
+        }
+        changed = true;
+      }
+
+      else if (isAcpPromptComplete({ eventType, data } as any)) {
+        const completeData = data as any;
+        updatedThread.isStreaming = false;
+        if (completeData.reason === 'Error') {
+          updatedThread.sessionStatus = 'Complete';
+        }
+        changed = true;
+      }
+
+      else if (isAcpToolUse({ eventType, data } as any)) {
+        const toolData = data as any;
+        const toolUseId = toolData.toolUseId;
+        
+        let toolCardFound = false;
+        const newMessages = updatedThread.messages.map(msg => {
+          const newParts = msg.parts.map(part => {
+            if (part.type === 'tool' && part.toolUseId === toolUseId) {
+              toolCardFound = true;
+              return {
+                ...part,
+                status: toolData.status,
+                output: truncateToolOutput(toolData.output),
+                error: toolData.error,
+                updatedAt: Date.now(),
+              } as AccumulatedToolCard;
+            }
+            return part;
+          });
+          return { ...msg, parts: newParts };
+        });
+
+        if (!toolCardFound) {
+          let lastMessage = newMessages[newMessages.length - 1];
+          if (!lastMessage || lastMessage.role !== 'assistant') {
+            lastMessage = {
+              id: generateMessageId(sequence),
+              role: 'assistant',
+              parts: [],
+              createdAt: Date.now(),
+              lastSequence: sequence,
+            };
+            newMessages.push(lastMessage);
+          }
+
+          const newToolCard: AccumulatedToolCard = {
+            type: 'tool',
+            toolUseId,
+            toolName: toolData.toolName,
+            status: toolData.status,
+            input: toolData.input,
+            output: truncateToolOutput(toolData.output),
+            error: toolData.error,
+            updatedAt: Date.now(),
+          };
+
+          lastMessage.parts = [...lastMessage.parts, newToolCard];
+          lastMessage.lastSequence = sequence;
+        }
+
+        updatedThread.messages = newMessages;
+        changed = true;
+      }
+
+      else if (isAcpContextUpdate({ eventType, data } as any)) {
+        const contextData = data as any;
+        let lastMessage = updatedThread.messages[updatedThread.messages.length - 1];
+        if (!lastMessage || lastMessage.role !== 'assistant') {
+          lastMessage = {
+            id: generateMessageId(sequence),
+            role: 'assistant',
+            parts: [],
+            createdAt: Date.now(),
+            lastSequence: sequence,
+          };
+          updatedThread.messages = [...updatedThread.messages, lastMessage];
+        }
+
+        const contextCard: AccumulatedContextCard = {
+          type: 'context',
+          updateType: contextData.updateType,
+          data: contextData.data,
+          sequence,
+        };
+
+        updatedThread.messages = updatedThread.messages.map((m, i) =>
+          i === updatedThread.messages.length - 1
+            ? { ...m, parts: [...m.parts, contextCard], lastSequence: sequence }
+            : m
+        );
+        changed = true;
+      }
+
+      else if (isAcpError({ eventType, data } as any)) {
+        const errorData = data as any;
+        const errorCard: AccumulatedErrorCard = {
+          type: 'error',
+          code: errorData.code,
+          message: errorData.message,
+          details: errorData.details,
+          recoverable: errorData.recoverable,
+          sequence,
+        };
+
+        let lastMessage = updatedThread.messages[updatedThread.messages.length - 1];
+        if (!lastMessage) {
+          lastMessage = {
+            id: generateMessageId(sequence),
+            role: 'assistant',
+            parts: [errorCard],
+            createdAt: Date.now(),
+            lastSequence: sequence,
+          };
+          updatedThread.messages = [lastMessage];
+        } else {
+          updatedThread.messages = updatedThread.messages.map((m, i) =>
+            i === updatedThread.messages.length - 1
+              ? { ...m, parts: [...m.parts, errorCard], lastSequence: sequence }
+              : m
+          );
+        }
+        changed = true;
+      }
+
+      else if (isAcpResumeMarker({ eventType, data } as any)) {
+        const resumeData = data as any;
+        updatedThread.resumeCheckpoint = resumeData.checkpoint;
+        updatedThread.lastSequence = resumeData.lastSequence;
+        changed = true;
+      }
+
+      if (changed && sequence > updatedThread.lastSequence) {
+        updatedThread.lastSequence = sequence;
+      }
+
+      if (updatedThread.messages.length > MAX_ACCUMULATED_MESSAGES) {
+        updatedThread.messages = updatedThread.messages.slice(-MAX_ACCUMULATED_MESSAGES);
+      }
+
+      newThreads.set(worktreeId, updatedThread);
+      return { ...state, threads: newThreads };
+    }
+
+    default:
+      return state;
+  }
 }
 
 export const useStore = create<AppState>()(
@@ -41,6 +356,9 @@ export const useStore = create<AppState>()(
   // Agent pane tabs (per worktree)
   agentTabs: new Map(),
   activeAgentTabId: new Map(),
+
+  // ACP Event Accumulator (connection-scoped, derived state)
+  acpAccumulator: createInitialAccumulatorState(),
 
   // PR dialog state
   prDialog: {
@@ -101,12 +419,13 @@ export const useStore = create<AppState>()(
 
       // State management from server snapshot
       stateFromSnapshot: (snapshot) => {
-        set({
+        set((state) => ({
           workspaces: snapshot.workspaces,
           worktrees: snapshot.worktrees,
           agentSessions: snapshot.agentSessions,
           terminalSessions: snapshot.terminalSessions,
-        });
+          acpAccumulator: acpAccumulatorReducer(state.acpAccumulator, { type: 'CONNECTION_RECONNECTED' }),
+        }));
       },
 
       // Workspace CRUD
@@ -199,7 +518,7 @@ export const useStore = create<AppState>()(
 
       // Notification management
       addNotification: (notification) => {
-        const id = `notification-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const id = `notification-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
         const newNotification: NotificationState = {
           level: notification.level,
           message: notification.message,
@@ -376,6 +695,21 @@ export const useStore = create<AppState>()(
     set((state) => ({
       alertDialog: state.alertDialog ? { ...state.alertDialog, open: false } : null,
     })),
+
+  dispatchAccumulator: (action: AcpAccumulatorAction) =>
+    set((state) => ({
+      acpAccumulator: acpAccumulatorReducer(state.acpAccumulator, action),
+    })),
+
+  flushAccumulator: () =>
+    set((state) => ({
+      acpAccumulator: acpAccumulatorReducer(state.acpAccumulator, { type: 'FLUSH_ALL' }),
+    })),
+
+  flushAccumulatorThread: (worktreeId: string) =>
+    set((state) => ({
+      acpAccumulator: acpAccumulatorReducer(state.acpAccumulator, { type: 'FLUSH_THREAD', worktreeId }),
+    })),
   }),
   { name: 'ymir-app-store' }
   )
@@ -438,6 +772,21 @@ export const selectDbResetDialog = (state: AppState) => state.dbResetDialog;
 export const selectDbResetDialogOpen = (state: AppState) => state.dbResetDialog.isOpen;
 
 export const selectAlertDialog = (state: AppState) => state.alertDialog;
+
+// ACP Accumulator selectors
+export const selectAccumulatorThread = (worktreeId: string) => (state: AppState): ThreadAccumulatedState => {
+  const thread = state.acpAccumulator.threads.get(worktreeId) ?? null;
+  return {
+    thread,
+    messageCount: thread?.messages.length ?? 0,
+    isStreaming: thread?.isStreaming ?? false,
+    sessionStatus: thread?.sessionStatus ?? 'Working',
+    hasErrors: thread?.messages.some(m => m.parts.some(p => p.type === 'error')) ?? false,
+  };
+};
+
+export const selectAccumulatorConnectionGeneration = (state: AppState) => 
+  state.acpAccumulator.connectionGeneration;
 
 export function updateStateFromServerMessage(message: ServerMessage): void {
   const { addWorkspace, updateWorkspace, removeWorkspace, addWorktree, updateWorktree, removeWorktree } = useStore.getState();
