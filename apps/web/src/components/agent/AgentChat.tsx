@@ -113,30 +113,34 @@ function AgentChatContent({
       </div>
 
       <div className="agent-chat-input-area">
-        <div className="agent-chat-status">
-          <div className={`agent-chat-status-dot ${getStatusDotClass(agentStatus)}`} />
-          <span className="agent-chat-status-text">{agentStatus}</span>
-          {agentStatusInfo?.taskSummary && (
-            <span className="agent-chat-status-task">{agentStatusInfo.taskSummary}</span>
-          )}
-        </div>
-
-        <ComposerPrimitive.Root className="agent-chat-input-wrapper">
-          <ComposerPrimitive.Input
-            className="agent-chat-input"
-            placeholder={`Ask ${agentName.toLowerCase()}...`}
-          />
-          <ComposerPrimitive.Send className="agent-chat-send-button">Send</ComposerPrimitive.Send>
-        </ComposerPrimitive.Root>
-
-        <div className="agent-chat-footer">
-          <div className="agent-chat-info">
-            <span>
-              {agentName} ({agentSubtitle})
-            </span>
+        <ComposerPrimitive.Root className="au-composer-root">
+          <div className="au-composer-container">
+            <ComposerPrimitive.Input
+              className="au-composer-input"
+              placeholder={`Ask ${agentName.toLowerCase()}...`}
+            />
+            <div className="au-composer-footer">
+              <div className="au-composer-status">
+                <div className={`au-status-dot ${getStatusDotClass(agentStatus)}`} />
+                <span className="au-status-text">{agentStatus}</span>
+                {agentStatusInfo?.taskSummary && (
+                  <span className="au-status-task">{agentStatusInfo.taskSummary}</span>
+                )}
+              </div>
+              <div className="au-composer-meta">
+                <span className="au-agent-info">
+                  {agentName} ({agentSubtitle})
+                </span>
+                <span className="au-keyboard-hint">tab: switch agents</span>
+              </div>
+            </div>
           </div>
-          <span className="agent-chat-tab-hint">tab: switch agents</span>
-        </div>
+          <ComposerPrimitive.Send className="au-composer-send" asChild>
+            <button type="button" aria-label="Send message">
+              <i className="ri-send-plane-fill" />
+            </button>
+          </ComposerPrimitive.Send>
+        </ComposerPrimitive.Root>
       </div>
     </div>
   );
