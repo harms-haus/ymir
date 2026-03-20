@@ -83,6 +83,21 @@ const SCHEMA_MIGRATIONS: &[&str] = &[
         FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
     );
     "#,
+    r#"
+    ALTER TABLE terminal_sessions ADD COLUMN position INTEGER DEFAULT 0;
+    "#,
+    r#"
+    ALTER TABLE terminal_sessions ADD COLUMN updated_at TEXT DEFAULT (datetime('now'));
+    "#,
+    r#"
+    ALTER TABLE agent_sessions ADD COLUMN label TEXT;
+    "#,
+    r#"
+    ALTER TABLE agent_sessions ADD COLUMN position INTEGER DEFAULT 0;
+    "#,
+    r#"
+    ALTER TABLE agent_sessions ADD COLUMN updated_at TEXT DEFAULT (datetime('now'));
+    "#,
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -189,11 +204,33 @@ impl Db {
             .conn()
             .context("Failed to get connection for migration")?;
 
+        conn.execute("CREATE TABLE IF NOT EXISTS _migrations (id INTEGER PRIMARY KEY, executed_at TEXT DEFAULT (datetime('now')))", libsql::params![]).await?;
+
         for (idx, migration) in SCHEMA_MIGRATIONS.iter().enumerate() {
+            let mut stmt = conn.prepare("SELECT 1 FROM _migrations WHERE id = ?1").await?;
+            let mut rows = stmt.query([idx as i64]).await?;
+            let exists = rows.next().await?.is_some();
+
+            if exists {
+                debug!("Migration {} already executed, skipping", idx);
+                continue;
+            }
+
             debug!("Executing migration {} (bytes: {})", idx, migration.len());
-            conn.execute_batch(migration)
-                .await
-                .with_context(|| format!("Failed to execute migration {}", idx))?;
+            match conn.execute_batch(migration).await {
+                Ok(_) => {}
+                Err(e) => {
+                    let err_msg = e.to_string();
+                    if err_msg.contains("duplicate column name") {
+                        debug!("Migration {} column already exists, marking as complete", idx);
+                    } else {
+                        return Err(e).with_context(|| format!("Failed to execute migration {}", idx))?;
+                    }
+                }
+            }
+
+            conn.execute("INSERT INTO _migrations (id) VALUES (?1)", libsql::params![idx as i64]).await?;
+
             debug!("Migration {} completed", idx);
         }
 
@@ -612,6 +649,66 @@ impl Db {
             .await?;
         debug!(
             "Deleted terminal session {} (rows affected: {})",
+            id, rows_affected
+        );
+        Ok(rows_affected > 0)
+    }
+
+    pub async fn update_terminal_label(&self, id: &str, label: &str) -> Result<bool> {
+        let conn = self.conn()?;
+        let rows_affected = conn
+            .execute(
+                "UPDATE terminal_sessions SET label = ?1, updated_at = datetime('now') WHERE id = ?2",
+                libsql::params![label, id],
+            )
+            .await?;
+        debug!(
+            "Updated terminal {} label (rows affected: {})",
+            id, rows_affected
+        );
+        Ok(rows_affected > 0)
+    }
+
+    pub async fn update_terminal_position(&self, id: &str, position: i64) -> Result<bool> {
+        let conn = self.conn()?;
+        let rows_affected = conn
+            .execute(
+                "UPDATE terminal_sessions SET position = ?1, updated_at = datetime('now') WHERE id = ?2",
+                libsql::params![position, id],
+            )
+            .await?;
+        debug!(
+            "Updated terminal {} position (rows affected: {})",
+            id, rows_affected
+        );
+        Ok(rows_affected > 0)
+    }
+
+    pub async fn update_agent_label(&self, id: &str, label: &str) -> Result<bool> {
+        let conn = self.conn()?;
+        let rows_affected = conn
+            .execute(
+                "UPDATE agent_sessions SET label = ?1, updated_at = datetime('now') WHERE id = ?2",
+                libsql::params![label, id],
+            )
+            .await?;
+        debug!(
+            "Updated agent {} label (rows affected: {})",
+            id, rows_affected
+        );
+        Ok(rows_affected > 0)
+    }
+
+    pub async fn update_agent_position(&self, id: &str, position: i64) -> Result<bool> {
+        let conn = self.conn()?;
+        let rows_affected = conn
+            .execute(
+                "UPDATE agent_sessions SET position = ?1, updated_at = datetime('now') WHERE id = ?2",
+                libsql::params![position, id],
+            )
+            .await?;
+        debug!(
+            "Updated agent {} position (rows affected: {})",
             id, rows_affected
         );
         Ok(rows_affected > 0)

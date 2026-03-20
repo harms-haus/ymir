@@ -138,8 +138,24 @@ pub async fn route_message(
             Some(handle_agent_cancel(state.clone(), msg).await)
         }
 
+        ClientMessagePayload::AgentRename(msg) => {
+            Some(handle_agent_rename(state.clone(), msg).await)
+        }
+
+        ClientMessagePayload::AgentReorder(msg) => {
+            Some(handle_agent_reorder(state.clone(), msg).await)
+        }
+
         ClientMessagePayload::FileList(msg) => {
             Some(handle_file_list(state.clone(), msg).await)
+        }
+
+        ClientMessagePayload::TerminalRename(msg) => {
+            Some(handle_terminal_rename(state.clone(), msg).await)
+        }
+
+        ClientMessagePayload::TerminalReorder(msg) => {
+            Some(handle_terminal_reorder(state.clone(), msg).await)
         }
 
         ClientMessagePayload::WorkspaceRename(_)
@@ -175,18 +191,26 @@ fn not_implemented(payload: ClientMessagePayload) -> ServerMessage {
         ClientMessagePayload::AgentSpawn(_) => "AgentSpawn",
         ClientMessagePayload::AgentSend(_) => "AgentSend",
         ClientMessagePayload::AgentCancel(_) => "AgentCancel",
+        ClientMessagePayload::AgentRename(_) => "AgentRename",
+        ClientMessagePayload::AgentReorder(_) => "AgentReorder",
         ClientMessagePayload::TerminalInput(_) => "TerminalInput",
         ClientMessagePayload::TerminalResize(_) => "TerminalResize",
         ClientMessagePayload::TerminalCreate(_) => "TerminalCreate",
+        ClientMessagePayload::TerminalKill(_) => "TerminalKill",
+        ClientMessagePayload::TerminalRename(_) => "TerminalRename",
+        ClientMessagePayload::TerminalReorder(_) => "TerminalReorder",
         ClientMessagePayload::FileRead(_) => "FileRead",
         ClientMessagePayload::FileWrite(_) => "FileWrite",
+        ClientMessagePayload::FileList(_) => "FileList",
         ClientMessagePayload::GitStatus(_) => "GitStatus",
         ClientMessagePayload::GitDiff(_) => "GitDiff",
         ClientMessagePayload::GitCommit(_) => "GitCommit",
         ClientMessagePayload::CreatePR(_) => "CreatePR",
+        ClientMessagePayload::GetState(_) => "GetState",
         ClientMessagePayload::UpdateSettings(_) => "UpdateSettings",
+        ClientMessagePayload::Ping(_) => "Ping",
+        ClientMessagePayload::Pong(_) => "Pong",
         ClientMessagePayload::Ack(_) => "Ack",
-        _ => "Unknown",
     };
 
     ServerMessage::new(ServerMessagePayload::Error(Error {
@@ -521,12 +545,186 @@ async fn handle_file_list(state: Arc<AppState>, msg: crate::protocol::FileList) 
     collect_files(&base_path, &base_path, &mut files);
     files.sort();
     
-    ServerMessage::new(ServerMessagePayload::FileListResult(FileListResult {
+ServerMessage::new(ServerMessagePayload::FileListResult(FileListResult {
         worktree_id,
         files,
-            request_id: None,
+        request_id: None,
     }))
 }
+
+#[instrument(skip(state))]
+async fn handle_terminal_rename(state: Arc<AppState>, msg: crate::protocol::TerminalRename) -> ServerMessage {
+    let session_id = msg.session_id;
+    let new_label = msg.new_label;
+
+    // Update database
+    if let Err(e) = state.db.update_terminal_label(&session_id.to_string(), &new_label).await {
+        tracing::error!("Failed to update terminal label: {}", e);
+        return ServerMessage::new(ServerMessagePayload::Error(Error {
+            code: "TERMINAL_RENAME_ERROR".to_string(),
+            message: e.to_string(),
+            details: None,
+            request_id: Some(msg.request_id),
+        }));
+    }
+
+    // Update in-memory state
+    {
+        let mut terminals = state.terminals.write().await;
+        if let Some(terminal) = terminals.get_mut(&session_id) {
+            terminal.label = Some(new_label.clone());
+        }
+    }
+
+    // Get worktree_id for broadcast
+    let worktree_id = {
+        let terminals = state.terminals.read().await;
+        terminals.get(&session_id).map(|t| t.worktree_id).unwrap_or_else(Uuid::nil)
+    };
+
+    // Broadcast update to all clients
+    let broadcast_msg = ServerMessage::new(ServerMessagePayload::TerminalUpdated(
+        crate::protocol::TerminalUpdated {
+            session_id,
+            worktree_id,
+            label: Some(new_label),
+            position: None,
+            request_id: msg.request_id,
+        },
+    ));
+    state.broadcast(broadcast_msg).await;
+
+    ServerMessage::new(ServerMessagePayload::Ack(crate::protocol::Ack {
+        message_id: session_id,
+        status: crate::protocol::AckStatus::Success,
+    }))
+}
+
+#[instrument(skip(state))]
+async fn handle_terminal_reorder(state: Arc<AppState>, msg: crate::protocol::TerminalReorder) -> ServerMessage {
+    let worktree_id = msg.worktree_id;
+    let session_ids = msg.session_ids;
+
+    // Update positions in database
+    for (position, session_id) in session_ids.iter().enumerate() {
+        if let Err(e) = state.db.update_terminal_position(&session_id.to_string(), position as i64).await {
+            tracing::error!("Failed to update terminal position: {}", e);
+            return ServerMessage::new(ServerMessagePayload::Error(Error {
+                code: "TERMINAL_REORDER_ERROR".to_string(),
+                message: e.to_string(),
+                details: None,
+                request_id: Some(msg.request_id),
+            }));
+        }
+    }
+
+    // Broadcast update to all clients
+    for (position, session_id) in session_ids.iter().enumerate() {
+        let broadcast_msg = ServerMessage::new(ServerMessagePayload::TerminalUpdated(
+            crate::protocol::TerminalUpdated {
+                session_id: *session_id,
+                worktree_id,
+                label: None,
+                position: Some(position as u32),
+                request_id: msg.request_id,
+            },
+        ));
+        state.broadcast(broadcast_msg).await;
+    }
+
+    ServerMessage::new(ServerMessagePayload::Ack(crate::protocol::Ack {
+        message_id: worktree_id,
+        status: crate::protocol::AckStatus::Success,
+    }))
+}
+
+#[instrument(skip(state))]
+async fn handle_agent_rename(state: Arc<AppState>, msg: crate::protocol::AgentRename) -> ServerMessage {
+    let session_id = msg.session_id;
+    let new_label = msg.new_label;
+
+    // Update database
+    if let Err(e) = state.db.update_agent_label(&session_id.to_string(), &new_label).await {
+        tracing::error!("Failed to update agent label: {}", e);
+        return ServerMessage::new(ServerMessagePayload::Error(Error {
+            code: "AGENT_RENAME_ERROR".to_string(),
+            message: e.to_string(),
+            details: None,
+            request_id: Some(msg.request_id),
+        }));
+    }
+
+    // Update in-memory state
+    {
+        let mut agents = state.agents.write().await;
+        if let Some(agent) = agents.get_mut(&session_id) {
+            // Note: AgentState doesn't have label field, but database has it
+            // We'll need to update that when we add label field to AgentState
+        }
+    }
+
+    // Get worktree_id for broadcast
+    let worktree_id = {
+        let agents = state.agents.read().await;
+        agents.get(&session_id).map(|a| a.worktree_id).unwrap_or_else(Uuid::nil)
+    };
+
+    // Broadcast update to all clients
+    let broadcast_msg = ServerMessage::new(ServerMessagePayload::AgentUpdated(
+        crate::protocol::AgentUpdated {
+            session_id,
+            worktree_id,
+            label: Some(new_label),
+            position: None,
+            request_id: msg.request_id,
+        },
+    ));
+    state.broadcast(broadcast_msg).await;
+
+    ServerMessage::new(ServerMessagePayload::Ack(crate::protocol::Ack {
+        message_id: session_id,
+        status: crate::protocol::AckStatus::Success,
+    }))
+}
+
+#[instrument(skip(state))]
+async fn handle_agent_reorder(state: Arc<AppState>, msg: crate::protocol::AgentReorder) -> ServerMessage {
+    let worktree_id = msg.worktree_id;
+    let session_ids = msg.session_ids;
+
+    // Update positions in database
+    for (position, session_id) in session_ids.iter().enumerate() {
+        if let Err(e) = state.db.update_agent_position(&session_id.to_string(), position as i64).await {
+            tracing::error!("Failed to update agent position: {}", e);
+            return ServerMessage::new(ServerMessagePayload::Error(Error {
+                code: "AGENT_REORDER_ERROR".to_string(),
+                message: e.to_string(),
+                details: None,
+                request_id: Some(msg.request_id),
+            }));
+        }
+    }
+
+    // Broadcast update to all clients
+    for (position, session_id) in session_ids.iter().enumerate() {
+        let broadcast_msg = ServerMessage::new(ServerMessagePayload::AgentUpdated(
+            crate::protocol::AgentUpdated {
+                session_id: *session_id,
+                worktree_id,
+                label: None,
+                position: Some(position as u32),
+                request_id: msg.request_id,
+            },
+        ));
+        state.broadcast(broadcast_msg).await;
+    }
+
+    ServerMessage::new(ServerMessagePayload::Ack(crate::protocol::Ack {
+        message_id: worktree_id,
+        status: crate::protocol::AckStatus::Success,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

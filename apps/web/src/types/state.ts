@@ -29,21 +29,24 @@ export interface WorktreeState {
 
 // Agent session state
 export interface AgentSessionState {
-  id: string;
-  worktreeId: string;
-  agentType: string;
-  acpSessionId?: string;
-  status: AgentStatus;
-  startedAt: number;
+    id: string;
+    worktreeId: string;
+    agentType: string;
+    acpSessionId?: string;
+    status: AgentStatus;
+    startedAt: number;
+    label?: string;
+    position?: number;
 }
 
 // Terminal session state
 export interface TerminalSessionState {
-  id: string;
-  worktreeId: string;
-  label: string;
-  shell: string;
-  createdAt: number;
+    id: string;
+    worktreeId: string;
+    label: string;
+    shell: string;
+    createdAt: number;
+    position?: number;
 }
 
 // Notification state for toast messages
@@ -396,8 +399,9 @@ export interface AppState {
   updateAgentSession: (sessionId: string, updates: Partial<AgentSessionState>) => void;
   removeAgentSession: (sessionId: string) => void;
   
-  addTerminalSession: (session: TerminalSessionState) => void;
-  removeTerminalSession: (sessionId: string) => void;
+addTerminalSession: (session: TerminalSessionState) => void;
+    updateTerminalSession: (sessionId: string, updates: Partial<TerminalSessionState>) => void;
+    removeTerminalSession: (sessionId: string) => void;
   
   // Notification management
   addNotification: (notification: Omit<NotificationState, 'id' | 'timestamp'>) => void;

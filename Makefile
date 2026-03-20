@@ -5,7 +5,7 @@ VITE_PORT := 5173
 BUILD_DIR := build
 INSTALL_PREFIX := /usr/local
 
-.PHONY: debug debug-host dev dev-tauri build-web-only build-tauri build build-prod install-prod clean kill help serve status config doctor
+.PHONY: debug debug-host dev dev-tauri build-web-only build-tauri build build-prod install-prod clean kill help serve status config doctor sync-types
 
 help:
 	@echo "ymir Makefile targets:"
@@ -23,6 +23,7 @@ help:
 	@echo "  config             Print current configuration"
 	@echo "  doctor             Run diagnostic checks"
 	@echo "  clean              Remove all build artifacts"
+	@echo "  sync-types         Generate TypeScript types from Rust protocol definitions"
 
 kill:
 	@echo "[ymir] killing processes on ports $(WS_PORT) and $(VITE_PORT)..."
@@ -104,3 +105,12 @@ clean:
 	@cargo clean
 	@rm -rf apps/web/node_modules apps/web/dist
 	@rm -rf $(BUILD_DIR)
+
+sync-types:
+	@echo "[ymir] generating TypeScript types from Rust protocol definitions..."
+	@cargo test --package ymir-ws-server --features export-types -- --nocapture 2>&1 | grep -E "(export_bindings|error\[)" | head -20 || true
+	@echo "[ymir] copying generated bindings to apps/web/src/types/generated/..."
+	@mkdir -p apps/web/src/types/generated
+	@cp crates/ws-server/bindings/*.ts apps/web/src/types/generated/
+	@echo "[ymir] types synchronized successfully"
+	@echo "[ymir] generated $(shell ls crates/ws-server/bindings/*.ts | wc -l) type definitions"

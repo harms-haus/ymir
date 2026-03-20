@@ -252,8 +252,36 @@ export interface TerminalCreate {
 }
 
 export interface TerminalKill {
-  type: 'TerminalKill';
-  sessionId: string;
+    type: 'TerminalKill';
+    sessionId: string;
+}
+
+export interface TerminalRename {
+    type: 'TerminalRename';
+    sessionId: string;
+    newLabel: string;
+    requestId?: string;
+}
+
+export interface TerminalReorder {
+    type: 'TerminalReorder';
+    worktreeId: string;
+    sessionIds: string[];
+    requestId?: string;
+}
+
+export interface AgentRename {
+    type: 'AgentRename';
+    sessionId: string;
+    newLabel: string;
+    requestId?: string;
+}
+
+export interface AgentReorder {
+    type: 'AgentReorder';
+    worktreeId: string;
+    sessionIds: string[];
+    requestId?: string;
 }
 
 // File messages
@@ -420,8 +448,26 @@ export interface TerminalCreated {
 }
 
 export interface TerminalRemoved {
-  type: 'TerminalRemoved';
-  sessionId: string;
+    type: 'TerminalRemoved';
+    sessionId: string;
+}
+
+export interface TerminalUpdated {
+    type: 'TerminalUpdated';
+    sessionId: string;
+    worktreeId: string;
+    label?: string;
+    position?: number;
+    requestId?: string;
+}
+
+export interface AgentUpdated {
+    type: 'AgentUpdated';
+    sessionId: string;
+    worktreeId: string;
+    label?: string;
+    position?: number;
+    requestId?: string;
 }
 
 // File events
@@ -645,59 +691,65 @@ export function isAcpResumeMarker(event: AcpEvent): event is { eventType: 'Resum
 // ============================================================================
 
 export type ClientMessage =
-  | WorkspaceCreate
-  | WorkspaceDelete
-  | WorkspaceRename
-  | WorkspaceUpdate
-  | WorktreeCreate
-  | WorktreeDelete
-  | WorktreeMerge
-  | WorktreeList
-  | AgentSpawn
-  | AgentSend
-  | AgentCancel
-  | TerminalInput
-  | TerminalResize
-  | TerminalCreate
-  | TerminalKill
-  | FileRead
-  | FileWrite
-  | FileList
-  | GitStatus
-  | GitDiff
-  | GitCommit
-  | CreatePR
-  | GetState
-  | UpdateSettings
-  | Ping
-  | Pong
-  | Ack;
+    | WorkspaceCreate
+    | WorkspaceDelete
+    | WorkspaceRename
+    | WorkspaceUpdate
+    | WorktreeCreate
+    | WorktreeDelete
+    | WorktreeMerge
+    | WorktreeList
+    | AgentSpawn
+    | AgentSend
+    | AgentCancel
+    | AgentRename
+    | AgentReorder
+    | TerminalInput
+    | TerminalResize
+    | TerminalCreate
+    | TerminalKill
+    | TerminalRename
+    | TerminalReorder
+    | FileRead
+    | FileWrite
+    | FileList
+    | GitStatus
+    | GitDiff
+    | GitCommit
+    | CreatePR
+    | GetState
+    | UpdateSettings
+    | Ping
+    | Pong
+    | Ack;
 
 export type ServerMessage =
-  | StateSnapshot
-  | WorkspaceCreated
-  | WorkspaceDeleted
-  | WorkspaceUpdated
-  | WorktreeCreated
-  | WorktreeDeleted
-  | WorktreeStatus
-  | AgentStatusUpdate
-  | AgentOutput
-  | AgentPrompt
-  | AgentRemoved
-  | TerminalOutput
-  | TerminalCreated
-  | TerminalRemoved
-  | FileContentMessage
-  | FileListResult
-  | GitStatusResult
-  | GitDiffResult
-  | Error
-  | Ping
-  | Pong
-  | Notification
-  | Ack
-  | AcpWireEvent;
+    | StateSnapshot
+    | WorkspaceCreated
+    | WorkspaceDeleted
+    | WorkspaceUpdated
+    | WorktreeCreated
+    | WorktreeDeleted
+    | WorktreeStatus
+    | AgentStatusUpdate
+    | AgentOutput
+    | AgentPrompt
+    | AgentRemoved
+    | AgentUpdated
+    | TerminalOutput
+    | TerminalCreated
+    | TerminalRemoved
+    | TerminalUpdated
+    | FileContentMessage
+    | FileListResult
+    | GitStatusResult
+    | GitDiffResult
+    | Error
+    | Ping
+    | Pong
+    | Notification
+    | Ack
+    | AcpWireEvent;
 
 export type BidirectionalMessage = Ack;
 
