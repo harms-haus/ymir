@@ -28,6 +28,7 @@ vi.mock('../../../lib/ws', () => ({
     send: mockSend,
     onMessage: mockOnMessage,
   })),
+  generateId: vi.fn(() => 'test-request-id'),
 }));
 
 describe('CreateWorktreeDialog', () => {
@@ -245,8 +246,10 @@ describe('CreateWorktreeDialog', () => {
         />
       );
 
-      const claudeOption = screen.getByText('Claude').closest('label');
-      fireEvent.click(claudeOption!);
+      const claudeLabel = screen.getByText('Claude').closest('label')!;
+      const claudeInput = claudeLabel.querySelector('input[type="radio"]') as HTMLInputElement;
+      fireEvent.click(claudeLabel);
+      fireEvent.change(claudeInput, { target: { checked: true, value: 'claude' } });
 
       const branchInput = screen.getByPlaceholderText('feature/my-branch');
       fireEvent.change(branchInput, { target: { value: 'feature/test' } });
@@ -269,19 +272,21 @@ describe('CreateWorktreeDialog', () => {
       const branchInput = screen.getByPlaceholderText('feature/my-branch');
       fireEvent.change(branchInput, { target: { value: 'feature/my-new-feature' } });
 
-      const claudeOption = screen.getByText('Claude').closest('label');
-      fireEvent.click(claudeOption!);
+      const claudeLabel = screen.getByText('Claude').closest('label')!;
+      const claudeInput = claudeLabel.querySelector('input[type="radio"]') as HTMLInputElement;
+      fireEvent.click(claudeLabel);
+      fireEvent.change(claudeInput, { target: { checked: true, value: 'claude' } });
 
       const createButton = screen.getByRole('button', { name: /create/i });
       fireEvent.click(createButton);
 
       await waitFor(() => {
-        expect(mockSend).toHaveBeenCalledWith({
+        expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({
           type: 'WorktreeCreate',
           workspaceId: 'workspace-1',
           branchName: 'feature/my-new-feature',
           agentType: 'claude',
-        });
+        }));
       });
     });
 
@@ -297,19 +302,21 @@ describe('CreateWorktreeDialog', () => {
       const branchInput = screen.getByPlaceholderText('feature/my-branch');
       fireEvent.change(branchInput, { target: { value: 'feature/test' } });
 
-      const noAgentOption = screen.getByText('No agent').closest('label');
-      fireEvent.click(noAgentOption!);
+      const noAgentLabel = screen.getByText('No agent').closest('label')!;
+      const noAgentInput = noAgentLabel.querySelector('input[type="radio"]') as HTMLInputElement;
+      fireEvent.click(noAgentLabel);
+      fireEvent.change(noAgentInput, { target: { checked: true, value: 'none' } });
 
       const createButton = screen.getByRole('button', { name: /create/i });
       fireEvent.click(createButton);
 
       await waitFor(() => {
-        expect(mockSend).toHaveBeenCalledWith({
+        expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({
           type: 'WorktreeCreate',
           workspaceId: 'workspace-1',
           branchName: 'feature/test',
           agentType: undefined,
-        });
+        }));
       });
     });
 
@@ -325,8 +332,10 @@ describe('CreateWorktreeDialog', () => {
       const branchInput = screen.getByPlaceholderText('feature/my-branch');
       fireEvent.change(branchInput, { target: { value: 'feature/test' } });
 
-      const claudeOption = screen.getByText('Claude').closest('label');
-      fireEvent.click(claudeOption!);
+      const claudeLabel = screen.getByText('Claude').closest('label')!;
+      const claudeInput = claudeLabel.querySelector('input[type="radio"]') as HTMLInputElement;
+      fireEvent.click(claudeLabel);
+      fireEvent.change(claudeInput, { target: { checked: true, value: 'claude' } });
 
       const createButton = screen.getByRole('button', { name: /create/i });
       fireEvent.click(createButton);
@@ -348,8 +357,10 @@ describe('CreateWorktreeDialog', () => {
       const branchInput = screen.getByPlaceholderText('feature/my-branch');
       fireEvent.change(branchInput, { target: { value: 'feature/test' } });
 
-      const claudeOption = screen.getByText('Claude').closest('label');
-      fireEvent.click(claudeOption!);
+      const claudeLabel = screen.getByText('Claude').closest('label')!;
+      const claudeInput = claudeLabel.querySelector('input[type="radio"]') as HTMLInputElement;
+      fireEvent.click(claudeLabel);
+      fireEvent.change(claudeInput, { target: { checked: true, value: 'claude' } });
 
       const createButton = screen.getByRole('button', { name: /create/i });
       fireEvent.click(createButton);
@@ -371,8 +382,10 @@ describe('CreateWorktreeDialog', () => {
       const branchInput = screen.getByPlaceholderText('feature/my-branch');
       fireEvent.change(branchInput, { target: { value: 'feature/test' } });
 
-      const claudeOption = screen.getByText('Claude').closest('label');
-      fireEvent.click(claudeOption!);
+      const claudeLabel = screen.getByText('Claude').closest('label')!;
+      const claudeInput = claudeLabel.querySelector('input[type="radio"]') as HTMLInputElement;
+      fireEvent.click(claudeLabel);
+      fireEvent.change(claudeInput, { target: { checked: true, value: 'claude' } });
 
       const createButton = screen.getByRole('button', { name: /create/i });
       fireEvent.click(createButton);
@@ -394,8 +407,10 @@ describe('CreateWorktreeDialog', () => {
       const branchInput = screen.getByPlaceholderText('feature/my-branch');
       fireEvent.change(branchInput, { target: { value: 'feature/test' } });
 
-      const claudeOption = screen.getByText('Claude').closest('label');
-      fireEvent.click(claudeOption!);
+      const claudeLabel = screen.getByText('Claude').closest('label')!;
+      const claudeInput = claudeLabel.querySelector('input[type="radio"]') as HTMLInputElement;
+      fireEvent.click(claudeLabel);
+      fireEvent.change(claudeInput, { target: { checked: true, value: 'claude' } });
 
       const createButton = screen.getByRole('button', { name: /create/i });
       fireEvent.click(createButton);
@@ -425,8 +440,10 @@ describe('CreateWorktreeDialog', () => {
       const branchInput = screen.getByPlaceholderText('feature/my-branch');
       fireEvent.change(branchInput, { target: { value: 'feature/test' } });
 
-      const claudeOption = screen.getByText('Claude').closest('label');
-      fireEvent.click(claudeOption!);
+      const claudeLabel = screen.getByText('Claude').closest('label')!;
+      const claudeInput = claudeLabel.querySelector('input[type="radio"]') as HTMLInputElement;
+      fireEvent.click(claudeLabel);
+      fireEvent.change(claudeInput, { target: { checked: true, value: 'claude' } });
 
       const createButton = screen.getByRole('button', { name: /create/i });
       fireEvent.click(createButton);
@@ -477,8 +494,10 @@ describe('CreateWorktreeDialog', () => {
       const branchInput = screen.getByPlaceholderText('feature/my-branch');
       fireEvent.change(branchInput, { target: { value: 'feature/test' } });
 
-      const claudeOption = screen.getByText('Claude').closest('label');
-      fireEvent.click(claudeOption!);
+      const claudeLabel = screen.getByText('Claude').closest('label')!;
+      const claudeInput = claudeLabel.querySelector('input[type="radio"]') as HTMLInputElement;
+      fireEvent.click(claudeLabel);
+      fireEvent.change(claudeInput, { target: { checked: true, value: 'claude' } });
 
       const createButton = screen.getByRole('button', { name: /create/i });
       fireEvent.click(createButton);
@@ -488,7 +507,7 @@ describe('CreateWorktreeDialog', () => {
       });
 
       const errorHandler = messageHandlers.get('Error')!;
-      errorHandler({ message: 'Branch already has worktree' });
+      errorHandler({ requestId: 'test-request-id', message: 'Branch already has worktree' });
 
       await waitFor(() => {
         expect(mockAddNotification).toHaveBeenCalledWith({
@@ -516,8 +535,10 @@ describe('CreateWorktreeDialog', () => {
       const branchInput = screen.getByPlaceholderText('feature/my-branch');
       fireEvent.change(branchInput, { target: { value: 'feature/test' } });
 
-      const claudeOption = screen.getByText('Claude').closest('label');
-      fireEvent.click(claudeOption!);
+      const claudeLabel = screen.getByText('Claude').closest('label')!;
+      const claudeInput = claudeLabel.querySelector('input[type="radio"]') as HTMLInputElement;
+      fireEvent.click(claudeLabel);
+      fireEvent.change(claudeInput, { target: { checked: true, value: 'claude' } });
 
       const createButton = screen.getByRole('button', { name: /create/i });
       fireEvent.click(createButton);
@@ -527,7 +548,7 @@ describe('CreateWorktreeDialog', () => {
       });
 
       const errorHandler = messageHandlers.get('Error')!;
-      errorHandler({ message: 'Error' });
+      errorHandler({ requestId: 'test-request-id', message: 'Error' });
 
       await waitFor(() => {
         expect(createButton).not.toBeDisabled();
@@ -566,17 +587,16 @@ describe('CreateWorktreeDialog', () => {
         />
       );
 
-      // Select an agent
-      const claudeOption = screen.getByText('Claude').closest('label');
-      fireEvent.click(claudeOption!);
+      const claudeLabel = screen.getByText('Claude').closest('label')!;
+      const claudeInput = claudeLabel.querySelector('input[type="radio"]') as HTMLInputElement;
+      fireEvent.click(claudeLabel);
+      fireEvent.change(claudeInput, { target: { checked: true, value: 'claude' } });
 
-      // Verify agent is selected
       const branchInput = screen.getByPlaceholderText('feature/my-branch');
       fireEvent.change(branchInput, { target: { value: 'feature/test' } });
       let createButton = screen.getByRole('button', { name: /create/i });
       expect(createButton).not.toBeDisabled();
 
-      // Close the dialog
       rerender(
         <CreateWorktreeDialog
           open={false}
@@ -585,7 +605,6 @@ describe('CreateWorktreeDialog', () => {
         />
       );
 
-      // Reopen the dialog
       rerender(
         <CreateWorktreeDialog
           open={true}
@@ -594,7 +613,6 @@ describe('CreateWorktreeDialog', () => {
         />
       );
 
-      // Verify agent selection is cleared - Create button should be disabled
       createButton = screen.getByRole('button', { name: /create/i });
       expect(createButton).toBeDisabled();
     });

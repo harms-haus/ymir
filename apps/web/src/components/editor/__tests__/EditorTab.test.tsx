@@ -111,13 +111,8 @@ describe('EditorTab', () => {
         handler({
           type: 'FileContent',
           worktreeId: defaultProps.worktreeId,
-          file: {
-            path: defaultProps.filePath,
-            content: 'const App = () => <div>Hello</div>;',
-            encoding: 'utf8',
-            size: 100,
-            modifiedAt: Date.now(),
-          },
+          path: defaultProps.filePath,
+          content: 'const App = () => <div>Hello</div>;',
         });
       });
     });
@@ -140,13 +135,8 @@ describe('EditorTab', () => {
         handler({
           type: 'FileContent',
           worktreeId: defaultProps.worktreeId,
-          file: {
-            path: defaultProps.filePath,
-            content: 'x'.repeat(6 * 1024 * 1024),
-            encoding: 'utf8',
-            size: 6 * 1024 * 1024,
-            modifiedAt: Date.now(),
-          },
+          path: defaultProps.filePath,
+          content: 'x'.repeat(6 * 1024 * 1024),
         });
       });
     });
@@ -171,13 +161,8 @@ describe('EditorTab', () => {
         handler({
           type: 'FileContent',
           worktreeId: defaultProps.worktreeId,
-          file: {
-            path: defaultProps.filePath,
-            content: 'initial content',
-            encoding: 'utf8',
-            size: 100,
-            modifiedAt: Date.now(),
-          },
+          path: defaultProps.filePath,
+          content: 'initial content',
         });
       });
     });
@@ -220,13 +205,8 @@ describe('EditorTab', () => {
         handler({
           type: 'FileContent',
           worktreeId: defaultProps.worktreeId,
-          file: {
-            path: defaultProps.filePath,
-            content: 'initial',
-            encoding: 'utf8',
-            size: 100,
-            modifiedAt: Date.now(),
-          },
+          path: defaultProps.filePath,
+          content: 'initial',
         });
       });
     });
@@ -251,13 +231,8 @@ describe('EditorTab', () => {
         handler({
           type: 'FileContent',
           worktreeId: defaultProps.worktreeId,
-          file: {
-            path: defaultProps.filePath,
-            content: 'content',
-            encoding: 'utf8',
-            size: 100,
-            modifiedAt: Date.now(),
-          },
+          path: defaultProps.filePath,
+          content: 'content',
         });
       });
     });
@@ -278,13 +253,8 @@ describe('EditorTab', () => {
         handler({
           type: 'FileContent',
           worktreeId: defaultProps.worktreeId,
-          file: {
-            path: defaultProps.filePath,
-            content: 'content',
-            encoding: 'utf8',
-            size: 100,
-            modifiedAt: Date.now(),
-          },
+          path: defaultProps.filePath,
+          content: 'content',
         });
       });
     });
@@ -303,13 +273,8 @@ describe('EditorTab', () => {
         handler({
           type: 'FileContent',
           worktreeId: 'different-worktree',
-          file: {
-            path: defaultProps.filePath,
-            content: 'content',
-            encoding: 'utf8',
-            size: 100,
-            modifiedAt: Date.now(),
-          },
+          path: defaultProps.filePath,
+          content: 'content',
         });
       });
     });
@@ -326,13 +291,8 @@ describe('EditorTab', () => {
         handler({
           type: 'FileContent',
           worktreeId: defaultProps.worktreeId,
-          file: {
-            path: 'different/path.tsx',
-            content: 'content',
-            encoding: 'utf8',
-            size: 100,
-            modifiedAt: Date.now(),
-          },
+          path: 'different/path.tsx',
+          content: 'content',
         });
       });
     });

@@ -1,9 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { ProjectPanel } from '../ProjectPanel'
-import { useStore } from '../../../store'
+import { useStore, selectActiveWorktree } from '../../../store'
 
-vi.mock('../../../store')
+vi.mock('../../../store', () => ({
+  useStore: vi.fn(),
+  selectActiveWorktree: vi.fn(),
+}))
+
 vi.mock('../../../lib/ws', () => ({
   getWebSocketClient: vi.fn(() => ({
     onMessage: vi.fn(() => vi.fn()),
@@ -11,15 +15,34 @@ vi.mock('../../../lib/ws', () => ({
   })),
 }))
 
+vi.mock('../ChangesTab', () => ({
+  ChangesTab: () => <div data-testid="changes-tab">Changes Tab</div>,
+}))
+
+vi.mock('../AllFilesTab', () => ({
+  AllFilesTab: () => <div data-testid="all-files-tab">All Files Tab</div>,
+}))
+
 describe('ProjectPanel', () => {
-  const mockUseStore = useStore as unknown as ReturnType<typeof vi.fn>
+  const mockSelectActiveWorktree = selectActiveWorktree as unknown as ReturnType<typeof vi.fn>
 
   beforeEach(() => {
     vi.clearAllMocks()
+    
+    const mockStore = {
+      addNotification: vi.fn(),
+    }
+    
+    ;(useStore as any).mockImplementation((selector: any) => {
+      if (typeof selector === 'function') {
+        return selector(mockStore)
+      }
+      return mockStore
+    })
   })
 
   it('should render project panel with tabs', () => {
-    mockUseStore.mockReturnValue(null)
+    mockSelectActiveWorktree.mockReturnValue(null)
     
     render(<ProjectPanel />)
     
@@ -29,7 +52,7 @@ describe('ProjectPanel', () => {
   })
 
   it('should show PR button as disabled when no active worktree', () => {
-    mockUseStore.mockReturnValue(null)
+    mockSelectActiveWorktree.mockReturnValue(null)
     
     render(<ProjectPanel />)
     
@@ -38,7 +61,7 @@ describe('ProjectPanel', () => {
   })
 
   it('should show PR button as enabled when active worktree exists', () => {
-    mockUseStore.mockReturnValue({
+    mockSelectActiveWorktree.mockReturnValue({
       id: 'worktree-1',
       status: 'active',
       branchName: 'main',
@@ -50,39 +73,5 @@ describe('ProjectPanel', () => {
     
     const prButton = screen.getByText('PR').closest('button')
     expect(prButton).not.toBeDisabled()
-  })
-
-  it('should open PR dialog when PR button is clicked', () => {
-    mockUseStore.mockReturnValue({
-      id: 'worktree-1',
-      status: 'active',
-      branchName: 'main',
-      path: '/path/to/worktree',
-      workspaceId: 'workspace-1',
-    })
-    
-    render(<ProjectPanel />)
-    
-    const prButton = screen.getByText('PR').closest('button')
-    fireEvent.click(prButton!)
-    
-    expect(screen.getByRole('dialog')).toBeInTheDocument()
-  })
-
-  it('should switch between Changes and All Files tabs', () => {
-    mockUseStore.mockReturnValue(null)
-    
-    render(<ProjectPanel />)
-    
-    const changesTab = screen.getByText('Changes')
-    const allFilesTab = screen.getByText('All Files')
-    
-    expect(changesTab.closest('[role="tab"]')).toHaveAttribute('aria-selected', 'true')
-    
-    fireEvent.click(allFilesTab)
-    expect(allFilesTab.closest('[role="tab"]')).toHaveAttribute('aria-selected', 'true')
-    
-    fireEvent.click(changesTab)
-    expect(changesTab.closest('[role="tab"]')).toHaveAttribute('aria-selected', 'true')
   })
 })

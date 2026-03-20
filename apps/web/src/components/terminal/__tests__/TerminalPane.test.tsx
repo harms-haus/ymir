@@ -154,21 +154,28 @@ describe('TerminalPane', () => {
   });
 
   it('increments terminal numbers correctly', async () => {
-    (useStore as any).mockReturnValue([
-      { id: 'session-1', label: 'Terminal 1', worktreeId: 'test-worktree' },
-      { id: 'session-2', label: 'Terminal 2', worktreeId: 'test-worktree' },
-    ]);
-    
+    (useStore as any).mockReturnValue([]);
+
     render(<TerminalPane worktreeId="test-worktree" />);
-    
-    const addButton = screen.getByLabelText('Create new terminal');
-    fireEvent.click(addButton);
-    
+
     await waitFor(() => {
       expect(mockSend).toHaveBeenCalledWith({
         type: 'TerminalCreate',
         worktreeId: 'test-worktree',
-        label: 'Terminal 3',
+        label: 'Terminal 1',
+      });
+    });
+
+    mockSend.mockClear();
+
+    const addButton = screen.getByLabelText('Create new terminal');
+    fireEvent.click(addButton);
+
+    await waitFor(() => {
+      expect(mockSend).toHaveBeenCalledWith({
+        type: 'TerminalCreate',
+        worktreeId: 'test-worktree',
+        label: 'Terminal 2',
       });
     });
   });

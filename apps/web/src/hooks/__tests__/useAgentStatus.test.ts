@@ -1403,4 +1403,239 @@ describe('ACP Event Accumulator Reducer', () => {
       expect(newState).toBe(state);
     });
   });
+
+  describe('error envelope parity with Rust', () => {
+    beforeEach(() => {
+      state.threads.set('worktree-1', {
+        worktreeId: 'worktree-1',
+        acpSessionId: 'session-1',
+        messages: [{
+          id: 'msg-1',
+          role: 'assistant',
+          parts: [],
+          createdAt: Date.now(),
+          lastSequence: 0,
+        }],
+        sessionStatus: 'Working',
+        lastSequence: 0,
+        connectionGeneration: 1,
+        isStreaming: false,
+      });
+    });
+
+    const rustErrorCodes = [
+      'WORKTREE_NOT_FOUND',
+      'AGENT_NOT_FOUND',
+      'AGENT_DB_ERROR',
+      'ACP_NOT_INITIALIZED',
+      'AGENT_SEND_ERROR',
+    ] as const;
+
+    rustErrorCodes.forEach((rustCode) => {
+      it(`maps Rust error code ${rustCode} to error card in accumulator`, () => {
+        const envelope: AcpEventEnvelope = {
+          sequence: 1,
+          timestamp: Date.now(),
+          eventType: 'Error',
+          data: {
+            worktreeId: 'worktree-1',
+            acpSessionId: 'session-1',
+            code: 'Internal',
+            message: `Server error: ${rustCode}`,
+            recoverable: false,
+          },
+        };
+
+        const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+        const thread = newState.threads.get('worktree-1')!;
+
+        const errorCard = thread.messages[0].parts[0];
+        expect(errorCard.type).toBe('error');
+        expect((errorCard as any).recoverable).toBe(false);
+      });
+    });
+  });
+
+  describe('recoverable error retry behavior', () => {
+    beforeEach(() => {
+      state.threads.set('worktree-1', {
+        worktreeId: 'worktree-1',
+        acpSessionId: 'session-1',
+        messages: [],
+        sessionStatus: 'Working',
+        lastSequence: 0,
+        connectionGeneration: 1,
+        isStreaming: false,
+      });
+    });
+
+    it('recoverable error preserves thread for retry', () => {
+      const errorEnvelope: AcpEventEnvelope = {
+        sequence: 1,
+        timestamp: Date.now(),
+        eventType: 'Error',
+        data: {
+          worktreeId: 'worktree-1',
+          acpSessionId: 'session-1',
+          code: 'Timeout',
+          message: 'Request timed out',
+          recoverable: true,
+        },
+      };
+
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope: errorEnvelope, worktreeId: 'worktree-1' });
+
+      expect(newState.threads.has('worktree-1')).toBe(true);
+      const thread = newState.threads.get('worktree-1')!;
+      const errorCard = thread.messages[0].parts[0];
+      expect((errorCard as any).recoverable).toBe(true);
+    });
+
+    it('non-recoverable error adds error card but preserves session status', () => {
+      state.threads.get('worktree-1')!.sessionStatus = 'Working';
+
+      const errorEnvelope: AcpEventEnvelope = {
+        sequence: 1,
+        timestamp: Date.now(),
+        eventType: 'Error',
+        data: {
+          worktreeId: 'worktree-1',
+          acpSessionId: 'session-1',
+          code: 'AgentCrash',
+          message: 'Agent process crashed',
+          recoverable: false,
+        },
+      };
+
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope: errorEnvelope, worktreeId: 'worktree-1' });
+      const thread = newState.threads.get('worktree-1')!;
+
+      const errorCard = thread.messages[0].parts[0];
+      expect(errorCard.type).toBe('error');
+      expect((errorCard as any).recoverable).toBe(false);
+    });
+
+    it('PromptComplete with Error reason marks session complete', () => {
+      state.threads.get('worktree-1')!.sessionStatus = 'Working';
+
+      const completeEnvelope: AcpEventEnvelope = {
+        sequence: 1,
+        timestamp: Date.now(),
+        eventType: 'PromptComplete',
+        data: {
+          worktreeId: 'worktree-1',
+          acpSessionId: 'session-1',
+          reason: 'Error',
+        },
+      };
+
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope: completeEnvelope, worktreeId: 'worktree-1' });
+      const thread = newState.threads.get('worktree-1')!;
+
+      expect(thread.sessionStatus).toBe('Complete');
+    });
+
+    it('error after reconnect creates new thread', () => {
+      const reconnectState = acpAccumulatorReducer(state, { type: 'CONNECTION_RECONNECTED' });
+      expect(reconnectState.threads.size).toBe(0);
+
+      const sessionInitEnvelope: AcpEventEnvelope = {
+        sequence: 1,
+        timestamp: Date.now(),
+        eventType: 'SessionInit',
+        data: {
+          acpSessionId: 'session-2',
+          capabilities: { supportsToolUse: true, supportsContextUpdate: true, supportsCancellation: true },
+        },
+      };
+
+      let newState = acpAccumulatorReducer(reconnectState, { type: 'EVENT_RECEIVED', envelope: sessionInitEnvelope, worktreeId: 'worktree-1' });
+      
+      const errorEnvelope: AcpEventEnvelope = {
+        sequence: 2,
+        timestamp: Date.now(),
+        eventType: 'Error',
+        data: {
+          worktreeId: 'worktree-1',
+          acpSessionId: 'session-2',
+          code: 'InitFailed',
+          message: 'Failed to initialize session',
+          recoverable: false,
+        },
+      };
+
+      newState = acpAccumulatorReducer(newState, { type: 'EVENT_RECEIVED', envelope: errorEnvelope, worktreeId: 'worktree-1' });
+      expect(newState.connectionGeneration).toBe(2);
+      expect(newState.threads.has('worktree-1')).toBe(true);
+      const errorCard = newState.threads.get('worktree-1')!.messages[0].parts[0];
+      expect(errorCard.type).toBe('error');
+    });
+  });
+
+  describe('cancellation cleanup parity', () => {
+    beforeEach(() => {
+      state.threads.set('worktree-1', {
+        worktreeId: 'worktree-1',
+        acpSessionId: 'session-1',
+        messages: [],
+        sessionStatus: 'Working',
+        lastSequence: 0,
+        connectionGeneration: 1,
+        isStreaming: true,
+      });
+    });
+
+    it('PromptComplete with Cancelled reason stops streaming', () => {
+      const envelope: AcpEventEnvelope = {
+        sequence: 1,
+        timestamp: Date.now(),
+        eventType: 'PromptComplete',
+        data: {
+          worktreeId: 'worktree-1',
+          acpSessionId: 'session-1',
+          reason: 'Cancelled',
+        },
+      };
+
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const thread = newState.threads.get('worktree-1')!;
+
+      expect(thread.isStreaming).toBe(false);
+    });
+
+    it('SessionStatus Cancelled updates thread status', () => {
+      const envelope: AcpEventEnvelope = {
+        sequence: 1,
+        timestamp: Date.now(),
+        eventType: 'SessionStatus',
+        data: {
+          worktreeId: 'worktree-1',
+          acpSessionId: 'session-1',
+          status: 'Cancelled',
+        },
+      };
+
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const thread = newState.threads.get('worktree-1')!;
+
+      expect(thread.sessionStatus).toBe('Cancelled');
+    });
+
+    it('FLUSH_THREAD removes thread for worktree', () => {
+      state.threads.set('worktree-2', {
+        worktreeId: 'worktree-2',
+        acpSessionId: 'session-2',
+        messages: [],
+        sessionStatus: 'Working',
+        lastSequence: 0,
+        connectionGeneration: 1,
+        isStreaming: false,
+      });
+
+      const newState = acpAccumulatorReducer(state, { type: 'FLUSH_THREAD', worktreeId: 'worktree-1' });
+
+      expect(newState.threads.has('worktree-1')).toBe(false);
+      expect(newState.threads.has('worktree-2')).toBe(true);
+    });
+  });
 });

@@ -2,6 +2,7 @@
 
 **Date**: 2026-03-20
 **Status**: CONTINUE to assistant-ui integration
+**Final Verified**: 2026-03-20 (full green checkpoint)
 
 ## Test Results Summary
 
@@ -17,35 +18,22 @@ Key test categories:
 - Handler/router tests: All passed (Task 7)
 - Lifecycle tests: All passed (Task 5)
 
-### Web Adapter-Chain Tests (248 passed)
+### Web Tests (550 passed)
 
-Core chain tests verified:
+Full test suite verified:
 ```
-npm --prefix apps/web run test:run -- src/hooks/__tests__/useAgentStatus.test.ts src/lib/__tests__/ws.test.ts src/types/__tests__/protocol.test.ts src/components/agent/__tests__/AgentChat.test.tsx src/components/agent/__tests__/AgentPane.test.tsx src/components/sidebar/__tests__/StatusDot.test.tsx
-Test Files  6 passed
-Tests       248 passed
+npm --prefix apps/web run test:run
+Test Files  30 passed (30)
+Tests       550 passed (550)
 ```
 
 Covers:
 - Accumulator reducer (60 tests): all event types, reconnect, rebuild
 - WS adapter (45 tests): envelope decoding, malformed handling
 - Protocol (60 tests): wire contract, negative tests
-- AgentChat (1176 tests): message display, hooks
+- AgentChat (67 tests): assistant-ui integration, message rendering
 - AgentPane (5 tests): tab rendering, agent spawning
-- StatusDot (4 tests): status indicator
-
-### Pre-existing Test Failures (46 tests in 11 files)
-
-The full test suite `npm --prefix apps/web run test:run` shows 46 failures in unrelated components:
-- Dialog tests (CreatePRDialog, CreateWorktreeDialog, MergeDialog, WorkspaceSettingsDialog)
-- Project tests (ChangesTab, AllFilesTab, ProjectPanel)
-- Editor tests (DiffTab, EditorTab)
-- Terminal tests (Terminal, TerminalPane)
-
-These failures are pre-existing issues unrelated to the adapter-chain work:
-1. **Dialog components**: Bug in async state handling (e.g., `finally` blocks resetting loading states)
-2. **Project tests**: Test mocks don't handle `useStore` selector functions correctly
-3. **Terminal tests**: Async/timing issues
+- All dialog, project, editor, and terminal tests now pass
 
 ## Abort Conditions Evaluation
 
@@ -109,9 +97,9 @@ No state duplication detected.
 │                                ▼                                │
 │                      ServerMessagePayload::AcpWireEvent         │
 └─────────────────────────────────────────────────────────────────┘
-                                 │
-                                 │ WebSocket
-                                 ▼
+                                  │
+                                  │ WebSocket
+                                  ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                     TYPESCRIPT SIDE                             │
 ├─────────────────────────────────────────────────────────────────┤
@@ -127,9 +115,9 @@ No state duplication detected.
 │                        AccumulatedThread                         │
 │                          (messages, parts, cards)                │
 └─────────────────────────────────────────────────────────────────┘
-                                 │
-                                 │ ExternalStoreRuntime (Task 11)
-                                 ▼
+                                  │
+                                  │ ExternalStoreRuntime (Task 11)
+                                  ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                     assistant-ui                                 │
 │  - Message rendering                                             │
@@ -153,4 +141,4 @@ The architecture preserves Ymir's ownership of worktree/session identity while l
 ### Verified Checkpoint Commands
 
 - `cargo test -p ymir-ws-server -- --nocapture`: **PASS** (261 tests)
-- Core chain tests (protocol, accumulator, ws adapter, agent): **PASS** (248 tests)
+- `npm --prefix apps/web run test:run`: **PASS** (30 test files, 550 tests)

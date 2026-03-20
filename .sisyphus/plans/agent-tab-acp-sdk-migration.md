@@ -750,7 +750,7 @@ Max Concurrent: 5
   - Files: accumulator files, `apps/web/src/store.ts`, related tests
   - Pre-commit: `npm --prefix apps/web run test:run -- src/hooks/__tests__/useAgentStatus.test.ts`
 
-- [ ] 10. Run the adapter-chain spike and abort checkpoint
+- [x] 10. Run the adapter-chain spike and abort checkpoint
 
   **What to do**:
   - Validate the full chain from Rust ACP bridge through WS-ACP and the accumulator before deep UI work.
@@ -813,7 +813,7 @@ Max Concurrent: 5
   - Pre-commit: `cargo test -p ymir-ws-server -- --nocapture && npm --prefix apps/web run test:run`
 
 
-- [ ] 11. Wire `assistant-ui` through `ExternalStoreRuntime`
+- [x] 11. Wire `assistant-ui` through `ExternalStoreRuntime`
 
   **What to do**:
   - Integrate `assistant-ui` using `ExternalStoreRuntime` fed from the accumulator output.
@@ -876,7 +876,7 @@ Max Concurrent: 5
   - Files: assistant-ui runtime wrapper files, `apps/web/src/components/agent/AgentPane.tsx`, related tests
   - Pre-commit: `npm --prefix apps/web run test:run -- src/components/agent/__tests__/AgentPane.test.tsx`
 
-- [ ] 12. Build compact custom event cards
+- [x] 12. Build compact custom event cards
 
   **What to do**:
   - Implement compact custom cards for permissions, tools, plans, and status updates on top of assistant-ui primitives.
@@ -938,7 +938,7 @@ Max Concurrent: 5
   - Files: `apps/web/src/components/agent/AgentChat.tsx`, card component files, related tests
   - Pre-commit: `npm --prefix apps/web run test:run -- src/components/agent/__tests__/AgentChat.test.tsx`
 
-- [ ] 13. Preserve worktree/tab/diff/editor/terminal integration
+- [x] 13. Preserve worktree/tab/diff/editor/terminal integration
 
   **What to do**:
   - Keep the new assistant-ui session surface interoperable with existing worktree tabs and adjacent diff/editor/terminal flows.
@@ -1000,7 +1000,7 @@ Max Concurrent: 5
   - Files: `apps/web/src/components/agent/AgentPane.tsx`, related panel files, relevant tests
   - Pre-commit: `npm --prefix apps/web run test:run -- src/components/agent/__tests__/AgentPane.test.tsx`
 
-- [ ] 14. Retire the obsolete custom ACP path and stale bindings
+- [x] 14. Retire the obsolete custom ACP path and stale bindings
 
   **What to do**:
   - Remove or quarantine the old custom ACP implementation once the new chain is active.
@@ -1062,7 +1062,7 @@ Max Concurrent: 5
   - Files: retired ACP Rust files, bindings, fixtures, related tests
   - Pre-commit: `cargo test -p ymir-ws-server -- --nocapture && npm --prefix apps/web run test:run`
 
-- [ ] 15. Add reconnect/rebuild/error regression coverage and full sweep
+- [x] 15. Add reconnect/rebuild/error regression coverage and full sweep
 
   **What to do**:
   - Add final unit coverage for reconnect, rebuild, cancellation, error envelopes, and parity-critical flows.
@@ -1134,16 +1134,16 @@ Max Concurrent: 5
 
 > 4 review agents run in parallel. All must approve. Present consolidated results and wait for explicit user okay.
 
-- [ ] F1. **Plan Compliance Audit** - `oracle`
+- [x] F1. **Plan Compliance Audit** - `oracle`
   Verify the delivered system preserves the explicit adapter chain, keeps accumulation only in the ACP event accumulator, launches agents in the selected worktree CWD, and avoids assistant-ui state ownership drift.
 
-- [ ] F2. **Code Quality Review** - `unspecified-high`
+- [x] F2. **Code Quality Review** - `unspecified-high`
   Run `cargo test -p ymir-ws-server`, `npm --prefix apps/web run test:run`, and inspect touched Rust/TypeScript files for dead custom ACP paths, weak typing, or accidental state duplication.
 
-- [ ] F3. **Unit-Verification Execution** - `unspecified-high`
+- [x] F3. **Unit-Verification Execution** - `unspecified-high`
   Execute every task-level QA scenario and confirm evidence files exist under `.sisyphus/evidence/`.
 
-- [ ] F4. **Scope Fidelity Check** - `deep`
+- [x] F4. **Scope Fidelity Check** - `deep`
   Confirm the work stayed within ACP bridge, adapter chain, accumulator, assistant-ui integration, and worktree-CWD lifecycle scope.
 
 ---

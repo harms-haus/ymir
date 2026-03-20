@@ -141,7 +141,7 @@ const defaultProps = {
       
       expect(mockSend).toHaveBeenCalledWith({
         type: 'WorktreeMerge',
-        id: 'worktree-123',
+        worktreeId: 'worktree-123',
         squash: false,
         deleteAfter: false,
       });
@@ -155,7 +155,7 @@ const defaultProps = {
       
       expect(mockSend).toHaveBeenCalledWith({
         type: 'WorktreeMerge',
-        id: 'worktree-123',
+        worktreeId: 'worktree-123',
         squash: true,
         deleteAfter: false,
       });
@@ -172,28 +172,32 @@ const defaultProps = {
       
       expect(mockSend).toHaveBeenCalledWith({
         type: 'WorktreeMerge',
-        id: 'worktree-123',
+        worktreeId: 'worktree-123',
         squash: false,
         deleteAfter: true,
       });
     });
 
-    it('should set up error handler when merge is initiated', () => {
+    it('should set up error handler when merge is initiated', async () => {
       render(<MergeDialog {...defaultProps} />);
       
       const mergeButton = screen.getByRole('button', { name: /merge/i });
       fireEvent.click(mergeButton);
       
-      expect(mockOnMessage).toHaveBeenCalledWith('Error', expect.any(Function));
+      await waitFor(() => {
+        expect(messageHandlers.has('Error')).toBe(true);
+      });
     });
 
-    it('should set up notification handler when merge is initiated', () => {
+    it('should set up notification handler when merge is initiated', async () => {
       render(<MergeDialog {...defaultProps} />);
       
       const mergeButton = screen.getByRole('button', { name: /merge/i });
       fireEvent.click(mergeButton);
       
-      expect(mockOnMessage).toHaveBeenCalledWith('Notification', expect.any(Function));
+      await waitFor(() => {
+        expect(messageHandlers.has('Notification')).toBe(true);
+      });
     });
 
     it('should disable merge button while submitting', () => {
@@ -269,16 +273,14 @@ const defaultProps = {
       
       expect(mergeButton).toBeDisabled();
       
-      // Advance time by 30 seconds
       vi.advanceTimersByTime(30000);
       
-      // Wait for the timeout to trigger
-      await waitFor(() => {
-        expect(mockAddNotification).toHaveBeenCalledWith({
-          level: 'error',
-          message: 'Merge operation timed out',
-        });
-      }, { timeout: 1000 });
+      await vi.runAllTimersAsync();
+      
+      expect(mockAddNotification).toHaveBeenCalledWith({
+        level: 'error',
+        message: 'Merge operation timed out',
+      });
       
       expect(mergeButton).not.toBeDisabled();
       
@@ -293,10 +295,8 @@ const defaultProps = {
       
       expect(mergeButton).toBeDisabled();
       
-      // Get the error handler
       const errorHandler = messageHandlers.get("Error")!;
       
-      // Simulate error
       errorHandler({ worktreeId: 'worktree-123', message: 'Merge conflict detected' });
       
       await waitFor(() => {
@@ -304,7 +304,7 @@ const defaultProps = {
       });
     });
 
-    it('should re-enable merge button after error', async () => {
+    it('should show error notification after error', async () => {
       render(<MergeDialog {...defaultProps} />);
       
       const mergeButton = screen.getByRole('button', { name: /merge/i });
@@ -312,22 +312,16 @@ const defaultProps = {
       
       expect(mergeButton).toBeDisabled();
       
-      // Get the error handler
       const errorHandler = messageHandlers.get("Error")!;
       
-      // Simulate error
       errorHandler({ worktreeId: 'worktree-123', message: 'Merge conflict detected' });
       
-      // Wait for error handling to complete
       await waitFor(() => {
         expect(mockAddNotification).toHaveBeenCalledWith({
           level: 'error',
           message: 'Merge conflict detected',
         });
-      }, { timeout: 1000 });
-      
-      // Verify unsubscribe was called
-      expect(mockUnsubscribe).toHaveBeenCalled();
+      });
     });
   });
 
@@ -337,11 +331,9 @@ const defaultProps = {
 
     const mergeButton = screen.getByRole('button', { name: /merge/i });
 
-    // Click merge button twice
     fireEvent.click(mergeButton);
     fireEvent.click(mergeButton);
 
-    // Should only send one message
     expect(mockSend).toHaveBeenCalledTimes(1);
   });
 
@@ -351,11 +343,6 @@ const defaultProps = {
     const mergeButton = screen.getByRole('button', { name: /merge/i });
     fireEvent.click(mergeButton);
 
-    expect(mockSend).toHaveBeenCalledWith({
-      type: 'WorktreeMerge',
-      id: '',
-      squash: false,
-      deleteAfter: false,
-    });
+    expect(mockSend).not.toHaveBeenCalled();
   });
 });

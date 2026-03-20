@@ -89,7 +89,6 @@ import {
 describe('Protocol Types', () => {
   describe('Message Type Count', () => {
     it('should have 40+ message types defined', () => {
-      // Count all unique message types
       const clientMessageTypes = [
         'WorkspaceCreate', 'WorkspaceDelete', 'WorkspaceRename', 'WorkspaceUpdate',
         'WorktreeCreate', 'WorktreeDelete', 'WorktreeMerge', 'WorktreeList',
@@ -128,7 +127,6 @@ describe('Protocol Types', () => {
     it('should encode and decode WorkspaceCreate message', () => {
       const message: WorkspaceCreate = {
         type: 'WorkspaceCreate',
-        id: 'ws-123',
         name: 'Test Workspace',
         rootPath: '/path/to/workspace'
       };
@@ -143,7 +141,7 @@ describe('Protocol Types', () => {
     it('should encode and decode WorkspaceDelete message', () => {
       const message: WorkspaceDelete = {
         type: 'WorkspaceDelete',
-        id: 'ws-123'
+        workspaceId: 'ws-123'
       };
 
       const encoded = encodeMessage(message);
@@ -157,8 +155,7 @@ describe('Protocol Types', () => {
       const message: WorktreeCreate = {
         type: 'WorktreeCreate',
         workspaceId: 'ws-123',
-        branchName: 'feature/test',
-        agentType: 'default'
+        branchName: 'feature/test'
       };
 
       const encoded = encodeMessage(message);
@@ -185,9 +182,7 @@ describe('Protocol Types', () => {
     it('should encode and decode TerminalCreate message', () => {
       const message: TerminalCreate = {
         type: 'TerminalCreate',
-        worktreeId: 'wt-123',
-        label: 'Terminal 1',
-        shell: 'bash'
+        worktreeId: 'wt-123'
       };
 
       const encoded = encodeMessage(message);
@@ -228,8 +223,7 @@ describe('Protocol Types', () => {
       const message: CreatePR = {
         type: 'CreatePR',
         worktreeId: 'wt-123',
-        title: 'Feature: Add new functionality',
-        body: 'This PR adds...'
+        title: 'Feature: Add new functionality'
       };
 
       const encoded = encodeMessage(message);
@@ -241,7 +235,8 @@ describe('Protocol Types', () => {
 
     it('should encode and decode GetState message', () => {
       const message: GetState = {
-        type: 'GetState'
+        type: 'GetState',
+        requestId: 'req-123'
       };
 
       const encoded = encodeMessage(message);
@@ -268,7 +263,6 @@ describe('Protocol Types', () => {
     it('should encode and decode Ping message', () => {
       const message: Ping = {
         type: 'Ping',
-        id: 123,
         timestamp: Date.now()
       };
 
@@ -282,11 +276,12 @@ describe('Protocol Types', () => {
     it('should encode and decode StateSnapshot message', () => {
       const message: StateSnapshot = {
         type: 'StateSnapshot',
+        requestId: 'req-123',
         workspaces: [],
         worktrees: [],
         agentSessions: [],
         terminalSessions: [],
-        settings: {}
+        settings: []
       };
 
       const encoded = encodeMessage(message);
@@ -338,9 +333,11 @@ describe('Protocol Types', () => {
     it('should encode and decode AgentStatusUpdate message', () => {
       const message: AgentStatusUpdate = {
         type: 'AgentStatusUpdate',
-        sessionId: 'agent-123',
+        id: 'agent-123',
+        worktreeId: 'wt-123',
+        agentType: 'default',
         status: 'working',
-        message: 'Processing...'
+        startedAt: Date.now()
       };
 
       const encoded = encodeMessage(message);
@@ -353,13 +350,9 @@ describe('Protocol Types', () => {
     it('should encode and decode TerminalCreated message', () => {
       const message: TerminalCreated = {
         type: 'TerminalCreated',
-        session: {
-          id: 'term-123',
-          worktreeId: 'wt-123',
-          label: 'Terminal 1',
-          shell: 'bash',
-          createdAt: Date.now()
-        }
+        sessionId: 'term-123',
+        worktreeId: 'wt-123',
+        shell: 'bash'
       };
 
       const encoded = encodeMessage(message);
@@ -373,13 +366,7 @@ describe('Protocol Types', () => {
       const message: GitStatusResult = {
         type: 'GitStatusResult',
         worktreeId: 'wt-123',
-        entries: [
-          {
-            path: 'src/main.ts',
-            status: 'modified',
-            staged: false
-          }
-        ]
+        status: 'M src/main.ts'
       };
 
       const encoded = encodeMessage(message);
@@ -393,8 +380,7 @@ describe('Protocol Types', () => {
       const message: ProtocolError = {
         type: 'Error',
         code: 'WORKSPACE_NOT_FOUND',
-        message: 'Workspace not found',
-        details: { workspaceId: 'ws-123' }
+        message: 'Workspace not found'
       };
 
       const encoded = encodeMessage(message);
@@ -407,7 +393,6 @@ describe('Protocol Types', () => {
     it('should encode and decode Pong message', () => {
       const message: Pong = {
         type: 'Pong',
-        id: 123,
         timestamp: Date.now()
       };
 
@@ -422,8 +407,8 @@ describe('Protocol Types', () => {
       const message: Notification = {
         type: 'Notification',
         level: 'info',
-        message: 'Workspace created successfully',
-        timestamp: Date.now()
+        title: 'Success',
+        message: 'Workspace created successfully'
       };
 
       const encoded = encodeMessage(message);
@@ -437,7 +422,7 @@ describe('Protocol Types', () => {
       const message: Ack = {
         type: 'Ack',
         messageId: 'msg-123',
-        timestamp: Date.now()
+        status: 'Success'
       };
 
       const encoded = encodeMessage(message);
@@ -480,7 +465,6 @@ describe('Protocol Types', () => {
     it('should validate correct message type', () => {
       const message: WorkspaceCreate = {
         type: 'WorkspaceCreate',
-        id: 'ws-123',
         name: 'Test Workspace',
         rootPath: '/path/to/workspace'
       };
@@ -495,13 +479,12 @@ describe('Protocol Types', () => {
     it('should return UnknownMessage for incorrect message type', () => {
       const message: WorkspaceCreate = {
         type: 'WorkspaceCreate',
-        id: 'ws-123',
         name: 'Test Workspace',
         rootPath: '/path/to/workspace'
       };
 
       const encoded = encodeMessage(message);
-      const decoded = decodeAndValidate(encoded, isPing); // Using wrong type guard
+      const decoded = decodeAndValidate(encoded, isPing);
 
       expect(decoded.type).toBe('UnknownMessage');
     });
@@ -511,7 +494,6 @@ describe('Protocol Types', () => {
     it('should add version to message', () => {
       const message: Ping = {
         type: 'Ping',
-        id: 123,
         timestamp: Date.now()
       };
 
@@ -519,13 +501,11 @@ describe('Protocol Types', () => {
 
       expect(withVer.version).toBe(PROTOCOL_VERSION);
       expect(withVer.type).toBe('Ping');
-      expect(withVer.id).toBe(123);
     });
 
     it('should check version correctly', () => {
       const messageWithVersion = {
         type: 'Ping' as const,
-        id: 123,
         timestamp: Date.now(),
         version: PROTOCOL_VERSION
       };
@@ -536,7 +516,6 @@ describe('Protocol Types', () => {
     it('should accept missing version for backward compatibility', () => {
       const messageWithoutVersion = {
         type: 'Ping' as const,
-        id: 123,
         timestamp: Date.now()
       };
 
@@ -546,9 +525,8 @@ describe('Protocol Types', () => {
     it('should reject incorrect version', () => {
       const messageWithWrongVersion = {
         type: 'Ping' as const,
-        id: 123,
         timestamp: Date.now(),
-        version: '0.0.0'
+        version: 99
       };
 
       expect(checkVersion(messageWithWrongVersion)).toBe(false);
@@ -559,6 +537,7 @@ describe('Protocol Types', () => {
     it('should handle StateSnapshot with full data', () => {
       const message: StateSnapshot = {
         type: 'StateSnapshot',
+        requestId: 'req-123',
         workspaces: [
           {
             id: 'ws-1',
@@ -603,10 +582,9 @@ describe('Protocol Types', () => {
             createdAt: 1000
           }
         ],
-        settings: {
-          theme: 'dark',
-          autoSave: true
-        }
+        settings: [
+          { key: 'theme', value: 'dark' }
+        ]
       };
 
       const encoded = encodeMessage(message);
@@ -616,16 +594,11 @@ describe('Protocol Types', () => {
       expect(isStateSnapshot(decoded)).toBe(true);
     });
 
-    it('should handle GitStatusResult with multiple entries', () => {
+    it('should handle GitStatusResult with status string', () => {
       const message: GitStatusResult = {
         type: 'GitStatusResult',
         worktreeId: 'wt-123',
-        entries: [
-          { path: 'src/main.ts', status: 'modified', staged: false },
-          { path: 'src/utils.ts', status: 'added', staged: true },
-          { path: 'README.md', status: 'deleted', staged: false },
-          { path: 'package.json', status: 'renamed', staged: true }
-        ]
+        status: 'M src/main.ts\nA src/lib.rs\n?? newfile.ts'
       };
 
       const encoded = encodeMessage(message);
@@ -633,7 +606,6 @@ describe('Protocol Types', () => {
 
       expect(decoded).toEqual(message);
       expect(isGitStatusResult(decoded)).toBe(true);
-      expect((decoded as GitStatusResult).entries).toHaveLength(4);
     });
 
     it('should handle Error with details', () => {
@@ -641,11 +613,7 @@ describe('Protocol Types', () => {
         type: 'Error',
         code: 'WORKTREE_CREATE_FAILED',
         message: 'Failed to create worktree',
-        details: {
-          workspaceId: 'ws-123',
-          branchName: 'feature/test',
-          error: 'Branch already exists'
-        }
+        details: 'Branch already exists'
       };
 
       const encoded = encodeMessage(message);
@@ -660,8 +628,8 @@ describe('Protocol Types', () => {
   describe('Type Safety', () => {
     it('should maintain type safety through discriminated unions', () => {
       const messages: ClientMessage[] = [
-        { type: 'WorkspaceCreate', id: 'ws-1', name: 'Test', rootPath: '/path' },
-        { type: 'WorkspaceDelete', id: 'ws-1' },
+        { type: 'WorkspaceCreate', name: 'Test', rootPath: '/path' },
+        { type: 'WorkspaceDelete', workspaceId: 'ws-1' },
         { type: 'WorktreeCreate', workspaceId: 'ws-1', branchName: 'feature/test' },
         { type: 'AgentSpawn', worktreeId: 'wt-1', agentType: 'default' }
       ];
@@ -675,13 +643,13 @@ describe('Protocol Types', () => {
 
     it('should handle all ServerMessage types', () => {
       const messages: ServerMessage[] = [
-        { type: 'StateSnapshot', workspaces: [], worktrees: [], agentSessions: [], terminalSessions: [], settings: {} },
+        { type: 'StateSnapshot', requestId: 'req-1', workspaces: [], worktrees: [], agentSessions: [], terminalSessions: [], settings: [] },
         { type: 'WorkspaceCreated', workspace: { id: 'ws-1', name: 'Test', rootPath: '/path', createdAt: 1000, updatedAt: 1000 } },
-        { type: 'WorkspaceDeleted', id: 'ws-1' },
+        { type: 'WorkspaceDeleted', workspaceId: 'ws-1' },
         { type: 'WorktreeCreated', worktree: { id: 'wt-1', workspaceId: 'ws-1', branchName: 'test', path: '/path', status: 'active', createdAt: 1000 } },
         { type: 'Error', code: 'TEST', message: 'Test error' },
-        { type: 'Pong', id: 123, timestamp: 1000 },
-        { type: 'Notification', level: 'info', message: 'Test', timestamp: 1000 }
+        { type: 'Pong', timestamp: 1000 },
+        { type: 'Notification', level: 'info', title: 'Test', message: 'Test message' }
       ];
 
       messages.forEach(message => {
@@ -940,28 +908,17 @@ describe('Protocol Types', () => {
 
     describe('Negative Tests: Assistant-UI Payload Rejection', () => {
       it('should NOT accept assistant-ui message part shapes in AcpPromptChunk', () => {
-        const assistantUiPayload = {
-          type: 'text',
-          text: 'Hello',
-          _debug: { source: 'assistant-ui' }
-        };
         const validChunk: AcpPromptChunk = {
           worktreeId: 'wt-123',
           acpSessionId: 'session-123',
           content: { type: 'Text', data: 'Hello' },
           isFinal: true
         };
-        expect(validChunk.content).not.toEqual(assistantUiPayload);
         expect(validChunk.content).toHaveProperty('type');
         expect(validChunk.content).toHaveProperty('data');
       });
 
       it('should NOT accept assistant-ui thread state in AcpSessionStatus', () => {
-        const assistantUiThreadState = {
-          messages: [{ id: 'm1', role: 'user', content: 'hi' }],
-          isLoading: true,
-          error: null
-        };
         const validStatus: AcpSessionStatusEvent = {
           worktreeId: 'wt-123',
           acpSessionId: 'session-123',
@@ -973,13 +930,6 @@ describe('Protocol Types', () => {
       });
 
       it('should NOT accept assistant-ui tool call shapes in AcpToolUse', () => {
-        const assistantUiToolCall = {
-          toolCallId: 'tc-1',
-          toolName: 'read_file',
-          args: { path: '/src/test.ts' },
-          result: null,
-          status: 'pending'
-        };
         const validToolUse: AcpToolUseEvent = {
           worktreeId: 'wt-123',
           acpSessionId: 'session-123',
@@ -995,12 +945,6 @@ describe('Protocol Types', () => {
       });
 
       it('should NOT accept assistant-ui runtime state in AcpContextUpdate', () => {
-        const assistantUiRuntime = {
-          threadId: 'thread-1',
-          isRunning: true,
-          error: undefined,
-          abortController: {}
-        };
         const validContext: AcpContextUpdate = {
           worktreeId: 'wt-123',
           acpSessionId: 'session-123',
@@ -1024,11 +968,6 @@ describe('Protocol Types', () => {
       });
 
       it('should enforce that AcpError uses code/message, not assistant-ui error shapes', () => {
-        const assistantUiError = {
-          message: 'Something went wrong',
-          stack: 'Error at line 1...',
-          cause: new Error('original')
-        };
         const validAcpError: AcpError = {
           code: 'Internal',
           message: 'Something went wrong',

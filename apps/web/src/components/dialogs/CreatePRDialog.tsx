@@ -124,9 +124,11 @@ export function CreatePRDialog({ open, onOpenChange }: CreatePRDialogProps) {
       }, 30000);
 
     } catch (error) {
-      throw error;
-    } finally {
       setIsAutoGenerating(false);
+      addNotification({
+        level: 'error',
+        message: `Failed to start auto-generate: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      });
     }
   }, [activeWorktree, addNotification]);
 

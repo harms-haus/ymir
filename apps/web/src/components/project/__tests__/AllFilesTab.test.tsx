@@ -1,10 +1,63 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { AllFilesTab } from '../AllFilesTab'
-import { useStore } from '../../../store'
+import { useStore, selectActiveWorktree } from '../../../store'
 import { getWebSocketClient } from '../../../lib/ws'
 
-vi.mock('../../../store')
+const mockStore = {
+  workspaces: [],
+  worktrees: [],
+  agentSessions: [],
+  terminalSessions: [],
+  notifications: [],
+  activeWorktreeId: null as string | null,
+  connectionStatus: 'open' as const,
+  connectionError: null,
+  agentTabs: new Map(),
+  activeAgentTabId: new Map(),
+  prDialog: { isOpen: false, title: '', body: '' },
+  setWorkspaces: vi.fn(),
+  setWorktrees: vi.fn(),
+  setAgentSessions: vi.fn(),
+  setTerminalSessions: vi.fn(),
+  setActiveWorktree: vi.fn(),
+  setConnectionStatus: vi.fn(),
+  setConnectionError: vi.fn(),
+  stateFromSnapshot: vi.fn(),
+  addWorkspace: vi.fn(),
+  updateWorkspace: vi.fn(),
+  removeWorkspace: vi.fn(),
+  addWorktree: vi.fn(),
+  updateWorktree: vi.fn(),
+  removeWorktree: vi.fn(),
+  addAgentSession: vi.fn(),
+  updateAgentSession: vi.fn(),
+  removeAgentSession: vi.fn(),
+  addTerminalSession: vi.fn(),
+  removeTerminalSession: vi.fn(),
+  addNotification: vi.fn(),
+  removeNotification: vi.fn(),
+  clearNotifications: vi.fn(),
+  addAgentTab: vi.fn(),
+  removeAgentTab: vi.fn(),
+  setActiveAgentTab: vi.fn(),
+  updateAgentTab: vi.fn(),
+  setPRDialogOpen: vi.fn(),
+  setPRDialogTitle: vi.fn(),
+  setPRDialogBody: vi.fn(),
+  resetPRDialog: vi.fn(),
+}
+
+vi.mock('../../../store', () => ({
+  useStore: vi.fn((selector) => {
+    if (typeof selector === 'function') {
+      return selector(mockStore)
+    }
+    return mockStore
+  }),
+  selectActiveWorktree: vi.fn(() => null),
+}))
+
 vi.mock('../../../lib/ws', () => ({
   getWebSocketClient: vi.fn(() => ({
     onMessage: vi.fn(() => vi.fn()),
@@ -13,7 +66,7 @@ vi.mock('../../../lib/ws', () => ({
 }))
 
 describe('AllFilesTab', () => {
-  const mockUseStore = useStore as unknown as ReturnType<typeof vi.fn>
+  const mockSelectActiveWorktree = selectActiveWorktree as unknown as ReturnType<typeof vi.fn>
   const mockWsClient = getWebSocketClient as unknown as ReturnType<typeof vi.fn>
 
   beforeEach(() => {
@@ -21,15 +74,15 @@ describe('AllFilesTab', () => {
   })
 
   it('should show no worktree message when no active worktree', () => {
-    mockUseStore.mockReturnValue(null)
+    mockSelectActiveWorktree.mockReturnValue(null)
     
     render(<AllFilesTab />)
     
     expect(screen.getByText('No worktree selected')).toBeInTheDocument()
   })
 
-  it('should show no files message when no files', () => {
-    mockUseStore.mockReturnValue({
+  it('should show no files message when no files', async () => {
+    mockSelectActiveWorktree.mockReturnValue({
       id: 'worktree-1',
       status: 'active',
       branchName: 'main',
@@ -37,11 +90,7 @@ describe('AllFilesTab', () => {
       workspaceId: 'workspace-1',
     })
     
-    const mockOnMessage = vi.fn((type) => {
-      if (type === 'FileChange') {
-      }
-      return vi.fn()
-    })
+    const mockOnMessage = vi.fn(() => vi.fn())
     
     mockWsClient.mockReturnValue({
       onMessage: mockOnMessage,
@@ -50,13 +99,13 @@ describe('AllFilesTab', () => {
     
     render(<AllFilesTab />)
     
-    waitFor(() => {
+    await waitFor(() => {
       expect(screen.getByText('No files found')).toBeInTheDocument()
     })
   })
 
   it('should display files in tree structure', async () => {
-    mockUseStore.mockReturnValue({
+    mockSelectActiveWorktree.mockReturnValue({
       id: 'worktree-1',
       status: 'active',
       branchName: 'main',
@@ -65,8 +114,8 @@ describe('AllFilesTab', () => {
     })
     
     const mockOnMessage = vi.fn((type, callback) => {
-      if (type === 'FileChange') {
-        callback({ type: 'FileChange', worktreeId: 'worktree-1', path: 'src/file1.ts', changeType: 'created' })
+      if (type === 'FileListResult') {
+        callback({ type: 'FileListResult', worktreeId: 'worktree-1', files: ['src/file1.ts'] })
       }
       return vi.fn()
     })
@@ -80,12 +129,18 @@ describe('AllFilesTab', () => {
     
     await waitFor(() => {
       expect(screen.getByText('src')).toBeInTheDocument()
+    })
+    
+    const srcDir = screen.getByText('src')
+    fireEvent.click(srcDir)
+    
+    await waitFor(() => {
       expect(screen.getByText('file1.ts')).toBeInTheDocument()
     })
   })
 
   it('should expand and collapse directories', async () => {
-    mockUseStore.mockReturnValue({
+    mockSelectActiveWorktree.mockReturnValue({
       id: 'worktree-1',
       status: 'active',
       branchName: 'main',
@@ -94,8 +149,8 @@ describe('AllFilesTab', () => {
     })
     
     const mockOnMessage = vi.fn((type, callback) => {
-      if (type === 'FileChange') {
-        callback({ type: 'FileChange', worktreeId: 'worktree-1', path: 'src/components/Button.tsx', changeType: 'created' })
+      if (type === 'FileListResult') {
+        callback({ type: 'FileListResult', worktreeId: 'worktree-1', files: ['src/components/Button.tsx'] })
       }
       return vi.fn()
     })
@@ -127,7 +182,7 @@ describe('AllFilesTab', () => {
   })
 
   it('should update file list when files change', async () => {
-    mockUseStore.mockReturnValue({
+    mockSelectActiveWorktree.mockReturnValue({
       id: 'worktree-1',
       status: 'active',
       branchName: 'main',
@@ -136,8 +191,8 @@ describe('AllFilesTab', () => {
     })
     
     const mockOnMessage = vi.fn((type, callback) => {
-      if (type === 'FileChange') {
-        callback({ type: 'FileChange', worktreeId: 'worktree-1', path: 'new-file.ts', changeType: 'created' })
+      if (type === 'FileListResult') {
+        callback({ type: 'FileListResult', worktreeId: 'worktree-1', files: ['new-file.ts'] })
       }
       return vi.fn()
     })
@@ -155,7 +210,7 @@ describe('AllFilesTab', () => {
   })
 
   it('should remove file from list when file is deleted', async () => {
-    mockUseStore.mockReturnValue({
+    mockSelectActiveWorktree.mockReturnValue({
       id: 'worktree-1',
       status: 'active',
       branchName: 'main',
@@ -164,8 +219,8 @@ describe('AllFilesTab', () => {
     })
     
     const mockOnMessage = vi.fn((type, callback) => {
-      if (type === 'FileChange') {
-        callback({ type: 'FileChange', worktreeId: 'worktree-1', path: 'file1.ts', changeType: 'deleted' })
+      if (type === 'FileListResult') {
+        callback({ type: 'FileListResult', worktreeId: 'worktree-1', files: [] })
       }
       return vi.fn()
     })
@@ -178,7 +233,7 @@ describe('AllFilesTab', () => {
     render(<AllFilesTab />)
     
     await waitFor(() => {
-      expect(screen.queryByText('file1.ts')).not.toBeInTheDocument()
+      expect(screen.getByText('No files found')).toBeInTheDocument()
     })
   })
 })

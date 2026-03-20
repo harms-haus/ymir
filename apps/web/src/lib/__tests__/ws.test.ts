@@ -999,6 +999,101 @@ describe('YmirClient', () => {
       });
     });
   });
+
+  describe('Rust-TS error code parity', () => {
+    it('handles Error server message with Rust error codes', () => {
+      client = new YmirClient({ url: 'ws://localhost:7319' });
+      Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
+      callOpenHandler();
+
+      const rustErrorCodes = [
+        'WORKTREE_NOT_FOUND',
+        'AGENT_NOT_FOUND',
+        'AGENT_DB_ERROR',
+        'ACP_NOT_INITIALIZED',
+        'AGENT_SEND_ERROR',
+      ];
+
+      rustErrorCodes.forEach((code) => {
+        const errorMessage: ServerMessage = {
+          type: 'Error',
+          code,
+          message: `Server error: ${code}`,
+          details: null,
+          requestId: null,
+        };
+
+        expect(() => {
+          callMessageHandler({ data: encodeMessage(errorMessage) } as MessageEvent);
+        }).not.toThrow();
+      });
+    });
+
+    it('Error message structure matches Rust Error struct', () => {
+      client = new YmirClient({ url: 'ws://localhost:7319' });
+      Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
+      callOpenHandler();
+
+      const errorMessage = {
+        type: 'Error' as const,
+        code: 'WORKTREE_NOT_FOUND',
+        message: 'Worktree not found',
+        details: 'Additional context',
+        requestId: 'req-123',
+      };
+
+      const encoded = encodeMessage(errorMessage);
+
+      expect(() => {
+        callMessageHandler({ data: encoded } as MessageEvent);
+      }).not.toThrow();
+    });
+
+    it('AgentRemoved message matches Rust AgentRemoved struct', () => {
+      const agentRemovedMessage = {
+        type: 'AgentRemoved' as const,
+        id: 'session-uuid',
+        worktreeId: 'worktree-uuid',
+      };
+
+      const encoded = encodeMessage(agentRemovedMessage);
+
+      expect(() => {
+        callMessageHandler({ data: encoded } as MessageEvent);
+      }).not.toThrow();
+    });
+
+    it('Ack message matches Rust Ack struct with status', () => {
+      const ackMessage = {
+        type: 'Ack' as const,
+        messageId: 'msg-uuid',
+        status: 'success' as const,
+      };
+
+      const encoded = encodeMessage(ackMessage);
+
+      expect(() => {
+        callMessageHandler({ data: encoded } as MessageEvent);
+      }).not.toThrow();
+    });
+
+    it('AgentStatusUpdate message matches Rust AgentStatusUpdate struct', () => {
+      const statusUpdateMessage = {
+        type: 'AgentStatusUpdate' as const,
+        id: 'session-uuid',
+        worktreeId: 'worktree-uuid',
+        agentType: 'claude',
+        status: 'working' as const,
+        startedAt: Date.now(),
+      };
+
+      const encoded = encodeMessage(statusUpdateMessage);
+
+      expect(() => {
+        callMessageHandler({ data: encoded } as MessageEvent);
+      }).not.toThrow();
+    });
+  });
 });
 
 function encodeMessage(message: any): ArrayBuffer {
