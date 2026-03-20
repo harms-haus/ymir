@@ -40,21 +40,22 @@
   width: 100%;
 }
 
-/* Panel headers */
 .panel-header {
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid hsl(var(--border, 220 13% 91%));
+  display: flex;
+  align-items: center;
+  height: 2.5rem;
+  padding: 0 1rem;
+  border-bottom: 1px solid hsl(var(--border));
   background: hsl(var(--background));
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .panel-header h2 {
   margin: 0;
   font-size: 0.875rem;
-  font-weight: 600;
+  font-weight: 500;
   color: hsl(var(--foreground));
-  text-transform: uppercase;
-  letter-spacing: 0.025em;
 }
 
 /* Panel content areas */

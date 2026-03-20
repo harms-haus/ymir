@@ -36,6 +36,9 @@ export function ContextMenu({ state, items, onAction, closeMenu }: ContextMenuPr
         return state.targetPath !== null
       }
     }
+    if (targetType === 'agent-tab' || targetType === 'terminal-tab') {
+      return ['rename', 'close', 'close-right', 'close-left', 'close-others'].includes(item.id)
+    }
     return true
   })
 

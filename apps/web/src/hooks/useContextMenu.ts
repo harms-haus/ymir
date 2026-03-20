@@ -5,11 +5,11 @@ export interface ContextMenuState {
   x: number
   y: number
   targetId: string | null
-  targetType: 'workspace' | 'worktree' | null
+  targetType: 'workspace' | 'worktree' | 'agent-tab' | 'terminal-tab' | null
   targetPath: string | null
 }
 
-export type ContextMenuAction = 
+export type ContextMenuAction =
   | 'create-worktree'
   | 'delete-worktree'
   | 'merge'
@@ -17,6 +17,11 @@ export type ContextMenuAction =
   | 'settings'
   | 'open-in-file-manager'
   | 'copy-path'
+  | 'rename'
+  | 'close'
+  | 'close-right'
+  | 'close-left'
+  | 'close-others'
 
 export interface ContextMenuCallbacks {
   onCreateWorktree?: (workspaceId: string) => void
@@ -26,6 +31,11 @@ export interface ContextMenuCallbacks {
   onSettings?: (workspaceId: string) => void
   onOpenInFileManager?: (path: string) => void
   onCopyPath?: (path: string) => void
+  onRename?: (tabId: string) => void
+  onClose?: (tabId: string) => void
+  onCloseRight?: (tabId: string) => void
+  onCloseLeft?: (tabId: string) => void
+  onCloseOthers?: (tabId: string) => void
 }
 
 export function useContextMenu(callbacks: ContextMenuCallbacks = {}) {
@@ -38,10 +48,10 @@ export function useContextMenu(callbacks: ContextMenuCallbacks = {}) {
     targetPath: null,
   })
 
-  const openMenu = useCallback((e: React.MouseEvent, id: string, type: 'workspace' | 'worktree', path?: string) => {
+  const openMenu = useCallback((e: React.MouseEvent, id: string, type: 'workspace' | 'worktree' | 'agent-tab' | 'terminal-tab', path?: string) => {
     e.preventDefault()
     e.stopPropagation()
-    
+
     setState({
       isOpen: true,
       x: e.clientX,
@@ -64,7 +74,7 @@ export function useContextMenu(callbacks: ContextMenuCallbacks = {}) {
 
   const handleAction = useCallback((action: ContextMenuAction) => {
     const { targetId, targetType, targetPath } = state
-    
+
     if (!targetId) return
 
     switch (action) {
@@ -101,6 +111,31 @@ export function useContextMenu(callbacks: ContextMenuCallbacks = {}) {
       case 'copy-path':
         if (targetPath) {
           callbacks.onCopyPath?.(targetPath)
+        }
+        break
+      case 'rename':
+        if (targetType === 'agent-tab' || targetType === 'terminal-tab') {
+          callbacks.onRename?.(targetId)
+        }
+        break
+      case 'close':
+        if (targetType === 'agent-tab' || targetType === 'terminal-tab') {
+          callbacks.onClose?.(targetId)
+        }
+        break
+      case 'close-right':
+        if (targetType === 'agent-tab' || targetType === 'terminal-tab') {
+          callbacks.onCloseRight?.(targetId)
+        }
+        break
+      case 'close-left':
+        if (targetType === 'agent-tab' || targetType === 'terminal-tab') {
+          callbacks.onCloseLeft?.(targetId)
+        }
+        break
+      case 'close-others':
+        if (targetType === 'agent-tab' || targetType === 'terminal-tab') {
+          callbacks.onCloseOthers?.(targetId)
         }
         break
     }

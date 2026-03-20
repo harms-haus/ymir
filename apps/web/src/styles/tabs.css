@@ -51,6 +51,10 @@
   border-right: none;
 }
 
+.tab[data-dragging="true"] {
+  opacity: 0.5;
+}
+
 .tab:hover {
   background: hsl(var(--muted) / 0.5);
   border-bottom-color: hsl(var(--border));
@@ -121,6 +125,24 @@
 .new-tab-button:focus-visible {
   outline: 2px solid hsl(var(--ring));
   outline-offset: -2px;
+}
+
+/* Tab rename input */
+.tab-rename-input {
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.375rem;
+  font-size: 0.875rem;
+  color: hsl(var(--foreground));
+  outline: none;
+  min-width: 80px;
+  max-width: 150px;
+}
+
+.tab-rename-input:focus {
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
 }
 
 /* ===== Legacy Class Mappings ===== */

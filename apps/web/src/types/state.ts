@@ -407,8 +407,12 @@ export interface AppState {
   // Agent tab management
   addAgentTab: (worktreeId: string, tab: AgentTab) => void;
   removeAgentTab: (worktreeId: string, tabId: string) => void;
+  removeAgentTabsRightOf: (worktreeId: string, tabId: string) => void;
+  removeAgentTabsLeftOf: (worktreeId: string, tabId: string) => void;
+  removeAgentTabsOthers: (worktreeId: string, tabId: string) => void;
   setActiveAgentTab: (worktreeId: string, tabId: string) => void;
   updateAgentTab: (worktreeId: string, tabId: string, updates: Partial<AgentTab>) => void;
+  reorderAgentTabs: (worktreeId: string, sourceIndex: number, targetIndex: number) => void;
 
   // PR dialog actions
   setPRDialogOpen: (isOpen: boolean) => void;
