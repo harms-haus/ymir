@@ -1,8 +1,7 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DiffTab } from '../DiffTab';
 import { useWebSocketClient } from '../../../hooks/useWebSocket';
-import { GitDiffResult } from '../../../types/generated/protocol';
 
 vi.mock('../../../hooks/useWebSocket');
 
@@ -59,36 +58,25 @@ describe('DiffTab', () => {
   });
 
   it('renders diff data when received', async () => {
-    const mockResult: GitDiffResult = {
-      type: 'GitDiffResult',
-      worktreeId: mockWorktreeId,
-      filePath: mockFilePath,
-      entries: [
-        {
-          path: mockFilePath,
-          status: 'modified',
-          hunks: [
-            {
-              oldStart: 1,
-              oldLines: 3,
-              newStart: 1,
-              newLines: 3,
-              lines: [
-                ' const a = 10',
-                '-const b = 20',
-                '+const b = 30',
-                ' console.log(a + b)',
-              ],
-            },
-          ],
-        },
-      ],
-    };
+    const mockDiff = `--- a/${mockFilePath}
++++ b/${mockFilePath}
+@@ -1,3 +1,3 @@
+ const a = 10
+-const b = 20
++const b = 30
+ console.log(a + b)`;
 
     render(<DiffTab filePath={mockFilePath} worktreeId={mockWorktreeId} />);
 
-    const messageHandler = mockOnMessage.mock.calls[0][1];
-    messageHandler(mockResult);
+    await act(async () => {
+      const messageHandler = mockOnMessage.mock.calls[0][1];
+      messageHandler({
+        type: 'GitDiffResult',
+        worktreeId: mockWorktreeId,
+        filePath: mockFilePath,
+        diff: mockDiff,
+      });
+    });
 
     await waitFor(() => {
       expect(screen.getByText(mockFilePath)).toBeInTheDocument();
@@ -96,31 +84,23 @@ describe('DiffTab', () => {
   });
 
   it('displays change type indicator for modified files', async () => {
-    const mockResult: GitDiffResult = {
-      type: 'GitDiffResult',
-      worktreeId: mockWorktreeId,
-      filePath: mockFilePath,
-      entries: [
-        {
-          path: mockFilePath,
-          status: 'modified',
-          hunks: [
-            {
-              oldStart: 1,
-              oldLines: 1,
-              newStart: 1,
-              newLines: 1,
-              lines: ['-old', '+new'],
-            },
-          ],
-        },
-      ],
-    };
+    const mockDiff = `--- a/${mockFilePath}
++++ b/${mockFilePath}
+@@ -1 +1 @@
+-old
++new`;
 
     render(<DiffTab filePath={mockFilePath} worktreeId={mockWorktreeId} />);
 
-    const messageHandler = mockOnMessage.mock.calls[0][1];
-    messageHandler(mockResult);
+    await act(async () => {
+      const messageHandler = mockOnMessage.mock.calls[0][1];
+      messageHandler({
+        type: 'GitDiffResult',
+        worktreeId: mockWorktreeId,
+        filePath: mockFilePath,
+        diff: mockDiff,
+      });
+    });
 
     await waitFor(() => {
       const badge = screen.getByTitle('Modified');
@@ -130,31 +110,22 @@ describe('DiffTab', () => {
   });
 
   it('displays change type indicator for added files', async () => {
-    const mockResult: GitDiffResult = {
-      type: 'GitDiffResult',
-      worktreeId: mockWorktreeId,
-      filePath: mockFilePath,
-      entries: [
-        {
-          path: mockFilePath,
-          status: 'added',
-          hunks: [
-            {
-              oldStart: 0,
-              oldLines: 0,
-              newStart: 1,
-              newLines: 1,
-              lines: ['+new content'],
-            },
-          ],
-        },
-      ],
-    };
+    const mockDiff = `--- /dev/null
++++ b/${mockFilePath}
+@@ -0,0 +1 @@
++new content`;
 
     render(<DiffTab filePath={mockFilePath} worktreeId={mockWorktreeId} />);
 
-    const messageHandler = mockOnMessage.mock.calls[0][1];
-    messageHandler(mockResult);
+    await act(async () => {
+      const messageHandler = mockOnMessage.mock.calls[0][1];
+      messageHandler({
+        type: 'GitDiffResult',
+        worktreeId: mockWorktreeId,
+        filePath: mockFilePath,
+        diff: mockDiff,
+      });
+    });
 
     await waitFor(() => {
       const badge = screen.getByText('A');
@@ -164,31 +135,22 @@ describe('DiffTab', () => {
   });
 
   it('displays change type indicator for deleted files', async () => {
-    const mockResult: GitDiffResult = {
-      type: 'GitDiffResult',
-      worktreeId: mockWorktreeId,
-      filePath: mockFilePath,
-      entries: [
-        {
-          path: mockFilePath,
-          status: 'deleted',
-          hunks: [
-            {
-              oldStart: 1,
-              oldLines: 1,
-              newStart: 0,
-              newLines: 0,
-              lines: ['-deleted content'],
-            },
-          ],
-        },
-      ],
-    };
+    const mockDiff = `--- a/${mockFilePath}
++++ /dev/null
+@@ -1 +0,0 @@
+-deleted content`;
 
     render(<DiffTab filePath={mockFilePath} worktreeId={mockWorktreeId} />);
 
-    const messageHandler = mockOnMessage.mock.calls[0][1];
-    messageHandler(mockResult);
+    await act(async () => {
+      const messageHandler = mockOnMessage.mock.calls[0][1];
+      messageHandler({
+        type: 'GitDiffResult',
+        worktreeId: mockWorktreeId,
+        filePath: mockFilePath,
+        diff: mockDiff,
+      });
+    });
 
     await waitFor(() => {
       const badge = screen.getByText('D');
@@ -197,59 +159,48 @@ describe('DiffTab', () => {
     });
   });
 
-  it('displays change type indicator for renamed files', async () => {
-    const mockResult: GitDiffResult = {
-      type: 'GitDiffResult',
-      worktreeId: mockWorktreeId,
-      filePath: mockFilePath,
-      entries: [
-        {
-          path: mockFilePath,
-          oldPath: 'src/components/OldName.tsx',
-          status: 'renamed',
-          hunks: [],
-        },
-      ],
-    };
+  it('displays old path when file was renamed', async () => {
+    const mockDiff = `--- a/src/components/OldName.tsx
++++ b/${mockFilePath}
+@@ -1 +1 @@
+-old
++new`;
 
     render(<DiffTab filePath={mockFilePath} worktreeId={mockWorktreeId} />);
 
-    const messageHandler = mockOnMessage.mock.calls[0][1];
-    messageHandler(mockResult);
+    await act(async () => {
+      const messageHandler = mockOnMessage.mock.calls[0][1];
+      messageHandler({
+        type: 'GitDiffResult',
+        worktreeId: mockWorktreeId,
+        filePath: mockFilePath,
+        diff: mockDiff,
+      });
+    });
 
     await waitFor(() => {
-      const badge = screen.getByText('R');
-      expect(badge).toBeInTheDocument();
-      expect(badge).toHaveAttribute('title', 'Renamed');
+      expect(screen.getByText('Renamed from: a/src/components/OldName.tsx')).toBeInTheDocument();
     });
   });
 
   it('toggles between split and inline view modes', async () => {
-    const mockResult: GitDiffResult = {
-      type: 'GitDiffResult',
-      worktreeId: mockWorktreeId,
-      filePath: mockFilePath,
-      entries: [
-        {
-          path: mockFilePath,
-          status: 'modified',
-          hunks: [
-            {
-              oldStart: 1,
-              oldLines: 1,
-              newStart: 1,
-              newLines: 1,
-              lines: ['-old', '+new'],
-            },
-          ],
-        },
-      ],
-    };
+    const mockDiff = `--- a/${mockFilePath}
++++ b/${mockFilePath}
+@@ -1 +1 @@
+-old
++new`;
 
     render(<DiffTab filePath={mockFilePath} worktreeId={mockWorktreeId} />);
 
-    const messageHandler = mockOnMessage.mock.calls[0][1];
-    messageHandler(mockResult);
+    await act(async () => {
+      const messageHandler = mockOnMessage.mock.calls[0][1];
+      messageHandler({
+        type: 'GitDiffResult',
+        worktreeId: mockWorktreeId,
+        filePath: mockFilePath,
+        diff: mockDiff,
+      });
+    });
 
     await waitFor(() => {
       expect(screen.getByText('Split')).toBeInTheDocument();
@@ -268,17 +219,17 @@ describe('DiffTab', () => {
   });
 
   it('shows error when no diff data is received', async () => {
-    const mockResult: GitDiffResult = {
-      type: 'GitDiffResult',
-      worktreeId: mockWorktreeId,
-      filePath: mockFilePath,
-      entries: [],
-    };
-
     render(<DiffTab filePath={mockFilePath} worktreeId={mockWorktreeId} />);
 
-    const messageHandler = mockOnMessage.mock.calls[0][1];
-    messageHandler(mockResult);
+    await act(async () => {
+      const messageHandler = mockOnMessage.mock.calls[0][1];
+      messageHandler({
+        type: 'GitDiffResult',
+        worktreeId: mockWorktreeId,
+        filePath: mockFilePath,
+        diff: '',
+      });
+    });
 
     await waitFor(() => {
       expect(screen.getByText('Failed to load diff')).toBeInTheDocument();
@@ -287,23 +238,17 @@ describe('DiffTab', () => {
   });
 
   it('ignores messages from other worktrees', async () => {
-    const mockResult: GitDiffResult = {
-      type: 'GitDiffResult',
-      worktreeId: 'other-worktree',
-      filePath: mockFilePath,
-      entries: [
-        {
-          path: mockFilePath,
-          status: 'modified',
-          hunks: [],
-        },
-      ],
-    };
-
     render(<DiffTab filePath={mockFilePath} worktreeId={mockWorktreeId} />);
 
-    const messageHandler = mockOnMessage.mock.calls[0][1];
-    messageHandler(mockResult);
+    await act(async () => {
+      const messageHandler = mockOnMessage.mock.calls[0][1];
+      messageHandler({
+        type: 'GitDiffResult',
+        worktreeId: 'other-worktree',
+        filePath: mockFilePath,
+        diff: 'some diff',
+      });
+    });
 
     await waitFor(() => {
       expect(screen.getByText('Loading diff...')).toBeInTheDocument();
@@ -311,80 +256,41 @@ describe('DiffTab', () => {
   });
 
   it('ignores messages for other files', async () => {
-    const mockResult: GitDiffResult = {
-      type: 'GitDiffResult',
-      worktreeId: mockWorktreeId,
-      filePath: 'other-file.ts',
-      entries: [
-        {
-          path: 'other-file.ts',
-          status: 'modified',
-          hunks: [],
-        },
-      ],
-    };
-
     render(<DiffTab filePath={mockFilePath} worktreeId={mockWorktreeId} />);
 
-    const messageHandler = mockOnMessage.mock.calls[0][1];
-    messageHandler(mockResult);
+    await act(async () => {
+      const messageHandler = mockOnMessage.mock.calls[0][1];
+      messageHandler({
+        type: 'GitDiffResult',
+        worktreeId: mockWorktreeId,
+        filePath: 'other-file.ts',
+        diff: 'some diff',
+      });
+    });
 
     await waitFor(() => {
       expect(screen.getByText('Loading diff...')).toBeInTheDocument();
     });
   });
 
-  it('displays renamed file information', async () => {
-    const mockResult: GitDiffResult = {
-      type: 'GitDiffResult',
-      worktreeId: mockWorktreeId,
-      filePath: mockFilePath,
-      entries: [
-        {
-          path: mockFilePath,
-          oldPath: 'src/components/OldName.tsx',
-          status: 'renamed',
-          hunks: [],
-        },
-      ],
-    };
-
-    render(<DiffTab filePath={mockFilePath} worktreeId={mockWorktreeId} />);
-
-    const messageHandler = mockOnMessage.mock.calls[0][1];
-    messageHandler(mockResult);
-
-    await waitFor(() => {
-      expect(screen.getByText('Renamed from: src/components/OldName.tsx')).toBeInTheDocument();
-    });
-  });
-
   it('displays language information in footer', async () => {
-    const mockResult: GitDiffResult = {
-      type: 'GitDiffResult',
-      worktreeId: mockWorktreeId,
-      filePath: 'src/components/App.tsx',
-      entries: [
-        {
-          path: 'src/components/App.tsx',
-          status: 'modified',
-          hunks: [
-            {
-              oldStart: 1,
-              oldLines: 1,
-              newStart: 1,
-              newLines: 1,
-              lines: ['-old', '+new'],
-            },
-          ],
-        },
-      ],
-    };
+    const mockDiff = `--- a/src/components/App.tsx
++++ b/src/components/App.tsx
+@@ -1 +1 @@
+-old
++new`;
 
     render(<DiffTab filePath="src/components/App.tsx" worktreeId={mockWorktreeId} />);
 
-    const messageHandler = mockOnMessage.mock.calls[0][1];
-    messageHandler(mockResult);
+    await act(async () => {
+      const messageHandler = mockOnMessage.mock.calls[0][1];
+      messageHandler({
+        type: 'GitDiffResult',
+        worktreeId: mockWorktreeId,
+        filePath: 'src/components/App.tsx',
+        diff: mockDiff,
+      });
+    });
 
     await waitFor(() => {
       expect(screen.getByText('tsx')).toBeInTheDocument();

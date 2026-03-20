@@ -48,3 +48,4 @@ apps/tauri/src-tauri/gen/
 .dual-graph/
 
 ymir.db
+.bifrost.yaml

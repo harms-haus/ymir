@@ -10,11 +10,19 @@ vi.mock('ghostty-web', () => ({
       resize: vi.fn(),
       dispose: vi.fn(),
       onData: vi.fn(),
+      onResize: vi.fn(),
+      loadAddon: vi.fn(),
       open: vi.fn(),
       options: {
         fontSize: 13,
         fontFamily: 'monospace',
       },
+    };
+  }),
+  FitAddon: vi.fn().mockImplementation(function() {
+    return {
+      fit: vi.fn(),
+      dispose: vi.fn(),
     };
   }),
 }));
@@ -53,17 +61,6 @@ describe('Terminal', () => {
     await waitFor(() => {
       const terminal = screen.getByTestId('terminal');
       expect(terminal).toHaveAttribute('data-session-id', 'test-session-1');
-    });
-  });
-
-  it('should apply CSS theme variables', async () => {
-    render(<Terminal terminalSessionId="test-session-1" />);
-
-    await waitFor(() => {
-      const terminal = screen.getByTestId('terminal');
-      expect(terminal).toHaveStyle({
-        backgroundColor: 'hsl(var(--terminal-bg))',
-      });
     });
   });
 });

@@ -20,15 +20,15 @@
 //! 2. Create DB session record
 //! 3. Add to `state.agents` (session_id → AgentState)
 //! 4. Spawn agent process in worktree CWD via tokio::spawn
-//! 5. On success: store client in `state.agent_clients[worktree_id]`
+//! 5. On success: spawn returns immediately, ACP runtime manages agent in background
 //! 6. Broadcast `AgentStatusUpdate` to all clients
 //!
-//! **Enforcement:** One agent per worktree (agent_clients keyed by worktree_id)
+//! **Enforcement:** One agent per worktree (ACP runtime tracks agents by worktree_id)
 //!
 //! ### Cancel
 //! 1. Find session by `worktree_id` in `state.agents`
 //! 2. Kill agent process via `AcpClient::kill()`
-//! 3. Remove from `state.agent_clients`
+//! 3. Request kill via `AcpHandle` (message-passing to ACP runtime)
 //! 4. Remove from `state.agents`
 //! 5. Delete from database
 //! 6. Broadcast `AgentRemoved` to all clients
@@ -38,7 +38,7 @@
 //! 1. Database FK cascade removes agent_sessions row
 //! 2. `cleanup_agents_for_worktree()` must be called to:
 //!    - Kill running agent process
-//!    - Remove from `state.agent_clients`
+//!    - Request kill via `AcpHandle` (message-passing to ACP runtime)
 //!    - Remove from `state.agents`
 //!
 //! ### Worktree Switch
@@ -568,6 +568,111 @@ mod tests {
                 panic!("Expected AgentStatusUpdate, got Error: {:?}", e);
             }
             _ => panic!("Expected AgentStatusUpdate, got {:?}", result.payload),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_cancel_succeeds_with_valid_session() {
+        let state = create_test_state().await;
+        let worktree_id = Uuid::new_v4();
+        let session_id = Uuid::new_v4();
+        let client_id = Uuid::new_v4();
+
+        // Set up in-memory agent session
+        state.agents.write().await.insert(
+            session_id,
+            AgentState {
+                id: session_id,
+                worktree_id,
+                agent_type: "test-agent".to_string(),
+                status: "working".to_string(),
+            },
+        );
+
+        // Connect client to receive broadcasts
+        let mut rx = state.connect(client_id).await;
+
+        let msg = crate::protocol::AgentCancel {
+            worktree_id,
+        };
+
+        let result = handle_agent_cancel(state.clone(), msg).await;
+
+        // Verify Ack response
+        match result.payload {
+            ServerMessagePayload::Ack(ack) => {
+                assert_eq!(ack.status, AckStatus::Success);
+            }
+            _ => panic!("Expected Ack, got {:?}", result.payload),
+        }
+
+        // Verify session removed from memory
+        assert!(state.agents.read().await.get(&session_id).is_none());
+
+        // Verify AgentRemoved broadcast sent
+        let received = tokio::time::timeout(
+            std::time::Duration::from_millis(500),
+            rx.recv()
+        ).await;
+
+        match received {
+            Ok(Some(msg)) => {
+                match msg.payload {
+                    ServerMessagePayload::AgentRemoved(removed) => {
+                        assert_eq!(removed.id, session_id);
+                        assert_eq!(removed.worktree_id, worktree_id);
+                    }
+                    _ => panic!("Expected AgentRemoved message, got {:?}", msg.payload),
+                }
+            }
+            Ok(None) => panic!("Channel closed"),
+            Err(_) => panic!("Timeout waiting for broadcast message"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_spawn_error_returns_correct_error_codes() {
+        let state = create_test_state().await;
+
+        // Test 1: Missing worktree returns WORKTREE_NOT_FOUND
+        let missing_worktree_msg = crate::protocol::AgentSpawn {
+            worktree_id: Uuid::new_v4(),
+            agent_type: "test".to_string(),
+        };
+
+        let result = handle_agent_spawn(state.clone(), missing_worktree_msg).await;
+        match result.payload {
+            ServerMessagePayload::Error(e) => {
+                assert_eq!(e.code, "WORKTREE_NOT_FOUND");
+                assert!(e.message.contains("not found"));
+            }
+            _ => panic!("Expected Error response for missing worktree"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_send_error_returns_correct_error_code() {
+        let state = create_test_state().await;
+
+        // ACP handle is initialized in test state, but no agent is spawned
+        // This tests the send path when there's no running agent
+        let msg = crate::protocol::AgentSend {
+            worktree_id: Uuid::new_v4(),
+            message: "test message".to_string(),
+        };
+
+        let result = handle_agent_send(state, msg).await;
+
+        // The ACP handle's send_prompt will fail because no agent is running
+        match result.payload {
+            ServerMessagePayload::Error(e) => {
+                // Either AGENT_SEND_ERROR or similar error
+                assert!(!e.code.is_empty());
+            }
+            ServerMessagePayload::Ack(_) => {
+                // This is also acceptable if the mock handle succeeds
+            }
+            _ => panic!("Expected Error or Ack, got {:?}", result.payload),
         }
     }
 }

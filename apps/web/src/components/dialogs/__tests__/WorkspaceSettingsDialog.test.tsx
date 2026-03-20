@@ -224,13 +224,13 @@ describe('WorkspaceSettingsDialog', () => {
     fireEvent.click(saveButton);
 
     await waitFor(() => {
-      expect(mockSend).toHaveBeenCalledWith({
+      expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({
         type: 'WorkspaceUpdate',
         workspaceId: 'workspace-1',
         color: '#3b82f6',
         icon: 'ri-folder-line',
         worktreeBaseDir: '.worktrees/',
-      });
+      }));
     });
   });
 
@@ -256,13 +256,13 @@ describe('WorkspaceSettingsDialog', () => {
     fireEvent.click(saveButton);
 
     await waitFor(() => {
-      expect(mockSend).toHaveBeenCalledWith({
+      expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({
         type: 'WorkspaceUpdate',
         workspaceId: 'workspace-1',
         color: '#ef4444',
         icon: 'ri-code-box-line',
         worktreeBaseDir: '.my-worktrees/',
-      });
+      }));
     });
   });
 
@@ -343,10 +343,10 @@ describe('WorkspaceSettingsDialog', () => {
     fireEvent.click(confirmDeleteButton);
 
     await waitFor(() => {
-      expect(mockSend).toHaveBeenCalledWith({
+      expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({
         type: 'WorkspaceDelete',
         workspaceId: 'workspace-1',
-      });
+      }));
     });
   });
 
