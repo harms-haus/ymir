@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useStore, selectActiveWorktree } from '../../store';
 import { useContextMenu } from '../../hooks/useContextMenu';
 import { ContextMenu } from '../ui/ContextMenu';
+import { getWebSocketClient } from '../../lib/ws';
+import type { FileList } from '../../types/generated/protocol';
 
 interface FileNode {
   path: string;
@@ -167,25 +169,26 @@ export function AllFilesTab() {
       return;
     }
 
-    // TODO: Subscribe to file change events - would need FileChange message type in protocol
-    // TODO: Request initial file list - this would need a new WebSocket message type
-    // For now, we'll use mock data to demonstrate the UI
-    const mockFiles = [
-      'src/components/Button.tsx',
-      'src/components/Input.tsx',
-      'src/lib/api.ts',
-      'src/lib/ws.ts',
-      'src/store.ts',
-      'src/types/protocol.ts',
-      'src/types/state.ts',
-      'package.json',
-      'README.md',
-      'tsconfig.json',
-    ];
-    setFiles(mockFiles);
+    const client = getWebSocketClient();
 
-    // Return empty cleanup function since no WebSocket subscription
-    return () => {};
+  // Subscribe to FileListResult
+  const unsubscribe = client.onMessage('FileListResult', (message) => {
+    // Only update if this is for the current worktree
+    if (message.worktreeId === activeWorktree.id) {
+      setFiles(message.files);
+    }
+  });
+
+  // Send FileList request
+  const fileListMsg: FileList = {
+    type: 'FileList',
+    worktreeId: activeWorktree.id,
+  };
+  client.send(fileListMsg);
+
+    return () => {
+      unsubscribe();
+    };
   }, [activeWorktree]);
 
   const handleToggleDir = useCallback((dirPath: string) => {
