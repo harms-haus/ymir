@@ -3,7 +3,7 @@
  * Defines the shape of the global state managed by the WebSocket client
  */
 
-import { AgentStatus } from './generated/protocol';
+import { AgentStatus, AcpSequence, AcpEvent, AcpEventEnvelope, AcpToolUseStatus, AcpSessionStatus, AcpContextUpdateType, AcpErrorCode } from './generated/protocol';
 
 // Workspace and Worktree state (simplified from protocol types)
 export interface WorkspaceState {
@@ -101,6 +101,204 @@ export interface DbResetDialogState {
 
 export type AlertDialogVariant = 'default' | 'destructive';
 
+// ============================================================================
+// ACP Event Accumulator Types
+// ============================================================================
+//
+// The accumulator is DERIVED, connection-scoped state that transforms ACP events
+// into assistant-ui-compatible thread/message/card state.
+//
+// CRITICAL: The accumulator is NOT the source of truth for:
+//   - Worktree identity (use AppState.worktrees)
+//   - Session identity (use AppState.agentSessions)
+//   - Connection state (use AppState.connectionStatus)
+//
+// Rebuild Rules:
+//   - On WebSocket reconnect: accumulator is FLUSHED and rebuilt from replay
+//   - Accumulator state is tied to the current WebSocket connection lifecycle
+//   - StateSnapshot triggers a full accumulator flush
+//   - ResumeMarker events enable partial replay from checkpoint
+//
+// Retention Policy:
+//   - Accumulator retains events up to the last ResumeMarker or connection start
+//   - Tool outputs are bounded (see MAX_TOOL_OUTPUT_LENGTH)
+//   - Text chunks are accumulated in order, deduplicated by sequence number
+//
+
+/** Maximum characters to retain for tool output (prevent memory bloat) */
+export const MAX_TOOL_OUTPUT_LENGTH = 10000;
+
+/** Maximum number of accumulated messages per thread (prevent unbounded growth) */
+export const MAX_ACCUMULATED_MESSAGES = 500;
+
+// ----------------------------------------------------------------------------
+// Accumulated Content Types (for assistant-ui rendering)
+// ----------------------------------------------------------------------------
+
+/** Accumulated text content from PromptChunk events */
+export interface AccumulatedTextContent {
+  type: 'text';
+  text: string;
+  isStreaming: boolean;
+}
+
+/** Accumulated tool card from ToolUse events */
+export interface AccumulatedToolCard {
+  type: 'tool';
+  toolUseId: string;
+  toolName: string;
+  status: AcpToolUseStatus;
+  input?: string;
+  output?: string;
+  error?: string;
+  /** Timestamp of last update */
+  updatedAt: number;
+}
+
+/** Accumulated context update card (file read/written, command executed, etc.) */
+export interface AccumulatedContextCard {
+  type: 'context';
+  updateType: AcpContextUpdateType;
+  data: string;
+  /** Sequence number for ordering */
+  sequence: AcpSequence;
+}
+
+/** Permission request card (derived from tool use awaiting approval) */
+export interface AccumulatedPermissionCard {
+  type: 'permission';
+  toolUseId: string;
+  toolName: string;
+  input: string;
+  /** Whether permission is still pending */
+  isPending: boolean;
+  /** Sequence number for ordering */
+  sequence: AcpSequence;
+}
+
+/** Error card from AcpError events */
+export interface AccumulatedErrorCard {
+  type: 'error';
+  code: AcpErrorCode;
+  message: string;
+  details?: string;
+  recoverable: boolean;
+  /** Sequence number for ordering */
+  sequence: AcpSequence;
+}
+
+/** Union type for all accumulated content parts */
+export type AccumulatedContentPart =
+  | AccumulatedTextContent
+  | AccumulatedToolCard
+  | AccumulatedContextCard
+  | AccumulatedPermissionCard
+  | AccumulatedErrorCard;
+
+/** Accumulated message in a thread */
+export interface AccumulatedMessage {
+  /** Unique message ID (derived from sequence or generated) */
+  id: string;
+  /** Role: 'user' | 'assistant' */
+  role: 'user' | 'assistant';
+  /** Content parts in this message */
+  parts: AccumulatedContentPart[];
+  /** Timestamp of message creation */
+  createdAt: number;
+  /** Sequence number of last update */
+  lastSequence: AcpSequence;
+}
+
+/** Accumulated thread for a worktree/session */
+export interface AccumulatedThread {
+  /** Worktree ID this thread belongs to */
+  worktreeId: string;
+  /** ACP session ID */
+  acpSessionId: string;
+  /** Messages in chronological order */
+  messages: AccumulatedMessage[];
+  /** Current session status from AcpSessionStatus events */
+  sessionStatus: AcpSessionStatus;
+  /** Last processed sequence number */
+  lastSequence: AcpSequence;
+  /** Connection generation (increments on reconnect) */
+  connectionGeneration: number;
+  /** Whether this thread is currently streaming */
+  isStreaming: boolean;
+  /** Resume marker checkpoint if available */
+  resumeCheckpoint?: string;
+}
+
+// ----------------------------------------------------------------------------
+// Accumulator State Shape
+// ----------------------------------------------------------------------------
+
+/** Per-connection accumulator state */
+export interface AcpAccumulatorState {
+  /** Connection generation counter (increments on each reconnect) */
+  connectionGeneration: number;
+  /** Accumulated threads keyed by worktreeId */
+  threads: Map<string, AccumulatedThread>;
+  /** Pending events awaiting correlation (keyed by correlationId) */
+  pendingCorrelations: Map<string, AcpEvent[]>;
+  /** Last flush timestamp */
+  lastFlushTimestamp: number | null;
+}
+
+/** Initial accumulator state factory */
+export function createInitialAccumulatorState(): AcpAccumulatorState {
+  return {
+    connectionGeneration: 1,
+    threads: new Map(),
+    pendingCorrelations: new Map(),
+    lastFlushTimestamp: null,
+  };
+}
+
+// ----------------------------------------------------------------------------
+// Accumulator Action Types (for reducer)
+// ----------------------------------------------------------------------------
+
+/** Actions that can be dispatched to the accumulator */
+export type AcpAccumulatorAction =
+  | { type: 'EVENT_RECEIVED'; envelope: AcpEventEnvelope; worktreeId: string }
+  | { type: 'CONNECTION_RECONNECTED' }
+  | { type: 'FLUSH_THREAD'; worktreeId: string }
+  | { type: 'FLUSH_ALL' }
+  | { type: 'REBUILD_FROM_SNAPSHOT'; worktreeId: string; acpSessionId: string }
+  | { type: 'SET_STREAMING'; worktreeId: string; isStreaming: boolean };
+
+/** Result of processing an event through the accumulator */
+export interface AccumulatorResult {
+  /** The updated thread (if any) */
+  thread?: AccumulatedThread;
+  /** Whether the accumulator state changed */
+  changed: boolean;
+  /** Action to dispatch to assistant-ui (if any) */
+  assistantUiAction?: {
+    type: 'APPEND_CONTENT' | 'UPDATE_CONTENT' | 'REMOVE_CONTENT' | 'SET_STATUS';
+    payload: unknown;
+  };
+}
+
+// ----------------------------------------------------------------------------
+// Selector Types
+// ----------------------------------------------------------------------------
+
+/** Selector result for a thread's accumulated state */
+export interface ThreadAccumulatedState {
+  /** The accumulated thread, or null if not found */
+  thread: AccumulatedThread | null;
+  /** Derived message count */
+  messageCount: number;
+  /** Derived is-streaming state */
+  isStreaming: boolean;
+  /** Derived session status */
+  sessionStatus: AcpSessionStatus;
+  /** Whether the thread has errors */
+  hasErrors: boolean;
+}
+
 export interface AlertDialogConfig {
   title: string;
   description: string;
@@ -132,6 +330,10 @@ export interface AppState {
   // Agent pane tabs (per worktree)
   agentTabs: Map<string, AgentTab[]>;
   activeAgentTabId: Map<string, string>;
+
+  // ACP Event Accumulator (connection-scoped, derived state)
+  // IMPORTANT: This is NOT the source of truth for worktree/session identity
+  acpAccumulator: AcpAccumulatorState;
 
   // PR dialog state
   prDialog: PRDialogState;
@@ -213,4 +415,9 @@ export interface AppState {
 
   showAlertDialog: (config: AlertDialogConfig) => void;
   hideAlertDialog: () => void;
+
+  // ACP Accumulator actions
+  dispatchAccumulator: (action: AcpAccumulatorAction) => void;
+  flushAccumulator: () => void;
+  flushAccumulatorThread: (worktreeId: string) => void;
 }

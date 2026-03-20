@@ -1,5 +1,5 @@
 import { encode, decode } from '@msgpack/msgpack';
-import { ClientMessage, ServerMessage, PROTOCOL_VERSION, StateSnapshot } from '../types/generated/protocol';
+import { ClientMessage, ServerMessage, PROTOCOL_VERSION, StateSnapshot, AcpEventEnvelope } from '../types/generated/protocol';
 import { updateStateFromServerMessage, useStore, useToastStore } from '../store';
 
 // Generate a UUID v4 for request IDs
@@ -274,6 +274,48 @@ export class YmirClient {
       ...decoded.data
     } as ServerMessage;
   }
+
+  private decodeAcpEnvelope(message: ServerMessage): AcpEventEnvelope | null {
+    if (message.type !== 'AcpWireEvent') {
+      return null;
+    }
+
+    const wireEvent = message as { type: 'AcpWireEvent'; envelope: unknown };
+
+    if (!wireEvent.envelope || typeof wireEvent.envelope !== 'object') {
+      console.error('[WS] [ACP] Malformed envelope: missing or invalid envelope object');
+      return null;
+    }
+
+    const envelope = wireEvent.envelope as Partial<AcpEventEnvelope>;
+
+    if (typeof envelope.sequence !== 'number') {
+      console.error('[WS] [ACP] Malformed envelope: missing or invalid sequence');
+      return null;
+    }
+
+    if (typeof envelope.timestamp !== 'number') {
+      console.error('[WS] [ACP] Malformed envelope: missing or invalid timestamp');
+      return null;
+    }
+
+    if (typeof envelope.eventType !== 'string') {
+      console.error('[WS] [ACP] Malformed envelope: missing or invalid eventType');
+      return null;
+    }
+
+    if (!envelope.data || typeof envelope.data !== 'object') {
+      console.error('[WS] [ACP] Malformed envelope: missing or invalid data');
+      return null;
+    }
+
+    if (envelope.correlationId !== undefined && typeof envelope.correlationId !== 'object') {
+      console.error('[WS] [ACP] Malformed envelope: invalid correlationId');
+      return null;
+    }
+
+    return envelope as AcpEventEnvelope;
+  }
   
   private handleMessage(message: ServerMessage): void {
     console.log('[WS] Received message type:', message.type, message);
@@ -282,6 +324,18 @@ export class YmirClient {
       this.handlePong();
     } else if (message.type === 'StateSnapshot') {
       this.handleStateSnapshot(message);
+    } else if (message.type === 'AcpWireEvent') {
+      const envelope = this.decodeAcpEnvelope(message);
+      if (envelope) {
+        console.log('[WS] [ACP] Decoded envelope:', envelope.eventType, envelope.sequence);
+        const handlers = this.messageHandlers.get(message.type);
+        if (handlers) {
+          handlers.forEach(handler => {
+            handler(envelope as any);
+          });
+        }
+        return;
+      }
     } else {
       updateStateFromServerMessage(message);
     }

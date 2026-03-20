@@ -1,0 +1,43 @@
+warning: unused import: `FileList`
+ --> crates/ws-server/src/router.rs:5:5
+  |
+5 |     FileList, FileListResult,
+  |     ^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `info`
+  --> crates/ws-server/src/workspace/mod.rs:15:15
+   |
+15 | use tracing::{info, instrument};
+   |               ^^^^
+
+warning: `ymir-ws-server` (lib) generated 2 warnings (run `cargo fix --lib -p ymir-ws-server` to apply 2 suggestions)
+warning: `ymir-ws-server` (lib test) generated 2 warnings (2 duplicates)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running unittests src/lib.rs (target/debug/deps/ymir_ws_server-4e97d49b898c7033)
+
+running 14 tests
+test agent::acp::tests::test_acp_handshake ... ok
+test agent::adapter::tests::test_create_client_capabilities ... ok
+test agent::adapter::tests::test_create_implementation ... ok
+test agent::adapter::tests::test_sequence_counter ... ok
+test agent::acp::tests::test_acp_status_transitions ... ok
+test agent::acp::tests::test_acp_handle_send ... ok
+test agent::handler::tests::test_cleanup_agents_for_worktree_removes_sessions ... ok
+test agent::handler::tests::test_find_agent_session_for_worktree ... ok
+test agent::handler::tests::test_get_worktree_path_returns_path_from_state ... ok
+test agent::handler::tests::test_cleanup_agents_for_worktree_noops_for_missing_worktree ... ok
+test agent::handler::tests::test_cancel_fails_for_missing_session ... ok
+test agent::handler::tests::test_spawn_fails_for_missing_worktree ... ok
+test agent::handler::tests::test_get_worktree_path_returns_none_for_missing_worktree ... ok
+test agent::handler::tests::test_cleanup_agents_for_worktree_preserves_other_worktree_sessions ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 243 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/ymir_ws_server-f964378166dadb88)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+

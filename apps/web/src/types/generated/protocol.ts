@@ -447,6 +447,200 @@ export interface GitDiffResult {
 }
 
 // ============================================================================
+// WS-ACP Wire Contract Types
+// ============================================================================
+//
+// Stateless event vocabulary for communication between the Rust ACP bridge
+// and the TypeScript side. Independent from assistant-ui message parts.
+//
+// Ordering: sequence numbers are monotonically increasing per session
+// Idempotency: duplicate sequence numbers are safe to replay
+// Resumability: client can request replay from last known sequence
+// Error Envelopes: all failures captured in structured AcpError
+
+export type AcpSequence = number;
+
+export interface AcpCorrelationId {
+  value: string;
+}
+
+export interface AcpEventEnvelope {
+  sequence: AcpSequence;
+  correlationId?: AcpCorrelationId;
+  timestamp: number;
+  eventType: AcpEvent['eventType'];
+  data: AcpEventData;
+}
+
+export type AcpEventData =
+  | AcpSessionInit
+  | AcpSessionStatusEvent
+  | AcpPromptChunk
+  | AcpPromptComplete
+  | AcpToolUseEvent
+  | AcpContextUpdate
+  | AcpError
+  | AcpResumeMarker;
+
+export type AcpEvent =
+  | { eventType: 'SessionInit'; data: AcpSessionInit }
+  | { eventType: 'SessionStatus'; data: AcpSessionStatusEvent }
+  | { eventType: 'PromptChunk'; data: AcpPromptChunk }
+  | { eventType: 'PromptComplete'; data: AcpPromptComplete }
+  | { eventType: 'ToolUse'; data: AcpToolUseEvent }
+  | { eventType: 'ContextUpdate'; data: AcpContextUpdate }
+  | { eventType: 'Error'; data: AcpError }
+  | { eventType: 'ResumeMarker'; data: AcpResumeMarker };
+
+export interface AcpSessionInit {
+  acpSessionId: string;
+  capabilities: AcpAgentCapabilities;
+}
+
+export interface AcpAgentCapabilities {
+  supportsToolUse: boolean;
+  supportsContextUpdate: boolean;
+  supportsCancellation: boolean;
+}
+
+export interface AcpSessionStatusEvent {
+  worktreeId: string;
+  acpSessionId: string;
+  status: AcpSessionStatus;
+}
+
+export type AcpSessionStatus = 'Working' | 'Waiting' | 'Complete' | 'Cancelled';
+
+export interface AcpPromptChunk {
+  worktreeId: string;
+  acpSessionId: string;
+  content: AcpChunkContent;
+  isFinal: boolean;
+}
+
+export type AcpChunkContent =
+  | { type: 'Text'; data: string }
+  | { type: 'Structured'; data: string };
+
+export interface AcpPromptComplete {
+  worktreeId: string;
+  acpSessionId: string;
+  reason: AcpPromptCompleteReason;
+}
+
+export type AcpPromptCompleteReason = 'Normal' | 'Cancelled' | 'Error';
+
+export interface AcpToolUseEvent {
+  worktreeId: string;
+  acpSessionId: string;
+  toolUseId: string;
+  toolName: string;
+  status: AcpToolUseStatus;
+  input?: string;
+  output?: string;
+  error?: string;
+}
+
+export type AcpToolUseStatus = 'Started' | 'InProgress' | 'Completed' | 'Error';
+
+export interface AcpContextUpdate {
+  worktreeId: string;
+  acpSessionId: string;
+  updateType: AcpContextUpdateType;
+  data: string;
+}
+
+export type AcpContextUpdateType =
+  | 'FileRead'
+  | 'FileWritten'
+  | 'CommandExecuted'
+  | 'BrowserAction'
+  | 'MemoryUpdate';
+
+export interface AcpError {
+  worktreeId?: string;
+  acpSessionId?: string;
+  code: AcpErrorCode;
+  message: string;
+  details?: string;
+  recoverable: boolean;
+}
+
+export type AcpErrorCode =
+  | 'AgentCrash'
+  | 'InitFailed'
+  | 'SessionNotFound'
+  | 'PromptFailed'
+  | 'ToolFailed'
+  | 'CancelFailed'
+  | 'Timeout'
+  | 'InvalidRequest'
+  | 'Internal';
+
+export interface AcpResumeMarker {
+  worktreeId: string;
+  acpSessionId: string;
+  lastSequence: AcpSequence;
+  checkpoint?: string;
+}
+
+export interface AcpResumeRequest {
+  worktreeId: string;
+  acpSessionId: string;
+  fromSequence: AcpSequence;
+}
+
+export interface AcpAck {
+  worktreeId: string;
+  acpSessionId: string;
+  lastSequence: AcpSequence;
+}
+
+// ============================================================================
+// WS-ACP Server Message Types
+// ============================================================================
+
+// WS-ACP envelope wrapper for server transmission
+// Wraps AcpEventEnvelope with standard message type discriminator
+export interface AcpWireEvent {
+  type: 'AcpWireEvent';
+  envelope: AcpEventEnvelope;
+}
+
+// Type guards for WS-ACP events
+export function isAcpSessionInit(event: AcpEvent): event is { eventType: 'SessionInit'; data: AcpSessionInit } {
+  return event.eventType === 'SessionInit';
+}
+
+export function isAcpSessionStatus(event: AcpEvent): event is { eventType: 'SessionStatus'; data: AcpSessionStatusEvent } {
+  return event.eventType === 'SessionStatus';
+}
+
+export function isAcpPromptChunk(event: AcpEvent): event is { eventType: 'PromptChunk'; data: AcpPromptChunk } {
+  return event.eventType === 'PromptChunk';
+}
+
+export function isAcpPromptComplete(event: AcpEvent): event is { eventType: 'PromptComplete'; data: AcpPromptComplete } {
+  return event.eventType === 'PromptComplete';
+}
+
+export function isAcpToolUse(event: AcpEvent): event is { eventType: 'ToolUse'; data: AcpToolUseEvent } {
+  return event.eventType === 'ToolUse';
+}
+
+export function isAcpContextUpdate(event: AcpEvent): event is { eventType: 'ContextUpdate'; data: AcpContextUpdate } {
+  return event.eventType === 'ContextUpdate';
+}
+
+export function isAcpError(event: AcpEvent): event is { eventType: 'Error'; data: AcpError } {
+  return event.eventType === 'Error';
+}
+
+export function isAcpResumeMarker(event: AcpEvent): event is { eventType: 'ResumeMarker'; data: AcpResumeMarker } {
+  return event.eventType === 'ResumeMarker';
+}
+
+// ============================================================================
 // Discriminated Unions
 // ============================================================================
 
@@ -502,7 +696,8 @@ export type ServerMessage =
   | Ping
   | Pong
   | Notification
-  | Ack;
+  | Ack
+  | AcpWireEvent;
 
 export type BidirectionalMessage = Ack;
 
@@ -727,6 +922,10 @@ export function isGitDiffResult(message: AnyMessage | UnknownMessage): message i
   return message.type === 'GitDiffResult';
 }
 
+export function isAcpWireEvent(message: AnyMessage | UnknownMessage): message is AcpWireEvent {
+  return message.type === 'AcpWireEvent';
+}
+
 // ============================================================================
 // Message Encoding/Decoding
 // ============================================================================
@@ -779,6 +978,7 @@ export function decodeMessage(data: ArrayBuffer | Uint8Array): AnyMessage | Unkn
       'FileContent', 'FileListResult',
       'GitStatusResult', 'GitDiffResult',
       'Error', 'Pong', 'Notification',
+      'AcpWireEvent',
       // Bidirectional
       'Ack'
     ];

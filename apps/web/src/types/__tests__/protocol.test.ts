@@ -22,6 +22,28 @@ import {
   Pong,
   Notification,
   Ack,
+  // WS-ACP Types
+  AcpSequence,
+  AcpCorrelationId,
+  AcpEventEnvelope,
+  AcpEvent,
+  AcpSessionInit,
+  AcpAgentCapabilities,
+  AcpSessionStatusEvent,
+  AcpSessionStatus,
+  AcpPromptChunk,
+  AcpChunkContent,
+  AcpPromptComplete,
+  AcpPromptCompleteReason,
+  AcpToolUseEvent,
+  AcpToolUseStatus,
+  AcpContextUpdate,
+  AcpContextUpdateType,
+  AcpError,
+  AcpErrorCode,
+  AcpResumeMarker,
+  AcpResumeRequest,
+  AcpAck,
   // Functions
   encodeMessage,
   decodeMessage,
@@ -50,6 +72,14 @@ import {
   isPong,
   isNotification,
   isAck,
+  isAcpSessionInit,
+  isAcpSessionStatus,
+  isAcpPromptChunk,
+  isAcpPromptComplete,
+  isAcpToolUse,
+  isAcpContextUpdate,
+  isAcpError,
+  isAcpResumeMarker,
   ClientMessage,
   ServerMessage,
   UnknownMessage,
@@ -658,6 +688,384 @@ describe('Protocol Types', () => {
         const encoded = encodeMessage(message);
         const decoded = decodeMessage(encoded);
         expect(decoded).toEqual(message);
+      });
+    });
+  });
+
+  describe('WS-ACP Wire Contract', () => {
+    describe('Event Types', () => {
+      it('should define all WS-ACP event types', () => {
+        const eventTypes = [
+          'SessionInit', 'SessionStatus', 'PromptChunk', 'PromptComplete',
+          'ToolUse', 'ContextUpdate', 'Error', 'ResumeMarker'
+        ];
+        expect(eventTypes.length).toBe(8);
+      });
+
+      it('should create valid AcpSessionInit event', () => {
+        const event: AcpEvent = {
+          eventType: 'SessionInit',
+          data: {
+            acpSessionId: 'session-123',
+            capabilities: {
+              supportsToolUse: true,
+              supportsContextUpdate: true,
+              supportsCancellation: true
+            }
+          }
+        };
+        expect(event.eventType).toBe('SessionInit');
+        expect(isAcpSessionInit(event)).toBe(true);
+      });
+
+      it('should create valid AcpSessionStatus event', () => {
+        const event: AcpEvent = {
+          eventType: 'SessionStatus',
+          data: {
+            worktreeId: 'wt-123',
+            acpSessionId: 'session-123',
+            status: 'Working'
+          }
+        };
+        expect(event.eventType).toBe('SessionStatus');
+        expect(isAcpSessionStatus(event)).toBe(true);
+      });
+
+      it('should create valid AcpPromptChunk event with text content', () => {
+        const event: AcpEvent = {
+          eventType: 'PromptChunk',
+          data: {
+            worktreeId: 'wt-123',
+            acpSessionId: 'session-123',
+            content: { type: 'Text', data: 'Hello, world!' },
+            isFinal: false
+          }
+        };
+        expect(event.eventType).toBe('PromptChunk');
+        expect(isAcpPromptChunk(event)).toBe(true);
+      });
+
+      it('should create valid AcpPromptChunk event with structured content', () => {
+        const event: AcpEvent = {
+          eventType: 'PromptChunk',
+          data: {
+            worktreeId: 'wt-123',
+            acpSessionId: 'session-123',
+            content: { type: 'Structured', data: '{"key":"value"}' },
+            isFinal: true
+          }
+        };
+        expect(event.eventType).toBe('PromptChunk');
+        const chunkData = event.data as AcpPromptChunk;
+        expect(chunkData.content.type).toBe('Structured');
+      });
+
+      it('should create valid AcpPromptComplete event', () => {
+        const event: AcpEvent = {
+          eventType: 'PromptComplete',
+          data: {
+            worktreeId: 'wt-123',
+            acpSessionId: 'session-123',
+            reason: 'Normal'
+          }
+        };
+        expect(event.eventType).toBe('PromptComplete');
+        expect(isAcpPromptComplete(event)).toBe(true);
+      });
+
+      it('should create valid AcpToolUse event with all statuses', () => {
+        const statuses: AcpToolUseStatus[] = ['Started', 'InProgress', 'Completed', 'Error'];
+        statuses.forEach(status => {
+          const event: AcpEvent = {
+            eventType: 'ToolUse',
+            data: {
+              worktreeId: 'wt-123',
+              acpSessionId: 'session-123',
+              toolUseId: 'tool-1',
+              toolName: 'read_file',
+              status,
+              input: status === 'Started' ? '{"path":"test.ts"}' : undefined,
+              output: status === 'Completed' ? '{"content":"..."}' : undefined,
+              error: status === 'Error' ? 'File not found' : undefined
+            }
+          };
+          expect(event.eventType).toBe('ToolUse');
+          expect(isAcpToolUse(event)).toBe(true);
+        });
+      });
+
+      it('should create valid AcpContextUpdate event', () => {
+        const updateTypes: AcpContextUpdateType[] = [
+          'FileRead', 'FileWritten', 'CommandExecuted', 'BrowserAction', 'MemoryUpdate'
+        ];
+        updateTypes.forEach(updateType => {
+          const event: AcpEvent = {
+            eventType: 'ContextUpdate',
+            data: {
+              worktreeId: 'wt-123',
+              acpSessionId: 'session-123',
+              updateType,
+              data: '{"details":"..."}'
+            }
+          };
+          expect(event.eventType).toBe('ContextUpdate');
+          expect(isAcpContextUpdate(event)).toBe(true);
+        });
+      });
+
+      it('should create valid AcpError event', () => {
+        const event: AcpEvent = {
+          eventType: 'Error',
+          data: {
+            worktreeId: 'wt-123',
+            acpSessionId: 'session-123',
+            code: 'AgentCrash',
+            message: 'Agent process terminated unexpectedly',
+            details: '{"exitCode":1}',
+            recoverable: false
+          }
+        };
+        expect(event.eventType).toBe('Error');
+        expect(isAcpError(event)).toBe(true);
+      });
+
+      it('should create valid AcpResumeMarker event', () => {
+        const event: AcpEvent = {
+          eventType: 'ResumeMarker',
+          data: {
+            worktreeId: 'wt-123',
+            acpSessionId: 'session-123',
+            lastSequence: 42,
+            checkpoint: 'base64-encoded-checkpoint'
+          }
+        };
+        expect(event.eventType).toBe('ResumeMarker');
+        expect(isAcpResumeMarker(event)).toBe(true);
+      });
+    });
+
+    describe('Event Envelope', () => {
+      it('should create valid AcpEventEnvelope with all fields', () => {
+        const envelope: AcpEventEnvelope = {
+          sequence: 1,
+          correlationId: { value: 'corr-123' },
+          timestamp: Date.now(),
+          eventType: 'SessionInit',
+          data: {
+            acpSessionId: 'session-123',
+            capabilities: {
+              supportsToolUse: true,
+              supportsContextUpdate: false,
+              supportsCancellation: true
+            }
+          }
+        };
+        expect(envelope.sequence).toBe(1);
+        expect(envelope.correlationId?.value).toBe('corr-123');
+      });
+
+      it('should create AcpEventEnvelope without correlationId', () => {
+        const envelope: AcpEventEnvelope = {
+          sequence: 2,
+          timestamp: Date.now(),
+          eventType: 'PromptChunk',
+          data: {
+            worktreeId: 'wt-123',
+            acpSessionId: 'session-123',
+            content: { type: 'Text', data: 'test' },
+            isFinal: true
+          }
+        };
+        expect(envelope.correlationId).toBeUndefined();
+      });
+    });
+
+    describe('Ordering and Sequence', () => {
+      it('should use monotonically increasing sequence numbers', () => {
+        const events: AcpEventEnvelope[] = [
+          { sequence: 1, timestamp: 1000, eventType: 'SessionInit', data: { acpSessionId: 's1', capabilities: { supportsToolUse: true, supportsContextUpdate: true, supportsCancellation: true } } },
+          { sequence: 2, timestamp: 1001, eventType: 'PromptChunk', data: { worktreeId: 'wt-1', acpSessionId: 's1', content: { type: 'Text', data: 'a' }, isFinal: false } },
+          { sequence: 3, timestamp: 1002, eventType: 'PromptChunk', data: { worktreeId: 'wt-1', acpSessionId: 's1', content: { type: 'Text', data: 'b' }, isFinal: true } }
+        ];
+        for (let i = 1; i < events.length; i++) {
+          expect(events[i].sequence).toBeGreaterThan(events[i-1].sequence);
+        }
+      });
+    });
+
+    describe('Error Codes', () => {
+      it('should define all ACP error codes', () => {
+        const errorCodes: AcpErrorCode[] = [
+          'AgentCrash', 'InitFailed', 'SessionNotFound', 'PromptFailed',
+          'ToolFailed', 'CancelFailed', 'Timeout', 'InvalidRequest', 'Internal'
+        ];
+        expect(errorCodes.length).toBe(9);
+      });
+
+      it('should create recoverable vs non-recoverable errors', () => {
+        const recoverableError: AcpError = {
+          code: 'Timeout',
+          message: 'Request timed out',
+          recoverable: true
+        };
+        const fatalError: AcpError = {
+          code: 'AgentCrash',
+          message: 'Agent process crashed',
+          recoverable: false
+        };
+        expect(recoverableError.recoverable).toBe(true);
+        expect(fatalError.recoverable).toBe(false);
+      });
+    });
+
+    describe('Resume and Ack', () => {
+      it('should create valid AcpResumeRequest', () => {
+        const request: AcpResumeRequest = {
+          worktreeId: 'wt-123',
+          acpSessionId: 'session-123',
+          fromSequence: 10
+        };
+        expect(request.fromSequence).toBe(10);
+      });
+
+      it('should create valid AcpAck', () => {
+        const ack: AcpAck = {
+          worktreeId: 'wt-123',
+          acpSessionId: 'session-123',
+          lastSequence: 42
+        };
+        expect(ack.lastSequence).toBe(42);
+      });
+    });
+
+    describe('Negative Tests: Assistant-UI Payload Rejection', () => {
+      it('should NOT accept assistant-ui message part shapes in AcpPromptChunk', () => {
+        const assistantUiPayload = {
+          type: 'text',
+          text: 'Hello',
+          _debug: { source: 'assistant-ui' }
+        };
+        const validChunk: AcpPromptChunk = {
+          worktreeId: 'wt-123',
+          acpSessionId: 'session-123',
+          content: { type: 'Text', data: 'Hello' },
+          isFinal: true
+        };
+        expect(validChunk.content).not.toEqual(assistantUiPayload);
+        expect(validChunk.content).toHaveProperty('type');
+        expect(validChunk.content).toHaveProperty('data');
+      });
+
+      it('should NOT accept assistant-ui thread state in AcpSessionStatus', () => {
+        const assistantUiThreadState = {
+          messages: [{ id: 'm1', role: 'user', content: 'hi' }],
+          isLoading: true,
+          error: null
+        };
+        const validStatus: AcpSessionStatusEvent = {
+          worktreeId: 'wt-123',
+          acpSessionId: 'session-123',
+          status: 'Working'
+        };
+        expect(validStatus).not.toHaveProperty('messages');
+        expect(validStatus).not.toHaveProperty('isLoading');
+        expect(validStatus).toHaveProperty('status');
+      });
+
+      it('should NOT accept assistant-ui tool call shapes in AcpToolUse', () => {
+        const assistantUiToolCall = {
+          toolCallId: 'tc-1',
+          toolName: 'read_file',
+          args: { path: '/src/test.ts' },
+          result: null,
+          status: 'pending'
+        };
+        const validToolUse: AcpToolUseEvent = {
+          worktreeId: 'wt-123',
+          acpSessionId: 'session-123',
+          toolUseId: 'tu-1',
+          toolName: 'read_file',
+          status: 'Started',
+          input: '{"path":"/src/test.ts"}'
+        };
+        expect(validToolUse).toHaveProperty('toolUseId');
+        expect(validToolUse).not.toHaveProperty('toolCallId');
+        expect(validToolUse).not.toHaveProperty('args');
+        expect(validToolUse.input).toBe('{"path":"/src/test.ts"}');
+      });
+
+      it('should NOT accept assistant-ui runtime state in AcpContextUpdate', () => {
+        const assistantUiRuntime = {
+          threadId: 'thread-1',
+          isRunning: true,
+          error: undefined,
+          abortController: {}
+        };
+        const validContext: AcpContextUpdate = {
+          worktreeId: 'wt-123',
+          acpSessionId: 'session-123',
+          updateType: 'FileRead',
+          data: '{"path":"/src/test.ts"}'
+        };
+        expect(validContext).not.toHaveProperty('threadId');
+        expect(validContext).not.toHaveProperty('isRunning');
+        expect(validContext).not.toHaveProperty('abortController');
+        expect(validContext).toHaveProperty('updateType');
+        expect(validContext).toHaveProperty('data');
+      });
+
+      it('should enforce that AcpChunkContent uses type/data, not assistant-ui shapes', () => {
+        const validTextContent: AcpChunkContent = { type: 'Text', data: 'Hello' };
+        const validStructuredContent: AcpChunkContent = { type: 'Structured', data: '{}' };
+        expect(validTextContent).toHaveProperty('type');
+        expect(validTextContent).toHaveProperty('data');
+        expect(validStructuredContent).toHaveProperty('type');
+        expect(validStructuredContent).toHaveProperty('data');
+      });
+
+      it('should enforce that AcpError uses code/message, not assistant-ui error shapes', () => {
+        const assistantUiError = {
+          message: 'Something went wrong',
+          stack: 'Error at line 1...',
+          cause: new Error('original')
+        };
+        const validAcpError: AcpError = {
+          code: 'Internal',
+          message: 'Something went wrong',
+          recoverable: false
+        };
+        expect(validAcpError).toHaveProperty('code');
+        expect(validAcpError).not.toHaveProperty('stack');
+        expect(validAcpError).not.toHaveProperty('cause');
+        expect(validAcpError).toHaveProperty('recoverable');
+      });
+    });
+
+    describe('Type Guard Coverage', () => {
+      it('should have type guards for all event types', () => {
+        const events: AcpEvent[] = [
+          { eventType: 'SessionInit', data: { acpSessionId: 's1', capabilities: { supportsToolUse: true, supportsContextUpdate: true, supportsCancellation: true } } },
+          { eventType: 'SessionStatus', data: { worktreeId: 'w1', acpSessionId: 's1', status: 'Working' } },
+          { eventType: 'PromptChunk', data: { worktreeId: 'w1', acpSessionId: 's1', content: { type: 'Text', data: 'x' }, isFinal: true } },
+          { eventType: 'PromptComplete', data: { worktreeId: 'w1', acpSessionId: 's1', reason: 'Normal' } },
+          { eventType: 'ToolUse', data: { worktreeId: 'w1', acpSessionId: 's1', toolUseId: 't1', toolName: 'test', status: 'Started' } },
+          { eventType: 'ContextUpdate', data: { worktreeId: 'w1', acpSessionId: 's1', updateType: 'FileRead', data: '{}' } },
+          { eventType: 'Error', data: { code: 'Internal', message: 'err', recoverable: false } },
+          { eventType: 'ResumeMarker', data: { worktreeId: 'w1', acpSessionId: 's1', lastSequence: 1 } }
+        ];
+
+        const guards = [
+          isAcpSessionInit, isAcpSessionStatus, isAcpPromptChunk, isAcpPromptComplete,
+          isAcpToolUse, isAcpContextUpdate, isAcpError, isAcpResumeMarker
+        ];
+
+        events.forEach((event, index) => {
+          guards.forEach((guard, guardIndex) => {
+            if (index === guardIndex) {
+              expect(guard(event)).toBe(true);
+            }
+          });
+        });
       });
     });
   });

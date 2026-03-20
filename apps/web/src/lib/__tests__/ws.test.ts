@@ -514,6 +514,491 @@ describe('YmirClient', () => {
       expect(client1).not.toBe(client2);
     });
   });
+
+  describe('WS-ACP adapter', () => {
+    const testWorktreeId = 'test-worktree-id';
+    const testAcpSessionId = 'test-acp-session-id';
+
+    describe('decodeAcpEnvelope', () => {
+      it('should decode valid AcpWireEvent envelope', () => {
+        client = new YmirClient({ url: 'ws://localhost:7319' });
+        Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
+        callOpenHandler();
+
+        const envelope: import('../../types/generated/protocol').AcpEventEnvelope = {
+          sequence: 1,
+          timestamp: Date.now(),
+          eventType: 'SessionStatus',
+          correlationId: { value: 'test-correlation' },
+          data: {
+            worktreeId: testWorktreeId,
+            acpSessionId: testAcpSessionId,
+            status: 'Working',
+          },
+        };
+
+        const message: ServerMessage = {
+          type: 'AcpWireEvent',
+          envelope,
+        };
+
+        expect(() => {
+          callMessageHandler({ data: encodeMessage(message) } as MessageEvent);
+        }).not.toThrow();
+      });
+
+      it('should decode envelope with SessionInit event type', () => {
+        client = new YmirClient({ url: 'ws://localhost:7319' });
+        Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
+        callOpenHandler();
+
+        const envelope: import('../../types/generated/protocol').AcpEventEnvelope = {
+          sequence: 1,
+          timestamp: Date.now(),
+          eventType: 'SessionInit',
+          data: {
+            acpSessionId: testAcpSessionId,
+            capabilities: {
+              supportsToolUse: true,
+              supportsContextUpdate: true,
+              supportsCancellation: true,
+            },
+          },
+        };
+
+        const message: ServerMessage = {
+          type: 'AcpWireEvent',
+          envelope,
+        };
+
+        expect(() => {
+          callMessageHandler({ data: encodeMessage(message) } as MessageEvent);
+        }).not.toThrow();
+      });
+
+      it('should decode envelope with PromptChunk event type', () => {
+        client = new YmirClient({ url: 'ws://localhost:7319' });
+        Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
+        callOpenHandler();
+
+        const envelope: import('../../types/generated/protocol').AcpEventEnvelope = {
+          sequence: 2,
+          timestamp: Date.now(),
+          eventType: 'PromptChunk',
+          data: {
+            worktreeId: testWorktreeId,
+            acpSessionId: testAcpSessionId,
+            content: { type: 'Text', data: 'test content' },
+            isFinal: false,
+          },
+        };
+
+        const message: ServerMessage = {
+          type: 'AcpWireEvent',
+          envelope,
+        };
+
+        expect(() => {
+          callMessageHandler({ data: encodeMessage(message) } as MessageEvent);
+        }).not.toThrow();
+      });
+    });
+
+    describe('malformed payload handling', () => {
+      it('should return null for non-AcpWireEvent messages', () => {
+        client = new YmirClient({ url: 'ws://localhost:7319' });
+        Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
+        callOpenHandler();
+
+        const message: ServerMessage = {
+          type: 'Pong',
+          timestamp: Date.now(),
+        };
+
+        const result = (client as any).decodeAcpEnvelope(message);
+        expect(result).toBeNull();
+      });
+
+      it('should handle missing envelope object gracefully', () => {
+        client = new YmirClient({ url: 'ws://localhost:7319' });
+
+        const message: ServerMessage = {
+          type: 'AcpWireEvent',
+          envelope: null as any,
+        };
+
+        const result = (client as any).decodeAcpEnvelope(message);
+        expect(result).toBeNull();
+      });
+
+      it('should handle invalid envelope type gracefully', () => {
+        client = new YmirClient({ url: 'ws://localhost:7319' });
+
+        const message: ServerMessage = {
+          type: 'AcpWireEvent',
+          envelope: 'invalid' as any,
+        };
+
+        const result = (client as any).decodeAcpEnvelope(message);
+        expect(result).toBeNull();
+      });
+
+      it('should handle missing sequence field', () => {
+        client = new YmirClient({ url: 'ws://localhost:7319' });
+
+        const message: ServerMessage = {
+          type: 'AcpWireEvent',
+          envelope: {
+            timestamp: Date.now(),
+            eventType: 'SessionStatus',
+            data: {},
+          } as any,
+        };
+
+        const result = (client as any).decodeAcpEnvelope(message);
+        expect(result).toBeNull();
+      });
+
+      it('should handle invalid sequence type', () => {
+        client = new YmirClient({ url: 'ws://localhost:7319' });
+
+        const message: ServerMessage = {
+          type: 'AcpWireEvent',
+          envelope: {
+            sequence: 'invalid' as any,
+            timestamp: Date.now(),
+            eventType: 'SessionStatus',
+            data: {},
+          },
+        };
+
+        const result = (client as any).decodeAcpEnvelope(message);
+        expect(result).toBeNull();
+      });
+
+      it('should handle missing timestamp field', () => {
+        client = new YmirClient({ url: 'ws://localhost:7319' });
+
+        const message: ServerMessage = {
+          type: 'AcpWireEvent',
+          envelope: {
+            sequence: 1,
+            eventType: 'SessionStatus',
+            data: {},
+          } as any,
+        };
+
+        const result = (client as any).decodeAcpEnvelope(message);
+        expect(result).toBeNull();
+      });
+
+      it('should handle missing eventType field', () => {
+        client = new YmirClient({ url: 'ws://localhost:7319' });
+
+        const message: ServerMessage = {
+          type: 'AcpWireEvent',
+          envelope: {
+            sequence: 1,
+            timestamp: Date.now(),
+            data: {},
+          } as any,
+        };
+
+        const result = (client as any).decodeAcpEnvelope(message);
+        expect(result).toBeNull();
+      });
+
+      it('should handle missing data field', () => {
+        client = new YmirClient({ url: 'ws://localhost:7319' });
+
+        const message: ServerMessage = {
+          type: 'AcpWireEvent',
+          envelope: {
+            sequence: 1,
+            timestamp: Date.now(),
+            eventType: 'SessionStatus',
+          } as any,
+        };
+
+        const result = (client as any).decodeAcpEnvelope(message);
+        expect(result).toBeNull();
+      });
+
+      it('should handle invalid correlationId if present', () => {
+        client = new YmirClient({ url: 'ws://localhost:7319' });
+
+        const message: ServerMessage = {
+          type: 'AcpWireEvent',
+          envelope: {
+            sequence: 1,
+            timestamp: Date.now(),
+            eventType: 'SessionStatus',
+            correlationId: 'invalid' as any,
+            data: {},
+          },
+        };
+
+        const result = (client as any).decodeAcpEnvelope(message);
+        expect(result).toBeNull();
+      });
+    });
+
+    describe('event ordering and sequence handling', () => {
+      it('should preserve sequence numbers across events', () => {
+        client = new YmirClient({ url: 'ws://localhost:7319' });
+        Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
+        callOpenHandler();
+
+        const envelopes: import('../../types/generated/protocol').AcpEventEnvelope[] = [
+          {
+            sequence: 1,
+            timestamp: Date.now(),
+            eventType: 'SessionInit',
+            data: {
+              acpSessionId: testAcpSessionId,
+              capabilities: {
+                supportsToolUse: true,
+                supportsContextUpdate: true,
+                supportsCancellation: true,
+              },
+            },
+          },
+          {
+            sequence: 2,
+            timestamp: Date.now(),
+            eventType: 'PromptChunk',
+            data: {
+              worktreeId: testWorktreeId,
+              acpSessionId: testAcpSessionId,
+              content: { type: 'Text', data: 'chunk 1' },
+              isFinal: false,
+            },
+          },
+          {
+            sequence: 3,
+            timestamp: Date.now(),
+            eventType: 'PromptChunk',
+            data: {
+              worktreeId: testWorktreeId,
+              acpSessionId: testAcpSessionId,
+              content: { type: 'Text', data: 'chunk 2' },
+              isFinal: false,
+            },
+          },
+        ];
+
+        envelopes.forEach((envelope) => {
+          const message: ServerMessage = {
+            type: 'AcpWireEvent',
+            envelope,
+          };
+          expect(() => {
+            callMessageHandler({ data: encodeMessage(message) } as MessageEvent);
+          }).not.toThrow();
+        });
+      });
+
+      it('should handle correlationId for request-response tracking', () => {
+        client = new YmirClient({ url: 'ws://localhost:7319' });
+        Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
+        callOpenHandler();
+
+        const envelope: import('../../types/generated/protocol').AcpEventEnvelope = {
+          sequence: 1,
+          timestamp: Date.now(),
+          eventType: 'SessionInit',
+          correlationId: { value: 'req-123' },
+          data: {
+            acpSessionId: testAcpSessionId,
+            capabilities: {
+              supportsToolUse: true,
+              supportsContextUpdate: true,
+              supportsCancellation: true,
+            },
+          },
+        };
+
+        const message: ServerMessage = {
+          type: 'AcpWireEvent',
+          envelope,
+        };
+
+        expect(() => {
+          callMessageHandler({ data: encodeMessage(message) } as MessageEvent);
+        }).not.toThrow();
+      });
+
+      it('should handle monotonically increasing sequence numbers', () => {
+        client = new YmirClient({ url: 'ws://localhost:7319' });
+        Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
+        callOpenHandler();
+
+        const baseSequence = 100;
+        for (let i = 0; i < 5; i++) {
+          const envelope: import('../../types/generated/protocol').AcpEventEnvelope = {
+            sequence: baseSequence + i,
+            timestamp: Date.now() + i,
+            eventType: 'PromptChunk',
+            data: {
+              worktreeId: testWorktreeId,
+              acpSessionId: testAcpSessionId,
+              content: { type: 'Text', data: `chunk ${i}` },
+              isFinal: i === 4,
+            },
+          };
+
+          const message: ServerMessage = {
+            type: 'AcpWireEvent',
+            envelope,
+          };
+
+          expect(() => {
+            callMessageHandler({ data: encodeMessage(message) } as MessageEvent);
+          }).not.toThrow();
+        }
+      });
+    });
+
+    describe('event type discrimination', () => {
+      it('should handle all eight ACP event types', () => {
+        client = new YmirClient({ url: 'ws://localhost:7319' });
+        Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
+        callOpenHandler();
+
+        const eventTypes: import('../../types/generated/protocol').AcpEvent['eventType'][] = [
+          'SessionInit',
+          'SessionStatus',
+          'PromptChunk',
+          'PromptComplete',
+          'ToolUse',
+          'ContextUpdate',
+          'Error',
+          'ResumeMarker',
+        ];
+
+        eventTypes.forEach((eventType) => {
+          let envelope: import('../../types/generated/protocol').AcpEventEnvelope;
+
+          switch (eventType) {
+            case 'SessionInit':
+              envelope = {
+                sequence: 1,
+                timestamp: Date.now(),
+                eventType,
+                data: {
+                  acpSessionId: testAcpSessionId,
+                  capabilities: {
+                    supportsToolUse: true,
+                    supportsContextUpdate: true,
+                    supportsCancellation: true,
+                  },
+                },
+              };
+              break;
+            case 'SessionStatus':
+              envelope = {
+                sequence: 2,
+                timestamp: Date.now(),
+                eventType,
+                data: {
+                  worktreeId: testWorktreeId,
+                  acpSessionId: testAcpSessionId,
+                  status: 'Working',
+                },
+              };
+              break;
+            case 'PromptChunk':
+              envelope = {
+                sequence: 3,
+                timestamp: Date.now(),
+                eventType,
+                data: {
+                  worktreeId: testWorktreeId,
+                  acpSessionId: testAcpSessionId,
+                  content: { type: 'Text', data: 'test' },
+                  isFinal: false,
+                },
+              };
+              break;
+            case 'PromptComplete':
+              envelope = {
+                sequence: 4,
+                timestamp: Date.now(),
+                eventType,
+                data: {
+                  worktreeId: testWorktreeId,
+                  acpSessionId: testAcpSessionId,
+                  reason: 'Normal',
+                },
+              };
+              break;
+            case 'ToolUse':
+              envelope = {
+                sequence: 5,
+                timestamp: Date.now(),
+                eventType,
+                data: {
+                  worktreeId: testWorktreeId,
+                  acpSessionId: testAcpSessionId,
+                  toolUseId: 'tool-1',
+                  toolName: 'test-tool',
+                  status: 'Completed',
+                },
+              };
+              break;
+            case 'ContextUpdate':
+              envelope = {
+                sequence: 6,
+                timestamp: Date.now(),
+                eventType,
+                data: {
+                  worktreeId: testWorktreeId,
+                  acpSessionId: testAcpSessionId,
+                  updateType: 'FileRead',
+                  data: 'file content',
+                },
+              };
+              break;
+            case 'Error':
+              envelope = {
+                sequence: 7,
+                timestamp: Date.now(),
+                eventType,
+                data: {
+                  worktreeId: testWorktreeId,
+                  acpSessionId: testAcpSessionId,
+                  code: 'Internal',
+                  message: 'test error',
+                  recoverable: true,
+                },
+              };
+              break;
+            case 'ResumeMarker':
+              envelope = {
+                sequence: 8,
+                timestamp: Date.now(),
+                eventType,
+                data: {
+                  worktreeId: testWorktreeId,
+                  acpSessionId: testAcpSessionId,
+                  lastSequence: 7,
+                },
+              };
+              break;
+          }
+
+          const message: ServerMessage = {
+            type: 'AcpWireEvent',
+            envelope,
+          };
+
+          expect(() => {
+            callMessageHandler({ data: encodeMessage(message) } as MessageEvent);
+          }).not.toThrow();
+        });
+      });
+    });
+  });
 });
 
 function encodeMessage(message: any): ArrayBuffer {

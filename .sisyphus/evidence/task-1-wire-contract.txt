@@ -1,0 +1,187 @@
+warning: unused import: `FileList`
+ --> crates/ws-server/src/router.rs:5:5
+  |
+5 |     FileList, FileListResult,
+  |     ^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `info`
+  --> crates/ws-server/src/workspace/mod.rs:15:15
+   |
+15 | use tracing::{info, instrument};
+   |               ^^^^
+
+warning: unused variable: `agent_type`
+   --> crates/ws-server/src/agent/handler.rs:166:22
+    |
+166 |     let (session_id, agent_type) = match session_data_opt {
+    |                      ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_agent_type`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `JsonRpcResponse` is never constructed
+  --> crates/ws-server/src/agent/acp.rs:49:8
+   |
+49 | struct JsonRpcResponse {
+   |        ^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `JsonRpcError` is never constructed
+  --> crates/ws-server/src/agent/acp.rs:58:8
+   |
+58 | struct JsonRpcError {
+   |        ^^^^^^^^^^^^
+
+warning: `ymir-ws-server` (lib) generated 5 warnings (run `cargo fix --lib -p ymir-ws-server` to apply 3 suggestions)
+warning: `ymir-ws-server` (lib test) generated 5 warnings (5 duplicates)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running unittests src/lib.rs (target/debug/deps/ymir_ws_server-b8f9d116996e8e04)
+
+running 136 tests
+test protocol::export_bindings_acpchunkcontent ... ok
+test protocol::export_bindings_acpagentcapabilities ... ok
+test protocol::export_bindings_acpcontextupdatetype ... ok
+test protocol::export_bindings_acperrorcode ... ok
+test protocol::export_bindings_ackstatus ... ok
+test protocol::export_bindings_acpcorrelationid ... ok
+test protocol::export_bindings_acpack ... ok
+test protocol::export_bindings_acppromptcompletereason ... ok
+test protocol::export_bindings_acpresumemarker ... ok
+test protocol::export_bindings_acpresumerequest ... ok
+test protocol::export_bindings_acpsessionstatus ... ok
+test protocol::export_bindings_ack ... ok
+test protocol::export_bindings_acpcontextupdate ... ok
+test protocol::export_bindings_acpsessionstatusevent ... ok
+test protocol::export_bindings_acptoolusestatus ... ok
+test protocol::export_bindings_agentcancel ... ok
+test protocol::export_bindings_acppromptchunk ... ok
+test protocol::export_bindings_acperror ... ok
+test protocol::export_bindings_acppromptcomplete ... ok
+test protocol::export_bindings_agentoutput ... ok
+test protocol::export_bindings_agentprompt ... ok
+test protocol::export_bindings_agentremoved ... ok
+test protocol::export_bindings_acpsessioninit ... ok
+test protocol::export_bindings_agentsend ... ok
+test protocol::export_bindings_agentspawn ... ok
+test protocol::export_bindings_agentstatus ... ok
+test protocol::export_bindings_acptooluseevent ... ok
+test protocol::export_bindings_createpr ... ok
+test protocol::export_bindings_error ... ok
+test protocol::export_bindings_filecontent ... ok
+test protocol::export_bindings_filelist ... ok
+test protocol::export_bindings_filelistresult ... ok
+test protocol::export_bindings_fileread ... ok
+test protocol::export_bindings_filewrite ... ok
+test protocol::export_bindings_getstate ... ok
+test protocol::export_bindings_gitcommit ... ok
+test protocol::export_bindings_gitdiff ... ok
+test protocol::export_bindings_agentsessiondata ... ok
+test protocol::export_bindings_gitdiffresult ... ok
+test protocol::export_bindings_gitstatus ... ok
+test protocol::export_bindings_agentstatusupdate ... ok
+test protocol::export_bindings_gitstatusresult ... ok
+test protocol::export_bindings_notification ... ok
+test protocol::export_bindings_ping ... ok
+test protocol::export_bindings_pong ... ok
+test protocol::export_bindings_settingdata ... ok
+test protocol::export_bindings_terminalcreate ... ok
+test protocol::export_bindings_terminalcreated ... ok
+test protocol::export_bindings_terminalinput ... ok
+test protocol::export_bindings_terminalkill ... ok
+test protocol::export_bindings_terminaloutput ... ok
+test protocol::export_bindings_terminalremoved ... ok
+test protocol::export_bindings_terminalresize ... ok
+test protocol::export_bindings_terminalsessiondata ... ok
+test protocol::export_bindings_notificationlevel ... ok
+test protocol::export_bindings_updatesettings ... ok
+test protocol::export_bindings_workspacecreate ... ok
+test protocol::export_bindings_workspacedata ... ok
+test protocol::export_bindings_workspacedelete ... ok
+test protocol::tests::test_acp_ack_roundtrip ... ok
+test protocol::tests::test_acp_context_update_roundtrip ... ok
+test protocol::tests::test_acp_correlation_id_roundtrip ... ok
+test protocol::tests::test_acp_error_roundtrip ... ok
+test protocol::tests::test_acp_event_envelope_roundtrip ... ok
+test protocol::tests::test_acp_event_variants_roundtrip ... ok
+test protocol::tests::test_acp_prompt_chunk_structured_roundtrip ... ok
+test protocol::tests::test_acp_prompt_chunk_text_roundtrip ... ok
+test protocol::tests::test_acp_prompt_complete_roundtrip ... ok
+test protocol::tests::test_acp_resume_marker_roundtrip ... ok
+test protocol::tests::test_acp_resume_request_roundtrip ... ok
+test protocol::tests::test_acp_session_init_roundtrip ... ok
+test protocol::tests::test_acp_session_status_event_roundtrip ... ok
+test protocol::tests::test_acp_tool_use_event_roundtrip ... ok
+test protocol::tests::test_agent_cancel_roundtrip ... ok
+test protocol::tests::test_agent_output_roundtrip ... ok
+test protocol::tests::test_agent_prompt_roundtrip ... ok
+test protocol::tests::test_agent_send_roundtrip ... ok
+test protocol::tests::test_agent_spawn_roundtrip ... ok
+test protocol::tests::test_agent_status_update_roundtrip ... ok
+test protocol::tests::test_client_message_creation ... ok
+test protocol::tests::test_client_message_sizes_are_reasonable ... ok
+test protocol::tests::test_create_pr_roundtrip ... ok
+test protocol::export_bindings_workspacedeleted ... ok
+test protocol::tests::test_error_roundtrip ... ok
+test protocol::tests::test_file_content_roundtrip ... ok
+test protocol::tests::test_file_read_roundtrip ... ok
+test protocol::tests::test_file_write_roundtrip ... ok
+test protocol::tests::test_get_state_roundtrip ... ok
+test protocol::tests::test_git_diff_result_roundtrip ... ok
+test protocol::tests::test_git_commit_roundtrip ... ok
+test protocol::tests::test_git_diff_roundtrip ... ok
+test protocol::tests::test_git_status_result_roundtrip ... ok
+test protocol::tests::test_git_status_roundtrip ... ok
+test protocol::tests::test_messagepack_roundtrip_client_message ... ok
+test protocol::tests::test_messagepack_roundtrip_server_message ... ok
+test protocol::tests::test_notification_roundtrip ... ok
+test protocol::tests::test_ping_roundtrip ... ok
+test protocol::tests::test_pong_roundtrip ... ok
+test protocol::tests::test_protocol_version_constant ... ok
+test protocol::tests::test_server_message_creation ... ok
+test protocol::tests::test_server_message_sizes_are_reasonable ... ok
+test protocol::tests::test_state_snapshot_roundtrip ... ok
+test protocol::tests::test_terminal_create_roundtrip ... ok
+test protocol::tests::test_terminal_created_roundtrip ... ok
+test protocol::tests::test_terminal_input_roundtrip ... ok
+test protocol::tests::test_terminal_output_roundtrip ... ok
+test protocol::tests::test_terminal_removed_roundtrip ... ok
+test protocol::tests::test_terminal_resize_roundtrip ... ok
+test protocol::tests::test_update_settings_roundtrip ... ok
+test protocol::tests::test_workspace_create_roundtrip ... ok
+test protocol::tests::test_workspace_delete_roundtrip ... ok
+test protocol::tests::test_workspace_deleted_roundtrip ... ok
+test protocol::tests::test_workspace_rename_roundtrip ... ok
+test protocol::tests::test_workspace_update_roundtrip ... ok
+test protocol::tests::test_workspace_updated_roundtrip ... ok
+test protocol::tests::test_worktree_create_roundtrip ... ok
+test protocol::tests::test_worktree_created_roundtrip ... ok
+test protocol::tests::test_worktree_delete_roundtrip ... ok
+test protocol::tests::test_worktree_deleted_roundtrip ... ok
+test protocol::tests::test_worktree_list_roundtrip ... ok
+test protocol::tests::test_worktree_merge_roundtrip ... ok
+test protocol::tests::test_worktree_status_roundtrip ... ok
+test protocol::export_bindings_workspacerename ... ok
+test protocol::export_bindings_workspaceupdate ... ok
+test protocol::export_bindings_worktreecreate ... ok
+test protocol::export_bindings_worktreedata ... ok
+test protocol::export_bindings_worktreedelete ... ok
+test protocol::export_bindings_worktreedeleted ... ok
+test protocol::export_bindings_worktreelist ... ok
+test protocol::export_bindings_workspacecreated ... ok
+test protocol::export_bindings_worktreemerge ... ok
+test protocol::export_bindings_workspaceupdated ... ok
+test protocol::export_bindings_worktreecreated ... ok
+test protocol::export_bindings_statesnapshot ... ok
+test protocol::export_bindings_acpevent ... ok
+test protocol::export_bindings_acpeventenvelope ... ok
+
+test result: ok. 136 passed; 0 failed; 0 ignored; 0 measured; 111 filtered out; finished in 0.10s
+
+     Running unittests src/main.rs (target/debug/deps/ymir_ws_server-84892d6f3599f897)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+

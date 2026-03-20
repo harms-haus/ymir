@@ -191,7 +191,7 @@ Max Concurrent: 5
 ## TODOs
 
 
-- [ ] 1. Define the WS-ACP wire contract
+- [x] 1. Define the WS-ACP wire contract
 
   **What to do**:
   - Define the stateless wire contract between the Rust ACP bridge and the TypeScript side.
@@ -254,7 +254,7 @@ Max Concurrent: 5
   - Files: `crates/ws-server/src/protocol.rs`, `apps/web/src/types/generated/protocol.ts`, `apps/web/src/types/__tests__/protocol.test.ts`
   - Pre-commit: `cargo test -p ymir-ws-server protocol:: -- --nocapture && npm --prefix apps/web run test:run -- src/types/__tests__/protocol.test.ts`
 
-- [ ] 2. Define the ACP event accumulator contract
+- [x] 2. Define the ACP event accumulator contract
 
   **What to do**:
   - Define the accumulator's input/output contract, including connection-scoped rebuild rules.
@@ -438,7 +438,7 @@ Max Concurrent: 5
   - Files: card-schema helper files, related tests
   - Pre-commit: `npm --prefix apps/web run test:run -- src/components/agent/__tests__/AgentChat.test.tsx`
 
-- [ ] 5. Define worktree-CWD launch and lifecycle rules
+- [x] 5. Define worktree-CWD launch and lifecycle rules
 
   **What to do**:
   - Define exactly how agent start/stop/restart behaves per selected worktree.
@@ -501,7 +501,7 @@ Max Concurrent: 5
   - Pre-commit: `cargo test -p ymir-ws-server agent:: -- --nocapture`
 
 
-- [ ] 6. Build the Rust ACP bridge and ACP-WS adapter
+- [x] 6. Build the Rust ACP bridge and ACP-WS adapter
 
   **What to do**:
   - Integrate the official Rust ACP crate into `ws-server`.
@@ -627,7 +627,7 @@ Max Concurrent: 5
   - Files: `crates/ws-server/src/agent/handler.rs`, `crates/ws-server/src/router.rs`, `crates/ws-server/src/db/mod.rs`, `crates/ws-server/src/state.rs`
   - Pre-commit: `cargo test -p ymir-ws-server -- --nocapture`
 
-- [ ] 8. Build the WS-ACP TypeScript adapter
+- [x] 8. Build the WS-ACP TypeScript adapter
 
   **What to do**:
   - Build a stateless TypeScript adapter that decodes WebSocket wire events into ACP event objects for the accumulator.
