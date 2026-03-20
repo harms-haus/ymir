@@ -316,7 +316,7 @@ Max Concurrent: 5
   - Files: `apps/web/src/store.ts`, `apps/web/src/types/state.ts`, accumulator test files
   - Pre-commit: `npm --prefix apps/web run test:run -- src/hooks/__tests__/useAgentStatus.test.ts`
 
-- [ ] 3. Define the assistant-ui runtime boundary
+- [x] 3. Define the assistant-ui runtime boundary
 
   **What to do**:
   - Define the exact boundary between host-owned Ymir state and `assistant-ui` `ExternalStoreRuntime` inputs.
@@ -377,7 +377,7 @@ Max Concurrent: 5
   - Files: runtime-boundary helper files, related tests, plan-referenced documentation comments if needed
   - Pre-commit: `npm --prefix apps/web run test:run -- src/components/agent/__tests__/AgentChat.test.tsx`
 
-- [ ] 4. Define permission-card and event-card schemas
+- [x] 4. Define permission-card and event-card schemas
 
   **What to do**:
   - Define compact custom card schemas for permission prompts, tool calls, plan updates, and status events.
@@ -564,7 +564,7 @@ Max Concurrent: 5
   - Files: `crates/ws-server/src/agent/`, `crates/ws-server/Cargo.toml`
   - Pre-commit: `cargo test -p ymir-ws-server agent:: -- --nocapture`
 
-- [ ] 7. Integrate Rust handlers, router, and persistence with CWD launch
+- [x] 7. Integrate Rust handlers, router, and persistence with CWD launch
 
   **What to do**:
   - Route spawn/send/cancel through the new Rust bridge.
@@ -688,7 +688,7 @@ Max Concurrent: 5
   - Files: `apps/web/src/lib/ws.ts`, adapter helper files, `apps/web/src/lib/__tests__/ws.test.ts`
   - Pre-commit: `npm --prefix apps/web run test:run -- src/lib/__tests__/ws.test.ts`
 
-- [ ] 9. Build the ACP event accumulator
+- [x] 9. Build the ACP event accumulator
 
   **What to do**:
   - Implement the connection-scoped ACP event accumulator.

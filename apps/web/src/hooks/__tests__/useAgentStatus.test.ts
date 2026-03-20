@@ -40,7 +40,7 @@ import { useStore } from '../../store';
 import { resetWebSocketClient, getWebSocketClient } from '../../lib/ws';
 import { encode } from '@msgpack/msgpack';
 import { PROTOCOL_VERSION } from '../../types/generated/protocol';
-import type { AgentStatusUpdate, AgentOutput, AgentSession } from '../../types/generated/protocol';
+import type { AgentStatusUpdate, AgentOutput, AgentSession, AcpSessionStatus } from '../../types/generated/protocol';
 import { createInitialAccumulatorState } from '../../types/state';
 
 const wsMock = vi.fn(function WebSocketMock(this: any, _url: string) {
@@ -876,6 +876,531 @@ describe('ACP Event Accumulator Reducer', () => {
       const thread = newState.threads.get('worktree-1')!;
 
       expect(thread.messages.length).toBeLessThanOrEqual(500);
+    });
+  });
+
+  describe('EVENT_RECEIVED - ContextUpdate variations', () => {
+    beforeEach(() => {
+      state.threads.set('worktree-1', {
+        worktreeId: 'worktree-1',
+        acpSessionId: 'session-1',
+        messages: [{
+          id: 'msg-1',
+          role: 'assistant',
+          parts: [],
+          createdAt: Date.now(),
+          lastSequence: 0,
+        }],
+        sessionStatus: 'Working',
+        lastSequence: 0,
+        connectionGeneration: 1,
+        isStreaming: false,
+      });
+    });
+
+    it('creates context card for FileRead', () => {
+      const envelope: AcpEventEnvelope = {
+        sequence: 1,
+        timestamp: Date.now(),
+        eventType: 'ContextUpdate',
+        data: {
+          worktreeId: 'worktree-1',
+          acpSessionId: 'session-1',
+          updateType: 'FileRead',
+          data: '/src/file.ts',
+        },
+      };
+
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const thread = newState.threads.get('worktree-1')!;
+
+      expect(thread.messages[0].parts).toHaveLength(1);
+      const contextCard = thread.messages[0].parts[0];
+      expect(contextCard.type).toBe('context');
+      expect((contextCard as any).updateType).toBe('FileRead');
+      expect((contextCard as any).data).toBe('/src/file.ts');
+    });
+
+    it('creates context card for FileWritten', () => {
+      const envelope: AcpEventEnvelope = {
+        sequence: 1,
+        timestamp: Date.now(),
+        eventType: 'ContextUpdate',
+        data: {
+          worktreeId: 'worktree-1',
+          acpSessionId: 'session-1',
+          updateType: 'FileWritten',
+          data: '/src/new-file.ts',
+        },
+      };
+
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const thread = newState.threads.get('worktree-1')!;
+
+      const contextCard = thread.messages[0].parts[0];
+      expect((contextCard as any).updateType).toBe('FileWritten');
+    });
+
+    it('creates context card for CommandExecuted', () => {
+      const envelope: AcpEventEnvelope = {
+        sequence: 1,
+        timestamp: Date.now(),
+        eventType: 'ContextUpdate',
+        data: {
+          worktreeId: 'worktree-1',
+          acpSessionId: 'session-1',
+          updateType: 'CommandExecuted',
+          data: 'npm run build',
+        },
+      };
+
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const thread = newState.threads.get('worktree-1')!;
+
+      const contextCard = thread.messages[0].parts[0];
+      expect((contextCard as any).updateType).toBe('CommandExecuted');
+    });
+
+    it('creates context card for BrowserAction', () => {
+      const envelope: AcpEventEnvelope = {
+        sequence: 1,
+        timestamp: Date.now(),
+        eventType: 'ContextUpdate',
+        data: {
+          worktreeId: 'worktree-1',
+          acpSessionId: 'session-1',
+          updateType: 'BrowserAction',
+          data: 'https://example.com',
+        },
+      };
+
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const thread = newState.threads.get('worktree-1')!;
+
+      const contextCard = thread.messages[0].parts[0];
+      expect((contextCard as any).updateType).toBe('BrowserAction');
+    });
+
+    it('creates context card for MemoryUpdate', () => {
+      const envelope: AcpEventEnvelope = {
+        sequence: 1,
+        timestamp: Date.now(),
+        eventType: 'ContextUpdate',
+        data: {
+          worktreeId: 'worktree-1',
+          acpSessionId: 'session-1',
+          updateType: 'MemoryUpdate',
+          data: 'plan-step-1',
+        },
+      };
+
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const thread = newState.threads.get('worktree-1')!;
+
+      const contextCard = thread.messages[0].parts[0];
+      expect((contextCard as any).updateType).toBe('MemoryUpdate');
+    });
+  });
+
+  describe('EVENT_RECEIVED - PromptComplete reason variations', () => {
+    beforeEach(() => {
+      state.threads.set('worktree-1', {
+        worktreeId: 'worktree-1',
+        acpSessionId: 'session-1',
+        messages: [],
+        sessionStatus: 'Working',
+        lastSequence: 0,
+        connectionGeneration: 1,
+        isStreaming: true,
+      });
+    });
+
+    it('handles Normal completion reason', () => {
+      const envelope: AcpEventEnvelope = {
+        sequence: 1,
+        timestamp: Date.now(),
+        eventType: 'PromptComplete',
+        data: {
+          worktreeId: 'worktree-1',
+          acpSessionId: 'session-1',
+          reason: 'Normal',
+        },
+      };
+
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const thread = newState.threads.get('worktree-1')!;
+
+      expect(thread.isStreaming).toBe(false);
+      expect(thread.sessionStatus).toBe('Working');
+    });
+
+    it('handles Cancelled completion reason', () => {
+      const envelope: AcpEventEnvelope = {
+        sequence: 1,
+        timestamp: Date.now(),
+        eventType: 'PromptComplete',
+        data: {
+          worktreeId: 'worktree-1',
+          acpSessionId: 'session-1',
+          reason: 'Cancelled',
+        },
+      };
+
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const thread = newState.threads.get('worktree-1')!;
+
+      expect(thread.isStreaming).toBe(false);
+    });
+
+    it('handles Error completion reason and sets session status to Complete', () => {
+      const envelope: AcpEventEnvelope = {
+        sequence: 1,
+        timestamp: Date.now(),
+        eventType: 'PromptComplete',
+        data: {
+          worktreeId: 'worktree-1',
+          acpSessionId: 'session-1',
+          reason: 'Error',
+        },
+      };
+
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const thread = newState.threads.get('worktree-1')!;
+
+      expect(thread.isStreaming).toBe(false);
+      expect(thread.sessionStatus).toBe('Complete');
+    });
+  });
+
+  describe('EVENT_RECEIVED - ToolUse status variations', () => {
+    beforeEach(() => {
+      state.threads.set('worktree-1', {
+        worktreeId: 'worktree-1',
+        acpSessionId: 'session-1',
+        messages: [{
+          id: 'msg-1',
+          role: 'assistant',
+          parts: [],
+          createdAt: Date.now(),
+          lastSequence: 0,
+        }],
+        sessionStatus: 'Working',
+        lastSequence: 0,
+        connectionGeneration: 1,
+        isStreaming: false,
+      });
+    });
+
+    it('handles InProgress tool status', () => {
+      const startEnvelope: AcpEventEnvelope = {
+        sequence: 1,
+        timestamp: Date.now(),
+        eventType: 'ToolUse',
+        data: {
+          worktreeId: 'worktree-1',
+          acpSessionId: 'session-1',
+          toolUseId: 'tool-1',
+          toolName: 'RunTests',
+          status: 'Started',
+          input: '{"test": "unit"}',
+        },
+      };
+      const progressEnvelope: AcpEventEnvelope = {
+        sequence: 2,
+        timestamp: Date.now(),
+        eventType: 'ToolUse',
+        data: {
+          worktreeId: 'worktree-1',
+          acpSessionId: 'session-1',
+          toolUseId: 'tool-1',
+          toolName: 'RunTests',
+          status: 'InProgress',
+        },
+      };
+
+      let newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope: startEnvelope, worktreeId: 'worktree-1' });
+      newState = acpAccumulatorReducer(newState, { type: 'EVENT_RECEIVED', envelope: progressEnvelope, worktreeId: 'worktree-1' });
+      const thread = newState.threads.get('worktree-1')!;
+
+      const toolCard = thread.messages[0].parts[0];
+      expect((toolCard as any).status).toBe('InProgress');
+    });
+
+    it('handles Error tool status', () => {
+      const startEnvelope: AcpEventEnvelope = {
+        sequence: 1,
+        timestamp: Date.now(),
+        eventType: 'ToolUse',
+        data: {
+          worktreeId: 'worktree-1',
+          acpSessionId: 'session-1',
+          toolUseId: 'tool-1',
+          toolName: 'ReadFile',
+          status: 'Started',
+        },
+      };
+      const errorEnvelope: AcpEventEnvelope = {
+        sequence: 2,
+        timestamp: Date.now(),
+        eventType: 'ToolUse',
+        data: {
+          worktreeId: 'worktree-1',
+          acpSessionId: 'session-1',
+          toolUseId: 'tool-1',
+          toolName: 'ReadFile',
+          status: 'Error',
+          error: 'File not found',
+        },
+      };
+
+      let newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope: startEnvelope, worktreeId: 'worktree-1' });
+      newState = acpAccumulatorReducer(newState, { type: 'EVENT_RECEIVED', envelope: errorEnvelope, worktreeId: 'worktree-1' });
+      const thread = newState.threads.get('worktree-1')!;
+
+      const toolCard = thread.messages[0].parts[0];
+      expect((toolCard as any).status).toBe('Error');
+      expect((toolCard as any).error).toBe('File not found');
+    });
+  });
+
+  describe('EVENT_RECEIVED - Error code variations', () => {
+    beforeEach(() => {
+      state.threads.set('worktree-1', {
+        worktreeId: 'worktree-1',
+        acpSessionId: 'session-1',
+        messages: [{
+          id: 'msg-1',
+          role: 'assistant',
+          parts: [],
+          createdAt: Date.now(),
+          lastSequence: 0,
+        }],
+        sessionStatus: 'Working',
+        lastSequence: 0,
+        connectionGeneration: 1,
+        isStreaming: false,
+      });
+    });
+
+    const errorCodes: Array<{ code: any; recoverable: boolean }> = [
+      { code: 'AgentCrash', recoverable: false },
+      { code: 'InitFailed', recoverable: false },
+      { code: 'SessionNotFound', recoverable: false },
+      { code: 'PromptFailed', recoverable: true },
+      { code: 'ToolFailed', recoverable: true },
+      { code: 'CancelFailed', recoverable: false },
+      { code: 'Timeout', recoverable: true },
+      { code: 'InvalidRequest', recoverable: false },
+      { code: 'Internal', recoverable: false },
+    ];
+
+    errorCodes.forEach(({ code, recoverable }) => {
+      it(`creates error card for ${code} code`, () => {
+        const envelope: AcpEventEnvelope = {
+          sequence: 1,
+          timestamp: Date.now(),
+          eventType: 'Error',
+          data: {
+            worktreeId: 'worktree-1',
+            acpSessionId: 'session-1',
+            code,
+            message: `Error: ${code}`,
+            recoverable,
+          },
+        };
+
+        const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+        const thread = newState.threads.get('worktree-1')!;
+
+        const errorCard = thread.messages[0].parts[0];
+        expect(errorCard.type).toBe('error');
+        expect((errorCard as any).code).toBe(code);
+        expect((errorCard as any).recoverable).toBe(recoverable);
+      });
+    });
+  });
+
+  describe('EVENT_RECEIVED - Structured content chunks', () => {
+    beforeEach(() => {
+      state.threads.set('worktree-1', {
+        worktreeId: 'worktree-1',
+        acpSessionId: 'session-1',
+        messages: [],
+        sessionStatus: 'Working',
+        lastSequence: 0,
+        connectionGeneration: 1,
+        isStreaming: false,
+      });
+    });
+
+    it('creates structured content part for Structured chunk type', () => {
+      const envelope: AcpEventEnvelope = {
+        sequence: 1,
+        timestamp: Date.now(),
+        eventType: 'PromptChunk',
+        data: {
+          worktreeId: 'worktree-1',
+          acpSessionId: 'session-1',
+          content: { type: 'Structured', data: '{"key": "value"}' },
+          isFinal: false,
+        },
+      };
+
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const thread = newState.threads.get('worktree-1')!;
+
+      expect(thread.messages).toHaveLength(1);
+      expect(thread.messages[0].parts).toHaveLength(1);
+      expect(thread.messages[0].parts[0].type).toBe('structured');
+      expect((thread.messages[0].parts[0] as any).data).toBe('{"key": "value"}');
+      expect((thread.messages[0].parts[0] as any).isStreaming).toBe(true);
+    });
+
+    it('sets isStreaming to false on final structured chunk', () => {
+      const envelope: AcpEventEnvelope = {
+        sequence: 1,
+        timestamp: Date.now(),
+        eventType: 'PromptChunk',
+        data: {
+          worktreeId: 'worktree-1',
+          acpSessionId: 'session-1',
+          content: { type: 'Structured', data: '{"key": "value"}' },
+          isFinal: true,
+        },
+      };
+
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const thread = newState.threads.get('worktree-1')!;
+
+      expect((thread.messages[0].parts[0] as any).isStreaming).toBe(false);
+    });
+  });
+
+  describe('EVENT_RECEIVED - SessionStatus variations', () => {
+    beforeEach(() => {
+      state.threads.set('worktree-1', {
+        worktreeId: 'worktree-1',
+        acpSessionId: 'session-1',
+        messages: [],
+        sessionStatus: 'Working',
+        lastSequence: 0,
+        connectionGeneration: 1,
+        isStreaming: false,
+      });
+    });
+
+    const statuses: AcpSessionStatus[] = ['Working', 'Waiting', 'Complete', 'Cancelled'];
+
+    statuses.forEach((status) => {
+      it(`updates session status to ${status}`, () => {
+        const envelope: AcpEventEnvelope = {
+          sequence: 1,
+          timestamp: Date.now(),
+          eventType: 'SessionStatus',
+          data: {
+            worktreeId: 'worktree-1',
+            acpSessionId: 'session-1',
+            status,
+          },
+        };
+
+        const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+        const thread = newState.threads.get('worktree-1')!;
+
+        expect(thread.sessionStatus).toBe(status);
+      });
+    });
+  });
+
+  describe('REBUILD_FROM_SNAPSHOT', () => {
+    it('creates empty thread with provided worktreeId and acpSessionId', () => {
+      const newState = acpAccumulatorReducer(state, {
+        type: 'REBUILD_FROM_SNAPSHOT',
+        worktreeId: 'worktree-1',
+        acpSessionId: 'recovered-session',
+      });
+
+      expect(newState.threads.has('worktree-1')).toBe(true);
+      const thread = newState.threads.get('worktree-1')!;
+      expect(thread.worktreeId).toBe('worktree-1');
+      expect(thread.acpSessionId).toBe('recovered-session');
+      expect(thread.messages).toEqual([]);
+      expect(thread.connectionGeneration).toBe(1);
+    });
+
+    it('overwrites existing thread for same worktreeId', () => {
+      state.threads.set('worktree-1', {
+        worktreeId: 'worktree-1',
+        acpSessionId: 'old-session',
+        messages: [{
+          id: 'msg-1',
+          role: 'assistant',
+          parts: [{ type: 'text', text: 'old content', isStreaming: false }],
+          createdAt: Date.now(),
+          lastSequence: 100,
+        }],
+        sessionStatus: 'Complete',
+        lastSequence: 100,
+        connectionGeneration: 1,
+        isStreaming: false,
+      });
+
+      const newState = acpAccumulatorReducer(state, {
+        type: 'REBUILD_FROM_SNAPSHOT',
+        worktreeId: 'worktree-1',
+        acpSessionId: 'new-session',
+      });
+
+      const thread = newState.threads.get('worktree-1')!;
+      expect(thread.acpSessionId).toBe('new-session');
+      expect(thread.messages).toEqual([]);
+      expect(thread.sessionStatus).toBe('Working');
+    });
+  });
+
+  describe('SET_STREAMING', () => {
+    beforeEach(() => {
+      state.threads.set('worktree-1', {
+        worktreeId: 'worktree-1',
+        acpSessionId: 'session-1',
+        messages: [],
+        sessionStatus: 'Working',
+        lastSequence: 0,
+        connectionGeneration: 1,
+        isStreaming: false,
+      });
+    });
+
+    it('sets isStreaming to true', () => {
+      const newState = acpAccumulatorReducer(state, {
+        type: 'SET_STREAMING',
+        worktreeId: 'worktree-1',
+        isStreaming: true,
+      });
+
+      expect(newState.threads.get('worktree-1')!.isStreaming).toBe(true);
+    });
+
+    it('sets isStreaming to false', () => {
+      state.threads.get('worktree-1')!.isStreaming = true;
+
+      const newState = acpAccumulatorReducer(state, {
+        type: 'SET_STREAMING',
+        worktreeId: 'worktree-1',
+        isStreaming: false,
+      });
+
+      expect(newState.threads.get('worktree-1')!.isStreaming).toBe(false);
+    });
+
+    it('returns unchanged state if thread does not exist', () => {
+      const newState = acpAccumulatorReducer(state, {
+        type: 'SET_STREAMING',
+        worktreeId: 'nonexistent',
+        isStreaming: true,
+      });
+
+      expect(newState).toBe(state);
     });
   });
 });

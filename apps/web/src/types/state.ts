@@ -142,6 +142,13 @@ export interface AccumulatedTextContent {
   isStreaming: boolean;
 }
 
+/** Accumulated structured content from PromptChunk events (JSON, code blocks, etc.) */
+export interface AccumulatedStructuredContent {
+  type: 'structured';
+  data: string;
+  isStreaming: boolean;
+}
+
 /** Accumulated tool card from ToolUse events */
 export interface AccumulatedToolCard {
   type: 'tool';
@@ -190,6 +197,7 @@ export interface AccumulatedErrorCard {
 /** Union type for all accumulated content parts */
 export type AccumulatedContentPart =
   | AccumulatedTextContent
+  | AccumulatedStructuredContent
   | AccumulatedToolCard
   | AccumulatedContextCard
   | AccumulatedPermissionCard

@@ -1,7 +1,7 @@
 //! ACP client using official agent-client-protocol SDK with message-passing boundary.
 
 use crate::agent::adapter::{create_client_capabilities, create_implementation, AcpEventSender, SequenceCounter, YmirClientHandler};
-use crate::protocol::AcpEventEnvelope;
+use crate::protocol::{AcpEventEnvelope, ServerMessage, ServerMessagePayload};
 use agent_client_protocol::{
     Agent, CancelNotification, ClientSideConnection, ContentBlock,
     InitializeRequest, NewSessionRequest, PromptRequest, ProtocolVersion, SessionId,
@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::process::Stdio;
 use std::sync::Arc;
 use tokio::process::Child;
-use tokio::sync::{mpsc, oneshot, RwLock};
+use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
 use tokio::task::JoinHandle;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use uuid::Uuid;
@@ -49,18 +49,22 @@ enum AcpCommand {
     },
 }
 
-struct LoggingEventSender {
-    worktree_id: Uuid,
+/// Event sender that broadcasts ACP events to all WebSocket clients.
+pub struct BroadcastingEventSender {
+    broadcast_tx: broadcast::Sender<ServerMessage>,
 }
 
-impl AcpEventSender for LoggingEventSender {
+impl BroadcastingEventSender {
+    pub fn new(broadcast_tx: broadcast::Sender<ServerMessage>) -> Self {
+        Self { broadcast_tx }
+    }
+}
+
+impl AcpEventSender for BroadcastingEventSender {
     fn send_event(&self, envelope: AcpEventEnvelope) {
-        tracing::debug!(
-            worktree_id = %self.worktree_id,
-            sequence = envelope.sequence,
-            event_type = ?envelope.event,
-            "ACP event"
-        );
+        let msg = ServerMessage::new(ServerMessagePayload::AcpWireEvent(envelope));
+        // Use send() which is non-blocking and handles no receivers gracefully
+        let _ = self.broadcast_tx.send(msg);
     }
 }
 
@@ -73,7 +77,12 @@ struct AcpClient {
 }
 
 impl AcpClient {
-    async fn spawn(agent_type: &str, worktree_path: &str) -> Result<Self> {
+    async fn spawn(
+        agent_type: &str,
+        worktree_path: &str,
+        worktree_id: Uuid,
+        broadcast_tx: broadcast::Sender<ServerMessage>,
+    ) -> Result<Self> {
         let executable = match agent_type {
             "claude" => "claude-agent",
             "opencode" => "opencode",
@@ -107,8 +116,7 @@ impl AcpClient {
         });
 
         let status = Arc::new(RwLock::new(AgentStatus::Idle));
-        let worktree_id = Uuid::new_v4();
-        let event_sender = Arc::new(LoggingEventSender { worktree_id });
+        let event_sender = Arc::new(BroadcastingEventSender::new(broadcast_tx));
         let sequence = Arc::new(SequenceCounter::new());
         let handler = YmirClientHandler::new(worktree_id, event_sender, sequence);
 
@@ -268,7 +276,7 @@ impl AcpHandle {
     }
 }
 
-pub fn start_acp_runtime() -> (AcpHandle, JoinHandle<()>) {
+pub fn start_acp_runtime(broadcast_tx: broadcast::Sender<ServerMessage>) -> (AcpHandle, JoinHandle<()>) {
     let (tx, mut rx) = mpsc::unbounded_channel::<AcpCommand>();
     let handle = AcpHandle::new(tx);
 
@@ -286,7 +294,12 @@ pub fn start_acp_runtime() -> (AcpHandle, JoinHandle<()>) {
             while let Some(cmd) = rx.recv().await {
                 match cmd {
                     AcpCommand::Spawn { worktree_id, agent_type, worktree_path, respond } => {
-                        let result = AcpClient::spawn(&agent_type, &worktree_path).await;
+                        let result = AcpClient::spawn(
+                            &agent_type,
+                            &worktree_path,
+                            worktree_id,
+                            broadcast_tx.clone(),
+                        ).await;
                         let _ = respond.send(result.map(|client| {
                             clients.insert(worktree_id, client);
                         }));
@@ -368,9 +381,39 @@ mod tests {
 
     #[tokio::test]
     async fn test_acp_handle_send() {
-        let (handle, _join) = start_acp_runtime();
+        let (broadcast_tx, _broadcast_rx) = broadcast::channel(16);
+        let (handle, _join) = start_acp_runtime(broadcast_tx);
 
         let status = handle.status(Uuid::new_v4()).await;
         assert!(matches!(status, AgentStatus::Idle));
+    }
+
+    #[test]
+    fn test_broadcasting_event_sender_sends_message() {
+        let (broadcast_tx, mut broadcast_rx) = broadcast::channel(16);
+        let sender = BroadcastingEventSender::new(broadcast_tx);
+
+        let envelope = AcpEventEnvelope {
+            sequence: 1,
+            correlation_id: None,
+            timestamp: 12345,
+            event: crate::protocol::AcpEvent::SessionStatus(
+                crate::protocol::AcpSessionStatusEvent {
+                    worktree_id: Uuid::nil(),
+                    acp_session_id: "test-session".to_string(),
+                    status: crate::protocol::AcpSessionStatus::Working,
+                }
+            ),
+        };
+
+        sender.send_event(envelope);
+
+        let received = broadcast_rx.try_recv().expect("Should receive broadcast");
+        match received.payload {
+            crate::protocol::ServerMessagePayload::AcpWireEvent(env) => {
+                assert_eq!(env.sequence, 1);
+            }
+            _ => panic!("Expected AcpWireEvent, got {:?}", received.payload),
+        }
     }
 }
