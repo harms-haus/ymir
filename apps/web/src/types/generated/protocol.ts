@@ -271,6 +271,19 @@ export interface FileWrite {
   encoding?: 'utf8' | 'base64';
 }
 
+export interface FileList {
+  type: 'FileList';
+  worktreeId: string;
+  path?: string;
+}
+
+export interface FileListResult {
+  type: 'FileListResult';
+  worktreeId: string;
+  files: string[];
+  requestId?: string;
+}
+
 // Git messages
 export interface GitStatus {
   type: 'GitStatus';
@@ -455,6 +468,7 @@ export type ClientMessage =
   | TerminalKill
   | FileRead
   | FileWrite
+  | FileList
   | GitStatus
   | GitDiff
   | GitCommit
@@ -481,6 +495,7 @@ export type ServerMessage =
   | TerminalCreated
   | TerminalRemoved
   | FileContentMessage
+  | FileListResult
   | GitStatusResult
   | GitDiffResult
   | Error
@@ -611,6 +626,14 @@ export function isFileWrite(message: AnyMessage | UnknownMessage): message is Fi
   return message.type === 'FileWrite';
 }
 
+export function isFileList(message: AnyMessage | UnknownMessage): message is FileList {
+  return message.type === 'FileList';
+}
+
+export function isFileListResult(message: AnyMessage | UnknownMessage): message is FileListResult {
+  return message.type === 'FileListResult';
+}
+
 export function isGitStatus(message: AnyMessage | UnknownMessage): message is GitStatus {
   return message.type === 'GitStatus';
 }
@@ -737,12 +760,12 @@ export function decodeMessage(data: ArrayBuffer | Uint8Array): AnyMessage | Unkn
     
     // Check if the type is a valid message type
     const validTypes = [
-  // Client messages
-  'WorkspaceCreate', 'WorkspaceDelete', 'WorkspaceRename', 'WorkspaceUpdate',
-  'WorktreeCreate', 'WorktreeDelete', 'WorktreeMerge', 'WorktreeList',
-  'AgentSpawn', 'AgentSend', 'AgentCancel',
-  'TerminalInput', 'TerminalResize', 'TerminalCreate', 'TerminalKill',
-  'FileRead', 'FileWrite',
+      // Client messages
+      'WorkspaceCreate', 'WorkspaceDelete', 'WorkspaceRename', 'WorkspaceUpdate',
+      'WorktreeCreate', 'WorktreeDelete', 'WorktreeMerge', 'WorktreeList',
+      'AgentSpawn', 'AgentSend', 'AgentCancel',
+      'TerminalInput', 'TerminalResize', 'TerminalCreate', 'TerminalKill',
+      'FileRead', 'FileWrite', 'FileList',
       'GitStatus', 'GitDiff', 'GitCommit',
       'CreatePR',
       'GetState', 'UpdateSettings',
@@ -753,7 +776,7 @@ export function decodeMessage(data: ArrayBuffer | Uint8Array): AnyMessage | Unkn
       'WorktreeCreated', 'WorktreeDeleted', 'WorktreeStatus',
       'AgentStatusUpdate', 'AgentOutput', 'AgentPrompt',
       'TerminalOutput', 'TerminalCreated', 'TerminalRemoved',
-      'FileContent',
+      'FileContent', 'FileListResult',
       'GitStatusResult', 'GitDiffResult',
       'Error', 'Pong', 'Notification',
       // Bidirectional

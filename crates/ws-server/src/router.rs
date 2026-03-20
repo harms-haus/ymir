@@ -2,6 +2,7 @@
 
 use crate::protocol::{
     ClientMessage, ClientMessagePayload, Error, ServerMessage, ServerMessagePayload,
+    FileList, FileListResult,
 };
 use crate::agent::{handle_agent_cancel, handle_agent_send, handle_agent_spawn};
 use crate::pty::{
@@ -135,6 +136,10 @@ pub async fn route_message(
 
         ClientMessagePayload::AgentCancel(msg) => {
             Some(handle_agent_cancel(state.clone(), msg).await)
+        }
+
+        ClientMessagePayload::FileList(msg) => {
+            Some(handle_file_list(state.clone(), msg).await)
         }
 
         ClientMessagePayload::WorkspaceRename(_)
@@ -470,6 +475,57 @@ async fn handle_create_pr(state: Arc<AppState>, msg: crate::protocol::CreatePR) 
                     request_id: None,
         })),
     }
+}
+
+#[instrument(skip(state))]
+async fn handle_file_list(state: Arc<AppState>, msg: crate::protocol::FileList) -> ServerMessage {
+    let worktree_id = msg.worktree_id;
+    let _path = msg.path.unwrap_or_default();
+    
+    let worktrees = state.worktrees.read().await;
+    let worktree = match worktrees.get(&worktree_id) {
+        Some(wt) => wt,
+        None => {
+            return ServerMessage::new(ServerMessagePayload::Error(Error {
+                code: "WORKTREE_NOT_FOUND".to_string(),
+                message: format!("Worktree {} not found", worktree_id),
+                details: None,
+                request_id: None,
+            }));
+        }
+    };
+    
+    let base_path = std::path::PathBuf::from(worktree.path.clone());
+    let mut files = Vec::new();
+    
+    // Helper function to collect files recursively
+    fn collect_files(dir: &std::path::Path, base: &std::path::Path, files: &mut Vec<String>) {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let entry_path = entry.path();
+                if entry_path.file_name().and_then(|n| n.to_str()) == Some(".git") {
+                    continue; // Skip .git directory
+                }
+                if entry_path.is_dir() {
+                    collect_files(&entry_path, base, files);
+                } else if let Ok(relative_path) = entry_path.strip_prefix(base) {
+                    if let Some(path_str) = relative_path.to_str() {
+                        files.push(path_str.to_string());
+                    }
+                }
+            }
+        }
+    }
+    
+    // Collect files from worktree directory
+    collect_files(&base_path, &base_path, &mut files);
+    files.sort();
+    
+    ServerMessage::new(ServerMessagePayload::FileListResult(FileListResult {
+        worktree_id,
+        files,
+            request_id: None,
+    }))
 }
 #[cfg(test)]
 mod tests {
