@@ -521,15 +521,22 @@ export const useStore = create<AppState>()(
           agentSessions: state.agentSessions.filter((as) => as.id !== sessionId),
         })),
 
-      // Terminal session CRUD
-      addTerminalSession: (session) =>
+// Terminal session CRUD
+    addTerminalSession: (session) =>
         set((state) => ({
-          terminalSessions: [...state.terminalSessions, session],
+            terminalSessions: [...state.terminalSessions, session],
         })),
 
-      removeTerminalSession: (sessionId) =>
+    updateTerminalSession: (sessionId, updates) =>
         set((state) => ({
-          terminalSessions: state.terminalSessions.filter((ts) => ts.id !== sessionId),
+            terminalSessions: state.terminalSessions.map((ts) =>
+                ts.id === sessionId ? { ...ts, ...updates } : ts
+            ),
+        })),
+
+    removeTerminalSession: (sessionId) =>
+        set((state) => ({
+            terminalSessions: state.terminalSessions.filter((ts) => ts.id !== sessionId),
         })),
 
       // Notification management
@@ -927,11 +934,29 @@ export function updateStateFromServerMessage(message: ServerMessage): void {
       }
       break;
 
-    case 'TerminalRemoved':
-      removeTerminalSession(message.sessionId);
-      break;
+case 'TerminalRemoved':
+            removeTerminalSession(message.sessionId);
+            break;
 
-    case 'Notification':
+        case 'TerminalUpdated': {
+            const { updateTerminalSession } = useStore.getState();
+            updateTerminalSession(message.sessionId, {
+                label: message.label,
+                ...(message.position !== undefined && { position: message.position }),
+            });
+            break;
+        }
+
+        case 'AgentUpdated': {
+            const { updateAgentSession } = useStore.getState();
+            updateAgentSession(message.sessionId, {
+                ...(message.label !== undefined && { label: message.label }),
+                ...(message.position !== undefined && { position: message.position }),
+            });
+            break;
+        }
+
+        case 'Notification':
       addNotification({
         level: message.level,
         message: message.message,

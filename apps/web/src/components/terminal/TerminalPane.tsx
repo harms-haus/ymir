@@ -194,11 +194,20 @@ export function TerminalPane({ worktreeId }: TerminalPaneProps) {
       const [moved] = newTabs.splice(draggedIndex, 1);
       newTabs.splice(dropTargetIndex, 0, moved);
       setTabs(newTabs);
+      
+      const sessionIds = newTabs.map(t => t.sessionId);
+      client.send({
+        type: 'TerminalReorder',
+        worktreeId,
+        sessionIds,
+        requestId: crypto.randomUUID(),
+      });
+      
       setTimeout(() => setIsDropping(false), 50);
     }
     setDraggedIndex(null);
     setDropTargetIndex(null);
-  }, [draggedIndex, dropTargetIndex, tabs]);
+  }, [draggedIndex, dropTargetIndex, tabs, worktreeId, client]);
 
   const getTabTransform = (index: number): string => {
     if (draggedIndex === null || dropTargetIndex === null) return 'translateX(0)';

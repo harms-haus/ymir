@@ -170,7 +170,21 @@ export function AgentPane({ worktreeId }: AgentPaneProps) {
     getTabStyle,
     handleMouseDown,
   } = useSortableTabs({
-    onReorder: (from, to) => reorderAgentTabs(worktreeId, from, to),
+    onReorder: (from, to) => {
+      reorderAgentTabs(worktreeId, from, to);
+      const newOrder = [...tabs];
+      const [moved] = newOrder.splice(from, 1);
+      newOrder.splice(to, 0, moved);
+      const sessionIds = newOrder
+        .filter(t => t.sessionId)
+        .map(t => t.sessionId!);
+      client.send({
+        type: 'AgentReorder',
+        worktreeId,
+        sessionIds,
+        requestId: crypto.randomUUID(),
+      });
+    },
   });
 
   return (

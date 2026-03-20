@@ -59,13 +59,38 @@ mod optional_uuid_str {
     where
         D: Deserializer<'de>,
     {
-        let opt: Option<String> = Option::deserialize(deserializer)?;
-        match opt {
+        let opt: Option<Option<String>> = Option::deserialize(deserializer).ok();
+        match opt.flatten() {
             Some(s) => Uuid::from_str(&s)
                 .map(Some)
                 .map_err(serde::de::Error::custom),
             None => Ok(None),
         }
+    }
+}
+
+mod uuid_vec_str {
+    use super::*;
+    use std::str::FromStr;
+
+    pub fn serialize<S>(uuids: &[Uuid], serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let strings: Vec<String> = uuids.iter().map(|u| u.hyphenated().to_string()).collect();
+        strings.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<Uuid>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let strings: Vec<String> = Vec::deserialize(deserializer)?;
+        let mut uuids = Vec::with_capacity(strings.len());
+        for s in strings {
+            uuids.push(Uuid::from_str(&s).map_err(serde::de::Error::custom)?);
+        }
+        Ok(uuids)
     }
 }
 
@@ -107,6 +132,10 @@ pub enum ClientMessagePayload {
     TerminalResize(TerminalResize),
     TerminalCreate(TerminalCreate),
     TerminalKill(TerminalKill),
+    TerminalRename(TerminalRename),
+    TerminalReorder(TerminalReorder),
+    AgentRename(AgentRename),
+    AgentReorder(AgentReorder),
     FileRead(FileRead),
     FileWrite(FileWrite),
     FileList(FileList),
@@ -140,6 +169,8 @@ pub enum ServerMessagePayload {
     TerminalOutput(TerminalOutput),
     TerminalCreated(TerminalCreated),
     TerminalRemoved(TerminalRemoved),
+    TerminalUpdated(TerminalUpdated),
+    AgentUpdated(AgentUpdated),
     FileContent(FileContent),
     FileListResult(FileListResult),
     GitStatusResult(GitStatusResult),
@@ -669,6 +700,94 @@ pub struct TerminalRemoved {
     #[serde(with = "uuid_str")]
     #[ts(type = "string")]
     pub session_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TerminalRename {
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub session_id: Uuid,
+    pub new_label: String,
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub request_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TerminalReorder {
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    #[ts(type = "string[]")]
+    pub session_ids: Vec<Uuid>,
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub request_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AgentRename {
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub session_id: Uuid,
+    pub new_label: String,
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub request_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AgentReorder {
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    #[ts(type = "string[]")]
+    pub session_ids: Vec<Uuid>,
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub request_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TerminalUpdated {
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub session_id: Uuid,
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    pub label: Option<String>,
+    pub position: Option<u32>,
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub request_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AgentUpdated {
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub session_id: Uuid,
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    pub label: Option<String>,
+    pub position: Option<u32>,
+    #[serde(with = "uuid_str")]
+    #[ts(type = "string")]
+    pub request_id: Uuid,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
