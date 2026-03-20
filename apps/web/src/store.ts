@@ -562,66 +562,113 @@ export const useStore = create<AppState>()(
 
     clearNotifications: () => set({ notifications: [] }),
 
-    // Agent tab management
-    addAgentTab: (worktreeId, tab) =>
-      set((state) => {
-        const newTabs = new Map(state.agentTabs);
-        const existingTabs = newTabs.get(worktreeId) || [];
-        // Prevent duplicate tabs
-        if (existingTabs.some((t) => t.id === tab.id)) {
-          return { agentTabs: state.agentTabs, activeAgentTabId: state.activeAgentTabId };
-        }
-        newTabs.set(worktreeId, [...existingTabs, tab]);
+  // Agent tab management
+  addAgentTab: (worktreeId, tab) =>
+    set((state) => {
+      const newTabs = new Map(state.agentTabs);
+      const existingTabs = newTabs.get(worktreeId) || [];
+      // Prevent duplicate tabs
+      if (existingTabs.some((t) => t.id === tab.id)) {
+        return { agentTabs: state.agentTabs, activeAgentTabId: state.activeAgentTabId };
+      }
+      newTabs.set(worktreeId, [...existingTabs, tab]);
 
-        const newActiveTabId = new Map(state.activeAgentTabId);
-        if (!newActiveTabId.has(worktreeId)) {
-          newActiveTabId.set(worktreeId, tab.id);
-        }
+      const newActiveTabId = new Map(state.activeAgentTabId);
+      if (!newActiveTabId.has(worktreeId)) {
+        newActiveTabId.set(worktreeId, tab.id);
+      }
 
-        return { agentTabs: newTabs, activeAgentTabId: newActiveTabId };
-      }),
+      return { agentTabs: newTabs, activeAgentTabId: newActiveTabId };
+    }),
 
-    removeAgentTab: (worktreeId, tabId) =>
-      set((state) => {
-        const newTabs = new Map(state.agentTabs);
-        const existingTabs = newTabs.get(worktreeId) || [];
-        const filteredTabs = existingTabs.filter((t) => t.id !== tabId);
+  removeAgentTab: (worktreeId, tabId) =>
+    set((state) => {
+      const newTabs = new Map(state.agentTabs);
+      const existingTabs = newTabs.get(worktreeId) || [];
+      const filteredTabs = existingTabs.filter((t) => t.id !== tabId);
 
-        if (filteredTabs.length === 0) {
-          newTabs.delete(worktreeId);
+      if (filteredTabs.length === 0) {
+        newTabs.delete(worktreeId);
+      } else {
+        newTabs.set(worktreeId, filteredTabs);
+      }
+
+      const newActiveTabId = new Map(state.activeAgentTabId);
+      if (newActiveTabId.get(worktreeId) === tabId) {
+        if (filteredTabs.length > 0) {
+          newActiveTabId.set(worktreeId, filteredTabs[0].id);
         } else {
-          newTabs.set(worktreeId, filteredTabs);
+          newActiveTabId.delete(worktreeId);
         }
+      }
 
-        const newActiveTabId = new Map(state.activeAgentTabId);
-        if (newActiveTabId.get(worktreeId) === tabId) {
-          if (filteredTabs.length > 0) {
-            newActiveTabId.set(worktreeId, filteredTabs[0].id);
-          } else {
-            newActiveTabId.delete(worktreeId);
-          }
-        }
+      return { agentTabs: newTabs, activeAgentTabId: newActiveTabId };
+    }),
 
-        return { agentTabs: newTabs, activeAgentTabId: newActiveTabId };
-      }),
+  removeAgentTabsRightOf: (worktreeId, tabId) =>
+    set((state) => {
+      const newTabs = new Map(state.agentTabs);
+      const existingTabs = newTabs.get(worktreeId) || [];
+      const tabIndex = existingTabs.findIndex((t) => t.id === tabId);
+      if (tabIndex === -1) return state;
+      const filteredTabs = existingTabs.slice(0, tabIndex + 1);
+      newTabs.set(worktreeId, filteredTabs);
+      return { agentTabs: newTabs };
+    }),
 
-    setActiveAgentTab: (worktreeId, tabId) =>
-      set((state) => {
-        const newActiveTabId = new Map(state.activeAgentTabId);
-        newActiveTabId.set(worktreeId, tabId);
-        return { activeAgentTabId: newActiveTabId };
-      }),
+  removeAgentTabsLeftOf: (worktreeId, tabId) =>
+    set((state) => {
+      const newTabs = new Map(state.agentTabs);
+      const existingTabs = newTabs.get(worktreeId) || [];
+      const tabIndex = existingTabs.findIndex((t) => t.id === tabId);
+      if (tabIndex === -1) return state;
+      const filteredTabs = existingTabs.slice(tabIndex);
+      newTabs.set(worktreeId, filteredTabs);
+      return { agentTabs: newTabs };
+    }),
 
-    updateAgentTab: (worktreeId, tabId, updates) =>
-      set((state) => {
-        const newTabs = new Map(state.agentTabs);
-        const existingTabs = newTabs.get(worktreeId) || [];
-        const updatedTabs = existingTabs.map((t) =>
-          t.id === tabId ? { ...t, ...updates } : t
-        );
-        newTabs.set(worktreeId, updatedTabs);
-        return { agentTabs: newTabs };
-      }),
+  removeAgentTabsOthers: (worktreeId, tabId) =>
+    set((state) => {
+      const newTabs = new Map(state.agentTabs);
+      const existingTabs = newTabs.get(worktreeId) || [];
+      const filteredTabs = existingTabs.filter((t) => t.id === tabId);
+      newTabs.set(worktreeId, filteredTabs);
+      const newActiveTabId = new Map(state.activeAgentTabId);
+      newActiveTabId.set(worktreeId, tabId);
+      return { agentTabs: newTabs, activeAgentTabId: newActiveTabId };
+    }),
+
+  setActiveAgentTab: (worktreeId, tabId) =>
+    set((state) => {
+      const newActiveTabId = new Map(state.activeAgentTabId);
+      newActiveTabId.set(worktreeId, tabId);
+      return { activeAgentTabId: newActiveTabId };
+    }),
+
+  updateAgentTab: (worktreeId, tabId, updates) =>
+    set((state) => {
+      const newTabs = new Map(state.agentTabs);
+      const existingTabs = newTabs.get(worktreeId) || [];
+      const updatedTabs = existingTabs.map((t) =>
+        t.id === tabId ? { ...t, ...updates } : t
+      );
+      newTabs.set(worktreeId, updatedTabs);
+      return { agentTabs: newTabs };
+    }),
+
+  reorderAgentTabs: (worktreeId, sourceIndex, targetIndex) =>
+    set((state) => {
+      const newTabs = new Map(state.agentTabs);
+      const existingTabs = newTabs.get(worktreeId) || [];
+      if (sourceIndex < 0 || sourceIndex >= existingTabs.length || targetIndex < 0 || targetIndex >= existingTabs.length) {
+        return state;
+      }
+      const newOrder = [...existingTabs];
+      const [movedTab] = newOrder.splice(sourceIndex, 1);
+      newOrder.splice(targetIndex, 0, movedTab);
+      newTabs.set(worktreeId, newOrder);
+      return { agentTabs: newTabs };
+    }),
 
   setPRDialogOpen: (isOpen) =>
       set((state) => ({

@@ -15,10 +15,10 @@ export function ProjectPanel() {
 
   return (
     <div className="project-container" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid hsl(var(--border))' }}>
-        <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Project</h2>
-        <Toolbar 
-          onPRClick={() => setIsPRDialogOpen(true)} 
+      <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2>Project</h2>
+        <Toolbar
+          onPRClick={() => setIsPRDialogOpen(true)}
           canCreatePR={canCreatePR}
         />
       </div>
