@@ -1,5 +1,4 @@
 import { useCallback } from 'react';
-import { ContentPartPrimitive } from '@assistant-ui/react';
 import type {
   PermissionCardSchema,
   ToolCardSchema,
@@ -260,9 +259,9 @@ export function UnknownCard({ schema }: UnknownCardProps) {
         <span className="event-card-icon">?</span>
         <span className="event-card-title">Unknown Event</span>
       </div>
-      <div className="event-card-body">
-        <p className="event-card-message">{schema.message}</p>
-        {schema.originalData && (
+  <div className="event-card-body">
+    <p className="event-card-message">{schema.message}</p>
+    {!!schema.originalData && (
           <details className="event-card-details">
             <summary>Debug Data</summary>
             <pre className="event-card-debug">
@@ -342,7 +341,7 @@ export function EventContentPart({ part, onPermissionAction }: EventContentPartP
   }
 
   if (part.type === 'tool-call') {
-    const toolPart = part as {
+    const toolPart = part as unknown as {
       toolCallId: string;
       toolName: string;
       status?: string;
@@ -359,5 +358,5 @@ export function EventContentPart({ part, onPermissionAction }: EventContentPartP
     return <ToolCard schema={schema} />;
   }
 
-  return <ContentPartPrimitive.Text />;
+  return null;
 }

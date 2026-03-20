@@ -1697,3 +1697,72 @@ Added final regression coverage for reconnect, rebuild, cancellation, and error-
 
 - `.sisyphus/evidence/task-15-rust-tests.txt` - Full Rust test suite output
 - `.sisyphus/evidence/task-15-web-tests.txt` - Full web test suite output
+
+## Composer UI Replacement with Assistant-UI Style (2026-03-20)
+
+### Implementation Summary
+
+Replaced the custom-styled composer shell in `AgentChat.tsx` with a styled version of the assistant-ui chat composer. The visible composer structure now uses `ComposerPrimitive.Root`, `ComposerPrimitive.Input`, and `ComposerPrimitive.Send` with assistant-ui-inspired styling while preserving all existing functionality.
+
+### Changes Made
+
+**File: `apps/web/src/components/agent/AgentChat.tsx`**
+- Restructured composer layout from vertical stack to horizontal layout with input container + send button
+- Moved status indicator and agent info into the composer footer
+- Changed send button from text "Send" to icon (`ri-send-plane-fill`) with aria-label
+- Used `asChild` prop on `ComposerPrimitive.Send` for custom button styling
+- Preserved all existing props and callbacks
+
+**File: `apps/web/src/styles/agent.css`**
+- Replaced `.agent-chat-input-wrapper`, `.agent-chat-input`, `.agent-chat-send-button` with new assistant-ui-style classes
+- Added `.au-composer-root` - horizontal flex container for input + send button
+- Added `.au-composer-container` - rounded container with focus ring
+- Added `.au-composer-input` - borderless textarea with transparent background
+- Added `.au-composer-footer` - status and meta info below input
+- Added `.au-composer-status` - status dot with pulsing animation for "working" state
+- Added `.au-composer-meta` - agent info and keyboard hint
+- Added `.au-composer-send` - circular send button with icon
+- Added `@keyframes pulse-dot` animation for working state indicator
+
+**File: `apps/web/src/components/agent/__tests__/AgentChat.test.tsx`**
+- Updated "renders send button" test to use `getByRole('button', { name: /send/i })` instead of `getByText('Send')`
+- Test change required because send button now uses icon instead of text
+
+### Design Principles
+
+1. **Assistant-UI Pattern**: Composer follows the horizontal layout pattern (input left, send button right) common in chat UIs
+2. **Integrated Status**: Status indicator and agent info moved inside composer footer for cleaner layout
+3. **Icon-Based Send**: Using icon (`ri-send-plane-fill`) instead of text for compact, recognizable send affordance
+4. **Focus Ring**: Container gets focus ring when textarea is focused for better accessibility
+5. **Animations**: Status dot pulses when agent is working for visual feedback
+
+### CSS Class Mapping
+
+| Old Class | New Class | Purpose |
+|-----------|-----------|---------|
+| `.agent-chat-input-wrapper` | `.au-composer-root` | Main composer container |
+| `.agent-chat-input` | `.au-composer-input` | Textarea input |
+| `.agent-chat-send-button` | `.au-composer-send` | Send button |
+| `.agent-chat-status` | `.au-composer-status` | Status dot + text |
+| `.agent-chat-footer` | `.au-composer-footer` | Footer container |
+| `.agent-chat-info` | `.au-composer-meta` | Agent info + hint |
+
+### Test Results
+
+- All 93 AgentChat tests pass
+- No breaking changes to existing functionality
+- Event card rendering remains intact
+- Thread rendering unchanged
+
+### Visual Changes
+
+**Before:**
+- Vertical stack: status → textarea → send button → footer
+- Send button as text "Send"
+- Separate footer below composer
+
+**After:**
+- Horizontal layout: textarea container + circular send button
+- Status and agent info inside textarea container footer
+- Send button as icon in circular button
+- Cleaner, more compact design

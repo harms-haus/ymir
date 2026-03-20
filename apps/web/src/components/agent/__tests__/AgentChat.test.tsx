@@ -109,7 +109,7 @@ describe('AgentChat', () => {
 
   it('renders send button', () => {
     renderAgentChat();
-    expect(screen.getByText('Send')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /send/i })).toBeInTheDocument();
   });
 
   it('has input that accepts text', () => {

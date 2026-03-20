@@ -1,4 +1,4 @@
-import { ReactNode, useCallback, useMemo } from 'react';
+import { ReactNode, useCallback } from 'react';
 import {
   useExternalStoreRuntime,
   AssistantRuntimeProvider,
@@ -6,7 +6,6 @@ import {
   AppendMessage,
 } from '@assistant-ui/react';
 import { useStore } from '../../store';
-import { useShallow } from 'zustand/react/shallow';
 import { useWebSocketClient } from '../../hooks/useWebSocket';
 import { AccumulatedMessage } from '../../types/state';
 
