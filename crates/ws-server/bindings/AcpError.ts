@@ -8,7 +8,7 @@ export type AcpError = {
 /**
  * The worktree ID (if applicable)
  */
-worktreeId: string, 
+worktreeId: string | null, 
 /**
  * The ACP session ID (if applicable)
  */

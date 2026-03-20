@@ -131,7 +131,16 @@ pub async fn handle_agent_spawn(
         Some(handle) => handle.clone(),
         None => {
             tracing::error!("ACP runtime not initialized");
-            return broadcast_msg;
+            let mut agents = state.agents.write().await;
+            agents.remove(&session_id);
+            drop(agents);
+            let _ = state.db.delete_agent_session(&session_id.to_string()).await;
+            return ServerMessage::new(ServerMessagePayload::Error(Error {
+                code: "ACP_NOT_INITIALIZED".to_string(),
+                message: "ACP runtime not initialized - cannot spawn agent".to_string(),
+                details: None,
+                request_id: None,
+            }));
         }
     };
 

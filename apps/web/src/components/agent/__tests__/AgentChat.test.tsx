@@ -540,10 +540,10 @@ describe('Runtime Boundary Helpers', () => {
 
     it('provides safe fallback for unknown content types', () => {
       const part: AccumulatedContentPart = {
-        type: 'text',
-        text: 'Known type',
+        type: 'unknown_type_placeholder' as any,
+        someUnknownField: 'Unknown data',
         isStreaming: false,
-      };
+      } as any;
 
       const input = createRuntimeInput({
         worktreeId: 'worktree-1',
@@ -556,6 +556,7 @@ describe('Runtime Boundary Helpers', () => {
       });
 
       expect(input?.thread.messages[0].content[0].type).toBe('text');
+      expect(input?.thread.messages[0].content[0].text).toBe('[Unknown content type]');
     });
   });
 

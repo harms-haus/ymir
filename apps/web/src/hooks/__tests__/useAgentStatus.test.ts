@@ -261,6 +261,8 @@ describe('useAgentStatus', () => {
     });
 
     it('subscribes to AgentOutput messages', async () => {
+      vi.useFakeTimers();
+      
       const session: AgentSession = {
         id: 'session-1',
         worktreeId: 'worktree-1',
@@ -276,7 +278,8 @@ describe('useAgentStatus', () => {
       const { result } = renderHook(() => useAgentStatus('worktree-1'));
       
       const initialActivity = result.current?.lastActivity;
-      await new Promise(resolve => setTimeout(resolve, 5));
+      
+      vi.advanceTimersByTime(10);
       
       const agentOutput: AgentOutput = {
         type: 'AgentOutput',
@@ -293,9 +296,11 @@ describe('useAgentStatus', () => {
         callMessageHandler(messageEvent);
       });
 
-      await waitFor(() => {
-        expect(result.current?.lastActivity).toBeGreaterThan(initialActivity!);
-      });
+      await vi.runAllTimersAsync();
+      
+      expect(result.current?.lastActivity).toBeGreaterThan(initialActivity!);
+      
+      vi.useRealTimers();
     });
 
     it('ignores messages for different sessions', async () => {

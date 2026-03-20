@@ -9,13 +9,30 @@ import { useStore } from '../../store';
 import { useWebSocketClient } from '../../hooks/useWebSocket';
 import { AccumulatedMessage } from '../../types/state';
 
-function convertAccumulatedMessage(msg: AccumulatedMessage, _index: number): ThreadMessageLike {
+function safeStringify(value: unknown): string {
+  if (value === undefined || value === null) {
+    return '';
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+}
+
+function convertAccumulatedMessage(msg: AccumulatedMessage, index: number, messages: AccumulatedMessage[], isStreaming: boolean): ThreadMessageLike {
   const content = msg.parts.map((part) => {
     switch (part.type) {
       case 'text':
         return { type: 'text' as const, text: part.text };
       case 'structured':
-        return { type: 'text' as const, text: part.data };
+        return { type: 'text' as const, text: safeStringify(part.data) };
       case 'tool':
         return {
           type: 'tool-call' as const,
@@ -35,12 +52,19 @@ function convertAccumulatedMessage(msg: AccumulatedMessage, _index: number): Thr
     }
   });
 
+  const isLastAssistantMessage = msg.role === 'assistant' && index === messages.length - 1;
+  const assistantStatus = msg.role === 'assistant'
+    ? isLastAssistantMessage && isStreaming
+      ? { type: 'running' as const }
+      : { type: 'complete' as const, reason: 'unknown' as const }
+    : undefined;
+
   return {
     id: msg.id,
     role: msg.role,
     content,
     createdAt: new Date(msg.createdAt),
-    ...(msg.role === 'assistant' && { status: { type: 'complete' as const, reason: 'unknown' as const } }),
+    ...(assistantStatus && { status: assistantStatus }),
   };
 }
 
@@ -80,7 +104,7 @@ export function AgentRuntimeProvider({ children, worktreeId, onSendMessage }: Ag
     isRunning,
     onNew,
     onCancel,
-    convertMessage: convertAccumulatedMessage,
+    convertMessage: (msg, index) => convertAccumulatedMessage(msg, index, messages, isStreaming),
   });
 
   return (

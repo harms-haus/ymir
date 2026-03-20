@@ -1,4 +1,4 @@
-/* Agent panel and tabs styles */
+/* Agent panel specific styles */
 
 .agent-pane {
   display: flex;
@@ -17,120 +17,6 @@
   min-height: 0;
   min-width: 0;
   width: 100%;
-}
-
-/* Agent tabs list */
-.agent-tabs-list {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  border-bottom: 1px solid hsl(var(--border));
-  background: hsl(var(--background));
-  padding: 0 0.5rem;
-  overflow-x: auto;
-  flex-shrink: 0;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-  min-width: 0;
-}
-
-/* Base UI Composite list container inside Tabs.List */
-.agent-tabs-list > [data-orientation] {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 0;
-}
-
-/* Agent tab */
-.agent-tab {
-  display: inline-flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  border-bottom: 2px solid transparent;
-  background: hsl(var(--background));
-  color: hsl(var(--muted-foreground));
-  cursor: pointer;
-  user-select: none;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-  border: none;
-  outline: none;
-  flex-shrink: 0;
-}
-
-.agent-tab:hover {
-  background: hsl(var(--muted) / 0.5);
-  border-bottom-color: hsl(var(--border));
-}
-
-.agent-tab[aria-selected="true"],
-.agent-tab[data-selected="true"] {
-  color: hsl(var(--foreground));
-  border-bottom-color: hsl(var(--primary));
-}
-
-.agent-tab-icon {
-  width: 1rem;
-  height: 1rem;
-}
-
-.agent-tab-label {
-  white-space: nowrap;
-}
-
-.agent-tab-close {
-  margin-left: 0.25rem;
-  padding: 0.25rem;
-  border-radius: 0.25rem;
-  opacity: 0.5;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.agent-tab-close:hover {
-  background: hsl(var(--muted) / 0.5);
-  opacity: 1;
-}
-
-.agent-tab-close:focus-visible {
-  outline: 2px solid hsl(var(--ring));
-  outline-offset: -2px;
-}
-
-/* New tab button */
-.agent-new-tab-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: 0.25rem;
-  padding: 0.375rem;
-  border-radius: 0.25rem;
-  opacity: 0.5;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  background: transparent;
-  border: none;
-  color: hsl(var(--muted-foreground));
-  font-size: 1.25rem;
-  line-height: 1;
-  flex-shrink: 0;
-}
-
-.agent-new-tab-button:hover {
-  opacity: 1;
-  background: hsl(var(--muted) / 0.5);
-  color: hsl(var(--foreground));
-}
-
-.agent-new-tab-button:focus-visible {
-  outline: 2px solid hsl(var(--ring));
-  outline-offset: -2px;
 }
 
 /* Agent panel content */
@@ -426,6 +312,11 @@
   cursor: not-allowed;
 }
 
+.au-composer-send:focus-visible:not(:disabled) {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
 .au-composer-send i {
   font-size: 1.125rem;
 }
@@ -572,9 +463,19 @@
   background: hsl(var(--muted) / 0.5);
 }
 
+.event-card-btn:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
 .event-card-btn-allow {
   border-color: hsl(142 76% 36%);
   color: hsl(142 76% 36%);
+}
+
+.event-card-btn-allow:focus-visible {
+  outline-color: hsl(142 76% 36%);
+  background: hsl(142 76% 36% / 0.1);
 }
 
 .event-card-btn-allow:hover {
@@ -586,6 +487,11 @@
   color: hsl(142 76% 36% / 0.9);
 }
 
+.event-card-btn-allow-always:focus-visible {
+  outline-color: hsl(142 76% 36%);
+  background: hsl(142 76% 36% / 0.08);
+}
+
 .event-card-btn-allow-always:hover {
   background: hsl(142 76% 36% / 0.08);
 }
@@ -595,6 +501,11 @@
   color: hsl(var(--destructive) / 0.9);
 }
 
+.event-card-btn-deny:focus-visible {
+  outline-color: hsl(var(--destructive));
+  background: hsl(var(--destructive) / 0.1);
+}
+
 .event-card-btn-deny:hover {
   background: hsl(var(--destructive) / 0.1);
 }
@@ -602,6 +513,11 @@
 .event-card-btn-deny-always {
   border-color: hsl(var(--destructive) / 0.5);
   color: hsl(var(--destructive) / 0.7);
+}
+
+.event-card-btn-deny-always:focus-visible {
+  outline-color: hsl(var(--destructive));
+  background: hsl(var(--destructive) / 0.08);
 }
 
 .event-card-btn-deny-always:hover {

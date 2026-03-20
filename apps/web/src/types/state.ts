@@ -194,6 +194,14 @@ export interface AccumulatedErrorCard {
   sequence: AcpSequence;
 }
 
+/** Image content from image-containing events */
+export interface AccumulatedImageContent {
+  type: 'image';
+  image?: string;
+  imageUrl?: string;
+  base64?: string;
+}
+
 /** Union type for all accumulated content parts */
 export type AccumulatedContentPart =
   | AccumulatedTextContent
@@ -201,7 +209,8 @@ export type AccumulatedContentPart =
   | AccumulatedToolCard
   | AccumulatedContextCard
   | AccumulatedPermissionCard
-  | AccumulatedErrorCard;
+  | AccumulatedErrorCard
+  | AccumulatedImageContent;
 
 /** Accumulated message in a thread */
 export interface AccumulatedMessage {
