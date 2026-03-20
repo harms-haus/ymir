@@ -463,4 +463,111 @@ mod tests {
             _ => panic!("Expected error response"),
         }
     }
+
+    #[tokio::test]
+    async fn test_acp_handle_initialized_in_test_state() {
+        let state = create_test_state().await;
+        assert!(state.acp_handle.is_some(), "ACP handle should be initialized in test state");
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_broadcasts_agent_removed() {
+        let state = create_test_state().await;
+        let worktree_id = Uuid::new_v4();
+        let session_id = Uuid::new_v4();
+        let client_id = Uuid::new_v4();
+
+        state.agents.write().await.insert(
+            session_id,
+            AgentState {
+                id: session_id,
+                worktree_id,
+                agent_type: "test".to_string(),
+                status: "idle".to_string(),
+            },
+        );
+
+        let mut rx = state.connect(client_id).await;
+
+        cleanup_agents_for_worktree(&state, worktree_id).await;
+
+        let received = tokio::time::timeout(
+            std::time::Duration::from_millis(500),
+            rx.recv()
+        ).await;
+
+        match received {
+            Ok(Some(msg)) => {
+                match msg.payload {
+                    ServerMessagePayload::AgentRemoved(removed) => {
+                        assert_eq!(removed.id, session_id);
+                        assert_eq!(removed.worktree_id, worktree_id);
+                    }
+                    _ => panic!("Expected AgentRemoved message, got {:?}", msg.payload),
+                }
+            }
+            Ok(None) => panic!("Channel closed"),
+            Err(_) => panic!("Timeout waiting for broadcast message"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_spawn_requires_worktree_in_database() {
+        let state = create_test_state().await;
+        let worktree_id = Uuid::new_v4();
+        let workspace_id = Uuid::new_v4();
+        let now = chrono::Utc::now().to_rfc3339();
+
+        let db_workspace = crate::db::Workspace {
+            id: workspace_id.to_string(),
+            name: "test-workspace".to_string(),
+            root_path: "/tmp/test".to_string(),
+            color: String::new(),
+            icon: String::new(),
+            worktree_base_dir: String::new(),
+            settings_json: String::new(),
+            created_at: now.clone(),
+            updated_at: now,
+        };
+        state.db.create_workspace(&db_workspace).await.expect("Failed to create workspace");
+
+        let db_worktree = crate::db::Worktree {
+            id: worktree_id.to_string(),
+            workspace_id: workspace_id.to_string(),
+            branch_name: "main".to_string(),
+            path: "/tmp/test-worktree".to_string(),
+            status: "active".to_string(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+        };
+        state.db.create_worktree(&db_worktree).await.expect("Failed to create worktree");
+
+        state.worktrees.write().await.insert(
+            worktree_id,
+            WorktreeState {
+                id: worktree_id,
+                workspace_id,
+                branch_name: "main".to_string(),
+                path: "/tmp/test-worktree".to_string(),
+                status: "active".to_string(),
+            },
+        );
+
+        let msg = crate::protocol::AgentSpawn {
+            worktree_id,
+            agent_type: "test".to_string(),
+        };
+
+        let result = handle_agent_spawn(state.clone(), msg).await;
+
+        match result.payload {
+            ServerMessagePayload::AgentStatusUpdate(update) => {
+                assert_eq!(update.worktree_id, worktree_id);
+                assert_eq!(update.agent_type, "test");
+            }
+            ServerMessagePayload::Error(e) => {
+                panic!("Expected AgentStatusUpdate, got Error: {:?}", e);
+            }
+            _ => panic!("Expected AgentStatusUpdate, got {:?}", result.payload),
+        }
+    }
 }

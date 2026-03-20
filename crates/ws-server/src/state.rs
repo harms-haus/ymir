@@ -146,7 +146,8 @@ impl AppState {
     pub fn with_acp(db: Arc<Db>, shutdown_rx: watch::Receiver<bool>) -> Self {
         use crate::agent::start_acp_runtime;
         let mut state = Self::new(db, shutdown_rx);
-        let (handle, _join) = start_acp_runtime();
+        let broadcast_tx = state.broadcast_tx.clone();
+        let (handle, _join) = start_acp_runtime(broadcast_tx);
         state.acp_handle = Some(handle);
         state.pty_manager = Some(PtyManager::new());
         state

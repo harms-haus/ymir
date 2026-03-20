@@ -1,0 +1,302 @@
+warning: unused import: `FileList`
+ --> crates/ws-server/src/router.rs:5:5
+  |
+5 |     FileList, FileListResult,
+  |     ^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `info`
+  --> crates/ws-server/src/workspace/mod.rs:15:15
+   |
+15 | use tracing::{info, instrument};
+   |               ^^^^
+
+warning: `ymir-ws-server` (lib) generated 2 warnings (run `cargo fix --lib -p ymir-ws-server` to apply 2 suggestions)
+warning: `ymir-ws-server` (lib test) generated 2 warnings (2 duplicates)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running unittests src/lib.rs (target/debug/deps/ymir_ws_server-4e97d49b898c7033)
+
+running 261 tests
+test agent::acp::tests::test_acp_handshake ... ok
+test agent::adapter::tests::test_create_client_capabilities ... ok
+test agent::adapter::tests::test_sequence_counter ... ok
+test agent::adapter::tests::test_create_implementation ... ok
+test agent::acp::tests::test_broadcasting_event_sender_sends_message ... ok
+test agent::acp::tests::test_acp_status_transitions ... ok
+test agent::acp::tests::test_acp_handle_send ... ok
+test agent::handler::tests::test_cleanup_agents_for_worktree_removes_sessions ... ok
+test agent::handler::tests::test_get_worktree_path_returns_path_from_state ... ok
+test agent::handler::tests::test_acp_handle_initialized_in_test_state ... ok
+test agent::handler::tests::test_get_worktree_path_returns_none_for_missing_worktree ... ok
+test agent::handler::tests::test_cancel_fails_for_missing_session ... ok
+test agent::handler::tests::test_cleanup_agents_for_worktree_preserves_other_worktree_sessions ... ok
+test agent::handler::tests::test_spawn_fails_for_missing_worktree ... ok
+test agent::handler::tests::test_cleanup_broadcasts_agent_removed ... ok
+test agent::handler::tests::test_find_agent_session_for_worktree ... ok
+test agent::handler::tests::test_cleanup_agents_for_worktree_noops_for_missing_worktree ... ok
+test db::tests::test_db_schema ... ok
+test agent::handler::tests::test_spawn_requires_worktree_in_database ... ok
+test hub::tests::test_activity_updates_timestamp ... ok
+test hub::tests::test_broadcast ... ok
+test db::tests::test_terminal_session_crud ... ok
+test db::tests::test_activity_log_crud ... ok
+test hub::tests::test_client_timeout ... ok
+test logging::tests::test_activity_layer_filters_logging_module ... ok
+test db::tests::test_panel_layout_crud ... ok
+test logging::tests::test_level_to_string ... ok
+test hub::tests::test_connect_disconnect ... ok
+test hub::tests::test_connected_clients_list ... ok
+test logging::tests::test_sanitize_field_value ... ok
+test db::tests::test_user_settings_crud ... ok
+test db::tests::test_agent_session_crud ... ok
+test git::tests::test_git_operations_diff_for_file ... ok
+test hub::tests::test_send_to_client ... ok
+test hub::tests::test_send_to_nonexistent_client ... ok
+test logging::tests::test_log_entry_added_to_buffer ... ok
+test db::tests::test_worktree_crud ... ok
+test git::tests::test_git_operations_status_logs_activity ... ok
+test git::tests::test_git_operations_commit_returns_hash ... ok
+test db::tests::test_workspace_crud ... ok
+test git::tests::test_git_operations_create_pr_uses_gh_cli ... ok
+test git::tests::test_git_operations_merge_squash ... ok
+test git::tests::test_git_operations_merge_commit ... ok
+test protocol::export_bindings_ack ... ok
+test protocol::export_bindings_ackstatus ... ok
+test logging::tests::test_shutdown_flushes_remaining ... ok
+test logging::tests::test_manual_flush ... ok
+test protocol::export_bindings_acpack ... ok
+test protocol::export_bindings_acpagentcapabilities ... ok
+test protocol::export_bindings_acpchunkcontent ... ok
+test protocol::export_bindings_acpcontextupdatetype ... ok
+test protocol::export_bindings_acpcorrelationid ... ok
+test protocol::export_bindings_acperrorcode ... ok
+test protocol::export_bindings_acppromptcompletereason ... ok
+test protocol::export_bindings_acpresumemarker ... ok
+test protocol::export_bindings_acpresumerequest ... ok
+test protocol::export_bindings_acpsessionstatus ... ok
+test protocol::export_bindings_acpcontextupdate ... ok
+test protocol::export_bindings_acptoolusestatus ... ok
+test protocol::export_bindings_acperror ... ok
+test protocol::export_bindings_agentcancel ... ok
+test protocol::export_bindings_acppromptchunk ... ok
+test protocol::export_bindings_acppromptcomplete ... ok
+test protocol::export_bindings_agentoutput ... ok
+test protocol::export_bindings_agentprompt ... ok
+test protocol::export_bindings_agentremoved ... ok
+test protocol::export_bindings_acpsessioninit ... ok
+test protocol::export_bindings_agentsend ... ok
+test protocol::export_bindings_acpsessionstatusevent ... ok
+test protocol::export_bindings_acptooluseevent ... ok
+test protocol::export_bindings_agentspawn ... ok
+test protocol::export_bindings_agentstatus ... ok
+test protocol::export_bindings_createpr ... ok
+test protocol::export_bindings_error ... ok
+test protocol::export_bindings_filecontent ... ok
+test protocol::export_bindings_filelist ... ok
+test protocol::export_bindings_filelistresult ... ok
+test protocol::export_bindings_fileread ... ok
+test protocol::export_bindings_filewrite ... ok
+test protocol::export_bindings_getstate ... ok
+test protocol::export_bindings_gitcommit ... ok
+test protocol::export_bindings_agentsessiondata ... ok
+test protocol::export_bindings_gitdiff ... ok
+test protocol::export_bindings_gitdiffresult ... ok
+test protocol::export_bindings_agentstatusupdate ... ok
+test protocol::export_bindings_gitstatus ... ok
+test protocol::export_bindings_gitstatusresult ... ok
+test protocol::export_bindings_notificationlevel ... ok
+test protocol::export_bindings_ping ... ok
+test protocol::export_bindings_pong ... ok
+test protocol::export_bindings_settingdata ... ok
+test protocol::export_bindings_terminalcreate ... ok
+test protocol::export_bindings_terminalcreated ... ok
+test protocol::export_bindings_terminalinput ... ok
+test protocol::export_bindings_terminalkill ... ok
+test protocol::export_bindings_terminaloutput ... ok
+test protocol::export_bindings_terminalremoved ... ok
+test protocol::export_bindings_terminalresize ... ok
+test protocol::export_bindings_notification ... ok
+test protocol::export_bindings_terminalsessiondata ... ok
+test protocol::export_bindings_updatesettings ... ok
+test protocol::export_bindings_workspacecreate ... ok
+test protocol::export_bindings_workspacedata ... ok
+test logging::tests::test_buffer_flushes_at_max_size ... ok
+test protocol::export_bindings_workspacedelete ... ok
+test protocol::tests::test_acp_ack_roundtrip ... ok
+test protocol::tests::test_acp_context_update_roundtrip ... ok
+test protocol::tests::test_acp_correlation_id_roundtrip ... ok
+test protocol::tests::test_acp_error_roundtrip ... ok
+test protocol::tests::test_acp_event_envelope_roundtrip ... ok
+test protocol::tests::test_acp_event_variants_roundtrip ... ok
+test protocol::tests::test_acp_prompt_chunk_structured_roundtrip ... ok
+test protocol::tests::test_acp_prompt_chunk_text_roundtrip ... ok
+test protocol::tests::test_acp_prompt_complete_roundtrip ... ok
+test protocol::tests::test_acp_resume_marker_roundtrip ... ok
+test protocol::tests::test_acp_resume_request_roundtrip ... ok
+test protocol::tests::test_acp_session_init_roundtrip ... ok
+test protocol::tests::test_acp_session_status_event_roundtrip ... ok
+test protocol::tests::test_acp_tool_use_event_roundtrip ... ok
+test protocol::tests::test_agent_cancel_roundtrip ... ok
+test protocol::tests::test_agent_output_roundtrip ... ok
+test protocol::tests::test_agent_prompt_roundtrip ... ok
+test protocol::tests::test_agent_send_roundtrip ... ok
+test protocol::tests::test_agent_spawn_roundtrip ... ok
+test protocol::tests::test_agent_status_update_roundtrip ... ok
+test protocol::tests::test_client_message_creation ... ok
+test protocol::tests::test_client_message_sizes_are_reasonable ... ok
+test protocol::tests::test_create_pr_roundtrip ... ok
+test protocol::tests::test_error_roundtrip ... ok
+test protocol::export_bindings_workspacedeleted ... ok
+test protocol::tests::test_file_content_roundtrip ... ok
+test protocol::tests::test_file_read_roundtrip ... ok
+test protocol::tests::test_file_write_roundtrip ... ok
+test protocol::tests::test_get_state_roundtrip ... ok
+test protocol::tests::test_git_commit_roundtrip ... ok
+test protocol::tests::test_git_diff_result_roundtrip ... ok
+test protocol::tests::test_git_diff_roundtrip ... ok
+test protocol::tests::test_git_status_result_roundtrip ... ok
+test protocol::tests::test_git_status_roundtrip ... ok
+test protocol::tests::test_messagepack_roundtrip_client_message ... ok
+test protocol::tests::test_messagepack_roundtrip_server_message ... ok
+test protocol::tests::test_notification_roundtrip ... ok
+test protocol::tests::test_ping_roundtrip ... ok
+test protocol::tests::test_pong_roundtrip ... ok
+test protocol::tests::test_protocol_version_constant ... ok
+test protocol::tests::test_server_message_creation ... ok
+test protocol::tests::test_server_message_sizes_are_reasonable ... ok
+test protocol::tests::test_state_snapshot_roundtrip ... ok
+test protocol::tests::test_terminal_create_roundtrip ... ok
+test protocol::tests::test_terminal_created_roundtrip ... ok
+test protocol::tests::test_terminal_input_roundtrip ... ok
+test protocol::tests::test_terminal_output_roundtrip ... ok
+test protocol::tests::test_terminal_removed_roundtrip ... ok
+test protocol::tests::test_terminal_resize_roundtrip ... ok
+test protocol::tests::test_update_settings_roundtrip ... ok
+test protocol::tests::test_workspace_create_roundtrip ... ok
+test protocol::tests::test_workspace_delete_roundtrip ... ok
+test protocol::tests::test_workspace_deleted_roundtrip ... ok
+test protocol::tests::test_workspace_rename_roundtrip ... ok
+test protocol::tests::test_workspace_update_roundtrip ... ok
+test protocol::tests::test_workspace_updated_roundtrip ... ok
+test protocol::tests::test_worktree_create_roundtrip ... ok
+test protocol::tests::test_worktree_created_roundtrip ... ok
+test protocol::tests::test_worktree_delete_roundtrip ... ok
+test protocol::tests::test_worktree_deleted_roundtrip ... ok
+test protocol::tests::test_worktree_list_roundtrip ... ok
+test protocol::tests::test_worktree_merge_roundtrip ... ok
+test protocol::tests::test_worktree_status_roundtrip ... ok
+test pty::output::tests::test_split_at_valid_utf8_complete ... ok
+test pty::output::tests::test_split_at_valid_utf8_empty ... ok
+test pty::output::tests::test_split_at_valid_utf8_incomplete_multibyte ... ok
+test pty::output::tests::test_split_at_valid_utf8_multibyte ... ok
+test pty::output::tests::test_split_at_valid_utf8_partial ... ok
+test pty::tests::test_detect_shell ... ok
+test protocol::export_bindings_workspacerename ... ok
+test protocol::export_bindings_workspaceupdate ... ok
+test protocol::export_bindings_worktreecreate ... ok
+test protocol::export_bindings_worktreedata ... ok
+test pty::tests::test_shell_exists ... ok
+test protocol::export_bindings_worktreedelete ... ok
+test protocol::export_bindings_worktreedeleted ... ok
+test protocol::export_bindings_workspacecreated ... ok
+test protocol::export_bindings_statesnapshot ... ok
+test protocol::export_bindings_acpeventenvelope ... ok
+test protocol::export_bindings_acpevent ... ok
+test protocol::export_bindings_workspaceupdated ... ok
+test state::tests::test_client_inactivity_timeout ... ok
+test test_fixtures::tests::test_ack_error_fixture ... ok
+test test_fixtures::tests::test_agent_cancel_fixture ... ok
+test test_fixtures::tests::test_ack_fixture ... ok
+test test_fixtures::tests::test_agent_output_fixture ... ok
+test test_fixtures::tests::test_agent_send_fixture ... ok
+test test_fixtures::tests::test_agent_prompt_fixture ... ok
+test test_fixtures::tests::test_agent_status_update_fixture ... ok
+test test_fixtures::tests::test_create_pr_fixture ... ok
+test test_fixtures::tests::test_agent_spawn_fixture ... ok
+test test_fixtures::tests::test_file_content_fixture ... ok
+test protocol::export_bindings_worktreemerge ... ok
+test protocol::export_bindings_worktreecreated ... ok
+test test_fixtures::tests::test_file_read_fixture ... ok
+test test_fixtures::tests::test_get_state_fixture ... ok
+test test_fixtures::tests::test_git_commit_fixture ... ok
+test test_fixtures::tests::test_fixture_dir_points_to_correct_location ... ok
+test test_fixtures::tests::test_git_diff_fixture ... ok
+test test_fixtures::tests::test_git_diff_result_fixture ... ok
+test test_fixtures::tests::test_git_status_result_fixture ... ok
+test test_fixtures::tests::test_file_write_fixture ... ok
+test test_fixtures::tests::test_notification_fixture ... ok
+test test_fixtures::tests::test_ping_fixture ... ok
+test test_fixtures::tests::test_state_snapshot_fixture ... ok
+test test_fixtures::tests::test_terminal_create_fixture ... ok
+test test_fixtures::tests::test_git_status_fixture ... ok
+test test_fixtures::tests::test_terminal_created_fixture ... ok
+test test_fixtures::tests::test_pong_fixture ... ok
+test test_fixtures::tests::test_terminal_input_fixture ... ok
+test test_fixtures::tests::test_terminal_output_fixture ... ok
+test test_fixtures::tests::test_terminal_kill_fixture ... ok
+test test_fixtures::tests::test_terminal_resize_fixture ... ok
+test test_fixtures::tests::test_workspace_create_fixture ... ok
+test test_fixtures::tests::test_workspace_created_fixture ... ok
+test test_fixtures::tests::test_workspace_rename_fixture ... ok
+test test_fixtures::tests::test_workspace_update_fixture ... ok
+test test_fixtures::tests::test_update_settings_fixture ... ok
+test test_fixtures::tests::test_workspace_deleted_fixture ... ok
+test test_fixtures::tests::test_worktree_deleted_fixture ... ok
+test protocol::export_bindings_worktreelist ... ok
+test state::tests::test_app_state_creation ... ok
+test test_fixtures::tests::test_workspace_updated_fixture ... ok
+test test_fixtures::tests::test_worktree_delete_fixture ... ok
+test test_fixtures::tests::test_worktree_created_fixture ... ok
+test test_fixtures::tests::test_worktree_list_fixture ... ok
+test test_fixtures::tests::test_worktree_merge_fixture ... ok
+test test_fixtures::tests::test_write_fixture_serializes_correctly ... ok
+test test_fixtures::tests::test_write_fixture_creates_file ... ok
+test router::tests::test_route_ping_returns_pong ... ok
+test watcher::tests::test_is_git_path ... ok
+test router::tests::test_route_get_state_returns_snapshot ... ok
+test router::tests::test_route_workspace_create_returns_workspace_created ... ok
+test workspace::tests::test_create_workspace ... ok
+test workspace::tests::test_delete_workspace ... ok
+test workspace::tests::test_list_workspaces ... ok
+test worktree::tests::test_create_worktree_fails_when_git_metadata_already_exists ... ok
+test worktree::tests::test_create_worktree ... ok
+test pty::tests::test_kill_session ... ok
+test pty::tests::test_resize ... ok
+test worktree::tests::test_delete_worktree ... ok
+test worktree::tests::test_list_worktrees_errors_on_invalid_uuid ... ok
+test worktree::tests::test_list_worktrees ... ok
+test worktree::tests::test_worktree_status ... ok
+test worktree::tests::test_delete_worktree_removes_git_metadata ... ok
+test pty::tests::test_spawn_session ... ok
+test watcher::tests::test_file_watcher_start_stop ... ok
+test pty::tests::test_cleanup_on_disconnect ... ok
+test pty::tests::test_write_and_read ... ok
+test watcher::tests::test_file_watcher_ignores_git ... ok
+test watcher::tests::test_file_watcher_pause_resume ... ok
+test pty::tests::test_max_sessions_per_worktree ... ok
+First event: Created, size: Some(12)
+Second event: Modified, size: Some(16), debug: FileEvent { path: "/tmp/.tmpUze9so/delivery_test.txt", kind: Modified, size: Some(16) }
+test watcher::tests::test_file_watcher_event_delivery ... ok
+Event for large file: size: Some(8192)
+Received 1 events for large file while it was still small (expected: 0 or more)
+test watcher::tests::test_file_size_filtering ... ok
+test watcher::tests::test_file_watcher_ignores_large_files ... ok
+test pty::tests::test_session_ttl_enforcement ... ok
+
+test result: ok. 261 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.22s
+
+     Running unittests src/main.rs (target/debug/deps/ymir_ws_server-f964378166dadb88)
+
+running 1 test
+test tests::test_health_endpoint ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ymir_ws_server
+
+running 1 test
+test crates/ws-server/src/logging.rs - logging::ActivityLogger (line 43) ... ignored
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

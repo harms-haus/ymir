@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AgentPane } from '../AgentPane';
-import { useStore } from '../../../store';
+import { useStore, selectActiveAgentTabId, selectAgentTabsByWorktreeId, AgentTab } from '../../../store';
 import { useWebSocketClient } from '../../../hooks/useWebSocket';
 
 vi.mock('../../../store');
@@ -31,23 +31,45 @@ describe('AgentPane', () => {
 
     (useWebSocketClient as any).mockReturnValue(mockClient);
 
-    // Mock useStore to return actions when called without selector
-    // and use selector when provided
     (useStore as any).mockImplementation((selector?: any) => {
       const store = {
         addAgentTab: mockAddAgentTab,
         removeAgentTab: mockRemoveAgentTab,
         setActiveAgentTab: mockSetActiveAgentTab,
+        agentSessions: [],
+        agentTabs: new Map(),
+        activeAgentTabId: new Map(),
       };
-      if (selector) {
+      if (typeof selector === 'function') {
         return selector(store);
       }
       return store;
     });
+
+    (selectAgentTabsByWorktreeId as any).mockImplementation((worktreeId: string) => {
+      return (state: any) => state.agentTabs.get(worktreeId) || [];
+    });
+
+    (selectActiveAgentTabId as any).mockImplementation((worktreeId: string) => {
+      return (state: any) => state.activeAgentTabId.get(worktreeId) || null;
+    });
   });
 
   it('renders empty state when no tabs exist', () => {
-    (useStore as any).mockReturnValue([]);
+    (useStore as any).mockImplementation((selector?: any) => {
+      const store = {
+        addAgentTab: mockAddAgentTab,
+        removeAgentTab: mockRemoveAgentTab,
+        setActiveAgentTab: mockSetActiveAgentTab,
+        agentSessions: [],
+        agentTabs: new Map(),
+        activeAgentTabId: new Map(),
+      };
+      if (typeof selector === 'function') {
+        return selector(store);
+      }
+      return store;
+    });
 
     render(<AgentPane worktreeId="worktree-1" />);
 
@@ -56,26 +78,55 @@ describe('AgentPane', () => {
   });
 
   it('renders agent tab with robot icon', () => {
-    const tabs = [{ id: 'tab-1', type: 'agent', sessionId: 'agent-session-1', label: 'claude' }];
-    (useStore as any).mockReturnValue(tabs);
+    const tabs: AgentTab[] = [{ id: 'tab-1', type: 'agent', sessionId: 'agent-session-1', label: 'claude' }];
+    const mockAgentSessions = [
+      {
+        id: 'agent-session-1',
+        worktreeId: 'worktree-1',
+        agentType: 'claude',
+        status: 'idle' as const,
+        startedAt: Date.now(),
+      },
+    ];
 
-    const mockAgentSession = {
-      id: 'agent-session-1',
-      worktreeId: 'worktree-1',
-      agentType: 'claude',
-      status: 'idle' as const,
-      startedAt: Date.now(),
-    };
+    (useStore as any).mockImplementation((selector?: any) => {
+      const store = {
+        addAgentTab: mockAddAgentTab,
+        removeAgentTab: mockRemoveAgentTab,
+        setActiveAgentTab: mockSetActiveAgentTab,
+        agentSessions: mockAgentSessions,
+        agentTabs: new Map([['worktree-1', tabs]]),
+        activeAgentTabId: new Map([['worktree-1', 'tab-1']]),
+      };
+      if (typeof selector === 'function') {
+        return selector(store);
+      }
+      return store;
+    });
 
-    render(<AgentPane worktreeId="worktree-1" agentSession={mockAgentSession} />);
+    render(<AgentPane worktreeId="worktree-1" />);
 
     expect(screen.getByText('claude')).toBeInTheDocument();
     expect(screen.getByTestId('agent-chat-agent-session-1')).toBeInTheDocument();
   });
 
   it('renders diff tab with diff icon', () => {
-    const tabs = [{ id: 'tab-1', type: 'diff', filePath: '/path/to/file.ts' }];
-    (useStore as any).mockReturnValue(tabs);
+    const tabs: AgentTab[] = [{ id: 'tab-1', type: 'diff', filePath: '/path/to/file.ts' }];
+
+    (useStore as any).mockImplementation((selector?: any) => {
+      const store = {
+        addAgentTab: mockAddAgentTab,
+        removeAgentTab: mockRemoveAgentTab,
+        setActiveAgentTab: mockSetActiveAgentTab,
+        agentSessions: [],
+        agentTabs: new Map([['worktree-1', tabs]]),
+        activeAgentTabId: new Map([['worktree-1', 'tab-1']]),
+      };
+      if (typeof selector === 'function') {
+        return selector(store);
+      }
+      return store;
+    });
 
     render(<AgentPane worktreeId="worktree-1" />);
 
@@ -84,8 +135,22 @@ describe('AgentPane', () => {
   });
 
   it('renders editor tab with code icon', () => {
-    const tabs = [{ id: 'tab-1', type: 'editor', filePath: '/path/to/file.ts' }];
-    (useStore as any).mockReturnValue(tabs);
+    const tabs: AgentTab[] = [{ id: 'tab-1', type: 'editor', filePath: '/path/to/file.ts' }];
+
+    (useStore as any).mockImplementation((selector?: any) => {
+      const store = {
+        addAgentTab: mockAddAgentTab,
+        removeAgentTab: mockRemoveAgentTab,
+        setActiveAgentTab: mockSetActiveAgentTab,
+        agentSessions: [],
+        agentTabs: new Map([['worktree-1', tabs]]),
+        activeAgentTabId: new Map([['worktree-1', 'tab-1']]),
+      };
+      if (typeof selector === 'function') {
+        return selector(store);
+      }
+      return store;
+    });
 
     render(<AgentPane worktreeId="worktree-1" />);
 
@@ -96,18 +161,33 @@ describe('AgentPane', () => {
 
 
   it('sends AgentSpawn message when + button is clicked', async () => {
-    const tabs = [{ id: 'tab-1', type: 'agent', sessionId: 'agent-session-1', label: 'claude' }];
-    (useStore as any).mockReturnValue(tabs);
+    const tabs: AgentTab[] = [{ id: 'tab-1', type: 'agent', sessionId: 'agent-session-1', label: 'claude' }];
+    const mockAgentSessions = [
+      {
+        id: 'agent-session-1',
+        worktreeId: 'worktree-1',
+        agentType: 'claude',
+        status: 'idle' as const,
+        startedAt: Date.now(),
+      },
+    ];
 
-    const mockAgentSession = {
-      id: 'agent-session-1',
-      worktreeId: 'worktree-1',
-      agentType: 'claude',
-      status: 'idle' as const,
-      startedAt: Date.now(),
-    };
+    (useStore as any).mockImplementation((selector?: any) => {
+      const store = {
+        addAgentTab: mockAddAgentTab,
+        removeAgentTab: mockRemoveAgentTab,
+        setActiveAgentTab: mockSetActiveAgentTab,
+        agentSessions: mockAgentSessions,
+        agentTabs: new Map([['worktree-1', tabs]]),
+        activeAgentTabId: new Map([['worktree-1', 'tab-1']]),
+      };
+      if (typeof selector === 'function') {
+        return selector(store);
+      }
+      return store;
+    });
 
-    render(<AgentPane worktreeId="worktree-1" agentSession={mockAgentSession} />);
+    render(<AgentPane worktreeId="worktree-1" />);
 
     const createButton = screen.getByLabelText('Create new agent');
     expect(createButton).toBeInTheDocument();

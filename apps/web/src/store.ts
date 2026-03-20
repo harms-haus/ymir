@@ -156,31 +156,47 @@ export function acpAccumulatorReducer(
           updatedThread.messages = [...updatedThread.messages, lastMessage];
         }
 
-        let textPart = lastMessage.parts.find((p): p is AccumulatedTextContent => 
-          p.type === 'text'
-        ) as AccumulatedTextContent | undefined;
-
         const content = chunkData.content;
-        const textContent = content?.type === 'Text' ? content.data : '';
+        const isText = content?.type === 'Text';
+        const isStructured = content?.type === 'Structured';
+        const contentData = content?.data ?? '';
 
-        if (textPart) {
-          const newParts = lastMessage.parts.map(p => 
-            p.type === 'text' 
-              ? { ...p, text: p.text + textContent, isStreaming: !chunkData.isFinal }
-              : p
-          );
-          updatedThread.messages = updatedThread.messages.map((m, i) =>
-            i === updatedThread.messages.length - 1
-              ? { ...m, parts: newParts, lastSequence: sequence }
-              : m
-          );
-        } else {
-          const newTextPart: AccumulatedTextContent = {
-            type: 'text',
-            text: textContent,
+        if (isText) {
+          let textPart = lastMessage.parts.find((p): p is AccumulatedTextContent => 
+            p.type === 'text'
+          ) as AccumulatedTextContent | undefined;
+
+          if (textPart) {
+            const newParts = lastMessage.parts.map(p => 
+              p.type === 'text' 
+                ? { ...p, text: p.text + contentData, isStreaming: !chunkData.isFinal }
+                : p
+            );
+            updatedThread.messages = updatedThread.messages.map((m, i) =>
+              i === updatedThread.messages.length - 1
+                ? { ...m, parts: newParts, lastSequence: sequence }
+                : m
+            );
+          } else {
+            const newTextPart: AccumulatedTextContent = {
+              type: 'text',
+              text: contentData,
+              isStreaming: !chunkData.isFinal,
+            };
+            const newParts = [...lastMessage.parts, newTextPart];
+            updatedThread.messages = updatedThread.messages.map((m, i) =>
+              i === updatedThread.messages.length - 1
+                ? { ...m, parts: newParts, lastSequence: sequence }
+                : m
+            );
+          }
+        } else if (isStructured) {
+          const newStructuredPart = {
+            type: 'structured' as const,
+            data: contentData,
             isStreaming: !chunkData.isFinal,
           };
-          const newParts = [...lastMessage.parts, newTextPart];
+          const newParts = [...lastMessage.parts, newStructuredPart];
           updatedThread.messages = updatedThread.messages.map((m, i) =>
             i === updatedThread.messages.length - 1
               ? { ...m, parts: newParts, lastSequence: sequence }
@@ -880,6 +896,20 @@ export function updateStateFromServerMessage(message: ServerMessage): void {
     case 'Error':
       handleError(message);
       break;
+
+    case 'AcpWireEvent': {
+      const { dispatchAccumulator, activeWorktreeId } = useStore.getState();
+      const envelope = message.envelope;
+      const data = envelope.data as any;
+      
+      // Most ACP events have worktreeId in data; SessionInit falls back to active worktree
+      const worktreeId = data?.worktreeId ?? activeWorktreeId;
+      
+      if (worktreeId) {
+        dispatchAccumulator({ type: 'EVENT_RECEIVED', envelope, worktreeId });
+      }
+      break;
+    }
   }
 }
 

@@ -149,6 +149,7 @@ pub enum ServerMessagePayload {
     Pong(Pong),
     Notification(Notification),
     Ack(Ack),
+    AcpWireEvent(AcpEventEnvelope),
 }
 
 /// Bidirectional messages (can be sent by either side)

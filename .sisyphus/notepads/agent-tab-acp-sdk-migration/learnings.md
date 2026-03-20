@@ -867,3 +867,355 @@ All 14 agent tests pass:
 2. **Private `AcpClient::new`**: Changed to `fn new()` (not `pub`) since it's only used internally by `start_acp_runtime`.
 
 3. **Test assertions removed**: Tests that checked `state.agent_clients` were updated to only check `state.agents` since `agent_clients` no longer exists in AppState.
+
+## Task 9: ACP Event Accumulator Implementation (2026-03-20)
+
+### Implementation Summary
+
+The accumulator is a connection-scoped, derived state that transforms ACP events into assistant-ui-compatible thread/message/card state. It is NOT the source of truth for worktree/session identity.
+
+### Key Components
+
+**File:** `apps/web/src/store.ts`
+- `acpAccumulatorReducer()` - pure reducer function handling all ACP event types
+- `AcpWireEvent` case in `updateStateFromServerMessage()` - dispatches envelopes to accumulator
+
+**File:** `apps/web/src/types/state.ts`
+- `AccumulatedTextContent` - streaming text chunks
+- `AccumulatedStructuredContent` - JSON/code block chunks
+- `AccumulatedToolCard` - tool execution status
+- `AccumulatedContextCard` - file read/written, command executed, browser action, memory update
+- `AccumulatedPermissionCard` - permission requests (type defined, not yet used)
+- `AccumulatedErrorCard` - structured errors with recoverable flag
+
+### Event Routing
+
+ACP events are routed to threads by worktreeId:
+- Most events have `worktreeId` in their data
+- `SessionInit` events fall back to `activeWorktreeId` since they don't have worktree context
+
+### Retention Bounds
+
+- `MAX_TOOL_OUTPUT_LENGTH = 10000` - tool outputs truncated
+- `MAX_ACCUMULATED_MESSAGES = 500` - message count bounded per thread
+
+### Test Coverage (60 tests)
+
+- CONNECTION_RECONNECTED: generation increment, thread flush
+- FLUSH_ALL, FLUSH_THREAD, REBUILD_FROM_SNAPSHOT, SET_STREAMING
+- All 8 ACP event types: SessionInit, SessionStatus, PromptChunk, PromptComplete, ToolUse, ContextUpdate, Error, ResumeMarker
+- All ContextUpdate updateType variations: FileRead, FileWritten, CommandExecuted, BrowserAction, MemoryUpdate
+- All PromptComplete reason variations: Normal, Cancelled, Error
+- All ToolUse status variations: Started, InProgress, Completed, Error
+- All AcpErrorCode values: AgentCrash, InitFailed, SessionNotFound, PromptFailed, ToolFailed, CancelFailed, Timeout, InvalidRequest, Internal
+- Structured content chunks
+- Message limit enforcement
+- Reconnect rebuild behavior
+
+### Gotchas
+
+1. **AcpWireEvent routing**: The `AcpWireEvent` message must be handled in `updateStateFromServerMessage()` to dispatch envelopes to the accumulator. Without this, ACP events from the WS-ACP adapter (Task 8) won't reach the accumulator.
+
+2. **SessionInit fallback**: SessionInit events don't have worktreeId, so they must fall back to `activeWorktreeId` for routing.
+
+3. **Structured content**: AcpChunkContent can be `{ type: 'Text', data: string }` or `{ type: 'Structured', data: string }`. Both must be handled separately - Text accumulates in existing text parts, Structured creates new parts.
+
+4. **No explicit permission events**: ACP contract doesn't have dedicated permission events. Permissions flow through ToolUse events with specific tool names. `AccumulatedPermissionCard` type is reserved for future use.
+
+5. **Unused import cleanup**: TypeScript's `noUnusedLocals` reports unused imports. Remove types that aren't used in value positions.
+
+## Task 7: Rust Handler, Router, and Persistence Integration (2026-03-19)
+
+### Implementation Summary
+
+Integrated the Task 6 `AcpHandle`/official ACP bridge into the active handler and router flow, with selected-worktree CWD launch semantics.
+
+### Files Modified
+
+- `crates/ws-server/src/protocol.rs` - Added `AcpWireEvent(AcpEventEnvelope)` variant to `ServerMessagePayload`
+- `crates/ws-server/src/agent/acp.rs` - Created `BroadcastingEventSender`, updated `start_acp_runtime()` to accept broadcast sender
+- `crates/ws-server/src/state.rs` - Updated `with_acp()` to pass broadcast sender to ACP runtime
+- `crates/ws-server/src/main.rs` - Changed from `with_pty_manager` to `with_acp` for full ACP integration
+- `crates/ws-server/src/agent/handler.rs` - Added integration tests
+
+### Key Components
+
+**BroadcastingEventSender:**
+- Implements `AcpEventSender` trait
+- Wraps `broadcast::Sender<ServerMessage>`
+- Converts `AcpEventEnvelope` to `ServerMessagePayload::AcpWireEvent` for broadcast to all WebSocket clients
+
+**Integration Flow:**
+1. `AppState::with_acp()` creates state with broadcast channel
+2. `start_acp_runtime(broadcast_tx)` spawns ACP runtime with broadcast capability
+3. `BroadcastingEventSender` sends ACP events to all connected clients
+4. Handler spawn/send/cancel flows operate through `AcpHandle` message-passing
+
+### Test Coverage (18 agent tests)
+
+- `test_acp_handle_initialized_in_test_state` - verifies ACP handle setup
+- `test_cleanup_broadcasts_agent_removed` - verifies cleanup sends broadcast
+- `test_spawn_requires_worktree_in_database` - verifies FK constraint handling
+- `test_broadcasting_event_sender_sends_message` - verifies event broadcasting
+- All existing handler and ACP tests pass
+
+### Gotchas
+
+1. **`broadcast()` sends to clients, not broadcast_tx**: The `AppState.broadcast()` method iterates over `self.clients` (connected WebSocket clients) and sends via mpsc channels. Tests must connect a client with `state.connect(client_id)` to receive broadcasts.
+
+2. **FK constraint requires DB setup**: Tests that create agent sessions must first create the workspace and worktree in the database (not just in-memory state) because `agent_sessions` has FK constraints.
+
+3. **`AcpWireEvent` wrapper needed**: TypeScript defines `AcpWireEvent` as a wrapper type with `type: 'AcpWireEvent'` and `data: AcpEventEnvelope`. Rust needed the matching `ServerMessagePayload::AcpWireEvent(AcpEventEnvelope)` variant for wire compatibility.
+
+4. **Broadcast sender cloning**: The broadcast sender is cloned for each agent spawn, allowing the ACP runtime to send events even after the original sender is moved.
+
+## Task 10: Adapter-Chain Spike and Abort Checkpoint (2026-03-19)
+
+### Decision: CONTINUE to assistant-ui Integration
+
+### Abort Condition Evaluation
+
+**Condition 1**: "if the accumulator + `assistant-ui` integration requires bypassing most of `assistant-ui`"
+- **Status**: PARTIAL CONCERN - CONTINUE
+- assistant-ui adds value for: message rendering, markdown, code highlighting, streaming animation
+- We bypass: backend runtimes, session management, worktree/tab concepts
+- **Conclusion**: Rendering value justifies integration
+
+**Condition 2**: "If the stateless wire contract cannot remain assistant-ui-agnostic"
+- **Status**: PASSED
+- Protocol tests reject assistant-ui-specific fields
+- Wire contract is stateless and clean
+
+**Condition 3**: "If worktree/session semantics cannot be preserved without duplicating canonical state"
+- **Status**: PASSED
+- Accumulator uses `worktreeId` as reference
+- Canonical state remains in `AppState.worktrees`, `AppState.agentSessions`
+- No state duplication
+
+### Test Results
+
+- Rust: 261 tests passed (including 18 agent tests, 136 protocol tests)
+- Accumulator: 60 tests passed
+- WS Adapter: 45 tests passed
+- Protocol: 60 tests passed
+
+### Chain Architecture Verified
+
+```
+Agent Process → ACP SDK → YmirClientHandler → BroadcastingEventSender
+                                         ↓
+                              ServerMessagePayload::AcpWireEvent
+                                         ↓
+                                    WebSocket
+                                         ↓
+                              YmirClient.decodeAcpEnvelope()
+                                         ↓
+                              acpAccumulatorReducer()
+                                         ↓
+                              AccumulatedThread (messages, parts)
+                                         ↓
+                              ExternalStoreRuntime (Task 11)
+                                         ↓
+                                   assistant-ui
+```
+
+### Key Findings
+
+1. **No state duplication**: Accumulator is DERIVED, connection-scoped state
+2. **Wire contract is clean**: Stateless, assistant-ui-agnostic
+3. **assistant-ui value is real**: Rendering primitives save implementation time
+4. **Architecture is sound**: Clear separation of concerns across layers
+
+### Next Steps
+
+- Task 11: Wire `assistant-ui` through `ExternalStoreRuntime`
+- Task 12: Build compact custom event cards
+- Tasks 13-15: Integration and cleanup
+
+## Task 3: Assistant-UI Runtime Boundary (2026-03-20)
+
+### Implementation Summary
+
+Created \`apps/web/src/components/agent/runtimeBoundary.ts\` - a comprehensive module defining the RENDER-ONLY boundary between Ymir'"'" 's host-owned state and \`assistant-ui\`'"'"s \`ExternalStoreRuntime\`.
+
+### Key Architecture Decisions
+
+1. **RENDER-ONLY Boundary**: Assistant-ui receives READ-ONLY snapshots from accumulator. All mutations flow through: Ymir store → accumulator → runtime boundary → ExternalStoreRuntime. Assistant-ui NEVER owns worktree, tab, or session identity.
+
+2. **Worktree ID as Thread ID**: Runtime uses \`worktreeId\` as the thread identifier, NOT \`sessionId\` or \`acpSessionId\`. This keeps session truth in Ymir'"'" 's store.
+
+3. **First-Cut Disabled Features**:
+   - **Editing**: Disabled because Ymir'"'" 's accumulator is canonical state source via ACP events
+   - **Approval**: Disabled because permissions are custom ACP tool use events, not assistant-ui tool approvals
+   - **Branching**: Disabled because conversation management is simple in first cut
+   - **Runtime Backends**: We use \`ExternalStoreRuntime\` only, no assistant-ui built-in backends
+
+4. **Enabled Custom Features**:
+   - Custom permission card rendering (for future Task 12)
+   - Custom tool card rendering (for future Task 12)
+   - Custom event card rendering (for future Task 12)
+
+### Files Modified
+
+1. **\`apps/web/src/components/agent/runtimeBoundary.ts\`** (342 lines):
+   - Complete runtime boundary module with types and mapping helpers
+   - Feature flags object \`FIRST_CUT_FEATURES\` documenting disabled/enabled features
+   - Mapping functions: \`createRuntimeInput()\`, \`mapContentPart()\`, \`mapMessage()\`, \`mapStatus()\`
+   - Selector helpers: \`getThreadMessages()\`, \`isThreadStreaming()\`, \`getThreadStatus()\`
+   - Validation helper: \`isValidRuntimeInput()\`
+
+2. **\`apps/web/src/components/agent/__tests__/AgentChat.test.tsx\`**:
+   - Added imports for runtime boundary types
+   - Added 42 new tests across 8 test suites covering all boundary functions
+
+### Test Coverage
+
+**Total**: 42 new tests added, all passing
+**Runtime Boundary Tests**: All 42 tests pass successfully
+**Note**: 2 pre-existing AgentChat tests failed due to DOM text matching issues (unrelated to runtime boundary work)
+
+### Type Definitions
+
+1. **\`ExternalStoreRuntimeInput\`**: Main contract type defining the interface between accumulator and assistant-ui
+2. **\`RuntimeThreadState\`**: Thread state compatible with assistant-ui expectations
+3. **\`RuntimeMessage\`**: Message format stripped of accumulator metadata
+4. **\`RuntimeContentPart\`**: Simplified content types for rendering
+
+### Mapping Helpers
+
+1. **\`createRuntimeInput(accumulated, onSubmit?, onCancel?)\`**: Main entry point
+2. **\`isValidRuntimeInput(input)\`**: Validation helper
+3. **Content Mapping Functions**: \`mapContentPart()\`, \`mapMessage()\`, \`mapStatus()\`
+4. **Selector Helpers**: \`getThreadMessages()\`, \`isThreadStreaming()\`, \`getThreadStatus()\`
+
+### Key Design Principles
+
+1. **No Assistant-UI State Ownership**: Assistant-ui receives immutable snapshots
+2. **Explicit Feature Guardrails**: \`FIRST_CUT_FEATURES\` constant makes disabled features explicit
+3. **Type Safety**: TypeScript interfaces define clear contracts between accumulator and runtime
+4. **Testability**: All helpers are pure functions with clear inputs/outputs
+
+### Gotchas
+
+1. **Thread ID Source**: Must use \`worktreeId\`, not \`sessionId\` or \`acpSessionId\`
+2. **Metadata Stripping**: Assistant-ui must not receive accumulator-specific metadata
+3. **Feature Locking**: Tests verify that editing/approval/branching remain disabled
+4. **Null Safety**: \`createRuntimeInput()\` returns null for null accumulator
+
+### Integration Points
+
+1. **From Accumulator**: Runtime boundary consumes \`AccumulatedThread\` from Task 9'"'" 's \`acpAccumulator\` state
+2. **To Assistant-UI**: Boundary exports \`ExternalStoreRuntimeInput\` type for \`ExternalStoreRuntime\` (Task 11)
+3. **From Store**: Runtime boundary doesn'"'" 't own state - it'"'" 's a pure transformation layer
+
+- Tasks 13-15: Integration and cleanup
+
+## Task 4: Card Schema Definition (2026-03-20)
+
+### Implementation Summary
+
+Created `apps/web/src/components/agent/card-schema.ts` with compact custom card schemas for:
+- Permission cards (tool approval prompts with safe action dispatch)
+- Tool cards (execution status and output)
+- Plan cards (execution progress from MemoryUpdate events)
+- Status cards (session state transitions and errors)
+
+### Schema Design Principles
+
+1. **Explicit required fields**: Each card schema defines required fields for rendering safety
+2. **Safe action dispatch**: Permission cards include replay-safe action objects (allow/deny/always variants)
+3. **Compact representation**: Minimized payload size with truncation helpers
+4. **Fallback behavior**: Unknown card types safely degrade to UnknownCardSchema
+5. **Type guards**: Runtime type guards for all card variants
+
+### Key Implementation Details
+
+**PermissionCardSchema**:
+- Includes `actions` object with 4 predefined action types
+- Actions are replay-safe (no arbitrary function execution)
+- Input summaries truncated to 200 chars for display safety
+- Human-readable reasons generated from tool names
+
+**ToolCardSchema**:
+- Maps AcpToolUseStatus enum values
+- Output truncated to 500 chars for display safety
+- Optional fields for input/output/error
+
+**PlanCardSchema**:
+- Derived from MemoryUpdate context updates with JSON data
+- Validates plan data structure before mapping
+- Handles missing optional fields gracefully
+
+**StatusCardSchema**:
+- Two creation functions: from error card OR from session status string
+- Severity mapping: recoverable=warning, non-recoverable=error
+- Session status mapping: Working/Waiting=info, Complete=success, Cancelled=warning, Error=error
+
+### Validation Functions
+
+Each card type has a corresponding validation function:
+- `isValidPermissionCard()`: Validates permission card structure
+- `isValidToolCard()`: Validates tool card structure
+- `isValidErrorCard()`: Validates error card structure
+- `isValidPlanData()`: Validates plan JSON structure (helper for plan cards)
+
+Validation checks include:
+- Required field presence
+- Type checking with typeof
+- String length validation
+- Numeric range validation (>= 0)
+
+### Fallback Behavior
+
+`createCardSchema()` function handles all accumulated content parts:
+- Switch statement with type discrimination
+- Each case creates specific schema or returns UnknownCardSchema
+- Unknown cards store original data for debugging
+- Safe default sequence (0) for unknown cards
+
+### Gotchas
+
+1. **Switch case lexical declarations**: TypeScript requires block scoping for variable declarations in switch cases. Fixed by wrapping case bodies in `{}` blocks.
+
+2. **Duplicate export cleanup**: During file edits, duplicate function exports were created. Careful sed cleanup required to maintain valid TypeScript syntax.
+
+3. **Missing closing braces**: Adding exports to existing file context can accidentally remove closing braces. Always verify brace balance with tools like `awk`.
+
+4. **Import statement ordering**: When adding new exports to existing import lists, maintain consistent alphabetical or logical ordering. Missing imports cause ReferenceError at test time.
+
+5. **Test file separation**: Card schema tests are separate from AgentChat component tests. AgentChat tests have pre-existing failures unrelated to card schema implementation.
+
+6. **Vite build cache**: TypeScript compilation errors may be cached. Clear `node_modules/.vite` and `node_modules/.cache` to force clean rebuilds.
+
+7. **Comment/docstring policy**: File-level docstrings and function docstrings are necessary for public API documentation. Inline code comments should be removed for self-documenting code.
+
+### Test Coverage
+
+Added 72 new tests covering:
+- Permission card creation and validation (6 tests)
+- Tool card creation and validation (4 tests)
+- Plan card creation and validation (4 tests)
+- Status card creation and validation (7 tests)
+- Unknown card fallback (6 tests)
+- Type guard tests (5 tests)
+
+## AgentChat Test Fix (2026-03-20)
+
+### Issue
+Two AgentChat component tests were failing: `displays agent output messages` and `displays user prompt messages`.
+
+### Root Cause
+The component's message handlers (lines 71-97 in AgentChat.tsx) filter messages by `worktreeId`: `if (msg.worktreeId === worktreeId)`. The test mocks were using `sessionId` instead of `worktreeId`, causing the filter to reject the messages.
+
+### Fix Applied
+Updated test mocks in `apps/web/src/components/agent/__tests__/AgentChat.test.tsx`:
+- `mockOutput`: Changed from `{ type: 'AgentOutput', sessionId: 'session-1', output: '...' }` to `{ type: 'AgentOutput', worktreeId: 'worktree-1', output: '...' }`
+- `mockPrompt`: Changed from `{ type: 'AgentPrompt', sessionId: 'session-1', prompt: '...' }` to `{ type: 'AgentPrompt', worktreeId: 'worktree-1', prompt: '...' }`
+- Also updated `ignores messages from other sessions` test to use `worktreeId: 'different-worktree'` and renamed to `ignores messages from other worktrees` for clarity
+
+### Result
+All 74 AgentChat tests now pass (previously 72 passing, 2 failing).
+
+### Files Modified
+- `apps/web/src/components/agent/__tests__/AgentChat.test.tsx` - Fixed 3 tests to use correct `worktreeId` field
+

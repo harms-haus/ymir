@@ -9,7 +9,7 @@ describe('fixtureValidator', () => {
   const FIXTURE_DIR = 'test-fixtures-temp';
 
   it('should validate WorkspaceCreate.msgpack fixture', async () => {
-    const fixturePath = '../../../test-fixtures/WorkspaceCreate.msgpack';
+    const fixturePath = '../../test-fixtures/WorkspaceCreate.msgpack';
 
     const result = await validateFixture(fixturePath);
 
@@ -31,7 +31,7 @@ describe('fixtureValidator', () => {
   });
 
   it('should validate WorkspaceRename.msgpack fixture', async () => {
-    const fixturePath = '../../../test-fixtures/WorkspaceRename.msgpack';
+    const fixturePath = '../../test-fixtures/WorkspaceRename.msgpack';
 
     const result = await validateFixture(fixturePath);
 
