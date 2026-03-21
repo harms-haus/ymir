@@ -10,6 +10,7 @@ import type { Worktree as ProtocolWorktree } from '../../types/protocol'
 import { CreateWorktreeDialog } from '../dialogs/CreateWorktreeDialog'
 import { WorkspaceSettingsDialog } from '../dialogs/WorkspaceSettingsDialog'
 import { MergeDialog } from '../dialogs/MergeDialog'
+import { ChangeBranchDialog } from '../dialogs/ChangeBranchDialog'
 import { deleteWorktree } from '../../lib/api'
 import { revealInFileManager, copyToClipboard } from '../../lib/tauri'
 
@@ -50,6 +51,7 @@ function WorkspaceRow({
     branchName: wt.branchName,
     path: '',
     status: 'active',
+    isMain: wt.isMain ?? false,
     createdAt: 0,
   }))
   const summary = useWorkspaceAgentStatusSummary(workspace.id, protocolWorktrees)
@@ -187,6 +189,13 @@ function WorkspaceRow({
   )
 }
 
+function getFolderName(path: string): string {
+  if (!path) return '';
+  const cleanPath = path.replace(/\/+$/, '');
+  const segments = cleanPath.split(/[/\\]/);
+  return segments[segments.length - 1] || '';
+}
+
 function WorktreeRow({
   worktree,
   isSelected,
@@ -195,6 +204,10 @@ function WorktreeRow({
 }: WorktreeRowProps & { onContextMenu?: (e: React.MouseEvent) => void }) {
   const agentStatus = useAgentStatus(worktree.id)
   const status = agentStatus?.status ?? 'idle'
+  
+  const totalChanges = worktree.gitStats 
+    ? worktree.gitStats.modified + worktree.gitStats.added + worktree.gitStats.deleted 
+    : 0;
   
   return (
     <button
@@ -222,19 +235,49 @@ function WorktreeRow({
         <StatusDot status={status} size={8} />
       </span>
 
-      <span
-        style={{
-          flex: 1,
+      <span style={{ 
+        flex: 1, 
+        display: 'flex', 
+        alignItems: 'center', 
+        gap: '8px',
+        overflow: 'hidden',
+      }}>
+        <span style={{ 
           fontSize: '13px',
+          fontWeight: 500,
           color: isSelected
             ? 'hsl(var(--accent-foreground))'
             : 'hsl(var(--foreground))',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
-        }}
-      >
-        {worktree.branchName}
+        }}>
+          {getFolderName(worktree.path)}
+        </span>
+        
+        <span style={{ 
+          fontSize: '11px', 
+          color: 'hsl(var(--muted-foreground))',
+          fontWeight: 400,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}>
+          {worktree.branchName}
+        </span>
+        
+        {totalChanges > 0 && (
+          <span style={{
+            fontSize: '11px',
+            padding: '1px 6px',
+            borderRadius: '10px',
+            backgroundColor: 'hsl(var(--warning) / 0.15)',
+            color: 'hsl(var(--warning))',
+            whiteSpace: 'nowrap',
+          }}>
+            {totalChanges}
+          </span>
+        )}
       </span>
     </button>
   )
@@ -259,6 +302,9 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
   const mergeDialog = useStore((state) => state.mergeDialog)
   const setMergeDialogOpen = useStore((state) => state.setMergeDialogOpen)
   const resetMergeDialog = useStore((state) => state.resetMergeDialog)
+  const changeBranchDialog = useStore((state) => state.changeBranchDialog)
+  const setChangeBranchDialogOpen = useStore((state) => state.setChangeBranchDialogOpen)
+  const resetChangeBranchDialog = useStore((state) => state.resetChangeBranchDialog)
   const showAlertDialog = useStore((state) => state.showAlertDialog)
   const removeWorktree = useStore((state) => state.removeWorktree)
   const alertDialog = useStore((state) => state.alertDialog)
@@ -274,6 +320,11 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
       id: 'settings',
       label: 'Settings',
       icon: 'ri-settings-3-line',
+    },
+    {
+      id: 'change-branch',
+      label: 'Change Branch',
+      icon: 'ri-git-branch-line',
     },
     {
       id: 'delete-worktree',
@@ -308,6 +359,20 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
   }, [setCreateWorktreeDialogOpen])
 
   const handleDeleteWorktree = useCallback((worktreeId: string) => {
+    const worktree = worktrees.find(wt => wt.id === worktreeId)
+    if (!worktree) return
+    
+    if (worktree.isMain) {
+      showAlertDialog({
+        title: 'Cannot Delete Main Worktree',
+        description: 'The main worktree cannot be deleted. It is automatically managed.',
+        confirmLabel: 'OK',
+        variant: 'default',
+        onConfirm: () => {},
+      })
+      return
+    }
+    
     showAlertDialog({
       title: 'Delete Worktree',
       description: 'Are you sure you want to delete this worktree? This action cannot be undone.',
@@ -319,7 +384,14 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
         removeWorktree(worktreeId)
       },
     })
-  }, [showAlertDialog, removeWorktree])
+  }, [showAlertDialog, removeWorktree, worktrees])
+
+const handleChangeBranch = useCallback((worktreeId: string) => {
+  const worktree = worktrees.find(wt => wt.id === worktreeId)
+  if (!worktree) return
+
+  setChangeBranchDialogOpen(true, worktreeId, worktree.branchName)
+}, [worktrees, setChangeBranchDialogOpen])
 
   const handleMerge = useCallback((worktreeId: string) => {
     const worktree = worktrees.find(wt => wt.id === worktreeId)
@@ -347,6 +419,7 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
   const contextMenuCallbacks: ContextMenuCallbacks = {
     onCreateWorktree: handleCreateWorktree,
     onDeleteWorktree: handleDeleteWorktree,
+    onChangeBranch: handleChangeBranch,
     onMerge: handleMerge,
     onViewDiff: handleViewDiff,
     onSettings: handleSettings,
@@ -367,18 +440,24 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
         data: workspace,
       })
 
-      if (expandedIds.has(workspace.id)) {
-        const workspaceWorktrees = worktrees.filter((wt) => wt.workspaceId === workspace.id)
-        for (const worktree of workspaceWorktrees) {
-          nodes.push({
-            id: worktree.id,
-            type: 'worktree',
-            depth: 1,
-            data: worktree,
-            parentId: workspace.id,
-          })
-        }
+    if (expandedIds.has(workspace.id)) {
+      const workspaceWorktrees = worktrees
+        .filter((wt) => wt.workspaceId === workspace.id)
+        .sort((a, b) => {
+          if (a.isMain && !b.isMain) return -1
+          if (!a.isMain && b.isMain) return 1
+          return a.createdAt - b.createdAt
+        })
+      for (const worktree of workspaceWorktrees) {
+        nodes.push({
+          id: worktree.id,
+          type: 'worktree',
+          depth: 1,
+          data: worktree,
+          parentId: workspace.id,
+        })
       }
+    }
     }
 
     return nodes
@@ -472,6 +551,15 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
         branchName={mergeDialog.branchName}
         mainBranch={mergeDialog.mainBranch}
         mergeType={mergeDialog.mergeType}
+      />
+      <ChangeBranchDialog
+        open={changeBranchDialog.isOpen}
+        onOpenChange={(open) => {
+          if (!open) resetChangeBranchDialog()
+          else setChangeBranchDialogOpen(true, changeBranchDialog.worktreeId ?? undefined, changeBranchDialog.currentBranch)
+        }}
+        worktreeId={changeBranchDialog.worktreeId}
+        currentBranch={changeBranchDialog.currentBranch}
       />
       {alertDialog && (
         <AlertDialog

@@ -362,19 +362,22 @@ describe('Protocol Types', () => {
       expect(isTerminalCreated(decoded)).toBe(true);
     });
 
-    it('should encode and decode GitStatusResult message', () => {
-      const message: GitStatusResult = {
-        type: 'GitStatusResult',
-        worktreeId: 'wt-123',
-        status: 'M src/main.ts'
-      };
+it('should encode and decode GitStatusResult message', () => {
+    const message: GitStatusResult = {
+      type: 'GitStatusResult',
+      worktreeId: 'wt-123',
+      entries: [
+        { path: 'src/main.ts', statusCode: ' M' },
+        { path: 'src/lib.ts', statusCode: 'A ' },
+      ]
+    };
 
-      const encoded = encodeMessage(message);
-      const decoded = decodeMessage(encoded);
+    const encoded = encodeMessage(message);
+    const decoded = decodeMessage(encoded);
 
-      expect(decoded).toEqual(message);
-      expect(isGitStatusResult(decoded)).toBe(true);
-    });
+    expect(decoded).toEqual(message);
+    expect(isGitStatusResult(decoded)).toBe(true);
+  });
 
     it('should encode and decode Error message', () => {
       const message: ProtocolError = {

@@ -18,12 +18,21 @@ export interface WorkspaceState {
   updatedAt: number;
 }
 
+// Git change statistics
+export interface GitStats {
+  modified: number;
+  added: number;
+  deleted: number;
+}
+
 export interface WorktreeState {
   id: string;
   workspaceId: string;
   branchName: string;
   path: string;
   status: 'active' | 'inactive' | 'orphaned';
+  isMain: boolean;
+  gitStats?: GitStats;
   createdAt: number;
 }
 
@@ -100,6 +109,12 @@ export interface MergeDialogState {
 export interface DbResetDialogState {
   isOpen: boolean;
   errorMessage: string;
+}
+
+export interface ChangeBranchDialogState {
+  isOpen: boolean;
+  worktreeId: string | null;
+  currentBranch: string;
 }
 
 export type AlertDialogVariant = 'default' | 'destructive';
@@ -367,6 +382,8 @@ export interface AppState {
 
   dbResetDialog: DbResetDialogState;
 
+  changeBranchDialog: ChangeBranchDialogState;
+
   alertDialog: AlertDialogState | null;
 
   setWorkspaces: (workspaces: WorkspaceState[]) => void;
@@ -393,6 +410,7 @@ export interface AppState {
   
   addWorktree: (worktree: WorktreeState) => void;
   updateWorktree: (worktreeId: string, updates: Partial<WorktreeState>) => void;
+  updateWorktreeGitStats: (worktreeId: string, stats: GitStats) => void;
   removeWorktree: (worktreeId: string) => void;
   
   addAgentSession: (session: AgentSessionState) => void;
@@ -437,6 +455,9 @@ addTerminalSession: (session: TerminalSessionState) => void;
   // DB reset dialog actions
   setDbResetDialogOpen: (isOpen: boolean, errorMessage?: string) => void;
   resetDbResetDialog: () => void;
+
+  setChangeBranchDialogOpen: (isOpen: boolean, worktreeId?: string, currentBranch?: string) => void;
+  resetChangeBranchDialog: () => void;
 
   showAlertDialog: (config: AlertDialogConfig) => void;
   hideAlertDialog: () => void;

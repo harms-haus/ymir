@@ -390,6 +390,8 @@ fn test_worktree_created_roundtrip() {
             path: "/path".to_string(),
             status: "active".to_string(),
             created_at: 0,
+            is_main: false,
+            git_stats: None,
         },
     }));
     test_roundtrip(msg);
@@ -482,9 +484,19 @@ fn test_file_content_roundtrip() {
 
 #[test]
 fn test_git_status_result_roundtrip() {
+    use crate::protocol::GitStatusEntry;
     let msg = ServerMessage::new(ServerMessagePayload::GitStatusResult(GitStatusResult {
         worktree_id: Uuid::new_v4(),
-        status: "clean".to_string(),
+        entries: vec![
+            GitStatusEntry {
+                path: "src/main.rs".to_string(),
+                status_code: " M".to_string(),
+            },
+            GitStatusEntry {
+                path: "src/lib.rs".to_string(),
+                status_code: "A ".to_string(),
+            },
+        ],
     }));
     test_roundtrip(msg);
 }

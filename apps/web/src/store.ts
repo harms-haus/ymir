@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { AppState, NotificationState, AgentTab, AlertDialogConfig, AgentSessionState, TerminalSessionState, AcpAccumulatorState, AcpAccumulatorAction, AccumulatedThread, AccumulatedTextContent, AccumulatedToolCard, AccumulatedContextCard, AccumulatedErrorCard, MAX_TOOL_OUTPUT_LENGTH, MAX_ACCUMULATED_MESSAGES, createInitialAccumulatorState, ThreadAccumulatedState } from './types/state';
+import { AppState, NotificationState, AgentTab, AlertDialogConfig, AgentSessionState, TerminalSessionState, AcpAccumulatorState, AcpAccumulatorAction, AccumulatedThread, AccumulatedTextContent, AccumulatedToolCard, AccumulatedContextCard, AccumulatedErrorCard, MAX_TOOL_OUTPUT_LENGTH, MAX_ACCUMULATED_MESSAGES, createInitialAccumulatorState, ThreadAccumulatedState, GitStats } from './types/state';
 export type { AgentTab };
 import { ServerMessage, TerminalOutput, isAcpSessionInit, isAcpSessionStatus, isAcpPromptChunk, isAcpPromptComplete, isAcpToolUse, isAcpContextUpdate, isAcpError, isAcpResumeMarker } from './types/protocol';
 import { handleError } from './lib/error-recovery';
@@ -406,6 +406,12 @@ export const useStore = create<AppState>()(
     errorMessage: '',
   },
 
+  changeBranchDialog: {
+    isOpen: false,
+    worktreeId: null,
+    currentBranch: '',
+  },
+
   alertDialog: null,
 
   setWorkspaces: (workspaces) => set({ workspaces }),
@@ -491,6 +497,13 @@ export const useStore = create<AppState>()(
         set((state) => ({
           worktrees: state.worktrees.map((wt) =>
             wt.id === worktreeId ? { ...wt, ...updates } : wt
+          ),
+        })),
+
+      updateWorktreeGitStats: (worktreeId: string, stats: GitStats) =>
+        set((state) => ({
+          worktrees: state.worktrees.map((wt) =>
+            wt.id === worktreeId ? { ...wt, gitStats: stats } : wt
           ),
         })),
 
@@ -758,9 +771,24 @@ export const useStore = create<AppState>()(
       })),
 
   resetDbResetDialog: () =>
-      set({
-        dbResetDialog: { isOpen: false, errorMessage: '' },
-      }),
+    set({
+      dbResetDialog: { isOpen: false, errorMessage: '' },
+    }),
+
+  setChangeBranchDialogOpen: (isOpen, worktreeId, currentBranch) =>
+    set((state) => ({
+      changeBranchDialog: {
+        ...state.changeBranchDialog,
+        isOpen,
+        worktreeId: worktreeId ?? state.changeBranchDialog.worktreeId,
+        currentBranch: currentBranch ?? state.changeBranchDialog.currentBranch,
+      },
+    })),
+
+  resetChangeBranchDialog: () =>
+    set({
+      changeBranchDialog: { isOpen: false, worktreeId: null, currentBranch: '' },
+    }),
 
   showAlertDialog: (config: AlertDialogConfig) =>
     set({
@@ -892,6 +920,10 @@ export function updateStateFromServerMessage(message: ServerMessage): void {
       break;
     
     case 'WorktreeStatus':
+      updateWorktree(message.worktree.id, message.worktree);
+      break;
+    
+    case 'WorktreeChanged':
       updateWorktree(message.worktree.id, message.worktree);
       break;
     

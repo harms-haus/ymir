@@ -25,8 +25,9 @@ use super::{
         WorkspaceRename, WorkspaceUpdate, WorkspaceUpdated,
     },
     worktree::{
-        WorktreeCreate, WorktreeCreated, WorktreeData, WorktreeDelete, WorktreeDeleted,
-        WorktreeList, WorktreeListResult, WorktreeMerge, WorktreeStatus,
+        WorktreeChangeBranch, WorktreeChanged, WorktreeCreate, WorktreeCreated, WorktreeData,
+        WorktreeDelete, WorktreeDeleted, WorktreeList, WorktreeListResult, WorktreeMerge,
+        WorktreeStatus,
     },
 };
 
@@ -57,6 +58,7 @@ pub enum ClientMessagePayload {
     WorktreeDelete(WorktreeDelete),
     WorktreeMerge(WorktreeMerge),
     WorktreeList(WorktreeList),
+    WorktreeChangeBranch(WorktreeChangeBranch),
     AgentSpawn(AgentSpawn),
     AgentSend(AgentSend),
     AgentCancel(AgentCancel),
@@ -91,6 +93,7 @@ pub enum ServerMessagePayload {
     WorkspaceUpdated(WorkspaceUpdated),
     WorktreeCreated(WorktreeCreated),
     WorktreeDeleted(WorktreeDeleted),
+    WorktreeChanged(WorktreeChanged),
     WorktreeListResult(WorktreeListResult),
     WorktreeStatus(WorktreeStatus),
     AgentStatusUpdate(AgentStatusUpdate),

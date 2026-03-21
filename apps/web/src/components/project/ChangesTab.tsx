@@ -1,7 +1,62 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useStore, selectActiveWorktree, AgentTab } from '../../store';
 import { getWebSocketClient } from '../../lib/ws';
-import { GitStatusEntry } from '../../types/protocol';
+import { GitStatusEntry, ServerGitStatusEntry } from '../../types/protocol';
+
+type UIStatus = 'added' | 'modified' | 'deleted' | 'untracked' | 'renamed';
+
+/**
+ * Parses a git status code (XY format from `git status --porcelain`) into a UI-friendly status.
+ * First char (X) = staged status, second char (Y) = unstaged status.
+ * Returns the most significant status for display and whether the file is staged.
+ */
+function parseStatusCode(statusCode: string): { status: UIStatus; staged: boolean } {
+  if (statusCode === '??') {
+    return { status: 'untracked', staged: false };
+  }
+
+  const stagedChar = statusCode[0];
+  const unstagedChar = statusCode[1];
+
+  // Check staged status first (takes priority)
+  if (stagedChar === 'A') {
+    return { status: 'added', staged: true };
+  }
+  if (stagedChar === 'D') {
+    return { status: 'deleted', staged: true };
+  }
+  if (stagedChar === 'R') {
+    return { status: 'renamed', staged: true };
+  }
+  if (stagedChar === 'M') {
+    return { status: 'modified', staged: true };
+  }
+
+  // Check unstaged status
+  if (unstagedChar === 'M') {
+    return { status: 'modified', staged: false };
+  }
+  if (unstagedChar === 'D') {
+    return { status: 'deleted', staged: false };
+  }
+
+  // Default to modified for any other codes (C=copied, U=unmerged, etc.)
+  return { status: 'modified', staged: false };
+}
+
+/**
+ * Transforms server wire format entries into UI-friendly format.
+ */
+function transformStatusEntries(serverEntries: ServerGitStatusEntry[]): GitStatusEntry[] {
+  return serverEntries.map((entry) => {
+    const { status, staged } = parseStatusCode(entry.statusCode);
+    return {
+      path: entry.path,
+      status,
+      staged,
+    };
+  });
+}
 
 interface GroupedFile {
   path: string;
@@ -117,8 +172,7 @@ export function ChangesTab() {
     // Subscribe to GitStatusResult messages
     const unsubscribe = wsClient.onMessage('GitStatusResult', (message) => {
       if (message.worktreeId === activeWorktree.id) {
-        // TODO: Parse status string into file entries
-        setFiles([]);
+        setFiles(transformStatusEntries(message.entries));
       }
     });
 

@@ -28,10 +28,10 @@
   --ring: 224.3 76.3% 48%;
   --radius: 0.5rem;
 
-  /* Status dot colors */
-  --status-working: 142 70% 45%;      /* Green: #22c55e */
-  --status-idle: 240 4% 46%;         /* Gray: #71717a */
-  --status-waiting: 48 93% 47%;      /* Yellow: #eab308 */
+  --status-working: 142 70% 45%;
+  --status-idle: 240 4% 46%;
+  --status-waiting: 48 93% 47%;
+  --warning: 38 92% 50%;
 
   /* Panel backgrounds (subtle visual differentiation) */
   --panel-sidebar: 222.2 84% 5.9%;   /* Slightly lighter than background */

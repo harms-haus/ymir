@@ -36,6 +36,7 @@ pub struct WorktreeState {
     pub branch_name: String,
     pub path: String,
     pub status: String,
+    pub is_main: bool,
 }
 
 /// In-memory state for an agent session
@@ -195,6 +196,7 @@ impl AppState {
                                             branch_name: wt.branch_name,
                                             path: wt.path,
                                             status: wt.status,
+                                            is_main: wt.is_main,
                                         },
                                     );
                                 }

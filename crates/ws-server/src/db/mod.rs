@@ -98,6 +98,9 @@ const SCHEMA_MIGRATIONS: &[&str] = &[
     r#"
     ALTER TABLE agent_sessions ADD COLUMN updated_at TEXT DEFAULT (datetime('now'));
     "#,
+    r#"
+    ALTER TABLE worktrees ADD COLUMN is_main INTEGER DEFAULT 0;
+    "#,
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -121,6 +124,7 @@ pub struct Worktree {
     pub path: String,
     pub status: String,
     pub created_at: String,
+    pub is_main: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -389,8 +393,8 @@ impl Db {
         let mut stmt = conn
             .prepare(
                 r#"
-            INSERT INTO worktrees (id, workspace_id, branch_name, path, status, created_at)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            INSERT INTO worktrees (id, workspace_id, branch_name, path, status, created_at, is_main)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
             "#,
             )
             .await?;
@@ -402,6 +406,7 @@ impl Db {
             worktree.path.as_str(),
             worktree.status.as_str(),
             worktree.created_at.as_str(),
+            worktree.is_main as i32,
         ))
         .await?;
 
@@ -411,7 +416,7 @@ impl Db {
 
     pub async fn get_worktree(&self, id: &str) -> Result<Option<Worktree>> {
         let conn = self.conn()?;
-        let mut stmt = conn.prepare("SELECT id, workspace_id, branch_name, path, status, created_at FROM worktrees WHERE id = ?1").await?;
+        let mut stmt = conn.prepare("SELECT id, workspace_id, branch_name, path, status, created_at, COALESCE(is_main, 0) FROM worktrees WHERE id = ?1").await?;
         let mut rows = stmt.query([id]).await?;
 
         if let Some(row) = rows.next().await? {
@@ -422,6 +427,7 @@ impl Db {
                 path: row.get(3)?,
                 status: row.get(4)?,
                 created_at: row.get(5)?,
+                is_main: row.get::<i32>(6)? != 0,
             }))
         } else {
             Ok(None)
@@ -431,7 +437,7 @@ impl Db {
     pub async fn list_worktrees(&self, workspace_id: &str) -> Result<Vec<Worktree>> {
         let conn = self.conn()?;
         let mut stmt = conn.prepare(
-            "SELECT id, workspace_id, branch_name, path, status, created_at FROM worktrees WHERE workspace_id = ?1 ORDER BY created_at DESC"
+            "SELECT id, workspace_id, branch_name, path, status, created_at, COALESCE(is_main, 0) FROM worktrees WHERE workspace_id = ?1 ORDER BY created_at DESC"
         ).await?;
         let mut rows = stmt.query([workspace_id]).await?;
         let mut worktrees = Vec::new();
@@ -444,6 +450,7 @@ impl Db {
                 path: row.get(3)?,
                 status: row.get(4)?,
                 created_at: row.get(5)?,
+                is_main: row.get::<i32>(6)? != 0,
             });
         }
 
@@ -464,6 +471,21 @@ impl Db {
             )
             .await?;
         debug!("Updated worktree {} (rows affected: {})", id, rows_affected);
+        Ok(rows_affected > 0)
+    }
+
+    pub async fn update_worktree_branch(&self, id: &str, branch_name: &str) -> Result<bool> {
+        let conn = self.conn()?;
+        let rows_affected = conn
+            .execute(
+                "UPDATE worktrees SET branch_name = ?1 WHERE id = ?2",
+                libsql::params![branch_name, id],
+            )
+            .await?;
+        debug!(
+            "Updated worktree {} branch to {} (rows affected: {})",
+            id, branch_name, rows_affected
+        );
         Ok(rows_affected > 0)
     }
 
@@ -1034,6 +1056,7 @@ mod tests {
             path: "/test/path/.git/worktrees/feature/test".to_string(),
             status: "active".to_string(),
             created_at: chrono::Utc::now().to_rfc3339(),
+            is_main: false,
         };
         db.create_worktree(&worktree)
             .await
@@ -1102,6 +1125,7 @@ mod tests {
             path: "/test/path".to_string(),
             status: "active".to_string(),
             created_at: chrono::Utc::now().to_rfc3339(),
+            is_main: true,
         };
         db.create_worktree(&worktree)
             .await
@@ -1182,6 +1206,7 @@ mod tests {
             path: "/test/path".to_string(),
             status: "active".to_string(),
             created_at: chrono::Utc::now().to_rfc3339(),
+            is_main: false,
         };
         db.create_worktree(&worktree)
             .await
@@ -1193,6 +1218,7 @@ mod tests {
             label: Some("Main Terminal".to_string()),
             shell: "bash".to_string(),
             created_at: chrono::Utc::now().to_rfc3339(),
+            position: 0,
         };
         db.create_terminal_session(&session)
             .await

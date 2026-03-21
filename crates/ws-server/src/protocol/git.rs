@@ -6,6 +6,19 @@ use uuid::Uuid;
 
 use super::uuid_serde;
 
+/// Represents a single file's git status entry.
+/// The status_code is the raw 2-character XY status from `git status --porcelain`.
+/// - First char (X): staged status
+/// - Second char (Y): unstaged status
+/// - ' ' = unmodified, 'M' = modified, 'A' = added, 'D' = deleted, 'R' = renamed, 'C' = copied, '?' = untracked
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct GitStatusEntry {
+    pub path: String,
+    pub status_code: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -54,7 +67,7 @@ pub struct GitStatusResult {
     #[serde(with = "uuid_serde")]
     #[ts(type = "string")]
     pub worktree_id: Uuid,
-    pub status: String,
+    pub entries: Vec<GitStatusEntry>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]

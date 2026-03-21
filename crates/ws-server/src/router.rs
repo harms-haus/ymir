@@ -110,6 +110,21 @@ pub async fn route_message(
                 }))),
             }
         }
+
+        ClientMessagePayload::WorktreeChangeBranch(msg) => {
+            match crate::worktree::change_branch(state.clone(), msg).await {
+                Ok(result) => Some(ServerMessage::new(ServerMessagePayload::WorktreeChanged(
+                    result,
+                ))),
+                Err(e) => Some(ServerMessage::new(ServerMessagePayload::Error(Error {
+                    code: "WORKTREE_CHANGE_BRANCH_ERROR".to_string(),
+                    message: e.to_string(),
+                    details: None,
+                    request_id: None,
+                }))),
+            }
+        }
+
         ClientMessagePayload::TerminalCreate(msg) => {
             Some(handle_terminal_create(state.clone(), msg).await)
         }
@@ -188,6 +203,7 @@ fn not_implemented(payload: ClientMessagePayload) -> ServerMessage {
         ClientMessagePayload::WorktreeDelete(_) => "WorktreeDelete",
         ClientMessagePayload::WorktreeMerge(_) => "WorktreeMerge",
         ClientMessagePayload::WorktreeList(_) => "WorktreeList",
+        ClientMessagePayload::WorktreeChangeBranch(_) => "WorktreeChangeBranch",
         ClientMessagePayload::AgentSpawn(_) => "AgentSpawn",
         ClientMessagePayload::AgentSend(_) => "AgentSend",
         ClientMessagePayload::AgentCancel(_) => "AgentCancel",

@@ -5,11 +5,11 @@
 
 use crate::db::{ActivityLogEntry, Worktree as DbWorktree};
 use crate::protocol::{
-    WorktreeCreate, WorktreeCreated, WorktreeData, WorktreeDelete, WorktreeDeleted, WorktreeList,
-    WorktreeStatus,
+  ServerMessage, ServerMessagePayload, WorktreeChangeBranch, WorktreeChanged, WorktreeCreate,
+  WorktreeCreated, WorktreeData, WorktreeDelete, WorktreeDeleted, WorktreeList, WorktreeStatus,
 };
 use crate::state::AppState;
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use git2::{Repository, WorktreePruneOptions};
 use std::path::Path;
 use std::sync::Arc;
@@ -136,6 +136,7 @@ pub async fn create(state: Arc<AppState>, msg: WorktreeCreate) -> Result<Worktre
         path: worktree_path.to_string_lossy().to_string(),
         status: "active".to_string(),
         created_at: chrono::Utc::now().to_rfc3339(),
+        is_main: false,
     };
 
     state
@@ -153,6 +154,7 @@ pub async fn create(state: Arc<AppState>, msg: WorktreeCreate) -> Result<Worktre
             branch_name: worktree.branch_name.clone(),
             path: worktree.path.clone(),
             status: worktree.status.clone(),
+            is_main: false,
         },
     );
 
@@ -187,6 +189,8 @@ pub async fn create(state: Arc<AppState>, msg: WorktreeCreate) -> Result<Worktre
             path: worktree.path,
             status: worktree.status,
             created_at,
+            is_main: false,
+            git_stats: None,
         },
     })
 }
@@ -194,6 +198,18 @@ pub async fn create(state: Arc<AppState>, msg: WorktreeCreate) -> Result<Worktre
 /// Delete a git worktree
 #[instrument(skip(state), fields(worktree_id = %msg.worktree_id))]
 pub async fn delete(state: Arc<AppState>, msg: WorktreeDelete) -> Result<WorktreeDeleted> {
+    delete_internal(state, msg, false).await
+}
+
+pub async fn delete_forced(state: Arc<AppState>, msg: WorktreeDelete) -> Result<WorktreeDeleted> {
+    delete_internal(state, msg, true).await
+}
+
+async fn delete_internal(
+    state: Arc<AppState>,
+    msg: WorktreeDelete,
+    force: bool,
+) -> Result<WorktreeDeleted> {
     debug!("Deleting worktree: {}", msg.worktree_id);
 
     // Get worktree from database
@@ -203,6 +219,11 @@ pub async fn delete(state: Arc<AppState>, msg: WorktreeDelete) -> Result<Worktre
         .await
         .context("Failed to fetch worktree from database")?
         .ok_or_else(|| anyhow::anyhow!("Worktree not found: {}", msg.worktree_id))?;
+
+    // Prevent deletion of main worktrees unless forced
+    if worktree.is_main && !force {
+        bail!("Cannot delete main worktree");
+    }
 
     // Get workspace to find the main repository
     let workspace = state
@@ -289,28 +310,85 @@ pub async fn delete(state: Arc<AppState>, msg: WorktreeDelete) -> Result<Worktre
 /// List worktrees for a workspace
 #[instrument(skip(state), fields(workspace_id = %msg.workspace_id))]
 pub async fn list(state: Arc<AppState>, msg: WorktreeList) -> Result<Vec<WorktreeData>> {
-    let worktrees = state
-        .db
-        .list_worktrees(&msg.workspace_id.to_string())
-        .await
-        .context("Failed to list worktrees from database")?;
+  let workspace_id = msg.workspace_id;
 
-    worktrees
-        .into_iter()
-        .map(|wt| {
-            Ok(WorktreeData {
-                id: Uuid::parse_str(&wt.id)
-                    .with_context(|| format!("Invalid worktree id in database: {}", wt.id))?,
-                workspace_id: Uuid::parse_str(&wt.workspace_id).with_context(|| {
-                    format!("Invalid workspace id in worktree data: {}", wt.workspace_id)
-                })?,
-                branch_name: wt.branch_name,
-                path: wt.path,
-                status: wt.status,
-                created_at: parse_worktree_created_at(&wt.created_at)?,
-            })
-        })
-        .collect()
+  let existing_worktrees = state
+    .db
+    .list_worktrees(&workspace_id.to_string())
+    .await
+    .context("Failed to list worktrees from database")?;
+
+  let has_main = existing_worktrees.iter().any(|wt| wt.is_main);
+
+  if !has_main && !existing_worktrees.is_empty() {
+    let workspace = state
+      .db
+      .get_workspace(&workspace_id.to_string())
+      .await
+      .context("Failed to fetch workspace")?;
+
+    if let Some(ws) = workspace {
+      match crate::workspace::find_main_branch(&ws.root_path) {
+        Ok(main_branch) => {
+          info!(
+            "Migrating workspace {}: creating main worktree for branch {}",
+            workspace_id, main_branch
+          );
+          match create_main(state.clone(), workspace_id, &main_branch).await {
+            Ok(worktree) => {
+              let msg = ServerMessage::new(ServerMessagePayload::WorktreeCreated(
+                WorktreeCreated { worktree },
+              ));
+              state.broadcast(msg).await;
+            }
+            Err(e) => {
+              warn!("Failed to create main worktree during migration: {}", e);
+            }
+          }
+        }
+        Err(e) => {
+          warn!("Failed to find main branch during migration: {}", e);
+        }
+      }
+    }
+  }
+
+  let worktrees = state
+    .db
+    .list_worktrees(&workspace_id.to_string())
+    .await
+    .context("Failed to list worktrees from database")?;
+
+  let mut result: Vec<WorktreeData> = worktrees
+    .into_iter()
+    .map(|wt| {
+      Ok(WorktreeData {
+        id: Uuid::parse_str(&wt.id)
+          .with_context(|| format!("Invalid worktree id in database: {}", wt.id))?,
+        workspace_id: Uuid::parse_str(&wt.workspace_id).with_context(|| {
+          format!("Invalid workspace id in worktree data: {}", wt.workspace_id)
+        })?,
+        branch_name: wt.branch_name,
+        path: wt.path,
+        status: wt.status,
+        created_at: parse_worktree_created_at(&wt.created_at)?,
+        is_main: wt.is_main,
+        git_stats: None,
+      })
+    })
+    .collect::<Result<Vec<_>>>()?;
+
+  result.sort_by(|a, b| {
+    if a.is_main && !b.is_main {
+      std::cmp::Ordering::Less
+    } else if !a.is_main && b.is_main {
+      std::cmp::Ordering::Greater
+    } else {
+      a.created_at.cmp(&b.created_at)
+    }
+  });
+
+  Ok(result)
 }
 
 /// Get worktree status
@@ -329,6 +407,137 @@ pub async fn status(state: Arc<AppState>, worktree_id: Uuid) -> Result<WorktreeS
         }),
         None => anyhow::bail!("Worktree not found: {}", worktree_id),
     }
+}
+
+/// Change the branch of a worktree
+#[instrument(skip(state), fields(worktree_id = %msg.worktree_id, new_branch = %msg.new_branch_name))]
+pub async fn change_branch(
+    state: Arc<AppState>,
+    msg: WorktreeChangeBranch,
+) -> Result<WorktreeChanged> {
+    debug!(
+        "Changing branch for worktree {} to {}",
+        msg.worktree_id, msg.new_branch_name
+    );
+
+    let worktree = state
+        .db
+        .get_worktree(&msg.worktree_id.to_string())
+        .await
+        .context("Failed to fetch worktree from database")?
+        .ok_or_else(|| anyhow::anyhow!("Worktree not found: {}", msg.worktree_id))?;
+
+    let repo_path = Path::new(&worktree.path);
+
+    state
+        .git_ops
+        .change_branch(msg.worktree_id, repo_path, &msg.new_branch_name)
+        .await
+        .context("Failed to change branch")?;
+
+    state
+        .db
+        .update_worktree_branch(&msg.worktree_id.to_string(), &msg.new_branch_name)
+        .await
+        .context("Failed to update worktree branch in database")?;
+
+    state.worktrees.write().await.entry(msg.worktree_id).and_modify(|wt| {
+        wt.branch_name = msg.new_branch_name.clone();
+    });
+
+    let created_at = parse_worktree_created_at(&worktree.created_at)?;
+
+    Ok(WorktreeChanged {
+        worktree: WorktreeData {
+            id: msg.worktree_id,
+            workspace_id: Uuid::parse_str(&worktree.workspace_id)
+                .context("Invalid workspace id")?,
+            branch_name: msg.new_branch_name,
+            path: worktree.path,
+            status: worktree.status,
+            created_at,
+            is_main: worktree.is_main,
+            git_stats: None,
+        },
+    })
+}
+
+/// Create a main worktree entry for a workspace (represents the main repository, not a separate worktree)
+#[instrument(skip(state), fields(workspace_id = %workspace_id, branch = %branch_name))]
+pub async fn create_main(
+  state: Arc<AppState>,
+  workspace_id: Uuid,
+  branch_name: &str,
+) -> Result<WorktreeData> {
+  debug!("Creating main worktree entry for workspace: {}", workspace_id);
+
+  let workspace = state
+    .db
+    .get_workspace(&workspace_id.to_string())
+    .await
+    .context("Failed to fetch workspace from database")?
+    .ok_or_else(|| anyhow::anyhow!("Workspace not found: {}", workspace_id))?;
+
+  let worktree_id = Uuid::new_v4();
+  let worktree = DbWorktree {
+    id: worktree_id.to_string(),
+    workspace_id: workspace_id.to_string(),
+    branch_name: branch_name.to_string(),
+    path: workspace.root_path.clone(),
+    status: "active".to_string(),
+    created_at: chrono::Utc::now().to_rfc3339(),
+    is_main: true,
+  };
+
+  state
+    .db
+    .create_worktree(&worktree)
+    .await
+    .context("Failed to create main worktree in database")?;
+
+  state.worktrees.write().await.insert(
+    worktree_id,
+    crate::state::WorktreeState {
+      id: worktree_id,
+      workspace_id,
+      branch_name: worktree.branch_name.clone(),
+      path: worktree.path.clone(),
+      status: worktree.status.clone(),
+      is_main: true,
+    },
+  );
+
+  info!("Created main worktree entry for workspace: {} at {}", workspace_id, workspace.root_path);
+
+  let activity = ActivityLogEntry {
+    id: None,
+    timestamp: chrono::Utc::now().to_rfc3339(),
+    level: "info".to_string(),
+    source: Some("worktree".to_string()),
+    message: format!("Created main worktree: {}", branch_name),
+    metadata_json: serde_json::json!({
+      "worktree_id": worktree_id.to_string(),
+      "workspace_id": workspace_id.to_string(),
+      "branch_name": branch_name,
+      "path": workspace.root_path,
+      "is_main": true
+    })
+    .to_string(),
+    };
+    state.db.log_activity(&activity).await?;
+
+    let created_at = parse_worktree_created_at(&worktree.created_at)?;
+
+    Ok(WorktreeData {
+        id: worktree_id,
+        workspace_id,
+        branch_name: worktree.branch_name,
+        path: worktree.path,
+        status: worktree.status,
+        created_at,
+        is_main: true,
+        git_stats: None,
+    })
 }
 
 #[cfg(test)]
@@ -590,6 +799,7 @@ mod tests {
                 path: root_path,
                 status: "active".to_string(),
                 created_at: chrono::Utc::now().to_rfc3339(),
+                is_main: false,
             })
             .await
             .expect("Failed to create invalid worktree record");
