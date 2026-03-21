@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import Editor, { OnMount, EditorProps } from '@monaco-editor/react';
 import type { editor } from 'monaco-editor';
 import { getWebSocketClient } from '../../lib/ws';
-import { FileRead, FileWrite, FileContentMessage } from '../../types/generated/protocol';
+import { FileRead, FileWrite, FileContentMessage } from '../../types/protocol';
 import { useToast } from '../../hooks/useToast';
 import { detectLanguage, isFileTooLarge } from '../../lib/language-detect';
 import { YMIR_DARK_THEME_NAME, registerYmirTheme } from '../../lib/monaco-theme';

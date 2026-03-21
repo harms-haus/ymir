@@ -1,15 +1,17 @@
 import {
   Error as ServerError,
-  PtyCrashError,
-  GitFailureError,
-  AgentCrashError,
-  DbError,
   ErrorCodes,
   isPtyCrashError,
   isGitFailureError,
   isAgentCrashError,
   isDbError,
-} from '../types/generated/protocol';
+} from '../types/protocol';
+import type {
+  PtyCrashError,
+  GitFailureError,
+  AgentCrashError,
+  DbError,
+} from '../types/protocol';
 import { getWebSocketClient } from './ws';
 import { useToastStore, useStore } from '../store';
 import { showNotification } from './tauri';

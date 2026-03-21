@@ -3,7 +3,7 @@
  * Defines the shape of the global state managed by the WebSocket client
  */
 
-import { AgentStatus, AcpSequence, AcpEvent, AcpEventEnvelope, AcpToolUseStatus, AcpSessionStatus, AcpContextUpdateType, AcpErrorCode } from './generated/protocol';
+import { AgentStatus, AcpSequence, AcpEvent, AcpEventEnvelope, AcpToolUseStatus, AcpSessionStatus, AcpContextUpdateType, AcpErrorCode } from './protocol';
 
 // Workspace and Worktree state (simplified from protocol types)
 export interface WorkspaceState {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useStore, selectActiveWorktree, AgentTab } from '../../store';
 import { getWebSocketClient } from '../../lib/ws';
-import { GitStatusEntry } from '../../types/generated/protocol';
+import { GitStatusEntry } from '../../types/protocol';
 
 interface GroupedFile {
   path: string;

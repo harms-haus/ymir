@@ -143,23 +143,68 @@ Key attributes:
 
 ### Generated Output
 
-TypeScript bindings are written to `crates/ws-server/bindings/`:
+TypeScript bindings are generated directly to `apps/web/src/types/generated/`:
 
 ```
-crates/ws-server/bindings/
+apps/web/src/types/generated/
 ├── AgentSpawn.ts
 ├── TerminalInput.ts
 ├── GitStatus.ts
 ├── StateSnapshot.ts
-└── ... (50+ generated files)
+└── ... (74 generated files)
 ```
 
 Each generated file exports a TypeScript interface:
 
 ```typescript
-// bindings/AgentSpawn.ts
-export interface AgentSpawn { worktreeId: string; agentType: string; }
+// generated/AgentSpawn.ts
+export type AgentSpawn = { worktreeId: string; agentType: string; }
 ```
+
+### Type Synchronization
+
+Run `make sync-types` to regenerate TypeScript bindings from Rust:
+
+```bash
+make sync-types
+```
+
+This will:
+1. Clean old generated files from `apps/web/src/types/generated/`
+2. Generate TypeScript bindings directly to `apps/web/src/types/generated/` via `TS_RS_EXPORT_DIR`
+
+### Type Structure
+
+- **Source**: `crates/ws-server/src/protocol.rs` — Rust types with `#[ts(export)]` attribute
+- **Generated**: `apps/web/src/types/generated/*.ts` — Individual TypeScript files (one per type, 74 total)
+- **Barrel Export**: `apps/web/src/types/generated/index.ts` — Re-exports all types for convenience
+- **Configuration**: `crates/ws-server/.cargo/config.toml` — Sets `TS_RS_EXPORT_DIR` to generate directly to the web app
+
+Import types from the barrel export:
+
+```typescript
+import { AgentSpawn, WorkspaceCreate, StateSnapshot } from '../types/generated';
+```
+
+### Adding New Types
+
+1. Add the Rust struct in `crates/ws-server/src/protocol.rs` with `#[ts(export)]`:
+
+   ```rust
+   #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+   #[serde(rename_all = "camelCase")]
+   #[ts(export)]
+   pub struct MyNewType {
+       pub field: String,
+   }
+   ```
+
+2. Run `make sync-types` to generate the TypeScript file
+
+3. Import from the barrel export:
+   ```typescript
+   import { MyNewType } from '../types/generated';
+   ```
 
 ### Binary Fixture Testing
 
@@ -193,16 +238,6 @@ test-fixtures/
 ```
 
 The TypeScript client can parse these fixtures to verify deserialization matches Rust.
-
-### Manual Protocol File
-
-The generated bindings are raw type definitions. The actual TypeScript protocol file (`apps/web/src/types/generated/protocol.ts`) wraps these with:
-
-- Type discriminators for message routing (`type: 'AgentSpawn'`)
-- Type guards for runtime validation
-- `encodeMessage()` / `decodeMessage()` helpers for MessagePack
-
-This hybrid approach keeps generated types synchronized while maintaining the message wrapper structure.
 
 ---
 

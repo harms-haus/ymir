@@ -3,7 +3,7 @@ import { Dialog } from '@base-ui/react/dialog';
 import { RadioGroup } from '@base-ui/react/radio-group';
 import { useStore } from '../../store';
 import { getWebSocketClient, generateId } from '../../lib/ws';
-import type { WorktreeCreate, WorktreeCreated, Error as ErrorMessage } from '../../types/generated/protocol';
+import type { WorktreeCreate, WorktreeCreated, Error as ErrorMessage } from '../../types/protocol';
 
 type AgentOption = 'claude' | 'opencode' | 'pi' | 'none';
 

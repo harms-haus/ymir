@@ -30,7 +30,7 @@ function callMessageHandler(event: MessageEvent) {
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { YmirClient, getWebSocketClient, resetWebSocketClient } from '../ws';
 import { encode, decode } from '@msgpack/msgpack';
-import type { ServerMessage, StateSnapshot } from '../../types/generated/protocol';
+import type { ServerMessage, StateSnapshot } from '../../types/protocol';
 import { useToastStore, useStore } from '../../store';
 
 const wsMock = vi.fn(function WebSocketMock(this: any, _url: string) {
@@ -525,7 +525,7 @@ describe('YmirClient', () => {
         Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
         callOpenHandler();
 
-        const envelope: import('../../types/generated/protocol').AcpEventEnvelope = {
+        const envelope: import('../../types/protocol').AcpEventEnvelope = {
           sequence: 1,
           timestamp: Date.now(),
           eventType: 'SessionStatus',
@@ -552,7 +552,7 @@ describe('YmirClient', () => {
         Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
         callOpenHandler();
 
-        const envelope: import('../../types/generated/protocol').AcpEventEnvelope = {
+        const envelope: import('../../types/protocol').AcpEventEnvelope = {
           sequence: 1,
           timestamp: Date.now(),
           eventType: 'SessionInit',
@@ -581,7 +581,7 @@ describe('YmirClient', () => {
         Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
         callOpenHandler();
 
-        const envelope: import('../../types/generated/protocol').AcpEventEnvelope = {
+        const envelope: import('../../types/protocol').AcpEventEnvelope = {
           sequence: 2,
           timestamp: Date.now(),
           eventType: 'PromptChunk',
@@ -749,7 +749,7 @@ describe('YmirClient', () => {
         Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
         callOpenHandler();
 
-        const envelopes: import('../../types/generated/protocol').AcpEventEnvelope[] = [
+        const envelopes: import('../../types/protocol').AcpEventEnvelope[] = [
           {
             sequence: 1,
             timestamp: Date.now(),
@@ -803,7 +803,7 @@ describe('YmirClient', () => {
         Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
         callOpenHandler();
 
-        const envelope: import('../../types/generated/protocol').AcpEventEnvelope = {
+        const envelope: import('../../types/protocol').AcpEventEnvelope = {
           sequence: 1,
           timestamp: Date.now(),
           eventType: 'SessionInit',
@@ -835,7 +835,7 @@ describe('YmirClient', () => {
 
         const baseSequence = 100;
         for (let i = 0; i < 5; i++) {
-          const envelope: import('../../types/generated/protocol').AcpEventEnvelope = {
+          const envelope: import('../../types/protocol').AcpEventEnvelope = {
             sequence: baseSequence + i,
             timestamp: Date.now() + i,
             eventType: 'PromptChunk',
@@ -865,7 +865,7 @@ describe('YmirClient', () => {
         Object.defineProperty(currentMockWebSocket, "readyState", { value: 1, writable: true });
         callOpenHandler();
 
-        const eventTypes: import('../../types/generated/protocol').AcpEvent['eventType'][] = [
+        const eventTypes: import('../../types/protocol').AcpEvent['eventType'][] = [
           'SessionInit',
           'SessionStatus',
           'PromptChunk',
@@ -877,7 +877,7 @@ describe('YmirClient', () => {
         ];
 
         eventTypes.forEach((eventType) => {
-          let envelope: import('../../types/generated/protocol').AcpEventEnvelope;
+          let envelope: import('../../types/protocol').AcpEventEnvelope;
 
           switch (eventType) {
             case 'SessionInit':

@@ -3,7 +3,7 @@ import { Tabs } from '@base-ui/react';
 import { useStore, selectTerminalSessionsByWorktreeId } from '../../store';
 import { useWebSocketClient } from '../../hooks/useWebSocket';
 import { Terminal, type TerminalRef } from './TerminalView';
-import { TerminalCreate, TerminalOutput } from '../../types/generated/protocol';
+import { TerminalCreate, TerminalOutput } from '../../types/protocol';
 import TerminalIcon from '@mui/icons-material/Terminal';
 import { useShallow } from 'zustand/react/shallow';
 import { useContextMenu } from '../../hooks/useContextMenu';
