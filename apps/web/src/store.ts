@@ -930,7 +930,15 @@ export function updateStateFromServerMessage(message: ServerMessage): void {
     case 'WorktreeDeleted':
       removeWorktree(message.worktreeId);
       break;
-    
+
+    case 'WorktreeDetailsResult': {
+      const { addAgentSession, addWorktree } = useStore.getState();
+      message.worktrees.forEach((worktree) => { addWorktree(worktree); });
+      message.agent_sessions.forEach((session) => { addAgentSession(session as any); });
+      message.terminal_sessions.forEach((session) => { addTerminalSession(session); });
+      break;
+    }
+
     case 'AgentStatusUpdate': {
       const existingSession = useStore.getState().agentSessions.find(as => as.id === message.id);
       if (existingSession) {
