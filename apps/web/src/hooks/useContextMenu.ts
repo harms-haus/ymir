@@ -12,6 +12,7 @@ export interface ContextMenuState {
 export type ContextMenuAction =
   | 'create-worktree'
   | 'delete-worktree'
+  | 'change-branch'
   | 'merge'
   | 'view-diff'
   | 'settings'
@@ -26,6 +27,7 @@ export type ContextMenuAction =
 export interface ContextMenuCallbacks {
   onCreateWorktree?: (workspaceId: string) => void
   onDeleteWorktree?: (worktreeId: string) => void
+  onChangeBranch?: (worktreeId: string) => void
   onMerge?: (worktreeId: string) => void
   onViewDiff?: (worktreeId: string) => void
   onSettings?: (workspaceId: string) => void
@@ -86,6 +88,11 @@ export function useContextMenu(callbacks: ContextMenuCallbacks = {}) {
       case 'delete-worktree':
         if (targetType === 'worktree') {
           callbacks.onDeleteWorktree?.(targetId)
+        }
+        break
+      case 'change-branch':
+        if (targetType === 'worktree') {
+          callbacks.onChangeBranch?.(targetId)
         }
         break
       case 'merge':

@@ -1,5 +1,5 @@
 use crate::db::{ActivityLogEntry, Db};
-use crate::protocol::{GitDiffResult, GitStatusResult};
+use crate::protocol::{GitDiffResult, GitStatusEntry, GitStatusResult};
 use git2::build::CheckoutBuilder;
 use git2::{
     BranchType, Commit, DiffFormat, DiffOptions, IndexAddOption, Repository, Status, StatusOptions,
@@ -32,7 +32,7 @@ impl GitOps {
         worktree_id: Uuid,
         repo_path: &Path,
     ) -> Result<GitStatusResult, GitError> {
-        let (status, entry_count) = {
+        let (entries, entry_count) = {
             let repo = open_repo(repo_path)?;
 
             let mut opts = StatusOptions::new();
@@ -43,19 +43,14 @@ impl GitOps {
                 .renames_index_to_workdir(true);
 
             let statuses = repo.statuses(Some(&mut opts))?;
-            let mut lines = Vec::with_capacity(statuses.len());
+            let mut entries = Vec::with_capacity(statuses.len());
             for entry in statuses.iter() {
-                let path = entry.path().unwrap_or("<unknown>");
-                lines.push(format!("{} {}", status_code(entry.status()), path));
+                let path = entry.path().unwrap_or("<unknown>").to_string();
+                let status_code = format_status_code(entry.status());
+                entries.push(GitStatusEntry { path, status_code });
             }
 
-            let status = if lines.is_empty() {
-                "clean".to_string()
-            } else {
-                lines.join("\n")
-            };
-
-            (status, statuses.len())
+            (entries, statuses.len())
         };
 
         self.log_info(
@@ -72,7 +67,7 @@ impl GitOps {
 
         Ok(GitStatusResult {
             worktree_id,
-            status,
+            entries,
         })
     }
 
@@ -326,6 +321,48 @@ impl GitOps {
         Ok(pr_url)
     }
 
+    #[instrument(skip(self), fields(worktree_id = %worktree_id, new_branch = %new_branch_name))]
+    pub async fn change_branch(
+        &self,
+        worktree_id: Uuid,
+        repo_path: &Path,
+        new_branch_name: &str,
+    ) -> Result<String, GitError> {
+        let new_branch = {
+            let repo = open_repo(repo_path)?;
+
+            let branch = repo
+                .find_branch(new_branch_name, BranchType::Local)
+                .map_err(|e| GitError::BranchNotFound(new_branch_name.to_string(), e.to_string()))?;
+
+            let branch_ref = branch.get().name().ok_or_else(|| {
+                GitError::InvalidReference(format!(
+                    "branch '{}' has no reference name",
+                    new_branch_name
+                ))
+            })?;
+
+            repo.set_head(branch_ref)?;
+            repo.checkout_head(Some(CheckoutBuilder::new().force()))?;
+
+            new_branch_name.to_string()
+        };
+
+        self.log_info(
+            "change_branch",
+            format!("Changed to branch '{}' in {}", new_branch, repo_path.display()),
+            format!(
+                r#"{{"worktree_id":"{}","repo_path":"{}","new_branch":"{}"}}"#,
+                worktree_id,
+                repo_path.display(),
+                json_escape(&new_branch)
+            ),
+        )
+        .await?;
+
+        Ok(new_branch)
+    }
+
     async fn log_info(
         &self,
         op: &str,
@@ -351,22 +388,42 @@ fn open_repo(path: &Path) -> Result<Repository, GitError> {
     Repository::open(path).map_err(|e| GitError::RepositoryNotFound(e.to_string()))
 }
 
-fn status_code(status: Status) -> &'static str {
-    if status.contains(Status::INDEX_NEW) {
-        "A"
+fn format_status_code(status: Status) -> String {
+    // Git porcelain format: XY where X = staged status, Y = unstaged status
+    // ' ' = unmodified, 'M' = modified, 'A' = added, 'D' = deleted, 'R' = renamed, 'C' = copied, '?' = untracked
+    
+    let staged = if status.contains(Status::INDEX_NEW) {
+        'A'
     } else if status.contains(Status::INDEX_MODIFIED) {
-        "M"
+        'M'
     } else if status.contains(Status::INDEX_DELETED) {
-        "D"
-    } else if status.contains(Status::WT_NEW) {
-        "??"
-    } else if status.contains(Status::WT_MODIFIED) {
-        " M"
-    } else if status.contains(Status::WT_DELETED) {
-        " D"
+        'D'
+    } else if status.contains(Status::INDEX_RENAMED) {
+        'R'
+    } else if status.contains(Status::INDEX_TYPECHANGE) {
+        'T'
     } else {
-        "??"
-    }
+        ' '
+    };
+
+    let unstaged = if status.contains(Status::WT_MODIFIED) {
+        'M'
+    } else if status.contains(Status::WT_DELETED) {
+        'D'
+    } else if status.contains(Status::WT_RENAMED) {
+        'R'
+    } else if status.contains(Status::WT_TYPECHANGE) {
+        'T'
+    } else if status.contains(Status::WT_NEW) {
+        // Untracked files show as "??" in porcelain format
+        return "??".to_string();
+    } else if status.contains(Status::CONFLICTED) {
+        'U'
+    } else {
+        ' '
+    };
+
+    format!("{}{}", staged, unstaged)
 }
 
 fn find_base_branch<'a>(
@@ -510,7 +567,7 @@ mod tests {
             .status(worktree_id, &repo_path)
             .await
             .expect("status result");
-        assert!(result.status.contains("new.txt"));
+        assert!(result.entries.iter().any(|e| e.path == "new.txt"));
 
         let logs = db
             .query_activity_log(Some("info"), None)

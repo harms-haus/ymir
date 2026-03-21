@@ -334,6 +334,7 @@ mod tests {
                 branch_name: "main".to_string(),
                 path: expected_path.clone(),
                 status: "active".to_string(),
+                is_main: false,
             },
         );
 
@@ -547,6 +548,7 @@ mod tests {
             path: "/tmp/test-worktree".to_string(),
             status: "active".to_string(),
             created_at: chrono::Utc::now().to_rfc3339(),
+            is_main: false,
         };
         state.db.create_worktree(&db_worktree).await.expect("Failed to create worktree");
 
@@ -558,6 +560,7 @@ mod tests {
                 branch_name: "main".to_string(),
                 path: "/tmp/test-worktree".to_string(),
                 status: "active".to_string(),
+                is_main: false,
             },
         );
 

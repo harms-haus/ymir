@@ -5,11 +5,12 @@
 
 use crate::db::{ActivityLogEntry, Workspace as DbWorkspace};
 use crate::protocol::{
-    WorkspaceCreate, WorkspaceCreated, WorkspaceData, WorkspaceDelete, WorkspaceDeleted,
+  ServerMessage, ServerMessagePayload, WorktreeCreated, WorkspaceCreate, WorkspaceCreated,
+  WorkspaceData, WorkspaceDelete, WorkspaceDeleted,
 };
 use crate::state::AppState;
-use anyhow::{Context, Result};
-use git2::Repository;
+use anyhow::{bail, Context, Result};
+use git2::{BranchType, Repository};
 use std::path::Path;
 use std::sync::Arc;
 use tracing::{info, instrument};
@@ -52,6 +53,37 @@ fn expand_tilde(path: &str) -> String {
         }
     }
     path.to_string()
+}
+
+pub fn find_main_branch(repo_path: &str) -> Result<String> {
+    let repo = Repository::open(repo_path).context("Failed to open git repository")?;
+
+    if repo.find_branch("main", BranchType::Local).is_ok() {
+        return Ok("main".to_string());
+    }
+
+    if repo.find_branch("master", BranchType::Local).is_ok() {
+        return Ok("master".to_string());
+    }
+
+    let head_result = repo.head();
+    match head_result {
+        Ok(head) => {
+            let head_name = head
+                .shorthand()
+                .ok_or_else(|| anyhow::anyhow!("HEAD has no branch name"))?
+                .to_string();
+            info!("No main/master branch found, using HEAD branch: {}", head_name);
+            Ok(head_name)
+        }
+        Err(e) => {
+            if e.code() == git2::ErrorCode::UnbornBranch {
+                Ok("main".to_string())
+            } else {
+                Err(e).context("Failed to get HEAD")
+            }
+        }
+    }
 }
 
 /// Create a new workspace and initialize git repository if needed
@@ -115,9 +147,24 @@ pub async fn create(state: Arc<AppState>, msg: WorkspaceCreate) -> Result<Worksp
         },
     );
 
-    // Log activity
-    let activity = ActivityLogEntry {
-        id: None,
+  // Find the main branch and create the main worktree
+  let main_branch = find_main_branch(&expanded_root_path)?;
+  let main_worktree =
+    crate::worktree::create_main(state.clone(), workspace_id, &main_branch).await?;
+  info!(
+    "Created main worktree '{}' for workspace '{}'",
+    main_branch, workspace.name
+  );
+
+  let worktree_created_msg = ServerMessage::new(ServerMessagePayload::WorktreeCreated(
+    WorktreeCreated {
+      worktree: main_worktree,
+    },
+  ));
+  state.broadcast(worktree_created_msg).await;
+
+  let activity = ActivityLogEntry {
+    id: None,
         timestamp: chrono::Utc::now().to_rfc3339(),
         level: "info".to_string(),
         source: Some("workspace".to_string()),
@@ -180,8 +227,8 @@ pub async fn delete(state: Arc<AppState>, msg: WorkspaceDelete) -> Result<Worksp
         };
         let delete_msg = crate::protocol::WorktreeDelete { worktree_id };
 
-        // Call worktree delete function to clean up git worktree
-        if let Err(err) = crate::worktree::delete(state.clone(), delete_msg).await {
+        // Use forced delete for workspace deletion to allow deleting main worktrees
+        if let Err(err) = crate::worktree::delete_forced(state.clone(), delete_msg).await {
             delete_errors.push(format!(
                 "{} ({}) failed to delete: {}",
                 worktree.branch_name, worktree.path, err

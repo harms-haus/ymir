@@ -90,12 +90,20 @@ export interface Workspace {
 }
 
 // Worktree types
+export interface GitStats {
+  modified: number;
+  added: number;
+  deleted: number;
+}
+
 export interface Worktree {
   id: string;
   workspaceId: string;
   branchName: string;
   path: string;
   status: 'active' | 'inactive' | 'orphaned';
+  isMain: boolean;
+  gitStats?: GitStats;
   createdAt: number;
 }
 
@@ -130,6 +138,14 @@ export interface FileData {
 }
 
 // Git types
+
+// Wire format from server - raw git status codes
+export interface ServerGitStatusEntry {
+  path: string;
+  statusCode: string;
+}
+
+// UI-friendly parsed format
 export interface GitStatusEntry {
   path: string;
   status: 'unmodified' | 'modified' | 'added' | 'deleted' | 'renamed' | 'copied' | 'untracked';
@@ -210,6 +226,18 @@ export interface WorktreeMerge {
 export interface WorktreeList {
   type: 'WorktreeList';
   workspaceId: string;
+}
+
+export interface WorktreeChangeBranch {
+  type: 'WorktreeChangeBranch';
+  worktreeId: string;
+  newBranchName: string;
+  requestId?: string;
+}
+
+export interface WorktreeChanged {
+  type: 'WorktreeChanged';
+  worktree: Worktree;
 }
 
 // Agent messages
@@ -482,7 +510,7 @@ export interface FileContentMessage {
 export interface GitStatusResult {
   type: 'GitStatusResult';
   worktreeId: string;
-  status: string;
+  entries: ServerGitStatusEntry[];
 }
 
 export interface GitDiffResult {
@@ -699,6 +727,7 @@ export type ClientMessage =
     | WorktreeDelete
     | WorktreeMerge
     | WorktreeList
+    | WorktreeChangeBranch
     | AgentSpawn
     | AgentSend
     | AgentCancel
@@ -730,6 +759,7 @@ export type ServerMessage =
     | WorkspaceUpdated
     | WorktreeCreated
     | WorktreeDeleted
+    | WorktreeChanged
     | WorktreeStatus
     | AgentStatusUpdate
     | AgentOutput
@@ -837,6 +867,10 @@ export function isWorktreeList(message: AnyMessage | UnknownMessage): message is
   return message.type === 'WorktreeList';
 }
 
+export function isWorktreeChangeBranch(message: AnyMessage | UnknownMessage): message is WorktreeChangeBranch {
+  return message.type === 'WorktreeChangeBranch';
+}
+
 export function isAgentSpawn(message: AnyMessage | UnknownMessage): message is AgentSpawn {
   return message.type === 'AgentSpawn';
 }
@@ -930,6 +964,10 @@ export function isWorktreeDeleted(message: AnyMessage | UnknownMessage): message
   return message.type === 'WorktreeDeleted';
 }
 
+export function isWorktreeChanged(message: AnyMessage | UnknownMessage): message is WorktreeChanged {
+  return message.type === 'WorktreeChanged';
+}
+
 export function isWorktreeStatus(message: AnyMessage | UnknownMessage): message is WorktreeStatus {
   return message.type === 'WorktreeStatus';
 }
@@ -1013,7 +1051,7 @@ export function decodeMessage(data: ArrayBuffer | Uint8Array): AnyMessage | Unkn
     const validTypes = [
       // Client messages
       'WorkspaceCreate', 'WorkspaceDelete', 'WorkspaceRename', 'WorkspaceUpdate',
-      'WorktreeCreate', 'WorktreeDelete', 'WorktreeMerge', 'WorktreeList',
+      'WorktreeCreate', 'WorktreeDelete', 'WorktreeMerge', 'WorktreeList', 'WorktreeChangeBranch',
       'AgentSpawn', 'AgentSend', 'AgentCancel',
       'TerminalInput', 'TerminalResize', 'TerminalCreate', 'TerminalKill',
       'FileRead', 'FileWrite', 'FileList',
@@ -1024,7 +1062,7 @@ export function decodeMessage(data: ArrayBuffer | Uint8Array): AnyMessage | Unkn
       // Server messages
       'StateSnapshot',
       'WorkspaceCreated', 'WorkspaceDeleted', 'WorkspaceUpdated',
-      'WorktreeCreated', 'WorktreeDeleted', 'WorktreeStatus',
+      'WorktreeCreated', 'WorktreeDeleted', 'WorktreeChanged', 'WorktreeStatus',
       'AgentStatusUpdate', 'AgentOutput', 'AgentPrompt',
       'TerminalOutput', 'TerminalCreated', 'TerminalRemoved',
       'FileContent', 'FileListResult',

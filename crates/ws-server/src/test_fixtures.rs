@@ -657,12 +657,23 @@ mod tests {
 
     #[test]
     fn test_git_status_result_fixture() -> Result<()> {
-        use crate::protocol::{GitStatusResult, ServerMessage, ServerMessagePayload};
+        use crate::protocol::{
+            GitStatusEntry, GitStatusResult, ServerMessage, ServerMessagePayload,
+        };
         use uuid::Uuid;
 
         let msg = ServerMessage::new(ServerMessagePayload::GitStatusResult(GitStatusResult {
             worktree_id: Uuid::new_v4(),
-            status: "M src/main.rs\nA src/lib.rs".to_string(),
+            entries: vec![
+                GitStatusEntry {
+                    path: "src/main.rs".to_string(),
+                    status_code: " M".to_string(),
+                },
+                GitStatusEntry {
+                    path: "src/lib.rs".to_string(),
+                    status_code: "A ".to_string(),
+                },
+            ],
         }));
 
         let path = write_fixture("GitStatusResult", &msg)?;
@@ -709,6 +720,8 @@ mod tests {
                 path: "/path/to/worktree".to_string(),
                 status: "active".to_string(),
                 created_at: 1234567890,
+                is_main: true,
+                git_stats: None,
             }],
             agent_sessions: vec![AgentSessionData {
                 id: agent_session_id,
@@ -1001,6 +1014,8 @@ mod tests {
                 path: "/path/to/worktree".to_string(),
                 status: "active".to_string(),
                 created_at: 1234567890,
+                is_main: true,
+                git_stats: None,
             },
         }));
 
