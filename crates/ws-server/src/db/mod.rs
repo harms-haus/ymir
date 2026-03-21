@@ -140,6 +140,7 @@ pub struct TerminalSession {
     pub label: Option<String>,
     pub shell: String,
     pub created_at: String,
+    pub position: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -601,43 +602,45 @@ impl Db {
     }
 
     pub async fn get_terminal_session(&self, id: &str) -> Result<Option<TerminalSession>> {
-        let conn = self.conn()?;
-        let mut stmt = conn.prepare("SELECT id, worktree_id, label, shell, created_at FROM terminal_sessions WHERE id = ?1").await?;
-        let mut rows = stmt.query([id]).await?;
+let conn = self.conn()?;
+    let mut stmt = conn.prepare("SELECT id, worktree_id, label, shell, created_at, COALESCE(position, 0) FROM terminal_sessions WHERE id = ?1").await?;
+    let mut rows = stmt.query([id]).await?;
 
-        if let Some(row) = rows.next().await? {
-            Ok(Some(TerminalSession {
-                id: row.get(0)?,
-                worktree_id: row.get(1)?,
-                label: row.get(2)?,
-                shell: row.get(3)?,
-                created_at: row.get(4)?,
-            }))
-        } else {
-            Ok(None)
-        }
+    if let Some(row) = rows.next().await? {
+      Ok(Some(TerminalSession {
+        id: row.get(0)?,
+        worktree_id: row.get(1)?,
+        label: row.get(2)?,
+        shell: row.get(3)?,
+        created_at: row.get(4)?,
+        position: row.get(5)?,
+      }))
+    } else {
+      Ok(None)
+    }
     }
 
-    pub async fn list_terminal_sessions(&self, worktree_id: &str) -> Result<Vec<TerminalSession>> {
-        let conn = self.conn()?;
-        let mut stmt = conn.prepare(
-            "SELECT id, worktree_id, label, shell, created_at FROM terminal_sessions WHERE worktree_id = ?1 ORDER BY created_at DESC"
-        ).await?;
-        let mut rows = stmt.query([worktree_id]).await?;
-        let mut sessions = Vec::new();
+pub async fn list_terminal_sessions(&self, worktree_id: &str) -> Result<Vec<TerminalSession>> {
+    let conn = self.conn()?;
+    let mut stmt = conn.prepare(
+      "SELECT id, worktree_id, label, shell, created_at, COALESCE(position, 0) FROM terminal_sessions WHERE worktree_id = ?1 ORDER BY COALESCE(position, 0) ASC"
+    ).await?;
+    let mut rows = stmt.query([worktree_id]).await?;
+    let mut sessions = Vec::new();
 
-        while let Some(row) = rows.next().await? {
-            sessions.push(TerminalSession {
-                id: row.get(0)?,
-                worktree_id: row.get(1)?,
-                label: row.get(2)?,
-                shell: row.get(3)?,
-                created_at: row.get(4)?,
-            });
-        }
-
-        Ok(sessions)
+    while let Some(row) = rows.next().await? {
+      sessions.push(TerminalSession {
+        id: row.get(0)?,
+        worktree_id: row.get(1)?,
+        label: row.get(2)?,
+        shell: row.get(3)?,
+        created_at: row.get(4)?,
+        position: row.get(5)?,
+      });
     }
+
+    Ok(sessions)
+  }
 
     pub async fn delete_terminal_session(&self, id: &str) -> Result<bool> {
         let conn = self.conn()?;

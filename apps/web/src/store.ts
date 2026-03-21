@@ -527,12 +527,18 @@ export const useStore = create<AppState>()(
             terminalSessions: [...state.terminalSessions, session],
         })),
 
-    updateTerminalSession: (sessionId, updates) =>
-        set((state) => ({
-            terminalSessions: state.terminalSessions.map((ts) =>
-                ts.id === sessionId ? { ...ts, ...updates } : ts
-            ),
-        })),
+  updateTerminalSession: (sessionId, updates) =>
+    set((state) => ({
+      terminalSessions: state.terminalSessions.map((ts) =>
+        ts.id === sessionId
+          ? {
+              ...ts,
+              ...(updates.label != null && { label: updates.label }),
+              ...(updates.position != null && { position: updates.position }),
+            }
+          : ts,
+      ),
+    })),
 
     removeTerminalSession: (sessionId) =>
         set((state) => ({
@@ -804,7 +810,13 @@ export const selectAgentSessionsByWorktreeId = (worktreeId: string) => (state: A
 };
 
 export const selectTerminalSessionsByWorktreeId = (worktreeId: string) => (state: AppState) => {
-  const sessions = state.terminalSessions.filter((ts) => ts.worktreeId === worktreeId);
+  const sessions = [...state.terminalSessions]
+    .filter((ts) => ts.worktreeId === worktreeId)
+    .sort((a, b) => {
+      const posA = a.position ?? 0;
+      const posB = b.position ?? 0;
+      return posA - posB;
+    });
   return sessions.length > 0 ? sessions : EMPTY_TERMINAL_SESSIONS;
 };
 
@@ -938,14 +950,14 @@ case 'TerminalRemoved':
             removeTerminalSession(message.sessionId);
             break;
 
-        case 'TerminalUpdated': {
-            const { updateTerminalSession } = useStore.getState();
-            updateTerminalSession(message.sessionId, {
-                label: message.label,
-                ...(message.position !== undefined && { position: message.position }),
-            });
-            break;
-        }
+case 'TerminalUpdated': {
+  const { updateTerminalSession } = useStore.getState();
+  updateTerminalSession(message.sessionId, {
+    ...(message.label != null && { label: message.label }),
+    ...(message.position != null && { position: message.position }),
+  });
+  break;
+}
 
         case 'AgentUpdated': {
             const { updateAgentSession } = useStore.getState();

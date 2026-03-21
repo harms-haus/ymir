@@ -145,7 +145,9 @@ pub struct AgentUpdated {
     #[serde(with = "uuid_serde")]
     #[ts(type = "string")]
     pub worktree_id: Uuid,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub position: Option<u32>,
     #[serde(with = "uuid_serde")]
     #[ts(type = "string")]
