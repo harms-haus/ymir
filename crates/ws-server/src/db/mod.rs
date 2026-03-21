@@ -5,6 +5,7 @@ use anyhow::{Context, Result};
 use libsql::{Builder, Connection, Database};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::sync::RwLock;
 use tracing::{debug, info, Level};
 #[cfg(test)]
 use uuid::Uuid;
@@ -187,9 +188,18 @@ pub struct PanelLayout {
     pub main_split_ratio: f64,
 }
 
-#[derive(Debug)]
 pub struct Db {
     db: Database,
+    cached_conn: RwLock<Option<Connection>>,
+}
+
+impl std::fmt::Debug for Db {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Db")
+            .field("db", &"<Database>")
+            .field("cached_conn", &"<Connection>")
+            .finish()
+    }
 }
 
 impl Db {
@@ -200,7 +210,10 @@ impl Db {
         let path_str = temp_path.to_string_lossy().to_string();
         let db = Builder::new_local(&path_str).build().await?;
         info!("Created temporary database at {}", path_str);
-        let db = Self { db };
+        let db = Self {
+            db,
+            cached_conn: RwLock::new(None),
+        };
         db.migrate().await?;
         Ok(db)
     }
@@ -209,13 +222,24 @@ impl Db {
         let path_str = path.as_ref().to_string_lossy().to_string();
         let db = Builder::new_local(&path_str).build().await?;
         info!("Opened database at {}", path_str);
-        let db = Self { db };
+        let db = Self {
+            db,
+            cached_conn: RwLock::new(None),
+        };
         db.migrate().await?;
         Ok(db)
     }
 
     pub fn conn(&self) -> Result<Connection> {
-        Ok(self.db.connect()?)
+        // Check if we have a cached connection
+        if let Some(conn) = self.cached_conn.read().unwrap().as_ref() {
+            return Ok(conn.clone());
+        }
+
+        // Create new connection and cache it
+        let conn = self.db.connect()?;
+        *self.cached_conn.write().unwrap() = Some(conn.clone());
+        Ok(conn)
     }
 
     pub async fn migrate(&self) -> Result<()> {
@@ -472,6 +496,29 @@ impl Db {
         Ok(worktrees)
     }
 
+    pub async fn list_all_worktrees(&self) -> Result<Vec<Worktree>> {
+        let conn = self.conn()?;
+        let mut stmt = conn.prepare(
+            "SELECT id, workspace_id, branch_name, path, status, created_at, COALESCE(is_main, 0) FROM worktrees ORDER BY created_at DESC"
+        ).await?;
+        let mut rows = stmt.query(()).await?;
+        let mut worktrees = Vec::new();
+
+        while let Some(row) = rows.next().await? {
+            worktrees.push(Worktree {
+                id: row.get(0)?,
+                workspace_id: row.get(1)?,
+                branch_name: row.get(2)?,
+                path: row.get(3)?,
+                status: row.get(4)?,
+                created_at: row.get(5)?,
+                is_main: row.get::<i32>(6)? != 0,
+            });
+        }
+
+        Ok(worktrees)
+    }
+
     pub async fn update_worktree(&self, id: &str, status: Option<&str>) -> Result<bool> {
         let conn = self.conn()?;
 
@@ -610,6 +657,28 @@ impl Db {
             id, rows_affected
         );
         Ok(rows_affected > 0)
+    }
+
+    pub async fn list_all_agent_sessions(&self) -> Result<Vec<AgentSession>> {
+        let conn = self.conn()?;
+        let mut stmt = conn.prepare(
+            "SELECT id, worktree_id, agent_type, acp_session_id, status, started_at FROM agent_sessions ORDER BY started_at DESC"
+        ).await?;
+        let mut rows = stmt.query(()).await?;
+        let mut sessions = Vec::new();
+
+        while let Some(row) = rows.next().await? {
+            sessions.push(AgentSession {
+                id: row.get(0)?,
+                worktree_id: row.get(1)?,
+                agent_type: row.get(2)?,
+                acp_session_id: row.get(3)?,
+                status: row.get(4)?,
+                started_at: row.get(5)?,
+            });
+        }
+
+        Ok(sessions)
     }
 }
 
@@ -752,6 +821,28 @@ pub async fn list_terminal_sessions(&self, worktree_id: &str) -> Result<Vec<Term
             id, rows_affected
         );
         Ok(rows_affected > 0)
+    }
+
+    pub async fn list_all_terminal_sessions(&self) -> Result<Vec<TerminalSession>> {
+        let conn = self.conn()?;
+        let mut stmt = conn.prepare(
+            "SELECT id, worktree_id, label, shell, created_at, COALESCE(position, 0) FROM terminal_sessions ORDER BY COALESCE(position, 0) ASC"
+        ).await?;
+        let mut rows = stmt.query(()).await?;
+        let mut sessions = Vec::new();
+
+        while let Some(row) = rows.next().await? {
+            sessions.push(TerminalSession {
+                id: row.get(0)?,
+                worktree_id: row.get(1)?,
+                label: row.get(2)?,
+                shell: row.get(3)?,
+                created_at: row.get(4)?,
+                position: row.get(5)?,
+            });
+        }
+
+        Ok(sessions)
     }
 }
 
