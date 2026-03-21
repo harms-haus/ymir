@@ -176,6 +176,10 @@ pub async fn route_message(
             Some(handle_terminal_request_history(state.clone(), msg).await)
         }
 
+        ClientMessagePayload::GetWorktreeDetails(msg) => {
+            Some(handle_get_worktree_details(state.clone(), msg).await)
+        }
+
         ClientMessagePayload::WorkspaceRename(_)
         | ClientMessagePayload::WorkspaceUpdate(_)
         | ClientMessagePayload::WorktreeMerge(_)
@@ -207,6 +211,7 @@ fn not_implemented(payload: ClientMessagePayload) -> ServerMessage {
         ClientMessagePayload::WorktreeMerge(_) => "WorktreeMerge",
         ClientMessagePayload::WorktreeList(_) => "WorktreeList",
         ClientMessagePayload::WorktreeChangeBranch(_) => "WorktreeChangeBranch",
+        ClientMessagePayload::GetWorktreeDetails(_) => "GetWorktreeDetails",
         ClientMessagePayload::AgentSpawn(_) => "AgentSpawn",
         ClientMessagePayload::AgentSend(_) => "AgentSend",
         ClientMessagePayload::AgentCancel(_) => "AgentCancel",
@@ -365,11 +370,110 @@ async fn handle_get_state(state: Arc<AppState>, request_id: Uuid) -> ServerMessa
     ServerMessage::new(ServerMessagePayload::StateSnapshot(StateSnapshot {
         request_id,
         workspaces,
-        worktrees,
-        agent_sessions,
-        terminal_sessions,
+        worktrees: vec![],      // Empty - lazy loaded on demand
+        agent_sessions: vec![], // Empty - lazy loaded on demand
+        terminal_sessions: vec![], // Empty - lazy loaded on demand
         settings: vec![],
     }))
+}
+
+#[instrument(skip(state))]
+async fn handle_get_worktree_details(
+    state: Arc<AppState>,
+    msg: crate::protocol::GetWorktreeDetails,
+) -> ServerMessage {
+    use crate::protocol::{
+        AgentSessionData, TerminalSessionData, WorktreeData, WorktreeDetailsResult,
+    };
+
+    let workspace_id = msg.workspace_id;
+    let request_id = msg.request_id.unwrap_or_else(Uuid::new_v4);
+
+    // Load worktrees for this workspace
+    let worktrees: Vec<WorktreeData> = match crate::worktree::list(
+        state.clone(),
+        crate::protocol::WorktreeList {
+            workspace_id,
+        },
+    )
+    .await
+    {
+        Ok(worktrees) => worktrees,
+        Err(e) => {
+            return ServerMessage::new(ServerMessagePayload::Error(Error {
+                code: "GET_WORKTREE_DETAILS_ERROR".to_string(),
+                message: e.to_string(),
+                details: None,
+                request_id: Some(request_id),
+            }));
+        }
+    };
+
+    // Load agents and terminals for these worktrees
+    let mut agent_sessions: Vec<AgentSessionData> = Vec::new();
+    let mut terminal_sessions: Vec<TerminalSessionData> = Vec::new();
+
+    for worktree in &worktrees {
+        let worktree_id = worktree.id.to_string();
+
+        // Load agent sessions
+        let db_agent_sessions = match state.db.list_agent_sessions(&worktree_id).await {
+            Ok(sessions) => sessions,
+            Err(e) => {
+                return ServerMessage::new(ServerMessagePayload::Error(Error {
+                    code: "GET_WORKTREE_DETAILS_ERROR".to_string(),
+                    message: e.to_string(),
+                    details: None,
+                    request_id: Some(request_id),
+                }));
+            }
+        };
+
+        agent_sessions.extend(
+            db_agent_sessions
+                .into_iter()
+                .map(|session| AgentSessionData {
+                    id: Uuid::parse_str(&session.id).unwrap_or_else(|_| Uuid::new_v4()),
+                    worktree_id: Uuid::parse_str(&session.worktree_id).unwrap_or(worktree.id),
+                    agent_type: session.agent_type,
+                    acp_session_id: session.acp_session_id,
+                    status: parse_agent_status(&session.status),
+                    started_at: parse_timestamp(&session.started_at),
+                }),
+        );
+
+        // Load terminal sessions
+        let db_terminal_sessions = match state.db.list_terminal_sessions(&worktree_id).await {
+            Ok(sessions) => sessions,
+            Err(e) => {
+                return ServerMessage::new(ServerMessagePayload::Error(Error {
+                    code: "GET_WORKTREE_DETAILS_ERROR".to_string(),
+                    message: e.to_string(),
+                    details: None,
+                    request_id: Some(request_id),
+                }));
+            }
+        };
+
+        terminal_sessions.extend(db_terminal_sessions.into_iter().map(|session| {
+            TerminalSessionData {
+                id: Uuid::parse_str(&session.id).unwrap_or_else(|_| Uuid::new_v4()),
+                worktree_id: Uuid::parse_str(&session.worktree_id).unwrap_or(worktree.id),
+                label: session.label,
+                shell: session.shell,
+                created_at: parse_timestamp(&session.created_at),
+            }
+        }));
+    }
+
+    ServerMessage::new(ServerMessagePayload::WorktreeDetailsResult(
+        WorktreeDetailsResult {
+            request_id: Some(request_id),
+            worktrees,
+            agent_sessions,
+            terminal_sessions,
+        }
+    ))
 }
 
 #[instrument(skip(state))]

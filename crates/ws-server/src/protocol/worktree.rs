@@ -129,3 +129,27 @@ pub struct WorktreeStatus {
     pub worktree_id: Uuid,
     pub status: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct GetWorktreeDetails {
+    #[serde(with = "optional_uuid_serde")]
+    #[ts(as = "Option<String>")]
+    pub request_id: Option<Uuid>,
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub workspace_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct WorktreeDetailsResult {
+    #[serde(with = "optional_uuid_serde")]
+    #[ts(as = "Option<String>")]
+    pub request_id: Option<Uuid>,
+    pub worktrees: Vec<crate::protocol::WorktreeData>,
+    pub agent_sessions: Vec<crate::protocol::AgentSessionData>,
+    pub terminal_sessions: Vec<crate::protocol::TerminalSessionData>,
+}

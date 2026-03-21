@@ -179,9 +179,31 @@ impl AppState {
             Err(e) => tracing::warn!("Failed to load workspaces from DB: {}", e),
         }
 
-        // TODO: Load all worktrees - will be implemented in Task 2 with list_all_worktrees()
-        // This avoids the duplicate list_workspaces() call and N+1 query pattern
-
+        // Load all worktrees using bulk query
+        match self.db.list_all_worktrees().await {
+            Ok(all_worktrees) => {
+                let mut worktrees = self.worktrees.write().await;
+                for wt in all_worktrees {
+                    if let (Ok(id), Ok(workspace_id)) = (
+                        uuid::Uuid::parse_str(&wt.id),
+                        uuid::Uuid::parse_str(&wt.workspace_id)
+                    ) {
+                        worktrees.insert(
+                            id,
+                            WorktreeState {
+                                id,
+                                workspace_id,
+                                branch_name: wt.branch_name,
+                                path: wt.path,
+                                status: wt.status,
+                                is_main: wt.is_main,
+                            },
+                        );
+                    }
+                }
+            }
+            Err(e) => tracing::warn!("Failed to load worktrees from DB: {}", e),
+        }
 
         tracing::info!("Initialized in-memory state from database");
     }

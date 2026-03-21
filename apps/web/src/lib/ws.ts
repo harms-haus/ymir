@@ -533,3 +533,16 @@ export function resetWebSocketClient(): void {
     client = null;
   }
 }
+
+export async function loadWorktreeDetails(workspaceId: string): Promise<void> {
+  const wsClient = getWebSocketClient();
+  if (!wsClient.isConnected()) {
+    throw new Error('WebSocket not connected');
+  }
+  
+  wsClient.send({
+    type: 'GetWorktreeDetails',
+    workspaceId,
+    requestId: generateId(),
+  });
+}
