@@ -235,6 +235,20 @@ export interface WorktreeChangeBranch {
   requestId?: string;
 }
 
+export interface GetWorktreeDetails {
+  type: 'GetWorktreeDetails';
+  workspaceId: string;
+  requestId?: string;
+}
+
+export interface WorktreeDetailsResult {
+  type: 'WorktreeDetailsResult';
+  requestId?: string;
+  worktrees: Worktree[];
+  agentSessions: AgentSession[];
+  terminalSessions: TerminalSession[];
+}
+
 export interface WorktreeChanged {
   type: 'WorktreeChanged';
   worktree: Worktree;
@@ -739,9 +753,10 @@ export type ClientMessage =
     | WorktreeCreate
     | WorktreeDelete
     | WorktreeMerge
-    | WorktreeList
-    | WorktreeChangeBranch
-    | AgentSpawn
+  | WorktreeList
+  | WorktreeChangeBranch
+  | GetWorktreeDetails
+  | AgentSpawn
     | AgentSend
     | AgentCancel
     | AgentRename
@@ -771,11 +786,12 @@ export type ServerMessage =
     | WorkspaceCreated
     | WorkspaceDeleted
     | WorkspaceUpdated
-    | WorktreeCreated
-    | WorktreeDeleted
-    | WorktreeChanged
-    | WorktreeStatus
-    | AgentStatusUpdate
+  | WorktreeCreated
+  | WorktreeDeleted
+  | WorktreeChanged
+  | WorktreeStatus
+  | WorktreeDetailsResult
+  | AgentStatusUpdate
     | AgentOutput
     | AgentPrompt
     | AgentRemoved
