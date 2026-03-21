@@ -66,15 +66,33 @@ interface GroupedFile {
 function getStatusColor(status: GitStatusEntry['status']) {
   switch (status) {
     case 'added':
-      return 'hsl(var(--success))';
+      return 'hsl(var(--status-working))';
     case 'modified':
       return 'hsl(var(--warning))';
     case 'deleted':
       return 'hsl(var(--destructive))';
     case 'untracked':
       return 'hsl(var(--muted-foreground))';
+    case 'renamed':
+      return 'hsl(var(--primary))';
     default:
       return 'hsl(var(--muted-foreground))';
+  }
+}
+
+function getStatusIcon(status: GitStatusEntry['status']) {
+  switch (status) {
+    case 'added':
+      return 'ri-add-line';
+    case 'modified':
+      return 'ri-edit-line';
+    case 'deleted':
+      return 'ri-delete-bin-line';
+    case 'renamed':
+      return 'ri-arrow-left-right-line';
+    case 'untracked':
+    default:
+      return 'ri-question-line';
   }
 }
 
@@ -209,7 +227,7 @@ export function ChangesTab() {
   if (files.length === 0) {
     return (
       <div style={{ padding: '48px 24px', textAlign: 'center', color: 'hsl(var(--muted-foreground))' }}>
-        <i className="ri-check-line" style={{ fontSize: '48px', marginBottom: '16px', color: 'hsl(var(--success))' }} />
+        <i className="ri-check-line" style={{ fontSize: '48px', marginBottom: '16px', color: 'hsl(var(--status-working))' }} />
         <p>No changes</p>
       </div>
     );
@@ -270,15 +288,21 @@ export function ChangesTab() {
                   padding: '8px 16px',
                   cursor: 'pointer',
                   borderBottom: '1px solid hsl(var(--border))',
+                  transition: 'background-color 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'hsl(var(--accent))';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
                 }}
               >
-                <span
+                <i
+                  className={getStatusIcon(file.status)}
                   style={{
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: '50%',
-                    backgroundColor: getStatusColor(file.status),
+                    fontSize: '14px',
                     marginRight: '12px',
+                    color: getStatusColor(file.status),
                   }}
                 />
                 <i 
@@ -316,9 +340,16 @@ export function ChangesTab() {
                       borderBottom: '1px solid hsl(var(--border))',
                       width: '100%',
                       border: 'none',
-                      background: 'transparent',
+                      background: 'hsl(var(--secondary) / 0.3)',
                       textAlign: 'left',
                       fontFamily: 'inherit',
+                      transition: 'background-color 0.15s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'hsl(var(--secondary) / 0.5)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'hsl(var(--secondary) / 0.3)';
                     }}
                   >
                     <span
@@ -359,15 +390,21 @@ export function ChangesTab() {
                             padding: '6px 16px 6px 52px',
                             cursor: 'pointer',
                             borderBottom: '1px solid hsl(var(--border))',
+                            transition: 'background-color 0.15s ease',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = 'hsl(var(--accent))';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'transparent';
                           }}
                         >
-                          <span
+                          <i
+                            className={getStatusIcon(file.status)}
                             style={{
-                              width: '8px',
-                              height: '8px',
-                              borderRadius: '50%',
-                              backgroundColor: getStatusColor(file.status),
+                              fontSize: '12px',
                               marginRight: '12px',
+                              color: getStatusColor(file.status),
                             }}
                           />
                           <i 
