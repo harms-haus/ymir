@@ -85,12 +85,13 @@ pub async fn handle_terminal_create(
     let shell = msg.shell.clone().unwrap_or_else(|| "/bin/bash".to_string());
     let now = chrono::Utc::now().to_rfc3339();
 
-    let db_session = TerminalSession {
-        id: session_id.to_string(),
-        worktree_id: msg.worktree_id.to_string(),
-        label: msg.label.clone(),
-        shell: shell.clone(),
-        created_at: now.clone(),
+let db_session = TerminalSession {
+      id: session_id.to_string(),
+      worktree_id: msg.worktree_id.to_string(),
+      label: msg.label.clone(),
+      shell: shell.clone(),
+      created_at: now.clone(),
+      position: 0,
     };
 
     if let Err(e) = state.db.create_terminal_session(&db_session).await {

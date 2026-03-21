@@ -127,15 +127,13 @@ export function TerminalPane({ worktreeId }: TerminalPaneProps) {
   }, [worktreeId, client]);
 
   useEffect(() => {
-    if (tabs.length === 0 && worktreeId) {
-      if (!creationInFlightRef.current) {
-        creationInFlightRef.current = true;
-        Promise.resolve(handleCreateTab()).finally(() => {
-          creationInFlightRef.current = false;
-        });
-      }
+    if (terminalSessions.length === 0 && worktreeId && !creationInFlightRef.current) {
+      creationInFlightRef.current = true;
+      Promise.resolve(handleCreateTab()).finally(() => {
+        creationInFlightRef.current = false;
+      });
     }
-  }, [worktreeId, tabs.length, handleCreateTab]);
+  }, [worktreeId, terminalSessions.length, handleCreateTab]);
 
   const { state: contextMenuState, openMenu, closeMenu, handleAction } = useContextMenu({
     onClose: (tabId: string) => handleCloseTab(tabId),
