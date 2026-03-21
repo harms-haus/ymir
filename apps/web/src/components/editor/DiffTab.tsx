@@ -330,17 +330,19 @@ export function DiffTab({ filePath, worktreeId }: DiffTabProps) {
           // Empty block
           emptyLineBackground: 'hsl(222.2 84% 4.9%)',
 
-          // Diff block labels
-          diffViewerTitleBackground: 'hsl(217.2 32.6% 12%)',
-          diffViewerTitleColor: 'hsl(210 40% 98%)',
-        },
+// Diff block labels
+      diffViewerTitleBackground: 'hsl(217.2 32.6% 12%)',
+      diffViewerTitleColor: 'hsl(210 40% 98%)',
+      diffViewerTitleBorderBottom: '1px solid hsl(217.2 32.6% 17.5%)',
+    },
       },
-      line: {
-        padding: '4px 8px',
-        fontFamily: 'var(--font-mono)',
-        fontSize: '13px',
-        lineHeight: '1.5',
-      },
+line: {
+      padding: '1px 8px',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '13px',
+      lineHeight: '1.2',
+      minHeight: '18px',
+    },
       gutter: {
         minWidth: '40px',
         padding: '4px 8px',
@@ -355,10 +357,17 @@ export function DiffTab({ filePath, worktreeId }: DiffTabProps) {
         fontSize: '13px',
         fontWeight: 'bold',
       },
-      content: {
-        width: '100%',
-      },
-    }),
+content: {
+      width: '100%',
+    },
+    titleBlock: {
+      padding: '8px 12px',
+      fontSize: '12px',
+      fontWeight: 500,
+      letterSpacing: '0.5px',
+      textTransform: 'uppercase' as const,
+    },
+  }),
     []
   );
 
@@ -400,14 +409,29 @@ export function DiffTab({ filePath, worktreeId }: DiffTabProps) {
   const changeTypeLabel = formatChangeType(diffData.changeType);
 
   return (
-    <div className="flex flex-col h-full bg-background">
-      {/* Header with file info and change type indicator */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">
-        <div className="flex items-center gap-3">
-          {/* Change type badge */}
+    <div className="flex flex-col h-full bg-background" style={{ overflow: 'hidden' }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '8px 16px',
+        borderBottom: '1px solid hsl(var(--border))',
+        backgroundColor: 'hsl(var(--card))',
+        flexShrink: 0,
+        minHeight: '44px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
           <span
-            className="flex items-center justify-center w-6 h-6 rounded text-xs font-bold"
             style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '24px',
+              height: '24px',
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontWeight: 'bold',
+              flexShrink: 0,
               backgroundColor: changeTypeBgColor,
               color: changeTypeColor,
             }}
@@ -415,61 +439,90 @@ export function DiffTab({ filePath, worktreeId }: DiffTabProps) {
           >
             {changeTypeLetter}
           </span>
-
-          {/* File path */}
-          <div className="flex flex-col">
-            <span className="text-sm font-medium text-foreground">{filePath}</span>
+          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+            <span style={{
+              fontSize: '14px',
+              fontWeight: 500,
+              color: 'hsl(var(--foreground))',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}>{filePath}</span>
             {diffData.oldPath && diffData.oldPath !== filePath && (
-              <span className="text-xs text-muted-foreground line-through">
+              <span style={{
+                fontSize: '12px',
+                color: 'hsl(var(--muted-foreground))',
+                textDecoration: 'line-through',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}>
                 {diffData.oldPath}
               </span>
             )}
           </div>
         </div>
-
-        {/* View mode toggle */}
-        <div className="flex items-center gap-2">
+        <div style={{ display: 'flex', alignItems: 'center', backgroundColor: 'hsl(var(--muted))', borderRadius: '6px', padding: '4px', flexShrink: 0, marginLeft: '16px' }}>
           <button
             type="button"
             onClick={() => setViewMode('split')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded transition-colors ${
-              viewMode === 'split'
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted text-muted-foreground hover:bg-muted/80'
-            }`}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '32px',
+              height: '28px',
+              borderRadius: '4px',
+              border: 'none',
+              cursor: 'pointer',
+              backgroundColor: viewMode === 'split' ? 'hsl(var(--card))' : 'transparent',
+              color: viewMode === 'split' ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))',
+              boxShadow: viewMode === 'split' ? '0 1px 2px rgba(0,0,0,0.2)' : 'none',
+              transition: 'all 0.2s ease',
+            }}
             aria-pressed={viewMode === 'split'}
+            title="Split view"
           >
-            <i className="ri-layout-column-line" />
-            <span>Split</span>
+            <i className="ri-layout-column-line" style={{ fontSize: '16px' }} />
           </button>
           <button
             type="button"
             onClick={() => setViewMode('inline')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded transition-colors ${
-              viewMode === 'inline'
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted text-muted-foreground hover:bg-muted/80'
-            }`}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '32px',
+              height: '28px',
+              borderRadius: '4px',
+              border: 'none',
+              cursor: 'pointer',
+              backgroundColor: viewMode === 'inline' ? 'hsl(var(--card))' : 'transparent',
+              color: viewMode === 'inline' ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))',
+              boxShadow: viewMode === 'inline' ? '0 1px 2px rgba(0,0,0,0.2)' : 'none',
+              transition: 'all 0.2s ease',
+            }}
             aria-pressed={viewMode === 'inline'}
+            title="Inline view"
           >
-            <i className="ri-layout-row-line" />
-            <span>Inline</span>
+            <i className="ri-layout-row-line" style={{ fontSize: '16px' }} />
           </button>
         </div>
       </div>
 
       {/* Diff viewer */}
       <div className="flex-1 overflow-auto">
-        <ReactDiffViewer
-          oldValue={diffData.oldContent}
-          newValue={diffData.newContent}
-          splitView={viewMode === 'split'}
-          showDiffOnly={false}
-          styles={diffStyles}
-          renderContent={renderContent}
-          leftTitle={diffData.changeType === 'added' ? 'Empty' : 'Original'}
-          rightTitle={diffData.changeType === 'deleted' ? 'Empty' : 'Modified'}
-        />
+<ReactDiffViewer
+        oldValue={diffData.oldContent}
+        newValue={diffData.newContent}
+        splitView={viewMode === 'split'}
+        showDiffOnly={false}
+        useDarkTheme
+        styles={diffStyles}
+        renderContent={renderContent}
+        leftTitle={diffData.changeType === 'added' ? 'Empty' : 'Original'}
+        rightTitle={diffData.changeType === 'deleted' ? 'Empty' : 'Modified'}
+      />
       </div>
 
       {/* Footer with stats */}
