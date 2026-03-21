@@ -2,13 +2,14 @@ use crate::db::{ActivityLogEntry, Db};
 use crate::protocol::{GitDiffResult, GitStatusEntry, GitStatusResult};
 use git2::build::CheckoutBuilder;
 use git2::{
-    BranchType, Commit, DiffFormat, DiffOptions, IndexAddOption, Repository, Status, StatusOptions,
+    BranchType, Commit, IndexAddOption, Repository, Status, StatusOptions,
 };
 use std::path::Path;
 use std::process::Command;
 use std::sync::Arc;
+use std::time::Duration;
 use thiserror::Error;
-use tracing::instrument;
+use tracing::warn;
 use uuid::Uuid;
 
 pub struct GitOps {
@@ -26,7 +27,6 @@ impl GitOps {
         Self { db }
     }
 
-    #[instrument(skip(self), fields(worktree_id = %worktree_id))]
     pub async fn status(
         &self,
         worktree_id: Uuid,
@@ -71,7 +71,6 @@ impl GitOps {
         })
     }
 
-    #[instrument(skip(self), fields(worktree_id = %worktree_id))]
     pub async fn diff(
         &self,
         worktree_id: Uuid,
@@ -81,30 +80,46 @@ impl GitOps {
         let diff_text = {
             let repo = open_repo(repo_path)?;
 
-            let mut diff_opts = DiffOptions::new();
-            diff_opts
-                .include_untracked(true)
-                .recurse_untracked_dirs(true);
-            if let Some(path) = file_path {
-                diff_opts.pathspec(path);
-            }
+            // Get list of files to diff
+            let files_to_diff = if let Some(path) = file_path {
+                vec![path.to_string()]
+            } else {
+                // Get all modified files from status
+                let mut opts = StatusOptions::new();
+                opts.include_untracked(true)
+                    .recurse_untracked_dirs(true)
+                    .include_ignored(false);
+                let statuses = repo.statuses(Some(&mut opts))?;
+                statuses
+                    .iter()
+                    .filter_map(|entry| entry.path().map(|p| p.to_string()))
+                    .collect()
+            };
 
-            let head_tree = repo.head().ok().and_then(|head| head.peel_to_tree().ok());
-
-            let diff =
-                repo.diff_tree_to_workdir_with_index(head_tree.as_ref(), Some(&mut diff_opts))?;
-
-            let mut out = String::new();
-            diff.print(DiffFormat::Patch, |_delta, _hunk, line| {
-                out.push(line.origin());
-                out.push_str(std::str::from_utf8(line.content()).unwrap_or("[binary]\n"));
-                true
-            })?;
-
-            if out.trim().is_empty() {
+            if files_to_diff.is_empty() {
                 "No changes".to_string()
             } else {
-                out
+                let mut combined_diff = String::new();
+
+                for path in files_to_diff {
+                    match generate_file_diff(&repo, repo_path, &path) {
+                        Ok(diff) if !diff.is_empty() => {
+                            combined_diff.push_str(&diff);
+                            combined_diff.push('\n');
+                        }
+                        Ok(_) => {} // No changes for this file
+                        Err(e) => {
+                            warn!("Failed to diff file {}: {}", path, e);
+                            // Continue with other files
+                        }
+                    }
+                }
+
+                if combined_diff.is_empty() {
+                    "No changes".to_string()
+                } else {
+                    combined_diff.trim_end().to_string()
+                }
             }
         };
 
@@ -127,7 +142,6 @@ impl GitOps {
         })
     }
 
-    #[instrument(skip(self), fields(worktree_id = %worktree_id, message))]
     pub async fn commit(
         &self,
         worktree_id: Uuid,
@@ -182,7 +196,6 @@ impl GitOps {
         Ok(commit_hash)
     }
 
-    #[instrument(skip(self), fields(worktree_id = %worktree_id, squash))]
     pub async fn merge(
         &self,
         worktree_id: Uuid,
@@ -274,7 +287,6 @@ impl GitOps {
         Ok(format!("Merged {} ({})", feature_branch, merge_oid))
     }
 
-    #[instrument(skip(self), fields(worktree_id = %worktree_id, title))]
     pub async fn create_pr(
         &self,
         worktree_id: Uuid,
@@ -321,7 +333,6 @@ impl GitOps {
         Ok(pr_url)
     }
 
-    #[instrument(skip(self), fields(worktree_id = %worktree_id, new_branch = %new_branch_name))]
     pub async fn change_branch(
         &self,
         worktree_id: Uuid,
@@ -469,6 +480,57 @@ fn json_opt_str(value: Option<&str>) -> String {
 
 fn json_escape(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+fn generate_file_diff(
+    repo: &Repository,
+    repo_path: &Path,
+    file_path: &str,
+) -> Result<String, GitError> {
+    use similar::{Algorithm, TextDiff};
+    use std::fs;
+
+    let full_path = repo_path.join(file_path);
+
+    let old_content = get_file_at_head(repo, file_path)?;
+    let new_content = fs::read_to_string(&full_path).unwrap_or_default();
+
+    if old_content == new_content {
+        return Ok(String::new());
+    }
+
+    let diff = TextDiff::configure()
+        .algorithm(Algorithm::Myers)
+        .timeout(Duration::from_secs(5))
+        .diff_lines(&old_content, &new_content);
+
+    let mut unified = diff.unified_diff();
+
+    let unified_with_paths = unified
+        .header(&format!("a/{}", file_path), &format!("b/{}", file_path));
+
+    Ok(format!("{}", unified_with_paths))
+}
+
+fn get_file_at_head(repo: &Repository, file_path: &str) -> Result<String, GitError> {
+    let head = repo.head()?;
+    let commit = head.peel_to_commit()?;
+    let tree = commit.tree()?;
+
+    let entry = tree.get_path(Path::new(file_path));
+
+    match entry {
+        Ok(entry) => {
+            let object = entry.to_object(repo)?;
+            if let Some(blob) = object.as_blob() {
+                String::from_utf8(blob.content().to_vec())
+                    .map_err(|_| GitError::InvalidReference("non-utf8 content".to_string()))
+            } else {
+                Err(GitError::InvalidReference("not a file".to_string()))
+            }
+        }
+        Err(_) => Ok(String::new()),
+    }
 }
 
 #[derive(Error, Debug)]

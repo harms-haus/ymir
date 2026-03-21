@@ -9,7 +9,7 @@ use crate::protocol::{
   WorkspaceData, WorkspaceDelete, WorkspaceDeleted,
 };
 use crate::state::AppState;
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use git2::{BranchType, Repository};
 use std::path::Path;
 use std::sync::Arc;

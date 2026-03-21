@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
 
-use super::{uuid_serde, uuid_vec_serde};
+use super::uuid_serde;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(rename_all = "camelCase")]
@@ -139,4 +139,27 @@ pub struct TerminalKill {
     #[serde(with = "uuid_serde")]
     #[ts(type = "string")]
     pub session_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TerminalRequestHistory {
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub session_id: Uuid,
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub request_id: Uuid,
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TerminalHistory {
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub session_id: Uuid,
+    pub data: String,
 }

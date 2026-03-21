@@ -16,7 +16,7 @@ use tracing::instrument;
 use uuid::Uuid;
 
 pub use handler::{
-    handle_terminal_create, handle_terminal_input, handle_terminal_kill, handle_terminal_resize,
+    handle_terminal_create, handle_terminal_input, handle_terminal_kill, handle_terminal_request_history, handle_terminal_resize,
 };
 pub use output::spawn_output_reader;
 

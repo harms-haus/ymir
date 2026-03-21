@@ -50,17 +50,27 @@ pub fn spawn_output_reader(
 
                     leftover_bytes = remaining;
 
-                    if !valid_str.is_empty() {
-                        let output_msg = ServerMessage::new(ServerMessagePayload::TerminalOutput(
-                            TerminalOutput {
-                                session_id,
-                                data: valid_str.to_string(),
-                            },
-                        ));
+            if !valid_str.is_empty() {
+                let output_data = valid_str.to_string();
+                let output_msg = ServerMessage::new(ServerMessagePayload::TerminalOutput(
+                    TerminalOutput {
+                        session_id,
+                        data: output_data.clone(),
+                    },
+                ));
 
-                        state.broadcast(output_msg).await;
-                        debug!(bytes = data.len(), "Broadcast terminal output");
+                state.broadcast(output_msg).await;
+                debug!(bytes = data.len(), "Broadcast terminal output");
+
+                let db = state.db.clone();
+                let session_id_str = session_id.to_string();
+                let output_data_clone = output_data.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = db.append_terminal_output(&session_id_str, &output_data_clone).await {
+                        tracing::error!("Failed to store terminal output: {}", e);
                     }
+                });
+            }
                 }
                 Err(e) => {
                     if e.kind() == std::io::ErrorKind::WouldBlock {
@@ -74,18 +84,27 @@ pub fn spawn_output_reader(
             }
         }
 
-        if !leftover_bytes.is_empty() {
-            let lossy_str = String::from_utf8_lossy(&leftover_bytes);
-            if !lossy_str.is_empty() {
-                let output_msg = ServerMessage::new(ServerMessagePayload::TerminalOutput(
-                    TerminalOutput {
-                        session_id,
-                        data: lossy_str.to_string(),
-                    },
-                ));
-                state.broadcast(output_msg).await;
-            }
+    if !leftover_bytes.is_empty() {
+        let lossy_str = String::from_utf8_lossy(&leftover_bytes);
+        if !lossy_str.is_empty() {
+            let output_data = lossy_str.to_string();
+            let output_msg = ServerMessage::new(ServerMessagePayload::TerminalOutput(
+                TerminalOutput {
+                    session_id,
+                    data: output_data.clone(),
+                },
+            ));
+            state.broadcast(output_msg).await;
+
+            let db = state.db.clone();
+            let session_id_str = session_id.to_string();
+            tokio::spawn(async move {
+                if let Err(e) = db.append_terminal_output(&session_id_str, &output_data).await {
+                    tracing::error!("Failed to store terminal output: {}", e);
+                }
+            });
         }
+    }
 
         info!("PTY output reader stopped");
     })
