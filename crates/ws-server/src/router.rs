@@ -1,12 +1,11 @@
 //! Message routing and dispatch for WebSocket server
 
 use crate::protocol::{
-    ClientMessage, ClientMessagePayload, Error, ServerMessage, ServerMessagePayload,
-    FileList, FileListResult,
+    ClientMessage, ClientMessagePayload, Error, ServerMessage, ServerMessagePayload, FileListResult,
 };
 use crate::agent::{handle_agent_cancel, handle_agent_send, handle_agent_spawn};
 use crate::pty::{
-    handle_terminal_create, handle_terminal_input, handle_terminal_kill, handle_terminal_resize,
+    handle_terminal_create, handle_terminal_input, handle_terminal_kill, handle_terminal_request_history, handle_terminal_resize,
 };
 use crate::state::AppState;
 use std::sync::Arc;
@@ -173,6 +172,10 @@ pub async fn route_message(
             Some(handle_terminal_reorder(state.clone(), msg).await)
         }
 
+        ClientMessagePayload::TerminalRequestHistory(msg) => {
+            Some(handle_terminal_request_history(state.clone(), msg).await)
+        }
+
         ClientMessagePayload::WorkspaceRename(_)
         | ClientMessagePayload::WorkspaceUpdate(_)
         | ClientMessagePayload::WorktreeMerge(_)
@@ -215,6 +218,7 @@ fn not_implemented(payload: ClientMessagePayload) -> ServerMessage {
         ClientMessagePayload::TerminalKill(_) => "TerminalKill",
         ClientMessagePayload::TerminalRename(_) => "TerminalRename",
         ClientMessagePayload::TerminalReorder(_) => "TerminalReorder",
+        ClientMessagePayload::TerminalRequestHistory(_) => "TerminalRequestHistory",
         ClientMessagePayload::FileRead(_) => "FileRead",
         ClientMessagePayload::FileWrite(_) => "FileWrite",
         ClientMessagePayload::FileList(_) => "FileList",
@@ -673,7 +677,7 @@ async fn handle_agent_rename(state: Arc<AppState>, msg: crate::protocol::AgentRe
     // Update in-memory state
     {
         let mut agents = state.agents.write().await;
-        if let Some(agent) = agents.get_mut(&session_id) {
+        if let Some(_agent) = agents.get_mut(&session_id) {
             // Note: AgentState doesn't have label field, but database has it
             // We'll need to update that when we add label field to AgentState
         }

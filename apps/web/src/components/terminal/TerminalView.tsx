@@ -13,7 +13,7 @@ import {
 } from 'react';
 import { init, Terminal as GhosttyTerminal, FitAddon } from 'ghostty-web';
 import { getWebSocketClient } from '../../lib/ws';
-import type { TerminalInput, TerminalResize } from '../../types/protocol';
+import type { TerminalInput, TerminalResize, TerminalHistory } from '../../types/protocol';
 
 // ============================================================================
 // Types
@@ -62,110 +62,117 @@ export function isGhosttyInitialized(): boolean {
 
 export const Terminal = forwardRef<TerminalRef, TerminalProps>(
   ({ terminalSessionId, className = '' }, ref) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const terminalRef = useRef<GhosttyTerminal | null>(null);
-  const fitAddonRef = useRef<FitAddon | null>(null);
-  const wsClientRef = useRef(getWebSocketClient());
+    const containerRef = useRef<HTMLDivElement>(null);
+    const terminalRef = useRef<GhosttyTerminal | null>(null);
+    const fitAddonRef = useRef<FitAddon | null>(null);
+    const wsClientRef = useRef(getWebSocketClient());
 
     // ============================================================================
     // Terminal Initialization
     // ============================================================================
 
-  useEffect(() => {
-    let isMounted = true;
-    let resizeObserver: ResizeObserver | null = null;
+    useEffect(() => {
+      let isMounted = true;
+      let resizeObserver: ResizeObserver | null = null;
+      let unsubscribeHistory: (() => void) | null = null;
 
-    const setupTerminal = async () => {
-      // Initialize ghostty-web WASM (singleton)
-      await initializeGhostty();
+      const setupTerminal = async () => {
+        await initializeGhostty();
 
-      if (!isMounted || !containerRef.current) return;
+        if (!isMounted || !containerRef.current) return;
 
-      // Get theme colors from CSS variables (wrap HSL values)
-      const root = document.documentElement;
-      const terminalBgRaw = getComputedStyle(root).getPropertyValue('--terminal-bg').trim();
-      const terminalFgRaw = getComputedStyle(root).getPropertyValue('--terminal-fg').trim();
-      const fontMono = getComputedStyle(root).getPropertyValue('--font-mono').trim();
-      // Wrap HSL values in hsl() for proper color parsing
-      const terminalBg = terminalBgRaw.startsWith('hsl') ? terminalBgRaw : `hsl(${terminalBgRaw})`;
-      const terminalFg = terminalFgRaw.startsWith('hsl') ? terminalFgRaw : `hsl(${terminalFgRaw})`;
+        const root = document.documentElement;
+        const terminalBgRaw = getComputedStyle(root).getPropertyValue('--terminal-bg').trim();
+        const terminalFgRaw = getComputedStyle(root).getPropertyValue('--terminal-fg').trim();
+        const fontMono = getComputedStyle(root).getPropertyValue('--font-mono').trim();
+        const terminalBg = terminalBgRaw.startsWith('hsl') ? terminalBgRaw : `hsl(${terminalBgRaw})`;
+        const terminalFg = terminalFgRaw.startsWith('hsl') ? terminalFgRaw : `hsl(${terminalFgRaw})`;
 
-      // Create terminal instance
-      const term = new GhosttyTerminal({
-        fontSize: 13,
-        theme: {
-          background: terminalBg || '#0d1117',
-          foreground: terminalFg || '#e6edf3',
-        },
-        fontFamily: fontMono || 'ui-monospace, SFMono-Regular, monospace',
-      });
+        const term = new GhosttyTerminal({
+          fontSize: 13,
+          theme: {
+            background: terminalBg || '#0d1117',
+            foreground: terminalFg || '#e6edf3',
+          },
+          fontFamily: fontMono || 'ui-monospace, SFMono-Regular, monospace',
+        });
 
-      // Open terminal in container
-      term.open(containerRef.current);
-      terminalRef.current = term;
+        term.open(containerRef.current);
+        terminalRef.current = term;
 
-      // Set up data handler - send input to WebSocket
-      term.onData((data: string) => {
-        const message: TerminalInput = {
-          type: 'TerminalInput',
+        term.onData((data: string) => {
+          const message: TerminalInput = {
+            type: 'TerminalInput',
+            sessionId: terminalSessionId,
+            data,
+          };
+          wsClientRef.current.send(message);
+        });
+
+        term.onResize((size: { cols: number; rows: number }) => {
+          const resizeMessage: TerminalResize = {
+            type: 'TerminalResize',
+            sessionId: terminalSessionId,
+            cols: size.cols,
+            rows: size.rows,
+          };
+          wsClientRef.current.send(resizeMessage);
+        });
+
+        const fitAddon = new FitAddon();
+        term.loadAddon(fitAddon);
+        fitAddonRef.current = fitAddon;
+        fitAddon.fit();
+
+        if (containerRef.current && 'ResizeObserver' in window) {
+          resizeObserver = new ResizeObserver(() => {
+            if (fitAddonRef.current && terminalRef.current) {
+              fitAddonRef.current.fit();
+            }
+          });
+          resizeObserver.observe(containerRef.current);
+        }
+
+        const requestId = crypto.randomUUID();
+        wsClientRef.current.send({
+          type: 'TerminalRequestHistory',
           sessionId: terminalSessionId,
-          data,
-        };
-        wsClientRef.current.send(message);
-      });
+          requestId,
+          limit: 1000,
+        });
 
-      // Set up resize handler to sync with backend
-      term.onResize((size: { cols: number; rows: number }) => {
-        const resizeMessage: TerminalResize = {
-          type: 'TerminalResize',
-          sessionId: terminalSessionId,
-          cols: size.cols,
-          rows: size.rows,
-        };
-        wsClientRef.current.send(resizeMessage);
-      });
-
-      // Load FitAddon for automatic resize handling
-      const fitAddon = new FitAddon();
-      term.loadAddon(fitAddon);
-      fitAddonRef.current = fitAddon;
-
-      // Initial fit
-      fitAddon.fit();
-
-      // Set up ResizeObserver to detect container size changes
-      if (containerRef.current && 'ResizeObserver' in window) {
-        resizeObserver = new ResizeObserver(() => {
-          if (fitAddonRef.current && terminalRef.current) {
-            fitAddonRef.current.fit();
+        unsubscribeHistory = wsClientRef.current.onMessage('TerminalHistory', (msg: TerminalHistory) => {
+          if (msg.sessionId === terminalSessionId && terminalRef.current) {
+            terminalRef.current.write(msg.data);
           }
         });
-        resizeObserver.observe(containerRef.current);
-      }
-    };
+      };
 
-    setupTerminal();
+      setupTerminal();
 
-    // Cleanup
-    return () => {
-      isMounted = false;
+      return () => {
+        isMounted = false;
 
-      if (resizeObserver && containerRef.current) {
-        resizeObserver.unobserve(containerRef.current);
-        resizeObserver.disconnect();
-      }
+        if (unsubscribeHistory) {
+          unsubscribeHistory();
+        }
 
-      if (fitAddonRef.current) {
-        fitAddonRef.current.dispose();
-        fitAddonRef.current = null;
-      }
+        if (resizeObserver && containerRef.current) {
+          resizeObserver.unobserve(containerRef.current);
+          resizeObserver.disconnect();
+        }
 
-      if (terminalRef.current) {
-        terminalRef.current.dispose();
-        terminalRef.current = null;
-      }
-    };
-  }, [terminalSessionId]);
+        if (fitAddonRef.current) {
+          fitAddonRef.current.dispose();
+          fitAddonRef.current = null;
+        }
+
+        if (terminalRef.current) {
+          terminalRef.current.dispose();
+          terminalRef.current = null;
+        }
+      };
+    }, [terminalSessionId]);
 
     // ============================================================================
     // Exposed Methods
@@ -192,15 +199,15 @@ export const Terminal = forwardRef<TerminalRef, TerminalProps>(
     // Render
     // ============================================================================
 
-  return (
-    <div
-      ref={containerRef}
-      className={`terminal-container ${className}`}
-      data-testid="terminal"
-      data-session-id={terminalSessionId}
-    />
-  );
-}
+    return (
+      <div
+        ref={containerRef}
+        className={`terminal-container ${className}`}
+        data-testid="terminal"
+        data-session-id={terminalSessionId}
+      />
+    );
+  }
 );
 
 Terminal.displayName = 'Terminal';

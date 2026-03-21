@@ -8,6 +8,37 @@ use std::sync::Arc;
 use tracing::instrument;
 use uuid::Uuid;
 
+pub async fn handle_terminal_request_history(
+    state: Arc<AppState>,
+    msg: crate::protocol::TerminalRequestHistory,
+) -> ServerMessage {
+    let history = match state
+        .db
+        .get_terminal_output_history(&msg.session_id.to_string(), msg.limit.map(|l| l as i64))
+        .await
+    {
+        Ok(output) => output,
+        Err(e) => {
+            tracing::error!("Failed to get terminal output history: {}", e);
+            return ServerMessage::new(ServerMessagePayload::Error(Error {
+                code: "TERMINAL_HISTORY_ERROR".to_string(),
+                message: format!("Failed to get terminal history: {}", e),
+                details: None,
+                request_id: Some(msg.request_id),
+            }));
+        }
+    };
+
+    let combined_output = history.join("");
+
+    ServerMessage::new(ServerMessagePayload::TerminalHistory(
+        crate::protocol::TerminalHistory {
+            session_id: msg.session_id,
+            data: combined_output,
+        },
+    ))
+}
+
 #[instrument(skip(state, msg), fields(worktree_id = %msg.worktree_id))]
 pub async fn handle_terminal_create(
     state: Arc<AppState>,
@@ -217,6 +248,10 @@ pub async fn handle_terminal_kill(
 
     if let Err(e) = state.db.delete_terminal_session(&msg.session_id.to_string()).await {
         tracing::warn!("Failed to delete terminal session from database: {}", e);
+    }
+
+    if let Err(e) = state.db.delete_terminal_output(&msg.session_id.to_string()).await {
+        tracing::warn!("Failed to delete terminal output from database: {}", e);
     }
 
     tracing::info!("Broadcasting TerminalRemoved for session: {}", msg.session_id);

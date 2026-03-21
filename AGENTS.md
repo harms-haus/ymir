@@ -4,6 +4,8 @@
 
 This project uses [ts-rs](https://github.com/Aleph-Alpha/ts-rs) to generate TypeScript types from Rust structs. Types are organized as one file per type.
 
+DO NOT EDIT GENERATED TYPESCRIPT FILES BY HAND, **ALWAYS** RUN THE `make sync-types` TO UPDATE TYPESCRIPT TYPES AFTER EDITING THE RUST TYPES
+
 ### Architecture
 
 **Rust Side** (Domain-based modules):
@@ -32,14 +34,14 @@ make sync-types
 
 This will:
 1. Clean old generated files from `apps/web/src/types/generated/`
-2. Run `cargo test --features export-types` to generate TypeScript files directly to `apps/web/src/types/generated/`
+2. Generate TypeScript files directly to `apps/web/src/types/generated/`
 3. **Important**: The generated files are raw interfaces. The manual `protocol.ts` adds type guards and discriminator fields.
 
 ### Type Structure
 
 - **Rust Source**: `crates/ws-server/src/protocol/*.rs` — Domain-organized Rust types
-- **Generated**: `apps/web/src/types/generated/*.ts` — Raw ts-rs generated interfaces
-- **Protocol Layer**: `apps/web/src/types/protocol.ts` — Manual types with type guards and helpers
+- **Generated**: `apps/web/src/types/generated/*.ts` — Raw ts-rs generated interfaces. DO NOT EDIT THESE
+- **Protocol Layer**: `apps/web/src/types/protocol.ts` — Manual types with type guards and helpers. DO NOT EDIT THIS
 - **Configuration**: `.cargo/config.toml` — Sets `TS_RS_EXPORT_DIR` to generate directly to the web app
 
 ### Adding New Types

@@ -101,6 +101,21 @@ const SCHEMA_MIGRATIONS: &[&str] = &[
     r#"
     ALTER TABLE worktrees ADD COLUMN is_main INTEGER DEFAULT 0;
     "#,
+    r#"
+    CREATE TABLE IF NOT EXISTS terminal_output (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        data TEXT NOT NULL,
+        timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (session_id) REFERENCES terminal_sessions(id) ON DELETE CASCADE
+    );
+    "#,
+    r#"
+    CREATE INDEX IF NOT EXISTS idx_terminal_output_session ON terminal_output(session_id);
+    "#,
+    r#"
+    CREATE INDEX IF NOT EXISTS idx_terminal_output_timestamp ON terminal_output(timestamp);
+    "#,
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -946,6 +961,67 @@ impl Db {
             workspace_id, rows_affected
         );
         Ok(rows_affected > 0)
+    }
+}
+
+impl Db {
+    pub async fn append_terminal_output(&self, session_id: &str, data: &str) -> Result<()> {
+        let conn = self.conn()?;
+        let mut stmt = conn
+            .prepare(
+                r#"
+                INSERT INTO terminal_output (session_id, data, timestamp)
+                VALUES (?1, ?2, datetime('now'))
+                "#,
+            )
+            .await?;
+
+        stmt.execute((session_id, data)).await?;
+        Ok(())
+    }
+
+    pub async fn get_terminal_output_history(
+        &self,
+        session_id: &str,
+        limit: Option<i64>,
+    ) -> Result<Vec<String>> {
+        let conn = self.conn()?;
+        let limit = limit.unwrap_or(1000);
+
+        let mut stmt = conn
+            .prepare(
+                r#"
+                SELECT data FROM terminal_output
+                WHERE session_id = ?1
+                ORDER BY id ASC
+                LIMIT ?2
+                "#,
+            )
+            .await?;
+
+        let mut rows = stmt.query([session_id, limit.to_string().as_str()]).await?;
+        let mut output = Vec::new();
+
+        while let Some(row) = rows.next().await? {
+            output.push(row.get::<String>(0)?);
+        }
+
+        Ok(output)
+    }
+
+    pub async fn delete_terminal_output(&self, session_id: &str) -> Result<u64> {
+        let conn = self.conn()?;
+        let rows_affected = conn
+            .execute(
+                "DELETE FROM terminal_output WHERE session_id = ?1",
+                libsql::params![session_id],
+            )
+            .await?;
+        debug!(
+            "Deleted terminal output for session {} (rows affected: {})",
+            session_id, rows_affected
+        );
+        Ok(rows_affected)
     }
 }
 

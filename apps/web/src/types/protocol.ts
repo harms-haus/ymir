@@ -292,10 +292,17 @@ export interface TerminalRename {
 }
 
 export interface TerminalReorder {
-    type: 'TerminalReorder';
-    worktreeId: string;
-    sessionIds: string[];
-    requestId?: string;
+  type: 'TerminalReorder';
+  worktreeId: string;
+  sessionIds: string[];
+  requestId?: string;
+}
+
+export interface TerminalRequestHistory {
+  type: 'TerminalRequestHistory';
+  sessionId: string;
+  requestId: string;
+  limit?: number;
 }
 
 export interface AgentRename {
@@ -481,12 +488,18 @@ export interface TerminalRemoved {
 }
 
 export interface TerminalUpdated {
-    type: 'TerminalUpdated';
-    sessionId: string;
-    worktreeId: string;
-    label?: string;
-    position?: number;
-    requestId?: string;
+  type: 'TerminalUpdated';
+  sessionId: string;
+  worktreeId: string;
+  label?: string;
+  position?: number;
+  requestId?: string;
+}
+
+export interface TerminalHistory {
+  type: 'TerminalHistory';
+  sessionId: string;
+  data: string;
 }
 
 export interface AgentUpdated {
@@ -736,10 +749,11 @@ export type ClientMessage =
     | TerminalInput
     | TerminalResize
     | TerminalCreate
-    | TerminalKill
-    | TerminalRename
-    | TerminalReorder
-    | FileRead
+  | TerminalKill
+  | TerminalRename
+  | TerminalReorder
+  | TerminalRequestHistory
+  | FileRead
     | FileWrite
     | FileList
     | GitStatus
@@ -766,11 +780,12 @@ export type ServerMessage =
     | AgentPrompt
     | AgentRemoved
     | AgentUpdated
-    | TerminalOutput
-    | TerminalCreated
-    | TerminalRemoved
-    | TerminalUpdated
-    | FileContentMessage
+  | TerminalOutput
+  | TerminalCreated
+  | TerminalRemoved
+  | TerminalUpdated
+  | TerminalHistory
+  | FileContentMessage
     | FileListResult
     | GitStatusResult
     | GitDiffResult
@@ -998,6 +1013,10 @@ export function isTerminalCreated(message: AnyMessage | UnknownMessage): message
 
 export function isTerminalRemoved(message: AnyMessage | UnknownMessage): message is TerminalRemoved {
   return message.type === 'TerminalRemoved';
+}
+
+export function isTerminalHistory(message: AnyMessage | UnknownMessage): message is TerminalHistory {
+  return message.type === 'TerminalHistory';
 }
 
 export function isFileContent(message: AnyMessage | UnknownMessage): message is FileContentMessage {
