@@ -934,8 +934,8 @@ export function updateStateFromServerMessage(message: ServerMessage): void {
     case 'WorktreeDetailsResult': {
       const { addAgentSession, addWorktree } = useStore.getState();
       message.worktrees.forEach((worktree) => { addWorktree(worktree); });
-      message.agent_sessions.forEach((session) => { addAgentSession(session as any); });
-      message.terminal_sessions.forEach((session) => { addTerminalSession(session); });
+      message.agentSessions.forEach((session) => { addAgentSession(session as any); });
+      message.terminalSessions.forEach((session) => { addTerminalSession(session); });
       break;
     }
 
