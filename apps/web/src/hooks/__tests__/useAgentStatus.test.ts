@@ -39,8 +39,8 @@ import { useAgentStatus, useAgentList } from '../useAgentStatus';
 import { useStore } from '../../store';
 import { resetWebSocketClient, getWebSocketClient } from '../../lib/ws';
 import { encode } from '@msgpack/msgpack';
-import { PROTOCOL_VERSION } from '../../types/generated/protocol';
-import type { AgentStatusUpdate, AgentOutput, AgentSession, AcpSessionStatus } from '../../types/generated/protocol';
+import { PROTOCOL_VERSION } from '../../types/protocol';
+import type { AgentStatusUpdate, AgentOutput, AgentSession, AcpSessionStatus } from '../../types/protocol';
 import { createInitialAccumulatorState } from '../../types/state';
 
 const wsMock = vi.fn(function WebSocketMock(this: any, _url: string) {
@@ -399,7 +399,7 @@ describe('useAgentStatus', () => {
 
 import { acpAccumulatorReducer } from '../../store';
 import type { AcpAccumulatorState } from '../../types/state';
-import type { AcpEventEnvelope } from '../../types/generated/protocol';
+import type { AcpEventEnvelope } from '../../types/protocol';
 
 describe('ACP Event Accumulator Reducer', () => {
   let state: AcpAccumulatorState;

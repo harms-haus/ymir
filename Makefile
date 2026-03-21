@@ -107,10 +107,9 @@ clean:
 	@rm -rf $(BUILD_DIR)
 
 sync-types:
+	@echo "[ymir] cleaning old generated types..."
+	@find apps/web/src/types/generated -name "*.ts" ! -name "index.ts" ! -name "typeGuards.ts" -delete
 	@echo "[ymir] generating TypeScript types from Rust protocol definitions..."
 	@cargo test --package ymir-ws-server --features export-types -- --nocapture 2>&1 | grep -E "(export_bindings|error\[)" | head -20 || true
-	@echo "[ymir] copying generated bindings to apps/web/src/types/generated/..."
-	@mkdir -p apps/web/src/types/generated
-	@cp crates/ws-server/bindings/*.ts apps/web/src/types/generated/
 	@echo "[ymir] types synchronized successfully"
-	@echo "[ymir] generated $(shell ls crates/ws-server/bindings/*.ts | wc -l) type definitions"
+	@count=$$(ls apps/web/src/types/generated/*.ts 2>/dev/null | wc -l); echo "[ymir] generated $$count type definitions"

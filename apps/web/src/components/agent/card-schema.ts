@@ -22,7 +22,7 @@ import type {
   AccumulatedPermissionCard,
   AccumulatedErrorCard,
 } from '../../types/state';
-import type { AcpToolUseStatus } from '../../types/generated/protocol';
+import type { AcpToolUseStatus } from '../../types/protocol';
 
 // ============================================================================
 // Permission Card Schema

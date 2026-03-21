@@ -1,66 +1,71 @@
 # Agent Instructions
 
-This project uses **Bifrost** for rune (issue) management in realm **ymir**.
+## Type Generation Workflow
 
-## Quick Reference
+This project uses [ts-rs](https://github.com/Aleph-Alpha/ts-rs) to generate TypeScript types from Rust structs. Types are organized as one file per type.
+
+### Architecture
+
+**Rust Side** (Domain-based modules):
+- `crates/ws-server/src/protocol/mod.rs` — Barrel re-export
+- `crates/ws-server/src/protocol/common.rs` — Core message types
+- `crates/ws-server/src/protocol/workspace.rs` — Workspace types
+- `crates/ws-server/src/protocol/worktree.rs` — Worktree types
+- `crates/ws-server/src/protocol/agent.rs` — Agent types
+- `crates/ws-server/src/protocol/terminal.rs` — Terminal types
+- `crates/ws-server/src/protocol/file.rs` — File types
+- `crates/ws-server/src/protocol/git.rs` — Git types
+- `crates/ws-server/src/protocol/acp.rs` — ACP wire types
+- `crates/ws-server/src/protocol/settings.rs` — Settings types
+
+**TypeScript Side**:
+- `apps/web/src/types/protocol.ts` — Manually maintained types with type guards
+- `apps/web/src/types/generated/*.ts` — ts-rs generated files (one per type, 80 total)
+
+### Generating Types
+
+Run the sync-types make target to regenerate TypeScript bindings:
 
 ```bash
-bf create <title>     # Create a new rune
-  -b, --branch <name> # Associate a branch with the rune
-  --no-branch          # Create rune without a branch
-bf list               # List runes
-bf show <id>          # View rune details
-bf claim <id>         # Claim a rune
-bf forge <id>         # Forge a rune (move from draft to open)
-bf fulfill <id>       # Mark a rune as fulfilled
-bf seal <id>          # Seal (close) a rune
-bf shatter <id>       # Shatter a rune (irreversible tombstone)
-bf sweep              # Shatter all unreferenced sealed/fulfilled runes
-bf update <id>        # Update a rune
-bf note <id> <text>   # Add a note to a rune
-bf events <id>        # View rune event history
-bf ready              # List runes ready for work
+make sync-types
 ```
 
-## Dependency Commands
+This will:
+1. Clean old generated files from `apps/web/src/types/generated/`
+2. Run `cargo test --features export-types` to generate TypeScript files directly to `apps/web/src/types/generated/`
+3. **Important**: The generated files are raw interfaces. The manual `protocol.ts` adds type guards and discriminator fields.
 
-```bash
-bf dep add <id> <relationship> <dep>     # Add a dependency to a rune
-bf dep remove <id> <relationship> <dep>  # Remove a dependency from a rune
-bf dep list <id>                         # List dependencies of a rune
-```
+### Type Structure
 
-Valid relationships: blocks, relates_to, duplicates, supersedes, replies_to.
-Inverse forms are also accepted: blocked_by, duplicated_by, superseded_by, replied_to_by.
+- **Rust Source**: `crates/ws-server/src/protocol/*.rs` — Domain-organized Rust types
+- **Generated**: `apps/web/src/types/generated/*.ts` — Raw ts-rs generated interfaces
+- **Protocol Layer**: `apps/web/src/types/protocol.ts` — Manual types with type guards and helpers
+- **Configuration**: `.cargo/config.toml` — Sets `TS_RS_EXPORT_DIR` to generate directly to the web app
 
-## Configuration
+### Adding New Types
 
-Bifrost is configured via a `.bifrost.yaml` file in the repository root:
+1. Add the Rust struct in the appropriate domain file (e.g., `crates/ws-server/src/protocol/workspace.rs`):
+   ```rust
+   #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+   #[serde(rename_all = "camelCase")]
+   #[ts(export)]
+   pub struct MyNewType {
+       pub field: String,
+   }
+   ```
 
-```yaml
-url: http://localhost:8080
-realm: <realm-id>
-```
+2. Run `make sync-types` to generate the TypeScript file
 
-Authentication is managed via `bf login`. Run `bf login --token <your-pat>` to authenticate.
+3. If needed, add type guards to `apps/web/src/types/protocol.ts`
 
-## Completing a Rune
+4. Import from the protocol module:
+   ```typescript
+   import { MyNewType } from '../types/protocol';
+   ```
 
-**When ending a work session**, you MUST complete ALL steps below.
+### Key Differences
 
-**MANDATORY WORKFLOW:**
+- **Generated types** (`generated/*.ts`): Raw interfaces from Rust, no type field
+- **Protocol types** (`protocol.ts`): Extended interfaces with `type` discriminator and type guards for runtime checking
 
-1. **File runes for remaining work** — Create runes for anything that needs follow-up
-2. **Run quality gates** (if code changed) — Tests, linters, builds
-3. **Update rune status** — Seal finished work, update in-progress items
-4. **Hand off** — Provide context for next session
-
-**CRITICAL RULES:**
-- NEVER stop before completing all steps above
-- If quality gates fail, fix them before finishing
-
-## Glossary
-
-- **Rune** — a work item (issue, task, bug, etc.)
-- **Saga** — an epic (a collection of related runes)
-- **Realm** — a tenant namespace for organizing runes
+Always import from `types/protocol` to get the full type system including type guards.

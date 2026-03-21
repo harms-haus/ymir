@@ -13,7 +13,7 @@ import {
 } from 'react';
 import { init, Terminal as GhosttyTerminal, FitAddon } from 'ghostty-web';
 import { getWebSocketClient } from '../../lib/ws';
-import type { TerminalInput, TerminalResize } from '../../types/generated/protocol';
+import type { TerminalInput, TerminalResize } from '../../types/protocol';
 
 // ============================================================================
 // Types

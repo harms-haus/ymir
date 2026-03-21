@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { AppState, NotificationState, AgentTab, AlertDialogConfig, AgentSessionState, TerminalSessionState, AcpAccumulatorState, AcpAccumulatorAction, AccumulatedThread, AccumulatedTextContent, AccumulatedToolCard, AccumulatedContextCard, AccumulatedErrorCard, MAX_TOOL_OUTPUT_LENGTH, MAX_ACCUMULATED_MESSAGES, createInitialAccumulatorState, ThreadAccumulatedState } from './types/state';
 export type { AgentTab };
-import { ServerMessage, TerminalOutput, isAcpSessionInit, isAcpSessionStatus, isAcpPromptChunk, isAcpPromptComplete, isAcpToolUse, isAcpContextUpdate, isAcpError, isAcpResumeMarker } from './types/generated/protocol';
+import { ServerMessage, TerminalOutput, isAcpSessionInit, isAcpSessionStatus, isAcpPromptChunk, isAcpPromptComplete, isAcpToolUse, isAcpContextUpdate, isAcpError, isAcpResumeMarker } from './types/protocol';
 import { handleError } from './lib/error-recovery';
 import { showNotification } from './lib/tauri';
 

@@ -84,7 +84,7 @@ import {
   ServerMessage,
   UnknownMessage,
   PROTOCOL_VERSION
-} from '../generated/protocol';
+} from '../generated';
 
 describe('Protocol Types', () => {
   describe('Message Type Count', () => {

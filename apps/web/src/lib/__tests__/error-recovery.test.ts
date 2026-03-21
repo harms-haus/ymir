@@ -10,7 +10,7 @@ import {
 } from '../error-recovery';
 import { useToastStore, useStore } from '../../store';
 import { getWebSocketClient } from '../ws';
-import type { PtyCrashError, GitFailureError, AgentCrashError, DbError, Error as ServerError } from '../../types/generated/protocol';
+import type { PtyCrashError, GitFailureError, AgentCrashError, DbError, Error as ServerError } from '../../types/protocol';
 
 vi.mock('../ws', () => ({
   getWebSocketClient: vi.fn(),

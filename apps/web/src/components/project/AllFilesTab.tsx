@@ -3,7 +3,7 @@ import { useStore, selectActiveWorktree } from '../../store';
 import { useContextMenu } from '../../hooks/useContextMenu';
 import { ContextMenu } from '../ui/ContextMenu';
 import { getWebSocketClient } from '../../lib/ws';
-import type { FileList } from '../../types/generated/protocol';
+import type { FileList } from '../../types/protocol';
 
 interface FileNode {
   path: string;

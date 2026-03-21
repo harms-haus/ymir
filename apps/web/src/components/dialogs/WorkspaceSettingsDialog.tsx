@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Dialog } from '@base-ui/react/dialog';
 import { useStore, selectWorkspaceById } from '../../store';
 import { getWebSocketClient } from '../../lib/ws';
-import type { WorkspaceUpdate, WorkspaceUpdated, WorkspaceDeleted, Error as ErrorMessage } from '../../types/generated/protocol';
+import type { WorkspaceUpdate, WorkspaceUpdated, WorkspaceDeleted, Error as ErrorMessage } from '../../types/protocol';
 
 const PRESET_COLORS = [
   { name: 'Red', value: '#ef4444' },

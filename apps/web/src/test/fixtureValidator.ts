@@ -4,8 +4,8 @@ import { decode } from '@msgpack/msgpack';
 import type {
   AnyMessage,
   UnknownMessage,
-} from '../types/generated/protocol';
-import type { WorkspaceCreate, WorktreeCreate, AgentSpawn, TerminalCreate } from '../types/generated/protocol';
+} from '../types/protocol';
+import type { WorkspaceCreate, WorktreeCreate, AgentSpawn, TerminalCreate } from '../types/protocol';
 
 export interface ValidationResult {
   valid: boolean;

@@ -6,7 +6,7 @@ import React, {
   useEffect,
   useState,
 } from 'react';
-import type { TerminalOutput } from '../../types/generated/protocol';
+import type { TerminalOutput } from '../../types/protocol';
 import { setTerminalOutputCallback } from '../../store';
 import { initializeGhostty, isGhosttyInitialized } from './TerminalView';
 

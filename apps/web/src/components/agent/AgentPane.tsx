@@ -4,7 +4,7 @@ import { useStore, selectActiveAgentTabId, selectAgentTabsByWorktreeId, AgentTab
 import { useWebSocketClient } from '../../hooks/useWebSocket';
 import { AgentChat } from './AgentChat';
 import { DiffTab } from '../editor/DiffTab';
-import { AgentCancel, AgentSend, AgentSpawn } from '../../types/generated/protocol';
+import { AgentCancel, AgentSend, AgentSpawn } from '../../types/protocol';
 import { useContextMenu } from '../../hooks/useContextMenu';
 import { TabContextMenu } from '../ui/TabContextMenu';
 import { useSortableTabs, SortableTab } from '../ui/SortableTabs';
