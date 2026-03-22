@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useStore, selectActiveWorktree, selectGitStatusCache } from '../../store';
+import { useStore, selectActiveWorktree, selectGitStatusCache, AgentTab } from '../../store';
 import { getWebSocketClient } from '../../lib/ws';
 import { FileTree, FileTreeNode } from '../ui/FileTree';
 import { GitStatusBadge, transformStatusEntries } from '../ui/GitStatusBadge';
@@ -16,11 +16,24 @@ export function ChangesTab({ viewMode }: ChangesTabProps) {
   const [files, setFiles] = useState<GitStatusEntry[]>(gitStatusCache?.entries ?? []);
   const [isLoading, setIsLoading] = useState(!gitStatusCache);
   const setGitStatusCache = useStore((state) => state.setGitStatusCache);
+  const addAgentTab = useStore((state) => state.addAgentTab);
   const wsClient = getWebSocketClient();
 
   const handleViewDiff = useCallback((filePath: string) => {
-    console.log('View diff for:', filePath);
-  }, []);
+    if (!activeWorktree) return;
+
+    const tabId = `diff-${filePath}`;
+
+    const diffTab: AgentTab = {
+      id: tabId,
+      type: 'diff',
+      filePath,
+      label: `Diff: ${filePath.split('/').pop()}`,
+    };
+
+    addAgentTab(activeWorktree.id, diffTab);
+    useStore.getState().setActiveAgentTab(activeWorktree.id, tabId);
+  }, [activeWorktree, addAgentTab]);
 
   useEffect(() => {
     if (!activeWorktree) {

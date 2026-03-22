@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { NodeApi } from 'react-arborist';
-import { useStore, selectActiveWorktree, selectFileListCache, selectGitStatusCache } from '../../store';
+import { useStore, selectActiveWorktree, selectFileListCache, selectGitStatusCache, AgentTab } from '../../store';
 import { getWebSocketClient } from '../../lib/ws';
 import { FileTree, FileTreeNode } from '../ui/FileTree';
 import { GitStatusBadge, transformStatusEntries } from '../ui/GitStatusBadge';
@@ -80,12 +80,24 @@ export function AllFilesTab() {
   const [gitStatusEntries, setGitStatusEntries] = useState<GitStatusEntry[]>(gitStatusCache?.entries ?? []);
   const setFileListCache = useStore((state) => state.setFileListCache);
   const setGitStatusCache = useStore((state) => state.setGitStatusCache);
+  const addAgentTab = useStore((state) => state.addAgentTab);
 
   const handleEdit = useCallback((node: NodeApi<FileTreeNode>) => {
-    if (node.data.type === 'file') {
-      console.log('Edit file:', node.data.id);
+    if (node.data.type === 'file' && activeWorktree) {
+      const filePath = node.data.id;
+      const tabId = `editor-${filePath}`;
+
+      const editorTab: AgentTab = {
+        id: tabId,
+        type: 'editor',
+        filePath,
+        label: filePath.split('/').pop() || 'Editor',
+      };
+
+      addAgentTab(activeWorktree.id, editorTab);
+      useStore.getState().setActiveAgentTab(activeWorktree.id, tabId);
     }
-  }, []);
+  }, [activeWorktree, addAgentTab]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, node: NodeApi<FileTreeNode>) => {
     e.preventDefault();

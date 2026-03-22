@@ -30,6 +30,7 @@ export function EditorTab({ filePath, worktreeId, sessionId: _sessionId }: Edito
   const monacoRef = useRef<typeof import('monaco-editor') | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewStateRef = useRef<editor.ICodeEditorViewState | null>(null);
+  const requestedRef = useRef<string | null>(null);
   const { error: showError } = useToast();
   
   const [fileState, setFileState] = useState<FileState>({
@@ -51,25 +52,14 @@ export function EditorTab({ filePath, worktreeId, sessionId: _sessionId }: Edito
   // Load file content on mount or when filePath/worktreeId changes
   useEffect(() => {
     const wsClient = getWebSocketClient();
-    
-    setFileState(prev => ({ ...prev, isLoading: true, error: null }));
-    setHasUnsavedChanges(false);
-    setLanguage(detectLanguage(filePath));
-    
-    // Send FileRead message
-    const message: FileRead = {
-      type: 'FileRead',
-      worktreeId,
-      path: filePath,
-    };
-    wsClient.send(message);
-    
-    // Listen for FileContent response
+    const requestKey = `${worktreeId}:${filePath}`;
+
+    // Setup message handler first so we can receive the response
     const unsubscribe = wsClient.onMessage('FileContent', (msg: FileContentMessage) => {
-    if (msg.worktreeId === worktreeId && msg.path === filePath) {
-      const contentBytes = new Blob([msg.content]).size;
-      const isTooLarge = isFileTooLarge(contentBytes, MAX_FILE_SIZE_MB);
-        
+      if (msg.worktreeId === worktreeId && msg.path === filePath) {
+        const contentBytes = new Blob([msg.content]).size;
+        const isTooLarge = isFileTooLarge(contentBytes, MAX_FILE_SIZE_MB);
+
         if (isTooLarge) {
           showError(
             'File too large',
@@ -77,7 +67,7 @@ export function EditorTab({ filePath, worktreeId, sessionId: _sessionId }: Edito
             5000
           );
         }
-        
+
         setFileState({
           content: msg.content,
           isLoading: false,
@@ -85,17 +75,30 @@ export function EditorTab({ filePath, worktreeId, sessionId: _sessionId }: Edito
           error: null,
           fileSize: contentBytes,
         });
-        
-        // Restore view state if available
+
         if (editorRef.current && viewStateRef.current) {
           editorRef.current.restoreViewState(viewStateRef.current);
         }
       }
     });
-    
+
+    // Only request if we haven't already requested this file
+    if (requestedRef.current !== requestKey) {
+      requestedRef.current = requestKey;
+      setFileState(prev => ({ ...prev, isLoading: true, error: null }));
+      setHasUnsavedChanges(false);
+      setLanguage(detectLanguage(filePath));
+
+      const message: FileRead = {
+        type: 'FileRead',
+        worktreeId,
+        path: filePath,
+      };
+      wsClient.send(message);
+    }
+
     return () => {
       unsubscribe();
-      // Save view state before unmounting
       if (editorRef.current) {
         viewStateRef.current = editorRef.current.saveViewState();
       }

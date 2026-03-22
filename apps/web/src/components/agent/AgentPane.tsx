@@ -5,6 +5,7 @@ import { useWebSocketClient } from '../../hooks/useWebSocket';
 import { AgentChat } from './AgentChat';
 import { AgentSkeleton } from './AgentSkeleton';
 import { DiffTab } from '../editor/DiffTab';
+import { EditorTab } from '../editor/EditorTab';
 import { AgentCancel, AgentSend, AgentSpawn } from '../../types/protocol';
 import { useContextMenu } from '../../hooks/useContextMenu';
 import { TabContextMenu } from '../ui/TabContextMenu';
@@ -265,18 +266,20 @@ export function AgentPane({ worktreeId }: AgentPaneProps) {
                       <p>No active agent session</p>
                     </div>
                   )}
-                  {tab.type === 'diff' && tab.filePath && (
-                    <DiffTab
-                      filePath={tab.filePath}
-                      worktreeId={worktreeId}
-                      sessionId={tab.sessionId}
-                    />
-                  )}
-                  {tab.type === 'editor' && (
-                    <div className="flex items-center justify-center h-full text-muted-foreground">
-                      <p>Editor placeholder (T24)</p>
-                    </div>
-                  )}
+            {tab.type === 'diff' && tab.filePath && (
+              <DiffTab
+                filePath={tab.filePath}
+                worktreeId={worktreeId}
+                sessionId={tab.sessionId}
+              />
+            )}
+            {tab.type === 'editor' && tab.filePath && (
+              <EditorTab
+                filePath={tab.filePath}
+                worktreeId={worktreeId}
+                sessionId={tab.sessionId ?? `editor-session-${Date.now()}`}
+              />
+            )}
                 </Tabs.Panel>
               );
             })
