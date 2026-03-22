@@ -3,7 +3,7 @@
  * Defines the shape of the global state managed by the WebSocket client
  */
 
-import { AgentStatus, AcpSequence, AcpEvent, AcpEventEnvelope, AcpToolUseStatus, AcpSessionStatus, AcpContextUpdateType, AcpErrorCode } from './protocol';
+import { AgentStatus, AcpSequence, AcpEvent, AcpEventEnvelope, AcpToolUseStatus, AcpSessionStatus, AcpContextUpdateType, AcpErrorCode, GitStatusEntry } from './protocol';
 
 // Workspace and Worktree state (simplified from protocol types)
 export interface WorkspaceState {
@@ -115,6 +115,24 @@ export interface ChangeBranchDialogState {
   isOpen: boolean;
   worktreeId: string | null;
   currentBranch: string;
+}
+
+// ============================================================================
+// File Cache Types (for caching file listings and git status)
+// ============================================================================
+
+/** Cache entry for file list data */
+export interface FileListCache {
+  worktreeId: string;
+  files: string[];
+  timestamp: number;
+}
+
+/** Cache entry for git status data */
+export interface GitStatusCache {
+  worktreeId: string;
+  entries: GitStatusEntry[];
+  timestamp: number;
 }
 
 export type AlertDialogVariant = 'default' | 'destructive';
@@ -361,6 +379,7 @@ export interface AppState {
   connectionStatus: ConnectionStatus;
   connectionError: string | null;
   expandedWorkspaceIds: Set<string>;
+  isWorkspacesLoading: boolean;
 
   // Agent pane tabs (per worktree)
   agentTabs: Map<string, AgentTab[]>;
@@ -369,6 +388,10 @@ export interface AppState {
   // ACP Event Accumulator (connection-scoped, derived state)
   // IMPORTANT: This is NOT the source of truth for worktree/session identity
   acpAccumulator: AcpAccumulatorState;
+
+  // File cache (caches file listings and git status until worktree changes)
+  fileListCache: Map<string, FileListCache>;
+  gitStatusCache: Map<string, GitStatusCache>;
 
   // PR dialog state
   prDialog: PRDialogState;
@@ -393,6 +416,7 @@ export interface AppState {
   setActiveWorktree: (worktreeId: string | null) => void;
   setConnectionStatus: (status: ConnectionStatus) => void;
   setConnectionError: (error: string | null) => void;
+  setWorkspacesLoading: (loading: boolean) => void;
   toggleWorkspaceExpanded: (workspaceId: string) => void;
   
   // State management from server messages
@@ -466,4 +490,11 @@ addTerminalSession: (session: TerminalSessionState) => void;
   dispatchAccumulator: (action: AcpAccumulatorAction) => void;
   flushAccumulator: () => void;
   flushAccumulatorThread: (worktreeId: string) => void;
+
+  // File cache actions
+  setFileListCache: (worktreeId: string, files: string[]) => void;
+  clearFileListCache: (worktreeId: string) => void;
+  setGitStatusCache: (worktreeId: string, entries: GitStatusEntry[]) => void;
+  clearGitStatusCache: (worktreeId: string) => void;
+  clearAllFileCaches: () => void;
 }

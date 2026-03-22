@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { AppState, NotificationState, AgentTab, AlertDialogConfig, AgentSessionState, TerminalSessionState, AcpAccumulatorState, AcpAccumulatorAction, AccumulatedThread, AccumulatedTextContent, AccumulatedToolCard, AccumulatedContextCard, AccumulatedErrorCard, MAX_TOOL_OUTPUT_LENGTH, MAX_ACCUMULATED_MESSAGES, createInitialAccumulatorState, ThreadAccumulatedState, GitStats } from './types/state';
 export type { AgentTab };
-import { ServerMessage, TerminalOutput, isAcpSessionInit, isAcpSessionStatus, isAcpPromptChunk, isAcpPromptComplete, isAcpToolUse, isAcpContextUpdate, isAcpError, isAcpResumeMarker } from './types/protocol';
+import { ServerMessage, TerminalOutput, GitStatusEntry, isAcpSessionInit, isAcpSessionStatus, isAcpPromptChunk, isAcpPromptComplete, isAcpToolUse, isAcpContextUpdate, isAcpError, isAcpResumeMarker } from './types/protocol';
 import { handleError } from './lib/error-recovery';
 import { showNotification } from './lib/tauri';
 
@@ -368,6 +368,7 @@ export const useStore = create<AppState>()(
     connectionStatus: 'closed',
     connectionError: null,
     expandedWorkspaceIds: new Set<string>(),
+    isWorkspacesLoading: true,
 
   // Agent pane tabs (per worktree)
   agentTabs: new Map(),
@@ -375,6 +376,10 @@ export const useStore = create<AppState>()(
 
   // ACP Event Accumulator (connection-scoped, derived state)
   acpAccumulator: createInitialAccumulatorState(),
+
+  // File cache (caches file listings and git status until worktree changes)
+  fileListCache: new Map(),
+  gitStatusCache: new Map(),
 
   // PR dialog state
   prDialog: {
@@ -424,9 +429,15 @@ export const useStore = create<AppState>()(
       
       setActiveWorktree: (activeWorktreeId) => set({ activeWorktreeId }),
       
-      setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
+  setConnectionStatus: (connectionStatus) => set((state) => ({
+    connectionStatus,
+    // Set loading to true only when connecting; clear it on terminal state (closed)
+    isWorkspacesLoading: connectionStatus === 'connecting' ? true : connectionStatus === 'closed' ? false : state.isWorkspacesLoading
+  })),
       
       setConnectionError: (connectionError) => set({ connectionError }),
+
+      setWorkspacesLoading: (isWorkspacesLoading) => set({ isWorkspacesLoading }),
 
       toggleWorkspaceExpanded: (workspaceId: string) =>
         set((state) => {
@@ -446,6 +457,7 @@ export const useStore = create<AppState>()(
           worktrees: snapshot.worktrees,
           agentSessions: snapshot.agentSessions,
           terminalSessions: snapshot.terminalSessions,
+          isWorkspacesLoading: false,
           acpAccumulator: acpAccumulatorReducer(state.acpAccumulator, { type: 'CONNECTION_RECONNECTED' }),
         }));
       },
@@ -814,12 +826,49 @@ export const useStore = create<AppState>()(
     set((state) => ({
       acpAccumulator: acpAccumulatorReducer(state.acpAccumulator, { type: 'FLUSH_THREAD', worktreeId }),
     })),
-  }),
+
+  // File cache actions
+  setFileListCache: (worktreeId: string, files: string[]) =>
+    set((state) => {
+      const newCache = new Map(state.fileListCache);
+      newCache.set(worktreeId, { worktreeId, files, timestamp: Date.now() });
+      return { fileListCache: newCache };
+    }),
+
+  clearFileListCache: (worktreeId: string) =>
+    set((state) => {
+      const newCache = new Map(state.fileListCache);
+      newCache.delete(worktreeId);
+      return { fileListCache: newCache };
+    }),
+
+  setGitStatusCache: (worktreeId: string, entries: GitStatusEntry[]) =>
+    set((state) => {
+      const newCache = new Map(state.gitStatusCache);
+      newCache.set(worktreeId, { worktreeId, entries, timestamp: Date.now() });
+      return { gitStatusCache: newCache };
+    }),
+
+  clearGitStatusCache: (worktreeId: string) =>
+    set((state) => {
+      const newCache = new Map(state.gitStatusCache);
+      newCache.delete(worktreeId);
+      return { gitStatusCache: newCache };
+    }),
+
+  clearAllFileCaches: () =>
+    set(() => ({
+      fileListCache: new Map(),
+      gitStatusCache: new Map(),
+    })),
+}),
   { name: 'ymir-app-store' }
   )
 );
 
 // Selectors for derived state
+export const selectIsWorkspacesLoading = (state: AppState) => state.isWorkspacesLoading;
+
 export const selectWorkspaceById = (workspaceId: string) => (state: AppState) =>
   state.workspaces.find((w) => w.id === workspaceId);
 
@@ -895,8 +944,15 @@ export const selectAccumulatorThread = (worktreeId: string) => (state: AppState)
   };
 };
 
-export const selectAccumulatorConnectionGeneration = (state: AppState) => 
+export const selectAccumulatorConnectionGeneration = (state: AppState) =>
   state.acpAccumulator.connectionGeneration;
+
+// File cache selectors
+export const selectFileListCache = (worktreeId: string) => (state: AppState) =>
+  state.fileListCache.get(worktreeId) ?? null;
+
+export const selectGitStatusCache = (worktreeId: string) => (state: AppState) =>
+  state.gitStatusCache.get(worktreeId) ?? null;
 
 export function updateStateFromServerMessage(message: ServerMessage): void {
   const { addWorkspace, updateWorkspace, removeWorkspace, addWorktree, updateWorktree, removeWorktree } = useStore.getState();
@@ -925,10 +981,16 @@ export function updateStateFromServerMessage(message: ServerMessage): void {
     
     case 'WorktreeChanged':
       updateWorktree(message.worktree.id, message.worktree);
+      // Clear file caches when worktree changes (files modified on disk)
+      useStore.getState().clearFileListCache(message.worktree.id);
+      useStore.getState().clearGitStatusCache(message.worktree.id);
       break;
-    
+
     case 'WorktreeDeleted':
       removeWorktree(message.worktreeId);
+      // Clear caches for deleted worktree
+      useStore.getState().clearFileListCache(message.worktreeId);
+      useStore.getState().clearGitStatusCache(message.worktreeId);
       break;
 
     case 'WorktreeDetailsResult': {

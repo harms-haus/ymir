@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Tabs } from '@base-ui/react';
-import { useStore, selectTerminalSessionsByWorktreeId } from '../../store';
+import { useStore, selectTerminalSessionsByWorktreeId, selectIsWorkspacesLoading } from '../../store';
 import { useWebSocketClient } from '../../hooks/useWebSocket';
 import { Terminal, type TerminalRef } from './TerminalView';
+import { TerminalSkeleton } from './TerminalSkeleton';
 import { TerminalCreate, TerminalOutput } from '../../types/protocol';
 import TerminalIcon from '@mui/icons-material/Terminal';
 import { useShallow } from 'zustand/react/shallow';
@@ -51,6 +52,7 @@ interface TerminalPaneProps {
 
 export function TerminalPane({ worktreeId }: TerminalPaneProps) {
   const client = useWebSocketClient();
+  const isWorkspacesLoading = useStore(selectIsWorkspacesLoading);
   const terminalSessions = useStore(
     useShallow((state) => selectTerminalSessionsByWorktreeId(worktreeId)(state))
   );
@@ -265,7 +267,9 @@ export function TerminalPane({ worktreeId }: TerminalPaneProps) {
           </button>
         </Tabs.List>
 
-        {tabs.length === 0 ? (
+        {isWorkspacesLoading ? (
+          <TerminalSkeleton />
+        ) : tabs.length === 0 ? (
           <Tabs.Panel value="empty">
             <div className="terminal-empty-state">
               <TerminalIcon className="terminal-empty-icon" style={{ width: '1.5rem', height: '1.5rem' }} />
