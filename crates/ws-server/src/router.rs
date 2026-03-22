@@ -1,7 +1,7 @@
 //! Message routing and dispatch for WebSocket server
 
 use crate::protocol::{
-    ClientMessage, ClientMessagePayload, Error, ServerMessage, ServerMessagePayload, FileListResult,
+    ClientMessage, ClientMessagePayload, Error, ServerMessage, ServerMessagePayload, FileListResult, FileContent,
 };
 use crate::agent::{handle_agent_cancel, handle_agent_send, handle_agent_spawn};
 use crate::pty::{
@@ -160,9 +160,13 @@ pub async fn route_message(
             Some(handle_agent_reorder(state.clone(), msg).await)
         }
 
-        ClientMessagePayload::FileList(msg) => {
-            Some(handle_file_list(state.clone(), msg).await)
-        }
+    ClientMessagePayload::FileList(msg) => {
+        Some(handle_file_list(state.clone(), msg).await)
+    }
+
+    ClientMessagePayload::FileRead(msg) => {
+        Some(handle_file_read(state.clone(), msg).await)
+    }
 
         ClientMessagePayload::TerminalRename(msg) => {
             Some(handle_terminal_rename(state.clone(), msg).await)
@@ -176,16 +180,15 @@ pub async fn route_message(
             Some(handle_terminal_request_history(state.clone(), msg).await)
         }
 
-        ClientMessagePayload::GetWorktreeDetails(msg) => {
-            Some(handle_get_worktree_details(state.clone(), msg).await)
-        }
+    ClientMessagePayload::GetWorktreeDetails(msg) => {
+        Some(handle_get_worktree_details(state.clone(), msg).await)
+    }
 
-        ClientMessagePayload::WorkspaceRename(_)
-        | ClientMessagePayload::WorkspaceUpdate(_)
-        | ClientMessagePayload::WorktreeMerge(_)
-        | ClientMessagePayload::FileRead(_)
-        | ClientMessagePayload::FileWrite(_)
-        | ClientMessagePayload::UpdateSettings(_) => Some(not_implemented(message.payload)),
+    ClientMessagePayload::WorkspaceRename(_)
+    | ClientMessagePayload::WorkspaceUpdate(_)
+    | ClientMessagePayload::WorktreeMerge(_)
+    | ClientMessagePayload::FileWrite(_)
+    | ClientMessagePayload::UpdateSettings(_) => Some(not_implemented(message.payload)),
 
         ClientMessagePayload::GitStatus(msg) => Some(handle_git_status(state.clone(), msg).await),
 
@@ -669,11 +672,70 @@ async fn handle_file_list(state: Arc<AppState>, msg: crate::protocol::FileList) 
     collect_files(&base_path, &base_path, &mut files);
     files.sort();
     
-ServerMessage::new(ServerMessagePayload::FileListResult(FileListResult {
+    ServerMessage::new(ServerMessagePayload::FileListResult(FileListResult {
         worktree_id,
         files,
         request_id: None,
     }))
+}
+
+#[instrument(skip(state))]
+async fn handle_file_read(state: Arc<AppState>, msg: crate::protocol::FileRead) -> ServerMessage {
+    let worktree_id = msg.worktree_id;
+    let path = msg.path;
+
+    let worktrees = state.worktrees.read().await;
+    let worktree = match worktrees.get(&worktree_id) {
+        Some(wt) => wt,
+        None => {
+            return ServerMessage::new(ServerMessagePayload::Error(Error {
+                code: "WORKTREE_NOT_FOUND".to_string(),
+                message: format!("Worktree {} not found", worktree_id),
+                details: None,
+                request_id: None,
+            }));
+        }
+    };
+
+    let base_path = std::path::PathBuf::from(worktree.path.clone());
+    let file_path = base_path.join(&path);
+
+    // Security check: ensure the file is within the worktree
+    match file_path.canonicalize() {
+        Ok(canonical_path) => {
+            if !canonical_path.starts_with(&base_path) {
+                return ServerMessage::new(ServerMessagePayload::Error(Error {
+                    code: "FILE_ACCESS_DENIED".to_string(),
+                    message: "File is outside of worktree directory".to_string(),
+                    details: None,
+                    request_id: None,
+                }));
+            }
+        }
+        Err(_) => {
+            // File doesn't exist yet or can't be canonicalized - that's ok
+            // We'll still try to read it if it exists
+        }
+    }
+
+    match tokio::fs::read_to_string(&file_path).await {
+        Ok(content) => {
+            ServerMessage::new(ServerMessagePayload::FileContent(FileContent {
+                worktree_id,
+                path,
+                content,
+            }))
+        }
+        Err(e) => {
+            tracing::error!("Failed to read file: {}", e);
+            ServerMessage::new(ServerMessagePayload::Error(Error {
+                code: "FILE_READ_ERROR".to_string(),
+                message: format!("Failed to read file: {}", e),
+                details: None,
+                request_id: None,
+            }))
+        }
+    }
 }
 
 #[instrument(skip(state))]
