@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import ReactDiffViewer from 'react-diff-viewer-continued';
 import { useWebSocketClient } from '../../hooks/useWebSocket';
 import { GitDiff, GitDiffResult } from '../../types/protocol';
+import { ToggleSwitch } from '../ui/ToggleSwitch';
 
 interface DiffTabProps {
   filePath: string;
@@ -462,52 +463,14 @@ content: {
             )}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', backgroundColor: 'hsl(var(--muted))', borderRadius: '6px', padding: '4px', flexShrink: 0, marginLeft: '16px' }}>
-          <button
-            type="button"
-            onClick={() => setViewMode('split')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '32px',
-              height: '28px',
-              borderRadius: '4px',
-              border: 'none',
-              cursor: 'pointer',
-              backgroundColor: viewMode === 'split' ? 'hsl(var(--card))' : 'transparent',
-              color: viewMode === 'split' ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))',
-              boxShadow: viewMode === 'split' ? '0 1px 2px rgba(0,0,0,0.2)' : 'none',
-              transition: 'all 0.2s ease',
-            }}
-            aria-pressed={viewMode === 'split'}
-            title="Split view"
-          >
-            <i className="ri-layout-column-line" style={{ fontSize: '16px' }} />
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('inline')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '32px',
-              height: '28px',
-              borderRadius: '4px',
-              border: 'none',
-              cursor: 'pointer',
-              backgroundColor: viewMode === 'inline' ? 'hsl(var(--card))' : 'transparent',
-              color: viewMode === 'inline' ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))',
-              boxShadow: viewMode === 'inline' ? '0 1px 2px rgba(0,0,0,0.2)' : 'none',
-              transition: 'all 0.2s ease',
-            }}
-            aria-pressed={viewMode === 'inline'}
-            title="Inline view"
-          >
-            <i className="ri-layout-row-line" style={{ fontSize: '16px' }} />
-          </button>
-        </div>
+<ToggleSwitch
+        value={viewMode}
+        options={[
+          { value: 'split', icon: 'ri-layout-column-line', title: 'Split view' },
+          { value: 'inline', icon: 'ri-layout-row-line', title: 'Inline view' },
+        ]}
+        onChange={(value) => setViewMode(value as 'split' | 'inline')}
+      />
       </div>
 
       {/* Diff viewer */}

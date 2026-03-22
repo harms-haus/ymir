@@ -1,5 +1,6 @@
 import { useCallback, useState, useRef, useEffect } from 'react'
 import { WorkspaceTree } from './WorkspaceTree'
+import { SidebarSkeleton } from './SidebarSkeleton'
 import { useStore } from '../../store'
 import { createWorkspace } from '../../lib/api'
 
@@ -182,6 +183,7 @@ function CreateWorkspaceModal({ isOpen, onClose, onCreate }: CreateWorkspaceModa
 
 export function SidebarPanel() {
   const workspaces = useStore((state) => state.workspaces)
+  const isWorkspacesLoading = useStore((state) => state.isWorkspacesLoading)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   const handleCreateWorkspace = useCallback(
@@ -191,10 +193,8 @@ export function SidebarPanel() {
     []
   )
 
-  const containerHeight = workspaces.length > 0 ? 400 : 200
-
   return (
-    <div className="sidebar-container">
+    <div className="sidebar-container" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="panel-header">
         <h2>Workspaces</h2>
       </div>
@@ -203,11 +203,15 @@ export function SidebarPanel() {
         className="panel-content"
         style={{
           padding: 0,
+          flex: 1,
           display: 'flex',
           flexDirection: 'column',
+          overflow: 'hidden',
         }}
       >
-        {workspaces.length === 0 ? (
+        {isWorkspacesLoading ? (
+          <SidebarSkeleton />
+        ) : workspaces.length === 0 ? (
           <div
             style={{
               flex: 1,
@@ -258,8 +262,8 @@ export function SidebarPanel() {
           </div>
         ) : (
           <>
-            <div style={{ flex: 1, overflow: 'hidden' }}>
-              <WorkspaceTree height={containerHeight} width="100%" />
+            <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              <WorkspaceTree />
             </div>
             <div
               style={{

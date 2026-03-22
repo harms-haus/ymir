@@ -1,8 +1,9 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { Tabs } from '@base-ui/react';
-import { useStore, selectActiveAgentTabId, selectAgentTabsByWorktreeId, AgentTab } from '../../store';
+import { useStore, selectActiveAgentTabId, selectAgentTabsByWorktreeId, selectIsWorkspacesLoading, AgentTab } from '../../store';
 import { useWebSocketClient } from '../../hooks/useWebSocket';
 import { AgentChat } from './AgentChat';
+import { AgentSkeleton } from './AgentSkeleton';
 import { DiffTab } from '../editor/DiffTab';
 import { AgentCancel, AgentSend, AgentSpawn } from '../../types/protocol';
 import { useContextMenu } from '../../hooks/useContextMenu';
@@ -45,6 +46,7 @@ function getTabLabel(tab: AgentTab): string {
 
 export function AgentPane({ worktreeId }: AgentPaneProps) {
   const client = useWebSocketClient();
+  const isWorkspacesLoading = useStore(selectIsWorkspacesLoading);
   const tabs = useStore(selectAgentTabsByWorktreeId(worktreeId));
   const activeTabId = useStore(selectActiveAgentTabId(worktreeId));
   const allAgentSessions = useStore((state) => state.agentSessions);
@@ -231,7 +233,9 @@ export function AgentPane({ worktreeId }: AgentPaneProps) {
         </Tabs.List>
 
         <div className="agent-panel-content">
-          {tabs.length === 0 ? (
+          {isWorkspacesLoading ? (
+            <AgentSkeleton />
+          ) : tabs.length === 0 ? (
             <Tabs.Panel value="empty" className="h-full">
               <div className="agent-empty-state">
                 <RobotIcon className="agent-empty-icon" style={{ width: '1.5rem', height: '1.5rem' }} />

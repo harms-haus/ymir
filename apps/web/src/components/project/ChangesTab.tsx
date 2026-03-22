@@ -1,185 +1,26 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useStore, selectActiveWorktree, AgentTab } from '../../store';
+import { useStore, selectActiveWorktree, selectGitStatusCache } from '../../store';
 import { getWebSocketClient } from '../../lib/ws';
-import { GitStatusEntry, ServerGitStatusEntry } from '../../types/protocol';
+import { FileTree, FileTreeNode } from '../ui/FileTree';
+import { GitStatusBadge, transformStatusEntries } from '../ui/GitStatusBadge';
+import { ProjectSkeleton } from './ProjectSkeleton';
+import type { GitStatusEntry } from '../../types/protocol';
 
-type UIStatus = 'added' | 'modified' | 'deleted' | 'untracked' | 'renamed';
-
-/**
- * Parses a git status code (XY format from `git status --porcelain`) into a UI-friendly status.
- * First char (X) = staged status, second char (Y) = unstaged status.
- * Returns the most significant status for display and whether the file is staged.
- */
-function parseStatusCode(statusCode: string): { status: UIStatus; staged: boolean } {
-  if (statusCode === '??') {
-    return { status: 'untracked', staged: false };
-  }
-
-  const stagedChar = statusCode[0];
-  const unstagedChar = statusCode[1];
-
-  // Check staged status first (takes priority)
-  if (stagedChar === 'A') {
-    return { status: 'added', staged: true };
-  }
-  if (stagedChar === 'D') {
-    return { status: 'deleted', staged: true };
-  }
-  if (stagedChar === 'R') {
-    return { status: 'renamed', staged: true };
-  }
-  if (stagedChar === 'M') {
-    return { status: 'modified', staged: true };
-  }
-
-  // Check unstaged status
-  if (unstagedChar === 'M') {
-    return { status: 'modified', staged: false };
-  }
-  if (unstagedChar === 'D') {
-    return { status: 'deleted', staged: false };
-  }
-
-  // Default to modified for any other codes (C=copied, U=unmerged, etc.)
-  return { status: 'modified', staged: false };
+interface ChangesTabProps {
+  viewMode: 'flat' | 'grouped';
 }
 
-/**
- * Transforms server wire format entries into UI-friendly format.
- */
-function transformStatusEntries(serverEntries: ServerGitStatusEntry[]): GitStatusEntry[] {
-  return serverEntries.map((entry) => {
-    const { status, staged } = parseStatusCode(entry.statusCode);
-    return {
-      path: entry.path,
-      status,
-      staged,
-    };
-  });
-}
-
-interface GroupedFile {
-  path: string;
-  entries: GitStatusEntry[];
-}
-
-function getStatusColor(status: GitStatusEntry['status']) {
-  switch (status) {
-    case 'added':
-      return 'hsl(var(--status-working))';
-    case 'modified':
-      return 'hsl(var(--warning))';
-    case 'deleted':
-      return 'hsl(var(--destructive))';
-    case 'untracked':
-      return 'hsl(var(--muted-foreground))';
-    case 'renamed':
-      return 'hsl(var(--primary))';
-    default:
-      return 'hsl(var(--muted-foreground))';
-  }
-}
-
-function getStatusIcon(status: GitStatusEntry['status']) {
-  switch (status) {
-    case 'added':
-      return 'ri-add-line';
-    case 'modified':
-      return 'ri-edit-line';
-    case 'deleted':
-      return 'ri-delete-bin-line';
-    case 'renamed':
-      return 'ri-arrow-left-right-line';
-    case 'untracked':
-    default:
-      return 'ri-question-line';
-  }
-}
-
-function getFileIcon(path: string) {
-  const ext = path.split('.').pop()?.toLowerCase();
-  const filename = path.split('/').pop() || '';
-  
-  if (filename === 'package.json') return 'ri-nodejs-line';
-  if (filename === 'Cargo.toml') return 'ri-rust-line';
-  if (filename === 'README.md') return 'ri-file-text-line';
-  if (filename === 'Dockerfile') return 'ri-docker-line';
-  
-  switch (ext) {
-    case 'ts':
-    case 'tsx':
-    case 'js':
-    case 'jsx':
-      return 'ri-javascript-line';
-    case 'py':
-      return 'ri-python-line';
-    case 'rs':
-      return 'ri-rust-line';
-    case 'json':
-      return 'ri-braces-line';
-    case 'md':
-      return 'ri-file-text-line';
-    case 'yml':
-    case 'yaml':
-      return 'ri-file-settings-line';
-    case 'toml':
-      return 'ri-file-settings-line';
-    case 'sh':
-      return 'ri-terminal-box-line';
-    case 'css':
-    case 'scss':
-    case 'sass':
-      return 'ri-css3-line';
-    case 'html':
-      return 'ri-html5-line';
-    case 'svg':
-    case 'png':
-    case 'jpg':
-    case 'jpeg':
-    case 'gif':
-      return 'ri-image-line';
-    default:
-      return 'ri-file-line';
-  }
-}
-
-function groupFilesByDirectory(files: GitStatusEntry[]): GroupedFile[] {
-  const groups = new Map<string, GitStatusEntry[]>();
-  
-  for (const file of files) {
-    const dir = file.path.substring(0, file.path.lastIndexOf('/')) || '.';
-    if (!groups.has(dir)) {
-      groups.set(dir, []);
-    }
-    groups.get(dir)!.push(file);
-  }
-  
-  return Array.from(groups.entries())
-    .map(([path, entries]) => ({ path, entries }))
-    .sort((a, b) => a.path.localeCompare(b.path));
-}
-
-export function ChangesTab() {
-  const [viewMode, setViewMode] = useState<'flat' | 'grouped'>('flat');
-  const [files, setFiles] = useState<GitStatusEntry[]>([]);
-  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set(['.']));
+export function ChangesTab({ viewMode }: ChangesTabProps) {
   const activeWorktree = useStore(selectActiveWorktree);
+  const gitStatusCache = useStore(selectGitStatusCache(activeWorktree?.id ?? ''));
+  const [files, setFiles] = useState<GitStatusEntry[]>(gitStatusCache?.entries ?? []);
+  const [isLoading, setIsLoading] = useState(!gitStatusCache);
+  const setGitStatusCache = useStore((state) => state.setGitStatusCache);
   const wsClient = getWebSocketClient();
-  const { addAgentTab, setActiveAgentTab } = useStore();
 
   const handleViewDiff = useCallback((filePath: string) => {
-    if (!activeWorktree) return;
-
-    const diffTab: AgentTab = {
-      id: `diff-${filePath}-${Date.now()}`,
-      type: 'diff',
-      filePath,
-      label: filePath.split('/').pop() || filePath,
-    };
-
-    addAgentTab(activeWorktree.id, diffTab);
-    setActiveAgentTab(activeWorktree.id, diffTab.id);
-  }, [activeWorktree, addAgentTab, setActiveAgentTab]);
+    console.log('View diff for:', filePath);
+  }, []);
 
   useEffect(() => {
     if (!activeWorktree) {
@@ -187,33 +28,96 @@ export function ChangesTab() {
       return;
     }
 
-    // Subscribe to GitStatusResult messages
     const unsubscribe = wsClient.onMessage('GitStatusResult', (message) => {
       if (message.worktreeId === activeWorktree.id) {
-        setFiles(transformStatusEntries(message.entries));
+        const entries = transformStatusEntries(message.entries);
+        setFiles(entries);
+        setGitStatusCache(activeWorktree.id, entries);
+        setIsLoading(false);
       }
     });
 
-    // Request initial status
-    wsClient.send({
-      type: 'GitStatus',
-      worktreeId: activeWorktree.id,
-    });
+    if (!gitStatusCache) {
+      setIsLoading(true);
+      wsClient.send({
+        type: 'GitStatus',
+        worktreeId: activeWorktree.id,
+      });
+    }
 
     return unsubscribe;
-  }, [activeWorktree, wsClient]);
+  }, [activeWorktree, wsClient, gitStatusCache, setGitStatusCache]);
 
-  const handleToggleDir = useCallback((dirPath: string) => {
-    setExpandedDirs(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(dirPath)) {
-        newSet.delete(dirPath);
-      } else {
-        newSet.add(dirPath);
+
+
+  const treeData: FileTreeNode[] = viewMode === 'flat'
+    ? files.map((file) => ({
+      id: file.path,
+      name: file.path,
+      type: 'file' as const,
+      data: { status: file.status, staged: file.staged },
+      isDeleted: file.status === 'deleted',
+    }))
+    : buildNestedTree(files);
+
+function buildNestedTree(files: GitStatusEntry[]): FileTreeNode[] {
+  const root: FileTreeNode[] = [];
+  const nodeMap = new Map<string, FileTreeNode>();
+
+  const sortedFiles = [...files].sort((a, b) => a.path.localeCompare(b.path));
+
+  for (const file of sortedFiles) {
+    const parts = file.path.split('/');
+    let currentPath = '';
+
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      const parentPath = currentPath;
+      currentPath = currentPath ? `${currentPath}/${part}` : part;
+      const isFile = i === parts.length - 1;
+
+      if (!nodeMap.has(currentPath)) {
+        const node: FileTreeNode = {
+          id: currentPath,
+          name: part,
+          type: isFile ? 'file' : 'directory',
+          children: isFile ? undefined : [],
+          data: isFile ? { status: file.status, staged: file.staged } : undefined,
+          isDeleted: isFile && file.status === 'deleted',
+        };
+
+        nodeMap.set(currentPath, node);
+
+        if (parentPath) {
+          const parent = nodeMap.get(parentPath);
+          if (parent && parent.children) {
+            parent.children.push(node);
+          }
+        } else {
+          root.push(node);
+        }
       }
-      return newSet;
+    }
+  }
+
+  function sortChildren(nodes: FileTreeNode[]) {
+    nodes.sort((a, b) => {
+      if (a.type !== b.type) {
+        return a.type === 'directory' ? -1 : 1;
+      }
+      return a.name.localeCompare(b.name);
     });
-  }, []);
+
+    for (const node of nodes) {
+      if (node.children) {
+        sortChildren(node.children);
+      }
+    }
+  }
+
+  sortChildren(root);
+  return root;
+}
 
   if (!activeWorktree) {
     return (
@@ -222,6 +126,10 @@ export function ChangesTab() {
         <p>No worktree selected</p>
       </div>
     );
+  }
+
+  if (isLoading) {
+    return <ProjectSkeleton />;
   }
 
   if (files.length === 0) {
@@ -233,204 +141,46 @@ export function ChangesTab() {
     );
   }
 
-  const groupedFiles = groupFilesByDirectory(files);
+  function folderHasChanges(folderId: string): boolean {
+    return files.some(f => f.path.startsWith(folderId + '/'));
+  }
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: '12px 16px', borderBottom: '1px solid hsl(var(--border))' }}>
-        <div style={{ display: 'inline-flex', gap: '4px' }}>
-          <button
-            type="button"
-            onClick={() => setViewMode('flat')}
-            style={{
-              padding: '4px 12px',
-              borderRadius: '4px',
-              border: '1px solid hsl(var(--border))',
-              backgroundColor: viewMode === 'flat' ? 'hsl(var(--accent))' : 'transparent',
-              color: viewMode === 'flat' ? 'hsl(var(--accent-foreground))' : 'hsl(var(--foreground))',
-              cursor: 'pointer',
-              fontSize: '13px',
-            }}
-          >
-            Flat
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('grouped')}
-            style={{
-              padding: '4px 12px',
-              borderRadius: '4px',
-              border: '1px solid hsl(var(--border))',
-              backgroundColor: viewMode === 'grouped' ? 'hsl(var(--accent))' : 'transparent',
-              color: viewMode === 'grouped' ? 'hsl(var(--accent-foreground))' : 'hsl(var(--foreground))',
-              cursor: 'pointer',
-              fontSize: '13px',
-            }}
-          >
-            Grouped by folder
-          </button>
-        </div>
-      </div>
-
-      <div style={{ flex: 1, overflow: 'auto' }}>
-        {viewMode === 'flat' ? (
-          <div>
-            {files.map((file) => (
-              <div
-                key={file.path}
-                role="button"
-                tabIndex={0}
-                onClick={() => handleViewDiff(file.path)}
-                onKeyUp={(e) => { if (e.key === 'Enter') handleViewDiff(file.path); }}
+    <div style={{ height: '100%' }}>
+  <FileTree
+    data={treeData}
+    onActivate={(node) => {
+      if (node.data.type === 'file') {
+        handleViewDiff(node.id);
+      }
+    }}
+    openByDefault={viewMode === 'grouped'}
+        renderRightContent={(node) => {
+          if (node.type === 'file') {
+            if (!node.data?.status) return null;
+            return (
+              <GitStatusBadge
+                status={node.data.status as GitStatusEntry['status']}
+                staged={node.data.staged as boolean}
+              />
+            );
+          }
+          if (node.type === 'directory' && folderHasChanges(node.id)) {
+            return (
+              <span
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '8px 16px',
-                  cursor: 'pointer',
-                  borderBottom: '1px solid hsl(var(--border))',
-                  transition: 'background-color 0.15s ease',
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  backgroundColor: 'hsl(var(--git-modified))',
+                  flexShrink: 0,
                 }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'hsl(var(--accent))';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }}
-              >
-                <i
-                  className={getStatusIcon(file.status)}
-                  style={{
-                    fontSize: '14px',
-                    marginRight: '12px',
-                    color: getStatusColor(file.status),
-                  }}
-                />
-                <i 
-                  className={getFileIcon(file.path)} 
-                  style={{ 
-                    fontSize: '16px', 
-                    marginRight: '8px',
-                    color: 'hsl(var(--muted-foreground))'
-                  }} 
-                />
-                <span style={{ flex: 1, fontSize: '13px', color: 'hsl(var(--foreground))' }}>
-                  {file.path}
-                </span>
-                <span style={{ fontSize: '11px', color: 'hsl(var(--muted-foreground))', textTransform: 'capitalize' }}>
-                  {file.status}
-                </span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div>
-            {groupedFiles.map(({ path, entries }) => {
-              const isExpanded = expandedDirs.has(path);
-              
-              return (
-                <div key={path}>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleDir(path)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      padding: '8px 16px',
-                      cursor: 'pointer',
-                      borderBottom: '1px solid hsl(var(--border))',
-                      width: '100%',
-                      border: 'none',
-                      background: 'hsl(var(--secondary) / 0.3)',
-                      textAlign: 'left',
-                      fontFamily: 'inherit',
-                      transition: 'background-color 0.15s ease',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'hsl(var(--secondary) / 0.5)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'hsl(var(--secondary) / 0.3)';
-                    }}
-                  >
-                    <span
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: '20px',
-                        height: '20px',
-                        marginRight: '8px',
-                        transition: 'transform 0.2s ease',
-                        transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
-                      }}
-                    >
-                      <i className="ri-arrow-right-s-line" style={{ fontSize: '16px' }} />
-                    </span>
-                    <i className="ri-folder-3-line" style={{ fontSize: '16px', marginRight: '8px', color: 'hsl(var(--primary))' }} />
-                    <span style={{ flex: 1, fontSize: '13px', color: 'hsl(var(--foreground))' }}>
-                      {path}
-                    </span>
-                    <span style={{ fontSize: '11px', color: 'hsl(var(--muted-foreground))' }}>
-                      {entries.length} {entries.length === 1 ? 'file' : 'files'}
-                    </span>
-                  </button>
-                  
-                  {isExpanded && (
-                    <div>
-                      {entries.map((file) => (
-                        <div
-                          key={file.path}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => handleViewDiff(file.path)}
-                          onKeyUp={(e) => { if (e.key === 'Enter') handleViewDiff(file.path); }}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            padding: '6px 16px 6px 52px',
-                            cursor: 'pointer',
-                            borderBottom: '1px solid hsl(var(--border))',
-                            transition: 'background-color 0.15s ease',
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = 'hsl(var(--accent))';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = 'transparent';
-                          }}
-                        >
-                          <i
-                            className={getStatusIcon(file.status)}
-                            style={{
-                              fontSize: '12px',
-                              marginRight: '12px',
-                              color: getStatusColor(file.status),
-                            }}
-                          />
-                          <i 
-                            className={getFileIcon(file.path)} 
-                            style={{ 
-                              fontSize: '14px', 
-                              marginRight: '8px',
-                              color: 'hsl(var(--muted-foreground))'
-                            }} 
-                          />
-                          <span style={{ flex: 1, fontSize: '13px', color: 'hsl(var(--foreground))' }}>
-                            {file.path.split('/').pop()}
-                          </span>
-                          <span style={{ fontSize: '11px', color: 'hsl(var(--muted-foreground))', textTransform: 'capitalize' }}>
-                            {file.status}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+              />
+            );
+          }
+          return null;
+        }}
+      />
     </div>
   );
 }

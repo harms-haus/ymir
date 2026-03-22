@@ -33,6 +33,13 @@
   --status-waiting: 48 93% 47%;
   --warning: 38 92% 50%;
 
+  /* Git status colors */
+  --git-added: 142 70% 45%;      /* Green for added/uncommitted */
+  --git-modified: 27 95% 55%;    /* Orange for modified */
+  --git-deleted: 0 70% 50%;       /* Red for deleted */
+  --git-untracked: 210 40% 70%;   /* Grayish for untracked */
+  --git-renamed: 270 50% 60%;     /* Purple for renamed */
+
   /* Panel backgrounds (subtle visual differentiation) */
   --panel-sidebar: 222.2 84% 5.9%;   /* Slightly lighter than background */
   --panel-main: 222.2 84% 4.9%;     /* Same as background */
