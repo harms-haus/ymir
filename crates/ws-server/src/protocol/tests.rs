@@ -150,6 +150,7 @@ fn test_agent_send_roundtrip() {
 fn test_agent_cancel_roundtrip() {
     let msg = ClientMessage::new(ClientMessagePayload::AgentCancel(AgentCancel {
         worktree_id: Uuid::new_v4(),
+        session_id: Uuid::new_v4(),
     }));
     test_roundtrip(msg);
 }
@@ -559,6 +560,7 @@ fn test_acp_event_envelope_roundtrip() {
                 supports_context_update: true,
                 supports_cancellation: true,
             },
+            config_options: Vec::new(),
         }),
     };
     test_roundtrip(envelope);
@@ -573,6 +575,7 @@ fn test_acp_session_init_roundtrip() {
             supports_context_update: false,
             supports_cancellation: true,
         },
+        config_options: Vec::new(),
     };
     test_roundtrip(event);
 }
@@ -699,6 +702,7 @@ fn test_acp_event_variants_roundtrip() {
                 supports_context_update: true,
                 supports_cancellation: true,
             },
+            config_options: Vec::new(),
         }),
         AcpEvent::SessionStatus(AcpSessionStatusEvent {
             worktree_id: Uuid::new_v4(),

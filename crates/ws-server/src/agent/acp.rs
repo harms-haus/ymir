@@ -1,10 +1,14 @@
 //! ACP client using official agent-client-protocol SDK with message-passing boundary.
 
-use crate::agent::adapter::{create_client_capabilities, create_implementation, AcpEventSender, SequenceCounter, YmirClientHandler};
+use crate::agent::adapter::{
+    create_client_capabilities, create_implementation, merge_session_setup_options,
+    AcpEventSender, SequenceCounter, YmirClientHandler,
+};
 use crate::protocol::{AcpEventEnvelope, ServerMessage, ServerMessagePayload};
 use agent_client_protocol::{
     Agent, CancelNotification, ClientSideConnection, ContentBlock,
     InitializeRequest, NewSessionRequest, PromptRequest, ProtocolVersion, SessionId,
+    SetSessionConfigOptionRequest, SetSessionModeRequest, SetSessionModelRequest,
 };
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
@@ -44,6 +48,12 @@ enum AcpCommand {
         worktree_id: Uuid,
         respond: oneshot::Sender<Result<()>>,
     },
+    SetSessionConfigOption {
+        worktree_id: Uuid,
+        config_id: String,
+        value: String,
+        respond: oneshot::Sender<Result<()>>,
+    },
     Status {
         worktree_id: Uuid,
         respond: oneshot::Sender<AgentStatus>,
@@ -75,6 +85,7 @@ struct AcpClient {
     _io_task: JoinHandle<()>,
     session_id: Option<SessionId>,
     status: Arc<RwLock<AgentStatus>>,
+    handler: YmirClientHandler,
 }
 
 impl AcpClient {
@@ -89,7 +100,7 @@ impl AcpClient {
         let sequence = Arc::new(SequenceCounter::new());
         let handler = YmirClientHandler::new(worktree_id, event_sender, sequence);
 
-        let (connection, _io_task, child) = Self::spawn_stdio(agent_type, worktree_path, handler).await?;
+        let (connection, _io_task, child) = Self::spawn_stdio(agent_type, worktree_path, handler.clone()).await?;
 
         let mut client = Self {
             process: child,
@@ -97,6 +108,7 @@ impl AcpClient {
             _io_task,
             session_id: None,
             status,
+            handler,
         };
 
         client.initialize().await?;
@@ -181,6 +193,52 @@ impl AcpClient {
             .map_err(|e| anyhow!("Session creation failed: {}", e))?;
 
         self.session_id = Some(response.session_id.clone());
+        let config_options = merge_session_setup_options(
+            response.config_options.as_deref(),
+            response.modes.as_ref(),
+            response.models.as_ref(),
+        );
+        self.handler.emit_session_init(
+            response.session_id.to_string(),
+            config_options,
+        );
+        Ok(())
+    }
+
+    async fn set_config_option(&mut self, config_id: &str, value: &str) -> Result<()> {
+        let session_id = self.session_id.clone().ok_or_else(|| anyhow!("No active session"))?;
+        let config_id = config_id.to_string();
+        let value = value.to_string();
+
+        match config_id.as_str() {
+            "mode" => {
+                self._connection
+                    .set_session_mode(SetSessionModeRequest::new(session_id, value.clone()))
+                    .await
+                    .map_err(|e| anyhow!("Set session mode failed: {}", e))?;
+            }
+            "model" => {
+                self._connection
+                    .set_session_model(SetSessionModelRequest::new(session_id, value.clone()))
+                    .await
+                    .map_err(|e| anyhow!("Set session model failed: {}", e))?;
+            }
+            _ => {
+                self._connection
+                    .set_session_config_option(SetSessionConfigOptionRequest::new(session_id, config_id.clone(), value.clone()))
+                    .await
+                    .map_err(|e| anyhow!("Set session config option failed: {}", e))?;
+            }
+        }
+
+        let config_options = self.handler.update_config_option_value(&config_id, &value);
+        let acp_session_id = self
+            .session_id
+            .as_ref()
+            .map(ToString::to_string)
+            .ok_or_else(|| anyhow!("No active session"))?;
+        self.handler.emit_config_options_update(acp_session_id, config_options);
+
         Ok(())
     }
 
@@ -275,6 +333,17 @@ impl AcpHandle {
         respond_rx.await.map_err(|e| anyhow!("Failed to receive response: {}", e))?
     }
 
+    pub async fn set_session_config_option(&self, worktree_id: Uuid, config_id: &str, value: &str) -> Result<()> {
+        let (respond_tx, respond_rx) = oneshot::channel();
+        self.tx.send(AcpCommand::SetSessionConfigOption {
+            worktree_id,
+            config_id: config_id.to_string(),
+            value: value.to_string(),
+            respond: respond_tx,
+        }).map_err(|e| anyhow!("Failed to send command: {}", e))?;
+        respond_rx.await.map_err(|e| anyhow!("Failed to receive response: {}", e))?
+    }
+
     pub async fn status(&self, worktree_id: Uuid) -> AgentStatus {
         let (respond_tx, respond_rx) = oneshot::channel();
         let _ = self.tx.send(AcpCommand::Status {
@@ -334,6 +403,14 @@ pub fn start_acp_runtime(broadcast_tx: broadcast::Sender<ServerMessage>) -> (Acp
                             client.kill().await
                         } else {
                             Ok(())
+                        };
+                        let _ = respond.send(result);
+                    }
+                    AcpCommand::SetSessionConfigOption { worktree_id, config_id, value, respond } => {
+                        let result = if let Some(client) = clients.get_mut(&worktree_id) {
+                            client.set_config_option(&config_id, &value).await
+                        } else {
+                            Err(anyhow!("No client for worktree {}", worktree_id))
                         };
                         let _ = respond.send(result);
                     }

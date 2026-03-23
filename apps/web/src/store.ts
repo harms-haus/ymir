@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { AppState, NotificationState, AgentTab, AlertDialogConfig, AgentSessionState, TerminalSessionState, AcpAccumulatorState, AcpAccumulatorAction, AccumulatedThread, AccumulatedMessage, AccumulatedTextContent, AccumulatedToolCard, AccumulatedContextCard, AccumulatedErrorCard, MAX_TOOL_OUTPUT_LENGTH, MAX_ACCUMULATED_MESSAGES, createInitialAccumulatorState, ThreadAccumulatedState, GitStats } from './types/state';
 export type { AgentTab };
-import { ServerMessage, TerminalOutput, GitStatusEntry, AcpEventEnvelope, isAcpSessionInit, isAcpSessionStatus, isAcpPromptChunk, isAcpPromptComplete, isAcpToolUse, isAcpContextUpdate, isAcpError, isAcpResumeMarker } from './types/protocol';
+import { ServerMessage, TerminalOutput, GitStatusEntry, AcpEventEnvelope, isAcpSessionInit, isAcpConfigOptionsUpdate, isAcpSessionStatus, isAcpPromptChunk, isAcpPromptComplete, isAcpToolUse, isAcpContextUpdate, isAcpError, isAcpResumeMarker } from './types/protocol';
 import { handleError } from './lib/error-recovery';
 import { showNotification } from './lib/tauri';
 
@@ -43,6 +43,7 @@ function createEmptyThread(worktreeId: string, acpSessionId: string, connectionG
     lastSequence: 0,
     connectionGeneration,
     isStreaming: false,
+    configOptions: [],
   };
 }
 
@@ -149,7 +150,11 @@ export function acpAccumulatorReducer(
           thread = createEmptyThread(worktreeId, sessionData.acpSessionId, state.connectionGeneration);
         }
         const newThreads = new Map(state.threads);
-        newThreads.set(worktreeId, { ...thread, acpSessionId: sessionData.acpSessionId });
+        newThreads.set(worktreeId, {
+          ...thread,
+          acpSessionId: sessionData.acpSessionId,
+          configOptions: sessionData.configOptions ?? [],
+        });
         return { ...state, threads: newThreads };
       }
 
@@ -166,6 +171,12 @@ export function acpAccumulatorReducer(
       if (isAcpSessionStatus({ eventType, data } as any)) {
         const statusData = data as any;
         updatedThread.sessionStatus = statusData.status;
+        changed = true;
+      }
+
+      else if (isAcpConfigOptionsUpdate({ eventType, data } as any)) {
+        const configData = data as any;
+        updatedThread.configOptions = configData.configOptions ?? [];
         changed = true;
       }
 

@@ -108,20 +108,21 @@ export function AgentPane({ worktreeId }: AgentPaneProps) {
     }
   }, [worktreeId, setActiveAgentTab]);
 
-  const handleCloseTab = useCallback((tabId: string) => {
-    const tab = tabs.find((t) => t.id === tabId);
-    if (tab?.sessionId) {
-      const session = agentSessions.find((as) => as.id === tab.sessionId);
-      if (session) {
-        const cancelMessage: AgentCancel = {
-          type: 'AgentCancel',
-          worktreeId: session.worktreeId,
-        };
-        client.send(cancelMessage);
-      }
-    }
-    removeAgentTab(worktreeId, tabId);
-  }, [worktreeId, tabs, agentSessions, removeAgentTab, client]);
+ const handleCloseTab = useCallback((tabId: string) => {
+ const tab = tabs.find((t) => t.id === tabId);
+ if (tab?.sessionId) {
+ const session = agentSessions.find((as) => as.id === tab.sessionId);
+ if (session) {
+ const cancelMessage: AgentCancel = {
+ type: 'AgentCancel',
+ worktreeId: session.worktreeId,
+ sessionId: session.id,
+ };
+ client.send(cancelMessage);
+ }
+ }
+ removeAgentTab(worktreeId, tabId);
+ }, [worktreeId, tabs, agentSessions, removeAgentTab, client]);
 
   const handleSendMessage = useCallback((message: string) => {
     const sendMessage: AgentSend = {

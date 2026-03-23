@@ -224,7 +224,7 @@ impl AppState {
 }
 
     #[cfg(test)]
-    pub async fn new_test() -> Self {
+    pub async fn new_test() -> Arc<Self> {
         let db = Db::in_memory()
             .await
             .expect("Failed to create in-memory db");

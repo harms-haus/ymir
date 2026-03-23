@@ -3,7 +3,7 @@
  * Defines the shape of the global state managed by the WebSocket client
  */
 
-import { AgentStatus, AcpSequence, AcpEvent, AcpEventEnvelope, AcpToolUseStatus, AcpSessionStatus, AcpContextUpdateType, AcpErrorCode, GitStatusEntry } from './protocol';
+import { AgentStatus, AcpSequence, AcpEvent, AcpEventEnvelope, AcpToolUseStatus, AcpSessionStatus, AcpContextUpdateType, AcpErrorCode, AcpSessionConfigOption, GitStatusEntry } from './protocol';
 
 // Workspace and Worktree state (simplified from protocol types)
 export interface WorkspaceState {
@@ -278,6 +278,7 @@ export interface AccumulatedThread {
   connectionGeneration: number;
   /** Whether this thread is currently streaming */
   isStreaming: boolean;
+  configOptions: AcpSessionConfigOption[];
   /** Resume marker checkpoint if available */
   resumeCheckpoint?: string;
 }

@@ -270,6 +270,14 @@ export interface AgentSend {
 export interface AgentCancel {
   type: 'AgentCancel';
   worktreeId: string;
+  sessionId: string;
+}
+
+export interface AgentSetConfigOption {
+  type: 'AgentSetConfigOption';
+  worktreeId: string;
+  configId: string;
+  value: string;
 }
 
 // Terminal messages
@@ -575,6 +583,7 @@ export interface AcpEventEnvelope {
 
 export type AcpEventData =
   | AcpSessionInit
+  | AcpConfigOptionsUpdate
   | AcpSessionStatusEvent
   | AcpPromptChunk
   | AcpPromptComplete
@@ -585,6 +594,7 @@ export type AcpEventData =
 
 export type AcpEvent =
   | { eventType: 'SessionInit'; data: AcpSessionInit }
+  | { eventType: 'ConfigOptionsUpdate'; data: AcpConfigOptionsUpdate }
   | { eventType: 'SessionStatus'; data: AcpSessionStatusEvent }
   | { eventType: 'PromptChunk'; data: AcpPromptChunk }
   | { eventType: 'PromptComplete'; data: AcpPromptComplete }
@@ -596,6 +606,30 @@ export type AcpEvent =
 export interface AcpSessionInit {
   acpSessionId: string;
   capabilities: AcpAgentCapabilities;
+  configOptions: AcpSessionConfigOption[];
+}
+
+export type AcpSessionConfigOptionCategory = 'mode' | 'model' | 'thought_level' | string;
+
+export interface AcpSessionConfigSelectOption {
+  value: string;
+  name: string;
+  description?: string;
+}
+
+export interface AcpSessionConfigOption {
+  id: string;
+  name: string;
+  description?: string;
+  category?: AcpSessionConfigOptionCategory;
+  currentValue: string;
+  options: AcpSessionConfigSelectOption[];
+}
+
+export interface AcpConfigOptionsUpdate {
+  worktreeId: string;
+  acpSessionId: string;
+  configOptions: AcpSessionConfigOption[];
 }
 
 export interface AcpAgentCapabilities {
@@ -713,6 +747,10 @@ export function isAcpSessionInit(event: AcpEvent): event is { eventType: 'Sessio
   return event.eventType === 'SessionInit';
 }
 
+export function isAcpConfigOptionsUpdate(event: AcpEvent): event is { eventType: 'ConfigOptionsUpdate'; data: AcpConfigOptionsUpdate } {
+  return event.eventType === 'ConfigOptionsUpdate';
+}
+
 export function isAcpSessionStatus(event: AcpEvent): event is { eventType: 'SessionStatus'; data: AcpSessionStatusEvent } {
   return event.eventType === 'SessionStatus';
 }
@@ -759,6 +797,7 @@ export type ClientMessage =
   | AgentSpawn
     | AgentSend
     | AgentCancel
+    | AgentSetConfigOption
     | AgentRename
     | AgentReorder
     | TerminalInput
@@ -912,6 +951,10 @@ export function isAgentSend(message: AnyMessage | UnknownMessage): message is Ag
 
 export function isAgentCancel(message: AnyMessage | UnknownMessage): message is AgentCancel {
   return message.type === 'AgentCancel';
+}
+
+export function isAgentSetConfigOption(message: AnyMessage | UnknownMessage): message is AgentSetConfigOption {
+  return message.type === 'AgentSetConfigOption';
 }
 
 export function isTerminalInput(message: AnyMessage | UnknownMessage): message is TerminalInput {
@@ -1087,7 +1130,7 @@ export function decodeMessage(data: ArrayBuffer | Uint8Array): AnyMessage | Unkn
       // Client messages
       'WorkspaceCreate', 'WorkspaceDelete', 'WorkspaceRename', 'WorkspaceUpdate',
       'WorktreeCreate', 'WorktreeDelete', 'WorktreeMerge', 'WorktreeList', 'WorktreeChangeBranch',
-      'AgentSpawn', 'AgentSend', 'AgentCancel',
+      'AgentSpawn', 'AgentSend', 'AgentCancel', 'AgentSetConfigOption',
       'TerminalInput', 'TerminalResize', 'TerminalCreate', 'TerminalKill',
       'FileRead', 'FileWrite', 'FileList',
       'GitStatus', 'GitDiff', 'GitCommit',

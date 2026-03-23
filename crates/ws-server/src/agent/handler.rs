@@ -301,6 +301,41 @@ pub async fn handle_agent_send(
     }))
 }
 
+#[instrument(skip(state, msg), fields(worktree_id = %msg.worktree_id, config_id = %msg.config_id))]
+pub async fn handle_agent_set_config_option(
+    state: Arc<AppState>,
+    msg: crate::protocol::AgentSetConfigOption,
+) -> ServerMessage {
+    let handle = match &state.acp_handle {
+        Some(h) => h.clone(),
+        None => {
+            return ServerMessage::new(ServerMessagePayload::Error(Error {
+                code: "ACP_NOT_INITIALIZED".to_string(),
+                message: "ACP runtime not initialized".to_string(),
+                details: None,
+                request_id: None,
+            }));
+        }
+    };
+
+    if let Err(e) = handle
+        .set_session_config_option(msg.worktree_id, &msg.config_id, &msg.value)
+        .await
+    {
+        return ServerMessage::new(ServerMessagePayload::Error(Error {
+            code: "AGENT_SET_CONFIG_ERROR".to_string(),
+            message: format!("Failed to set session config option: {}", e),
+            details: None,
+            request_id: None,
+        }));
+    }
+
+    ServerMessage::new(ServerMessagePayload::Ack(crate::protocol::Ack {
+        message_id: msg.worktree_id,
+        status: AckStatus::Success,
+    }))
+}
+
 #[instrument(skip(state, msg), fields(worktree_id = %msg.worktree_id))]
 pub async fn handle_agent_cancel(
     state: Arc<AppState>,
@@ -364,7 +399,7 @@ mod tests {
     use std::sync::Arc;
 
     async fn create_test_state() -> Arc<AppState> {
-        Arc::new(AppState::new_test().await)
+        AppState::new_test().await
     }
 
     #[tokio::test]
@@ -505,12 +540,13 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_cancel_fails_for_missing_session() {
-        let state = create_test_state().await;
-        let msg = crate::protocol::AgentCancel {
-            worktree_id: Uuid::new_v4(),
-        };
+ #[tokio::test]
+ async fn test_cancel_fails_for_missing_session() {
+ let state = create_test_state().await;
+ let msg = crate::protocol::AgentCancel {
+ worktree_id: Uuid::new_v4(),
+ session_id: Uuid::new_v4(),
+ };
 
         let result = handle_agent_cancel(state, msg).await;
 
@@ -649,14 +685,15 @@ mod tests {
             },
         );
 
-        // Connect client to receive broadcasts
-        let mut rx = state.connect(client_id).await;
+ // Connect client to receive broadcasts
+ let mut rx = state.connect(client_id).await;
 
-        let msg = crate::protocol::AgentCancel {
-            worktree_id,
-        };
+ let msg = crate::protocol::AgentCancel {
+ worktree_id,
+ session_id,
+ };
 
-        let result = handle_agent_cancel(state.clone(), msg).await;
+ let result = handle_agent_cancel(state.clone(), msg).await;
 
         // Verify Ack response
         match result.payload {
