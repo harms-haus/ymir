@@ -419,31 +419,44 @@ async fn handle_get_worktree_details(
     for worktree in &worktrees {
         let worktree_id = worktree.id.to_string();
 
-        // Load agent sessions
-        let db_agent_sessions = match state.db.list_agent_sessions(&worktree_id).await {
-            Ok(sessions) => sessions,
-            Err(e) => {
-                return ServerMessage::new(ServerMessagePayload::Error(Error {
-                    code: "GET_WORKTREE_DETAILS_ERROR".to_string(),
-                    message: e.to_string(),
-                    details: None,
-                    request_id: Some(request_id),
-                }));
-            }
-        };
+    // Load agent sessions - only return those that are actually spawned in memory
+    let agents_map = state.agents.read().await;
+    let spawned_agent_ids: std::collections::HashSet<Uuid> = agents_map
+      .values()
+      .filter(|agent| agent.worktree_id == worktree.id)
+      .map(|agent| agent.id)
+      .collect();
+    drop(agents_map);
 
-        agent_sessions.extend(
-            db_agent_sessions
-                .into_iter()
-                .map(|session| AgentSessionData {
-                    id: Uuid::parse_str(&session.id).unwrap_or_else(|_| Uuid::new_v4()),
-                    worktree_id: Uuid::parse_str(&session.worktree_id).unwrap_or(worktree.id),
-                    agent_type: session.agent_type,
-                    acp_session_id: session.acp_session_id,
-                    status: parse_agent_status(&session.status),
-                    started_at: parse_timestamp(&session.started_at),
-                }),
-        );
+    let db_agent_sessions = match state.db.list_agent_sessions(&worktree_id).await {
+      Ok(sessions) => sessions,
+      Err(e) => {
+        return ServerMessage::new(ServerMessagePayload::Error(Error {
+          code: "GET_WORKTREE_DETAILS_ERROR".to_string(),
+          message: e.to_string(),
+          details: None,
+          request_id: Some(request_id),
+        }));
+      }
+    };
+
+    agent_sessions.extend(
+      db_agent_sessions
+        .into_iter()
+        .filter(|session| {
+          // Only include agents that are actually spawned in ACP runtime
+          let session_id = Uuid::parse_str(&session.id).unwrap_or_else(|_| Uuid::nil());
+          spawned_agent_ids.contains(&session_id)
+        })
+        .map(|session| AgentSessionData {
+          id: Uuid::parse_str(&session.id).unwrap_or_else(|_| Uuid::new_v4()),
+          worktree_id: Uuid::parse_str(&session.worktree_id).unwrap_or(worktree.id),
+          agent_type: session.agent_type,
+          acp_session_id: session.acp_session_id,
+          status: parse_agent_status(&session.status),
+          started_at: parse_timestamp(&session.started_at),
+        }),
+    );
 
         // Load terminal sessions
         let db_terminal_sessions = match state.db.list_terminal_sessions(&worktree_id).await {

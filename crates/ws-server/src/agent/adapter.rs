@@ -47,23 +47,25 @@ impl YmirClientHandler {
         Self { worktree_id, event_sender, sequence }
     }
 
-    fn send_event(&self, event: AcpEvent) {
-        let envelope = AcpEventEnvelope {
-            sequence: self.sequence.next(),
-            correlation_id: None,
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_millis() as u64)
-                .unwrap_or(0),
-            event,
-        };
-        self.event_sender.send_event(envelope);
-    }
+  fn send_event(&self, event: AcpEvent) {
+    let envelope = AcpEventEnvelope {
+      sequence: self.sequence.next(),
+      correlation_id: None,
+      timestamp: std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0),
+      event: event.clone(),
+    };
+    tracing::info!("Broadcasting ACP event: {:?} for worktree {}", event, self.worktree_id);
+    self.event_sender.send_event(envelope);
+  }
 
-    fn handle_session_notification(&self, notif: SessionNotification) {
-        let session_id_str = notif.session_id.0.to_string();
-        
-        match notif.update {
+  fn handle_session_notification(&self, notif: SessionNotification) {
+    let session_id_str = notif.session_id.0.to_string();
+    tracing::info!("Received session notification from ACP agent: {:?}", notif.update);
+
+    match notif.update {
             SessionUpdate::AgentMessageChunk(chunk) => {
                 let content = match chunk.content {
                     ContentBlock::Text(text) => AcpChunkContent::Text(text.text),

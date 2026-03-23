@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { AppState, NotificationState, AgentTab, AlertDialogConfig, AgentSessionState, TerminalSessionState, AcpAccumulatorState, AcpAccumulatorAction, AccumulatedThread, AccumulatedTextContent, AccumulatedToolCard, AccumulatedContextCard, AccumulatedErrorCard, MAX_TOOL_OUTPUT_LENGTH, MAX_ACCUMULATED_MESSAGES, createInitialAccumulatorState, ThreadAccumulatedState, GitStats } from './types/state';
+import { AppState, NotificationState, AgentTab, AlertDialogConfig, AgentSessionState, TerminalSessionState, AcpAccumulatorState, AcpAccumulatorAction, AccumulatedThread, AccumulatedMessage, AccumulatedTextContent, AccumulatedToolCard, AccumulatedContextCard, AccumulatedErrorCard, MAX_TOOL_OUTPUT_LENGTH, MAX_ACCUMULATED_MESSAGES, createInitialAccumulatorState, ThreadAccumulatedState, GitStats } from './types/state';
 export type { AgentTab };
-import { ServerMessage, TerminalOutput, GitStatusEntry, isAcpSessionInit, isAcpSessionStatus, isAcpPromptChunk, isAcpPromptComplete, isAcpToolUse, isAcpContextUpdate, isAcpError, isAcpResumeMarker } from './types/protocol';
+import { ServerMessage, TerminalOutput, GitStatusEntry, AcpEventEnvelope, isAcpSessionInit, isAcpSessionStatus, isAcpPromptChunk, isAcpPromptComplete, isAcpToolUse, isAcpContextUpdate, isAcpError, isAcpResumeMarker } from './types/protocol';
 import { handleError } from './lib/error-recovery';
 import { showNotification } from './lib/tauri';
 
@@ -39,7 +39,7 @@ function createEmptyThread(worktreeId: string, acpSessionId: string, connectionG
     worktreeId,
     acpSessionId,
     messages: [],
-    sessionStatus: 'Working',
+    sessionStatus: 'Complete',
     lastSequence: 0,
     connectionGeneration,
     isStreaming: false,
@@ -98,7 +98,7 @@ export function acpAccumulatorReducer(
     case 'SET_STREAMING': {
       const thread = state.threads.get(action.worktreeId);
       if (!thread) return state;
-      
+
       const newThreads = new Map(state.threads);
       newThreads.set(action.worktreeId, {
         ...thread,
@@ -108,6 +108,31 @@ export function acpAccumulatorReducer(
         ...state,
         threads: newThreads,
       };
+    }
+
+    case 'USER_MESSAGE': {
+      const { worktreeId, content } = action;
+      let thread = state.threads.get(worktreeId);
+
+      if (!thread) {
+        thread = createEmptyThread(worktreeId, 'unknown', state.connectionGeneration);
+      }
+
+      const newMessage: AccumulatedMessage = {
+        id: generateMessageId(Date.now()),
+        role: 'user',
+        parts: [{ type: 'text', text: content, isStreaming: false }],
+        createdAt: Date.now(),
+        lastSequence: Date.now(),
+      };
+
+      const newThreads = new Map(state.threads);
+      newThreads.set(worktreeId, {
+        ...thread,
+        messages: [...thread.messages, newMessage],
+      });
+
+      return { ...state, threads: newThreads };
     }
 
     case 'EVENT_RECEIVED': {
@@ -128,7 +153,11 @@ export function acpAccumulatorReducer(
         return { ...state, threads: newThreads };
       }
 
-      if (!thread) return state;
+      // Create thread lazily if it doesn't exist (for any event type)
+      if (!thread) {
+        const acpSessionId = (data as any)?.acpSessionId ?? 'unknown';
+        thread = createEmptyThread(worktreeId, acpSessionId, state.connectionGeneration);
+      }
 
       const newThreads = new Map(state.threads);
       let updatedThread = { ...thread };
@@ -1085,14 +1114,13 @@ case 'TerminalUpdated': {
 
     case 'AcpWireEvent': {
       const { dispatchAccumulator, activeWorktreeId } = useStore.getState();
-      const envelope = message.envelope;
+      const { type, ...envelope } = message as unknown as Record<string, unknown>;
       const data = envelope.data as any;
-      
-      // Most ACP events have worktreeId in data; SessionInit falls back to active worktree
+
       const worktreeId = data?.worktreeId ?? activeWorktreeId;
-      
+
       if (worktreeId) {
-        dispatchAccumulator({ type: 'EVENT_RECEIVED', envelope, worktreeId });
+        dispatchAccumulator({ type: 'EVENT_RECEIVED', envelope: envelope as unknown as AcpEventEnvelope, worktreeId });
       }
       break;
     }

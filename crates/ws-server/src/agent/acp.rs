@@ -10,6 +10,7 @@ use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::process::Stdio;
 use std::sync::Arc;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Child;
 use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
 use tokio::task::JoinHandle;
@@ -83,58 +84,12 @@ impl AcpClient {
         worktree_id: Uuid,
         broadcast_tx: broadcast::Sender<ServerMessage>,
     ) -> Result<Self> {
-        let executable = match agent_type {
-            "claude" => "claude-agent",
-            "opencode" => "opencode",
-            "pi" => "pi-acp",
-            _ => return Err(anyhow!("Unknown agent type: {}", agent_type)),
-        };
-
-        let mut child = tokio::process::Command::new(executable)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .current_dir(worktree_path)
-            .spawn()
-            .map_err(|e| anyhow!("Failed to spawn agent: {}", e))?;
-
-        let stdin = child.stdin.take().ok_or_else(|| anyhow!("No stdin"))?;
-        let stdout = child.stdout.take().ok_or_else(|| anyhow!("No stdout"))?;
-        let stderr = child.stderr.take().ok_or_else(|| anyhow!("No stderr"))?;
-
-        let _stderr_drain = tokio::spawn(async move {
-            use tokio::io::AsyncBufReadExt;
-            let mut reader = tokio::io::BufReader::new(stderr);
-            let mut buffer = Vec::new();
-            loop {
-                match reader.read_until(b'\n', &mut buffer).await {
-                    Ok(0) => break,
-                    Ok(_) => buffer.clear(),
-                    Err(_) => break,
-                }
-            }
-        });
-
         let status = Arc::new(RwLock::new(AgentStatus::Idle));
         let event_sender = Arc::new(BroadcastingEventSender::new(broadcast_tx));
         let sequence = Arc::new(SequenceCounter::new());
         let handler = YmirClientHandler::new(worktree_id, event_sender, sequence);
 
-        let outgoing = stdin.compat_write();
-        let incoming = stdout.compat();
-
-        let (connection, io_future) = ClientSideConnection::new(
-            handler,
-            outgoing,
-            incoming,
-            |fut| { tokio::task::spawn_local(fut); },
-        );
-
-        let _io_task = tokio::task::spawn_local(async move {
-            if let Err(e) = io_future.await {
-                tracing::error!("ACP I/O error: {}", e);
-            }
-        });
+        let (connection, _io_task, child) = Self::spawn_stdio(agent_type, worktree_path, handler).await?;
 
         let mut client = Self {
             process: child,
@@ -148,6 +103,60 @@ impl AcpClient {
         client.create_session(worktree_path).await?;
 
         Ok(client)
+    }
+
+        async fn spawn_stdio(
+        agent_type: &str,
+        worktree_path: &str,
+        handler: YmirClientHandler,
+    ) -> Result<(ClientSideConnection, JoinHandle<()>, Child)> {
+        let executable = match agent_type {
+            "claude" => "claude-agent",
+            "opencode" => "opencode",
+            "pi" => "pi-acp",
+            _ => return Err(anyhow!("Unknown agent type: {}", agent_type)),
+        };
+
+        let mut cmd = tokio::process::Command::new(executable);
+        if agent_type == "opencode" {
+            cmd.args(&["acp"]);
+        }
+        let mut child = cmd
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .current_dir(worktree_path)
+            .spawn()
+            .map_err(|e| anyhow!("Failed to spawn agent: {}", e))?;
+
+        let stdin = child.stdin.take().ok_or_else(|| anyhow!("No stdin"))?;
+        let stdout = child.stdout.take().ok_or_else(|| anyhow!("No stdout"))?;
+        let stderr = child.stderr.take().ok_or_else(|| anyhow!("No stderr"))?;
+
+        let _stderr_drain = tokio::spawn(async move {
+            let mut reader = BufReader::new(stderr);
+            let mut buffer = Vec::new();
+            loop {
+                match reader.read_until(b'\n', &mut buffer).await {
+                    Ok(0) => break,
+                    Ok(_) => buffer.clear(),
+                    Err(_) => break,
+                }
+            }
+        });
+
+        let (connection, io_future) = ClientSideConnection::new(
+            handler,
+            stdin.compat_write(),
+            stdout.compat(),
+            |fut| { tokio::task::spawn_local(fut); },
+        );
+
+        let io_task = tokio::task::spawn_local(async move {
+            let _ = io_future.await;
+        });
+
+        Ok((connection, io_task, child))
     }
 
     async fn initialize(&mut self) -> Result<()> {

@@ -678,12 +678,20 @@ impl Db {
             });
         }
 
-        Ok(sessions)
-    }
+  Ok(sessions)
+  }
+
+  pub async fn clear_all_agent_sessions(&self) -> Result<usize> {
+    let conn = self.conn()?;
+    let rows_affected = conn
+      .execute("DELETE FROM agent_sessions", ())
+      .await?;
+    Ok(rows_affected as usize)
+  }
 }
 
 impl Db {
-    pub async fn create_terminal_session(&self, session: &TerminalSession) -> Result<()> {
+  pub async fn create_terminal_session(&self, session: &TerminalSession) -> Result<()> {
         let conn = self.conn()?;
         let mut stmt = conn
             .prepare(
@@ -842,12 +850,20 @@ pub async fn list_terminal_sessions(&self, worktree_id: &str) -> Result<Vec<Term
             });
         }
 
-        Ok(sessions)
-    }
+  Ok(sessions)
+  }
+
+  pub async fn clear_all_terminal_sessions(&self) -> Result<usize> {
+    let conn = self.conn()?;
+    let rows_affected = conn
+      .execute("DELETE FROM terminal_sessions", ())
+      .await?;
+    Ok(rows_affected as usize)
+  }
 }
 
 impl Db {
-    pub async fn set_user_setting(&self, key: &str, value: &str) -> Result<()> {
+  pub async fn set_user_setting(&self, key: &str, value: &str) -> Result<()> {
         let conn = self.conn()?;
         conn.execute(
             "INSERT OR REPLACE INTO user_settings (key, value) VALUES (?1, ?2)",

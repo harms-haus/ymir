@@ -315,6 +315,7 @@ export function createInitialAccumulatorState(): AcpAccumulatorState {
 /** Actions that can be dispatched to the accumulator */
 export type AcpAccumulatorAction =
   | { type: 'EVENT_RECEIVED'; envelope: AcpEventEnvelope; worktreeId: string }
+  | { type: 'USER_MESSAGE'; worktreeId: string; content: string }
   | { type: 'CONNECTION_RECONNECTED' }
   | { type: 'FLUSH_THREAD'; worktreeId: string }
   | { type: 'FLUSH_ALL' }

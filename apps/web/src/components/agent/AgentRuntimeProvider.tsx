@@ -81,7 +81,7 @@ export function AgentRuntimeProvider({ children, worktreeId, onSendMessage }: Ag
   const thread = useStore((state) => state.acpAccumulator.threads.get(worktreeId));
   const messages = thread?.messages ?? [];
   const isStreaming = thread?.isStreaming ?? false;
-  const sessionStatus = thread?.sessionStatus ?? 'Working';
+  const sessionStatus = thread?.sessionStatus ?? 'Complete';
   const isRunning = isStreaming || sessionStatus === 'Working';
 
   const onNew = useCallback(async (message: AppendMessage) => {
@@ -90,9 +90,10 @@ export function AgentRuntimeProvider({ children, worktreeId, onSendMessage }: Ag
       .map((part) => part.text)
       .join('\n');
     if (textContent.trim()) {
+      dispatchAccumulator({ type: 'USER_MESSAGE', worktreeId, content: textContent });
       onSendMessage(textContent);
     }
-  }, [onSendMessage]);
+  }, [onSendMessage, dispatchAccumulator, worktreeId]);
 
   const onCancel = useCallback(async () => {
     client.send({ type: 'AgentCancel', worktreeId });

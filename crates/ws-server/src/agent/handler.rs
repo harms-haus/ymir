@@ -105,71 +105,102 @@ pub async fn handle_agent_spawn(
         }));
     }
 
-    {
-        let mut agents = state.agents.write().await;
-        agents.insert(session_id, crate::state::AgentState {
-            id: session_id,
-            worktree_id: msg.worktree_id,
-            agent_type: msg.agent_type.clone(),
-            status: "idle".to_string(),
-        });
+  let acp_handle = match &state.acp_handle {
+    Some(handle) => handle.clone(),
+    None => {
+      tracing::error!("ACP runtime not initialized");
+      let _ = state.db.delete_agent_session(&session_id.to_string()).await;
+      return ServerMessage::new(ServerMessagePayload::Error(Error {
+        code: "ACP_NOT_INITIALIZED".to_string(),
+        message: "ACP runtime not initialized - cannot spawn agent".to_string(),
+        details: None,
+        request_id: None,
+      }));
     }
+  };
 
-    let broadcast_msg = ServerMessage::new(ServerMessagePayload::AgentStatusUpdate(
-        AgentStatusUpdate {
-            id: session_id,
-            worktree_id: msg.worktree_id,
-            agent_type: msg.agent_type.clone(),
-            status: AgentStatus::Idle,
-            started_at,
-        },
-    ));
-
-    state.broadcast(broadcast_msg.clone()).await;
-
-    let acp_handle = match &state.acp_handle {
-        Some(handle) => handle.clone(),
-        None => {
-            tracing::error!("ACP runtime not initialized");
-            let mut agents = state.agents.write().await;
-            agents.remove(&session_id);
-            drop(agents);
-            let _ = state.db.delete_agent_session(&session_id.to_string()).await;
-            return ServerMessage::new(ServerMessagePayload::Error(Error {
-                code: "ACP_NOT_INITIALIZED".to_string(),
-                message: "ACP runtime not initialized - cannot spawn agent".to_string(),
-                details: None,
-                request_id: None,
-            }));
-        }
-    };
-
-    let session_id_ref = session_id;
-    let worktree_id_ref = msg.worktree_id;
-    let state_ref = state.clone();
-    let agent_type_ref = msg.agent_type.clone();
-    let worktree_path_ref = worktree_path;
-
-    tokio::spawn(async move {
-        match acp_handle.spawn_agent(worktree_id_ref, &agent_type_ref, &worktree_path_ref).await {
-            Ok(()) => {
-                tracing::info!("Agent spawned successfully for worktree {}", worktree_id_ref);
-            }
-            Err(e) => {
-                tracing::error!("Failed to spawn agent process: {}", e);
-                if let Err(db_err) = state_ref.db.update_agent_session(
-                    &session_id_ref.to_string(),
-                    "error"
-                ).await {
-                    tracing::error!("Failed to update agent session status: {}", db_err);
-                }
-                let mut agents = state_ref.agents.write().await;
-                agents.remove(&session_id_ref);
-            }
-        }
+  // Add to state immediately so client can see it's spawning
+  {
+    let mut agents = state.agents.write().await;
+    agents.insert(session_id, crate::state::AgentState {
+      id: session_id,
+      worktree_id: msg.worktree_id,
+      agent_type: msg.agent_type.clone(),
+      status: "spawning".to_string(),
     });
+  }
 
-    broadcast_msg
+  // Broadcast "spawning" status
+  let spawning_msg = ServerMessage::new(ServerMessagePayload::AgentStatusUpdate(
+    AgentStatusUpdate {
+      id: session_id,
+      worktree_id: msg.worktree_id,
+      agent_type: msg.agent_type.clone(),
+      status: AgentStatus::Working,
+      started_at,
+    },
+  ));
+  state.broadcast(spawning_msg).await;
+
+  // Spawn in background so response returns immediately
+  let session_id_ref = session_id;
+  let worktree_id_ref = msg.worktree_id;
+  let state_ref = state.clone();
+  let agent_type_ref = msg.agent_type.clone();
+  let started_at_ref = started_at;
+
+  tokio::spawn(async move {
+    match acp_handle.spawn_agent(worktree_id_ref, &agent_type_ref, &worktree_path).await {
+      Ok(()) => {
+        tracing::info!("Agent spawned successfully for worktree {}", worktree_id_ref);
+
+        // Update state to idle
+        {
+          let mut agents = state_ref.agents.write().await;
+          if let Some(agent) = agents.get_mut(&session_id_ref) {
+            agent.status = "idle".to_string();
+          }
+        }
+
+        // Broadcast success
+        let success_msg = ServerMessage::new(ServerMessagePayload::AgentStatusUpdate(
+          AgentStatusUpdate {
+            id: session_id_ref,
+            worktree_id: worktree_id_ref,
+            agent_type: agent_type_ref,
+            status: AgentStatus::Idle,
+            started_at: started_at_ref,
+          },
+        ));
+        let _ = state_ref.broadcast(success_msg).await;
+      }
+      Err(e) => {
+        tracing::error!("Failed to spawn agent process: {}", e);
+        let _ = state_ref.db.delete_agent_session(&session_id_ref.to_string()).await;
+
+        // Remove from state
+        {
+          let mut agents = state_ref.agents.write().await;
+          agents.remove(&session_id_ref);
+        }
+
+        // Broadcast removal
+        let removed_msg = ServerMessage::new(ServerMessagePayload::AgentRemoved(
+          crate::protocol::AgentRemoved {
+            id: session_id_ref,
+            worktree_id: worktree_id_ref,
+          }
+        ));
+        let _ = state_ref.broadcast(removed_msg).await;
+      }
+    }
+  });
+
+  // Return immediate acknowledgement
+  ServerMessage::new(ServerMessagePayload::Ack(crate::protocol::Ack {
+    message_id: session_id,
+    status: AckStatus::Success,
+  }))
 }
 
 fn parse_timestamp(timestamp: &str) -> u64 {
@@ -223,22 +254,39 @@ pub async fn cleanup_agents_for_worktree(state: &AppState, worktree_id: Uuid) {
 
 #[instrument(skip(state, msg), fields(worktree_id = %msg.worktree_id))]
 pub async fn handle_agent_send(
-    state: Arc<AppState>,
-    msg: crate::protocol::AgentSend,
+  state: Arc<AppState>,
+  msg: crate::protocol::AgentSend,
 ) -> ServerMessage {
-    let handle = match &state.acp_handle {
-        Some(h) => h.clone(),
-        None => {
-            return ServerMessage::new(ServerMessagePayload::Error(Error {
-                code: "ACP_NOT_INITIALIZED".to_string(),
-                message: "ACP runtime not initialized".to_string(),
-                details: None,
-                request_id: None,
-            }));
-        }
-    };
+  // Verify agent session exists and is ready (not spawning)
+  let agent_ready = {
+    let agents = state.agents.read().await;
+    agents.values().any(|agent| {
+      agent.worktree_id == msg.worktree_id && agent.status == "idle"
+    })
+  };
 
-    if let Err(e) = handle.send_prompt(msg.worktree_id, &msg.message).await {
+  if !agent_ready {
+    return ServerMessage::new(ServerMessagePayload::Error(Error {
+      code: "AGENT_NOT_READY".to_string(),
+      message: format!("Agent for worktree {} is not ready (still spawning or not found)", msg.worktree_id),
+      details: None,
+      request_id: None,
+    }));
+  }
+
+  let handle = match &state.acp_handle {
+    Some(h) => h.clone(),
+    None => {
+      return ServerMessage::new(ServerMessagePayload::Error(Error {
+        code: "ACP_NOT_INITIALIZED".to_string(),
+        message: "ACP runtime not initialized".to_string(),
+        details: None,
+        request_id: None,
+      }));
+    }
+  };
+
+  if let Err(e) = handle.send_prompt(msg.worktree_id, &msg.message).await {
         return ServerMessage::new(ServerMessagePayload::Error(Error {
             code: "AGENT_SEND_ERROR".to_string(),
             message: format!("Failed to send message to agent: {}", e),
