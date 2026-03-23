@@ -33,6 +33,20 @@ pub struct AgentCancel {
     #[serde(with = "uuid_serde")]
     #[ts(type = "string")]
     pub worktree_id: Uuid,
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub session_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AgentSetConfigOption {
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    pub config_id: String,
+    pub value: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]

@@ -1,27 +1,26 @@
 import { getWebSocketClient, generateId } from './ws';
-import { 
-  WorkspaceCreate, 
-  WorkspaceDelete, 
-  WorkspaceRename,
-  WorkspaceUpdate,
-  WorktreeCreate, 
-  WorktreeDelete, 
-  WorktreeMerge, 
-  WorktreeList, 
-  AgentSpawn, 
-  AgentSend, 
-  AgentCancel, 
-  TerminalCreate, 
-  TerminalInput, 
-  TerminalResize, 
-  FileRead, 
-  FileWrite, 
-  GitStatus, 
-  GitDiff, 
-  GitCommit, 
-  CreatePR, 
-  UpdateSettings,
-  GetState
+import {
+WorkspaceCreate,
+WorkspaceDelete,
+WorkspaceRename,
+WorkspaceUpdate,
+WorktreeCreate,
+WorktreeDelete,
+WorktreeMerge,
+WorktreeList,
+AgentSpawn,
+AgentSend,
+TerminalCreate,
+TerminalInput,
+TerminalResize,
+FileRead,
+FileWrite,
+GitStatus,
+GitDiff,
+GitCommit,
+CreatePR,
+UpdateSettings,
+GetState
 } from '../types/protocol';
 
 // Workspace API
@@ -127,19 +126,10 @@ export function sendToAgent(worktreeId: string, message: string): void {
   const client = getWebSocketClient();
   const msg: AgentSend = {
     type: 'AgentSend',
-    worktreeId,
-    message,
-  };
-  client.send(msg);
-}
-
-export function cancelAgent(worktreeId: string): void {
-  const client = getWebSocketClient();
-  const message: AgentCancel = {
-    type: 'AgentCancel',
-    worktreeId,
-  };
-  client.send(message);
+worktreeId,
+ message,
+ };
+ client.send(msg);
 }
 
 // Terminal API

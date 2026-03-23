@@ -1,11 +1,10 @@
-import { useState, useCallback } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { AgentRuntimeProvider } from './AgentRuntimeProvider';
 import {
   ThreadPrimitive,
   ComposerPrimitive,
   MessagePrimitive,
 } from '@assistant-ui/react';
-import { useAgentStatus } from '../../hooks/useAgentStatus';
 import { EventCard, EventContentPart } from './EventCards';
 import {
   createPermissionCardSchema,
@@ -16,8 +15,9 @@ import {
   type PermissionCardSchema,
 } from './card-schema';
 import { Select } from '@base-ui/react/select';
-import { Popover } from '@base-ui/react/popover';
 import { useStore } from '../../store';
+import { useWebSocketClient } from '../../hooks/useWebSocket';
+import type { AcpSessionConfigOption } from '../../types/protocol';
 import '../../styles/agent.css';
 
 interface AgentChatProps {
@@ -27,46 +27,19 @@ interface AgentChatProps {
   onSendMessage: (message: string) => void;
 }
 
-const AVAILABLE_PROVIDERS = [
-  { id: 'claude', name: 'Claude', subtitle: 'Plan Builder' },
-  { id: 'opencode', name: 'OpenCode', subtitle: 'Coding' },
-  { id: 'pi', name: 'Pi', subtitle: 'Assistant' },
-];
-
-const AVAILABLE_MODELS: Record<string, Array<{ id: string; name: string }>> = {
-  claude: [
-    { id: 'claude-sonnet-4-6', name: 'Sonnet 4.6' },
-    { id: 'claude-opus-4', name: 'Opus 4' },
-    { id: 'claude-haiku-3-5', name: 'Haiku 3.5' },
-  ],
-  opencode: [
-    { id: 'opencode-default', name: 'OpenCode' },
-  ],
-  pi: [
-    { id: 'pi-default', name: 'Pi' },
-  ],
-};
+const EMPTY_CONFIG_OPTIONS: AcpSessionConfigOption[] = [];
+const AVAILABLE_AGENTS = ['claude', 'opencode', 'pi'] as const;
 
 function getAgentDisplayName(agentType: string): string {
   const agentNames: Record<string, string> = {
     claude: 'Claude',
     opencode: 'OpenCode',
+    pi: 'Pi',
     'glm-5': 'GLM-5',
     'gpt-4': 'GPT-4',
     'gpt-5': 'GPT-5',
   };
   return agentNames[agentType.toLowerCase()] || agentType;
-}
-
-function getAgentSubtitle(agentType: string): string {
-  const agentSubtitles: Record<string, string> = {
-    claude: 'Plan Builder',
-    opencode: 'Coding',
-    'glm-5': 'Coding',
-    'gpt-4': 'Assistant',
-    'gpt-5': 'Assistant',
-  };
-  return agentSubtitles[agentType.toLowerCase()] || 'Agent';
 }
 
 function getStatusDotClass(status: string): string {
@@ -84,6 +57,23 @@ function getStatusDotClass(status: string): string {
   }
 }
 
+function getOptionLabel(option: AcpSessionConfigOption | undefined): string {
+  if (!option) {
+    return '';
+  }
+  return option.options.find((item) => item.value === option.currentValue)?.name || option.currentValue;
+}
+
+function getConfigOption(
+  configOptions: AcpSessionConfigOption[],
+  id: string,
+  category?: string
+): AcpSessionConfigOption | undefined {
+  return configOptions.find((option) => option.id === id)
+    || configOptions.find((option) => option.category === category)
+    || undefined;
+}
+
 function AgentSelector({
   worktreeId,
   currentAgentType,
@@ -93,54 +83,53 @@ function AgentSelector({
   currentAgentType: string;
   onAgentChange: (agentId: string) => void;
 }) {
-  const agentSessions = useStore((state) =>
-    state.agentSessions.filter((as) => as.worktreeId === worktreeId)
-  );
-
-  const currentSession = agentSessions.find(
-    (s) => s.agentType === currentAgentType
-  );
-  const currentAgent = AVAILABLE_PROVIDERS.find(
-    (p) => p.id === currentAgentType.toLowerCase()
+  const allAgentSessions = useStore((state) => state.agentSessions);
+  const currentSession = useMemo(
+    () => allAgentSessions.find(
+      (session) => session.worktreeId === worktreeId && session.agentType === currentAgentType
+    ),
+    [allAgentSessions, worktreeId, currentAgentType]
   );
 
   return (
     <Select.Root
       value={currentAgentType}
-      onValueChange={(value) => onAgentChange(value)}
+      onValueChange={(value) => {
+        if (value) {
+          onAgentChange(value);
+        }
+      }}
     >
       <Select.Trigger className="au-selector-trigger agent-selector">
         <span
-          className={`au-status-dot ${getStatusDotClass(
-            currentSession?.status ?? 'idle'
-          )}`}
+          className={`au-status-dot ${getStatusDotClass(currentSession?.status ?? 'idle')}`}
         />
-        <Select.Value placeholder="Select agent" />
+        <span>{getAgentDisplayName(currentAgentType)}</span>
         <Select.Icon className="au-selector-icon">▼</Select.Icon>
       </Select.Trigger>
       <Select.Portal>
         <Select.Positioner className="au-selector-positioner" sideOffset={4}>
           <Select.Popup className="au-selector-popup">
-            {AVAILABLE_PROVIDERS.map((provider) => {
-              const session = agentSessions.find(
-                (s) => s.agentType.toLowerCase() === provider.id
+            {AVAILABLE_AGENTS.map((agentId) => {
+              const session = allAgentSessions.find(
+                (item) => item.worktreeId === worktreeId && item.agentType === agentId
               );
+              const sessionStatus = session ? session.status : 'idle';
+
               return (
-                <Select.Item
-                  key={provider.id}
-                  value={provider.id}
-                  className="au-selector-item"
-                >
-                  <span
-                    className={`au-status-dot ${getStatusDotClass(
-                      session?.status ?? 'idle'
-                    )}`}
-                  />
-                  <Select.ItemText>{provider.name}</Select.ItemText>
-                  <Select.ItemIndicator className="au-selector-indicator">
-                    ✓
-                  </Select.ItemIndicator>
-                </Select.Item>
+              <Select.Item
+                key={agentId}
+                value={agentId}
+                className="au-selector-item"
+              >
+                <span
+                  className={`au-status-dot ${getStatusDotClass(sessionStatus)}`}
+                />
+                <Select.ItemText>{getAgentDisplayName(agentId)}</Select.ItemText>
+                <Select.ItemIndicator className="au-selector-indicator">
+                  ✓
+                </Select.ItemIndicator>
+              </Select.Item>
               );
             })}
           </Select.Popup>
@@ -150,33 +139,40 @@ function AgentSelector({
   );
 }
 
-function ModelSelector({
-  providerId,
-  currentModel,
-  onModelChange,
+function ConfigSelector({
+  option,
+  placeholder,
+  className,
+  onChange,
 }: {
-  providerId: string;
-  currentModel: string;
-  onModelChange: (modelId: string) => void;
+  option?: AcpSessionConfigOption;
+  placeholder: string;
+  className: string;
+  onChange: (value: string) => void;
 }) {
-  const models = AVAILABLE_MODELS[providerId] || [];
-
   return (
-    <Select.Root value={currentModel} onValueChange={(value) => onModelChange(value)}>
-      <Select.Trigger className="au-selector-trigger model-selector">
-        <Select.Value placeholder="Model" />
+    <Select.Root
+      value={option?.currentValue ?? null}
+      onValueChange={(value) => {
+        if (value) {
+          onChange(value);
+        }
+      }}
+    >
+      <Select.Trigger className={`au-selector-trigger ${className}`}>
+        <span>{option ? getOptionLabel(option) : placeholder}</span>
         <Select.Icon className="au-selector-icon">▼</Select.Icon>
       </Select.Trigger>
       <Select.Portal>
         <Select.Positioner className="au-selector-positioner" sideOffset={4}>
           <Select.Popup className="au-selector-popup">
-            {models.map((model) => (
+            {(option?.options ?? []).map((item) => (
               <Select.Item
-                key={model.id}
-                value={model.id}
+                key={`${option?.id ?? placeholder}-${item.value}`}
+                value={item.value}
                 className="au-selector-item"
               >
-                <Select.ItemText>{model.name}</Select.ItemText>
+                <Select.ItemText>{item.name}</Select.ItemText>
                 <Select.ItemIndicator className="au-selector-indicator">
                   ✓
                 </Select.ItemIndicator>
@@ -186,77 +182,6 @@ function ModelSelector({
         </Select.Positioner>
       </Select.Portal>
     </Select.Root>
-  );
-}
-
-function ProviderSelector({
-  currentProvider,
-  onProviderChange,
-}: {
-  currentProvider: string;
-  onProviderChange: (providerId: string) => void;
-}) {
-  const current = AVAILABLE_PROVIDERS.find(
-    (p) => p.id === currentProvider.toLowerCase()
-  );
-
-  return (
-    <Popover.Root>
-      <Popover.Trigger className="au-provider-trigger">
-        <span className="au-provider-name">{current?.name || 'OpenCode'}</span>
-        <span className="au-provider-subtitle">
-          {current?.subtitle || 'Coding'}
-        </span>
-        <span className="au-selector-icon">▼</span>
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Positioner className="au-selector-positioner" sideOffset={4}>
-          <Popover.Popup className="au-selector-popup au-provider-popup">
-            {AVAILABLE_PROVIDERS.map((provider) => (
-              <button
-                key={provider.id}
-                type="button"
-                className={`au-provider-option ${
-                  provider.id === currentProvider.toLowerCase() ? 'active' : ''
-                }`}
-                onClick={() => onProviderChange(provider.id)}
-              >
-                <span className="au-provider-option-name">{provider.name}</span>
-                <span className="au-provider-option-subtitle">
-                  {provider.subtitle}
-                </span>
-              </button>
-            ))}
-          </Popover.Popup>
-        </Popover.Positioner>
-      </Popover.Portal>
-    </Popover.Root>
-  );
-}
-
-function ThinkingBlock({ content }: { content: string }) {
-  const [isExpanded, setIsExpanded] = useState(false);
-
-  return (
-    <div className="thinking-block">
-      <button
-        type="button"
-        className="thinking-toggle"
-        onClick={() => setIsExpanded(!isExpanded)}
-        aria-expanded={isExpanded}
-      >
-        <span className="thinking-icon">💭</span>
-        <span className="thinking-label">Thinking</span>
-        <span className={`thinking-chevron ${isExpanded ? 'expanded' : ''}`}>
-          ▼
-        </span>
-      </button>
-      {isExpanded && (
-        <div className="thinking-content">
-          <pre>{content}</pre>
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -287,34 +212,32 @@ function AgentChatContent({
   agentType: string;
   worktreeId: string;
 }) {
-  const [selectedProvider, setSelectedProvider] = useState(agentType);
-  const [selectedModel, setSelectedModel] = useState(
-    AVAILABLE_MODELS[agentType.toLowerCase()]?.[0]?.id || 'default'
+  const client = useWebSocketClient();
+  const [selectedAgentType, setSelectedAgentType] = useState(agentType);
+  const thread = useStore((state) => state.acpAccumulator.threads.get(worktreeId));
+  const configOptions = thread?.configOptions ?? EMPTY_CONFIG_OPTIONS;
+
+  const agentName = getAgentDisplayName(selectedAgentType);
+  const modeOption = useMemo(
+    () => getConfigOption(configOptions, 'mode', 'mode'),
+    [configOptions]
+  );
+  const modelOption = useMemo(
+    () => getConfigOption(configOptions, 'model', 'model'),
+    [configOptions]
   );
 
-  const agentName = getAgentDisplayName(agentType);
-  const agentSubtitle = getAgentSubtitle(agentType);
-  const agentStatusInfo = useAgentStatus(worktreeId);
-  const agentStatus = agentStatusInfo?.status ?? 'idle';
+  const handleConfigChange = useCallback((configId: string, value: string) => {
+    client.send({
+      type: 'AgentSetConfigOption',
+      worktreeId,
+      configId,
+      value,
+    });
+  }, [client, worktreeId]);
 
-  const handleAgentChange = useCallback((agentId: string) => {
-    setSelectedProvider(agentId);
-    const defaultModel = AVAILABLE_MODELS[agentId]?.[0]?.id;
-    if (defaultModel) {
-      setSelectedModel(defaultModel);
-    }
-  }, []);
-
-  const handleModelChange = useCallback((modelId: string) => {
-    setSelectedModel(modelId);
-  }, []);
-
-  const handleProviderChange = useCallback((providerId: string) => {
-    setSelectedProvider(providerId);
-    const defaultModel = AVAILABLE_MODELS[providerId]?.[0]?.id;
-    if (defaultModel) {
-      setSelectedModel(defaultModel);
-    }
+  const handleAgentChange = useCallback((nextAgentType: string) => {
+    setSelectedAgentType(nextAgentType);
   }, []);
 
   return (
@@ -355,21 +278,32 @@ function AgentChatContent({
             </div>
             <div className="au-composer-footer compact">
               <div className="au-composer-status-row">
-                <AgentSelector
-                  worktreeId={worktreeId}
-                  currentAgentType={selectedProvider}
-                  onAgentChange={handleAgentChange}
+                <ConfigSelector
+                  option={modeOption}
+                  placeholder="Mode"
+                  className="mode-selector"
+                  onChange={(value) => {
+                    if (modeOption) {
+                      handleConfigChange(modeOption.id, value);
+                    }
+                  }}
                 />
-                <ModelSelector
-                  providerId={selectedProvider}
-                  currentModel={selectedModel}
-                  onModelChange={handleModelChange}
+                <ConfigSelector
+                  option={modelOption}
+                  placeholder="Model"
+                  className="model-selector"
+                  onChange={(value) => {
+                    if (modelOption) {
+                      handleConfigChange(modelOption.id, value);
+                    }
+                  }}
                 />
               </div>
               <div className="au-composer-meta compact">
-                <ProviderSelector
-                  currentProvider={selectedProvider}
-                  onProviderChange={handleProviderChange}
+                <AgentSelector
+                  worktreeId={worktreeId}
+                  currentAgentType={selectedAgentType}
+                  onAgentChange={handleAgentChange}
                 />
               </div>
             </div>
@@ -381,16 +315,16 @@ function AgentChatContent({
 }
 
 export function AgentChat({
-  sessionId: _sessionId,
-  agentType,
-  worktreeId,
-  onSendMessage,
+ sessionId,
+ agentType,
+ worktreeId,
+ onSendMessage,
 }: AgentChatProps) {
-  return (
-    <AgentRuntimeProvider worktreeId={worktreeId} onSendMessage={onSendMessage}>
-      <AgentChatContent agentType={agentType} worktreeId={worktreeId} />
-    </AgentRuntimeProvider>
-  );
+ return (
+ <AgentRuntimeProvider worktreeId={worktreeId} sessionId={sessionId} onSendMessage={onSendMessage}>
+ <AgentChatContent agentType={agentType} worktreeId={worktreeId} />
+ </AgentRuntimeProvider>
+ );
 }
 
 export {

@@ -49,6 +49,7 @@ pub struct AcpEventEnvelope {
 pub enum AcpEvent {
     /// Session initialized successfully
     SessionInit(AcpSessionInit),
+    ConfigOptionsUpdate(AcpConfigOptionsUpdate),
     /// Session status changed (working/waiting/complete/error)
     SessionStatus(AcpSessionStatusEvent),
     /// Streaming prompt response chunk
@@ -74,6 +75,53 @@ pub struct AcpSessionInit {
     pub acp_session_id: String,
     /// Agent capabilities
     pub capabilities: AcpAgentCapabilities,
+    #[serde(default)]
+    pub config_options: Vec<AcpSessionConfigOption>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum AcpSessionConfigOptionCategory {
+    Mode,
+    Model,
+    ThoughtLevel,
+    Other(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AcpSessionConfigSelectOption {
+    pub value: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AcpSessionConfigOption {
+    pub id: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub category: Option<AcpSessionConfigOptionCategory>,
+    pub current_value: String,
+    pub options: Vec<AcpSessionConfigSelectOption>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AcpConfigOptionsUpdate {
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    pub acp_session_id: String,
+    pub config_options: Vec<AcpSessionConfigOption>,
 }
 
 /// Agent capabilities reported during initialization.

@@ -211,6 +211,7 @@ mod tests {
 
         let msg = ClientMessage::new(ClientMessagePayload::AgentCancel(AgentCancel {
             worktree_id: Uuid::new_v4(),
+            session_id: Uuid::new_v4(),
         }));
 
         let path = write_fixture("AgentCancel", &msg)?;

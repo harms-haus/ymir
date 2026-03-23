@@ -8,7 +8,7 @@ use super::{
     acp::AcpEventEnvelope,
     agent::{
         AgentCancel, AgentOutput, AgentPrompt, AgentRemoved, AgentRename, AgentReorder, AgentSend,
-        AgentSessionData, AgentSpawn, AgentStatusUpdate, AgentUpdated,
+        AgentSessionData, AgentSetConfigOption, AgentSpawn, AgentStatusUpdate, AgentUpdated,
     },
     file::{FileContent, FileList, FileListResult, FileRead, FileWrite},
     git::{CreatePR, GitCommit, GitDiff, GitDiffResult, GitStatus, GitStatusResult},
@@ -63,6 +63,7 @@ pub enum ClientMessagePayload {
     AgentSpawn(AgentSpawn),
     AgentSend(AgentSend),
     AgentCancel(AgentCancel),
+    AgentSetConfigOption(AgentSetConfigOption),
     TerminalInput(TerminalInput),
     TerminalResize(TerminalResize),
     TerminalCreate(TerminalCreate),

@@ -32,7 +32,7 @@ similar = { version = "2.7", default-features = false, features = ["text"] }
 notify = "6.1"
 thiserror.workspace = true
 ts-rs = { version = "10.0", features = ["serde-compat"] }
-agent-client-protocol = "0.10"
+agent-client-protocol = { version = "0.10", features = ["unstable_session_model"] }
 tokio-util = { version = "0.7", features = ["compat"] }
 async-trait = "0.1"
 

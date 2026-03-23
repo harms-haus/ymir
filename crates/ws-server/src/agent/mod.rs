@@ -10,6 +10,6 @@ pub use adapter::{
     AcpEventSender, SequenceCounter, YmirClientHandler,
 };
 pub use handler::{
-    cleanup_agents_for_worktree, get_worktree_path, handle_agent_cancel, handle_agent_send,
-    handle_agent_spawn,
+    cleanup_agents_for_worktree, get_worktree_path, handle_agent_cancel,
+    handle_agent_send, handle_agent_set_config_option, handle_agent_spawn,
 };

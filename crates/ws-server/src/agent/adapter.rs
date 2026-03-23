@@ -1,18 +1,149 @@
 //! ACP-WS Adapter: Stateless translation between ACP SDK and WS-ACP wire types.
 
 use crate::protocol::{
-    AcpChunkContent, AcpContextUpdate, AcpContextUpdateType,
-    AcpEvent, AcpEventEnvelope, AcpPromptChunk, AcpToolUseEvent, AcpToolUseStatus,
+    AcpAgentCapabilities, AcpChunkContent, AcpConfigOptionsUpdate, AcpContextUpdate,
+    AcpContextUpdateType, AcpEvent, AcpEventEnvelope, AcpPromptChunk,
+    AcpSessionConfigOption, AcpSessionConfigOptionCategory, AcpSessionConfigSelectOption,
+    AcpSessionInit, AcpToolUseEvent, AcpToolUseStatus,
 };
 use agent_client_protocol::{
     Client, ContentBlock, Error, FileSystemCapabilities, Implementation,
-    PermissionOptionKind, RequestPermissionOutcome, RequestPermissionResponse,
-    SelectedPermissionOutcome, SessionNotification, SessionUpdate, ToolCallStatus,
+    ModelInfo, PermissionOptionKind, RequestPermissionOutcome, RequestPermissionResponse,
+    SelectedPermissionOutcome, SessionConfigKind, SessionConfigOption,
+    SessionConfigOptionCategory, SessionConfigSelectOptions, SessionModeState,
+    SessionModelState, SessionNotification, SessionUpdate, ToolCallStatus,
 };
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tracing::{debug, warn};
 use uuid::Uuid;
+
+pub fn normalize_config_options(options: &[SessionConfigOption]) -> Vec<AcpSessionConfigOption> {
+    options
+        .iter()
+        .filter_map(|option| {
+            let select = match &option.kind {
+                SessionConfigKind::Select(select) => select,
+                _ => return None,
+            };
+
+            let normalized_options = match &select.options {
+                SessionConfigSelectOptions::Ungrouped(values) => values
+                    .iter()
+                    .map(|value| AcpSessionConfigSelectOption {
+                        value: value.value.to_string(),
+                        name: value.name.clone(),
+                        description: value.description.clone(),
+                    })
+                    .collect(),
+                SessionConfigSelectOptions::Grouped(groups) => groups
+                    .iter()
+                    .flat_map(|group| group.options.iter())
+                    .map(|value| AcpSessionConfigSelectOption {
+                        value: value.value.to_string(),
+                        name: value.name.clone(),
+                        description: value.description.clone(),
+                    })
+                    .collect(),
+                _ => Vec::new(),
+            };
+
+            let category = option.category.as_ref().map(|category| match category {
+                SessionConfigOptionCategory::Mode => AcpSessionConfigOptionCategory::Mode,
+                SessionConfigOptionCategory::Model => AcpSessionConfigOptionCategory::Model,
+                SessionConfigOptionCategory::ThoughtLevel => {
+                    AcpSessionConfigOptionCategory::ThoughtLevel
+                }
+                SessionConfigOptionCategory::Other(value) => {
+                    AcpSessionConfigOptionCategory::Other(value.clone())
+                }
+                _ => AcpSessionConfigOptionCategory::Other("unknown".to_string()),
+            });
+
+            Some(AcpSessionConfigOption {
+                id: option.id.to_string(),
+                name: option.name.clone(),
+                description: option.description.clone(),
+                category,
+                current_value: select.current_value.to_string(),
+                options: normalized_options,
+            })
+        })
+        .collect()
+}
+
+pub fn mode_state_to_config_option(mode_state: &SessionModeState) -> AcpSessionConfigOption {
+    AcpSessionConfigOption {
+        id: "mode".to_string(),
+        name: "Mode".to_string(),
+        description: None,
+        category: Some(AcpSessionConfigOptionCategory::Mode),
+        current_value: mode_state.current_mode_id.to_string(),
+        options: mode_state
+            .available_modes
+            .iter()
+            .map(|mode| AcpSessionConfigSelectOption {
+                value: mode.id.to_string(),
+                name: mode.name.clone(),
+                description: mode.description.clone(),
+            })
+            .collect(),
+    }
+}
+
+pub fn model_state_to_config_option(model_state: &SessionModelState) -> AcpSessionConfigOption {
+    AcpSessionConfigOption {
+        id: "model".to_string(),
+        name: "Model".to_string(),
+        description: None,
+        category: Some(AcpSessionConfigOptionCategory::Model),
+        current_value: model_state.current_model_id.to_string(),
+        options: model_state
+            .available_models
+            .iter()
+            .map(|model: &ModelInfo| AcpSessionConfigSelectOption {
+                value: model.model_id.to_string(),
+                name: model.name.clone(),
+                description: model.description.clone(),
+            })
+            .collect(),
+    }
+}
+
+pub fn merge_session_setup_options(
+    config_options: Option<&[SessionConfigOption]>,
+    mode_state: Option<&SessionModeState>,
+    model_state: Option<&SessionModelState>,
+) -> Vec<AcpSessionConfigOption> {
+    let mut merged = config_options
+        .map(normalize_config_options)
+        .unwrap_or_default();
+
+    if let Some(mode_state) = mode_state {
+        let mode_option = mode_state_to_config_option(mode_state);
+        if let Some(existing) = merged.iter_mut().find(|option| {
+            option.id == "mode" || matches!(option.category, Some(AcpSessionConfigOptionCategory::Mode))
+        }) {
+            *existing = mode_option;
+        } else {
+            merged.push(mode_option);
+        }
+    }
+
+    if let Some(model_state) = model_state {
+        let model_option = model_state_to_config_option(model_state);
+        if let Some(existing) = merged.iter_mut().find(|option| {
+            option.id == "model" || matches!(option.category, Some(AcpSessionConfigOptionCategory::Model))
+        }) {
+            *existing = model_option;
+        } else {
+            merged.push(model_option);
+        }
+    }
+
+    merged
+}
 
 pub struct SequenceCounter {
     inner: AtomicU64,
@@ -36,15 +167,65 @@ pub trait AcpEventSender: Send + Sync {
     fn send_event(&self, envelope: AcpEventEnvelope);
 }
 
+#[derive(Clone)]
 pub struct YmirClientHandler {
     worktree_id: Uuid,
     event_sender: Arc<dyn AcpEventSender>,
     sequence: Arc<SequenceCounter>,
+    config_options: Arc<Mutex<Vec<AcpSessionConfigOption>>>,
 }
 
 impl YmirClientHandler {
     pub fn new(worktree_id: Uuid, event_sender: Arc<dyn AcpEventSender>, sequence: Arc<SequenceCounter>) -> Self {
-        Self { worktree_id, event_sender, sequence }
+        Self {
+            worktree_id,
+            event_sender,
+            sequence,
+            config_options: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    pub fn emit_session_init(&self, acp_session_id: String, config_options: Vec<AcpSessionConfigOption>) {
+        if let Ok(mut stored) = self.config_options.lock() {
+            *stored = config_options.clone();
+        }
+
+        self.send_event(AcpEvent::SessionInit(AcpSessionInit {
+            acp_session_id,
+            capabilities: AcpAgentCapabilities {
+                supports_tool_use: true,
+                supports_context_update: true,
+                supports_cancellation: true,
+            },
+            config_options,
+        }));
+    }
+
+    pub fn emit_config_options_update(&self, acp_session_id: String, config_options: Vec<AcpSessionConfigOption>) {
+        if let Ok(mut stored) = self.config_options.lock() {
+            *stored = config_options.clone();
+        }
+
+        self.send_event(AcpEvent::ConfigOptionsUpdate(AcpConfigOptionsUpdate {
+            worktree_id: self.worktree_id,
+            acp_session_id,
+            config_options,
+        }));
+    }
+
+    pub fn update_config_option_value(&self, config_id: &str, value: &str) -> Vec<AcpSessionConfigOption> {
+        if let Ok(mut stored) = self.config_options.lock() {
+            if let Some(option) = stored.iter_mut().find(|option| {
+                option.id == config_id
+                    || (config_id == "mode" && matches!(option.category, Some(AcpSessionConfigOptionCategory::Mode)))
+                    || (config_id == "model" && matches!(option.category, Some(AcpSessionConfigOptionCategory::Model)))
+            }) {
+                option.current_value = value.to_string();
+            }
+            return stored.clone();
+        }
+
+        Vec::new()
     }
 
   fn send_event(&self, event: AcpEvent) {
@@ -166,10 +347,15 @@ impl YmirClientHandler {
                     data: serde_json::to_string(&plan).unwrap_or_default(),
                 }));
             }
-            SessionUpdate::AvailableCommandsUpdate(_)
-            | SessionUpdate::CurrentModeUpdate(_)
-            | SessionUpdate::ConfigOptionUpdate(_)
-            | SessionUpdate::SessionInfoUpdate(_) => {
+            SessionUpdate::ConfigOptionUpdate(update) => {
+                let config_options = normalize_config_options(&update.config_options);
+                self.emit_config_options_update(session_id_str, config_options);
+            }
+            SessionUpdate::CurrentModeUpdate(update) => {
+                let config_options = self.update_config_option_value("mode", &update.current_mode_id.to_string());
+                self.emit_config_options_update(session_id_str, config_options);
+            }
+            SessionUpdate::AvailableCommandsUpdate(_) | SessionUpdate::SessionInfoUpdate(_) => {
                 debug!("Unhandled session update type");
             }
             _ => {

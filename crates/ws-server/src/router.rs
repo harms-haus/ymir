@@ -3,7 +3,9 @@
 use crate::protocol::{
     ClientMessage, ClientMessagePayload, Error, ServerMessage, ServerMessagePayload, FileListResult, FileContent,
 };
-use crate::agent::{handle_agent_cancel, handle_agent_send, handle_agent_spawn};
+use crate::agent::{
+    handle_agent_cancel, handle_agent_send, handle_agent_set_config_option, handle_agent_spawn,
+};
 use crate::pty::{
     handle_terminal_create, handle_terminal_input, handle_terminal_kill, handle_terminal_request_history, handle_terminal_resize,
 };
@@ -152,6 +154,10 @@ pub async fn route_message(
             Some(handle_agent_cancel(state.clone(), msg).await)
         }
 
+        ClientMessagePayload::AgentSetConfigOption(msg) => {
+            Some(handle_agent_set_config_option(state.clone(), msg).await)
+        }
+
         ClientMessagePayload::AgentRename(msg) => {
             Some(handle_agent_rename(state.clone(), msg).await)
         }
@@ -218,6 +224,7 @@ fn not_implemented(payload: ClientMessagePayload) -> ServerMessage {
         ClientMessagePayload::AgentSpawn(_) => "AgentSpawn",
         ClientMessagePayload::AgentSend(_) => "AgentSend",
         ClientMessagePayload::AgentCancel(_) => "AgentCancel",
+        ClientMessagePayload::AgentSetConfigOption(_) => "AgentSetConfigOption",
         ClientMessagePayload::AgentRename(_) => "AgentRename",
         ClientMessagePayload::AgentReorder(_) => "AgentReorder",
         ClientMessagePayload::TerminalInput(_) => "TerminalInput",
@@ -936,7 +943,7 @@ mod tests {
         let client_id = Uuid::new_v4();
 
         let msg = ClientMessage::new(ClientMessagePayload::Ping(Ping { timestamp: 12345 }));
-        let response = route_message(Arc::new(state), client_id, msg).await;
+        let response = route_message(state, client_id, msg).await;
 
         assert!(response.is_some());
         let response = response.unwrap();
@@ -955,7 +962,7 @@ mod tests {
         let request_id = Uuid::new_v4();
 
         let msg = ClientMessage::new(ClientMessagePayload::GetState(GetState { request_id }));
-        let response = route_message(Arc::new(state), client_id, msg).await;
+        let response = route_message(state, client_id, msg).await;
 
         assert!(response.is_some());
         let response = response.unwrap();
@@ -985,7 +992,7 @@ mod tests {
                 worktree_base_dir: None,
             },
         ));
-        let response = route_message(Arc::new(state), client_id, msg).await;
+        let response = route_message(state, client_id, msg).await;
 
         assert!(response.is_some());
         let response = response.unwrap();
