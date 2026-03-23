@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { Tabs } from '@base-ui/react';
 import { useStore, selectActiveAgentTabId, selectAgentTabsByWorktreeId, selectIsWorkspacesLoading, AgentTab } from '../../store';
+import { useUIStore } from '../../uiStore';
 import { useWebSocketClient } from '../../hooks/useWebSocket';
 import { AgentChat } from './AgentChat';
 import { AgentSkeleton } from './AgentSkeleton';
@@ -101,6 +102,13 @@ export function AgentPane({ worktreeId }: AgentPaneProps) {
       });
     }
   }, [worktreeId, tabs.length, agentSessions.length, handleSpawnAgent]);
+
+  useEffect(() => {
+    const savedTabId = useUIStore.getState().activeAgentTabIds[worktreeId];
+    if (savedTabId && tabs.some((t) => t.id === savedTabId)) {
+      setActiveAgentTab(worktreeId, savedTabId);
+    }
+  }, [worktreeId, tabs, setActiveAgentTab]);
 
   const handleTabChange = useCallback((value: string | null) => {
     if (value && value !== 'empty') {

@@ -20,6 +20,7 @@ interface FileTreeProps {
   onActivate?: (node: NodeApi<FileTreeNode>) => void;
   selection?: string;
   openByDefault?: boolean;
+  initialOpenState?: { [id: string]: boolean };
   rowHeight?: number;
   indent?: number;
   className?: string;
@@ -44,8 +45,6 @@ function FileTreeNodeRenderer({
     onContextMenu?.(e, node);
   };
 
-  // Extract paddingLeft from style (used by react-arborist for indentation)
-  // and apply padding separately to preserve it
   const { paddingLeft = 0 } = style as { paddingLeft?: number };
 
   return (
@@ -78,60 +77,47 @@ function FileTreeNodeRenderer({
       }}
     >
       {!isFile && (
-        <button
-          type="button"
+        <div
+          style={{
+            width: '16px',
+            height: '16px',
+            marginRight: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
           onClick={(e) => {
             e.stopPropagation();
             node.toggle();
           }}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '20px',
-            height: '20px',
-            marginRight: '4px',
-            padding: 0,
-            border: 'none',
-            background: 'transparent',
-            cursor: 'pointer',
-            transition: 'transform 0.2s ease',
-            transform: node.isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
-            color: 'hsl(var(--muted-foreground))',
-          }}
         >
-          <i className="ri-arrow-right-s-line" style={{ fontSize: '16px' }} />
-        </button>
+          <i
+            className={node.isOpen ? 'ri-arrow-down-s-line' : 'ri-arrow-right-s-line'}
+            style={{ fontSize: '14px', color: 'hsl(var(--muted-foreground))' }}
+          />
+        </div>
       )}
-      {isFile && (
-        <FileIcon
-          name={node.data.name}
-          size={16}
-          style={{
-            marginRight: '8px',
-            color: 'hsl(var(--muted-foreground))',
-            flexShrink: 0,
-          }}
-        />
-      )}
+      <div style={{ marginRight: '6px', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+        <FileIcon name={node.data.name} />
+      </div>
       <span
         style={{
-          flex: 1,
           fontSize: '13px',
           color: isSelected ? 'hsl(var(--accent-foreground))' : 'hsl(var(--foreground))',
+          whiteSpace: 'nowrap',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
+          flex: 1,
           minWidth: 0,
-          textDecoration: node.data.isDeleted ? 'line-through' : 'none',
         }}
       >
         {node.data.name}
       </span>
       {renderRightContent && (
-        <span style={{ flexShrink: 0, marginLeft: '8px' }}>
+        <div style={{ marginLeft: 'auto', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
           {renderRightContent(node.data)}
-        </span>
+        </div>
       )}
     </div>
   );
@@ -145,6 +131,7 @@ export function FileTree({
   onActivate,
   selection,
   openByDefault = false,
+  initialOpenState,
   rowHeight = 32,
   indent = 10,
   className,
@@ -198,6 +185,7 @@ export function FileTree({
           rowHeight={rowHeight}
           indent={indent}
           openByDefault={openByDefault}
+          initialOpenState={initialOpenState}
           selection={selection}
           onSelect={handleSelect}
           onToggle={onToggle}

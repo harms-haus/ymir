@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import ReactDiffViewer from 'react-diff-viewer-continued';
 import { useWebSocketClient } from '../../hooks/useWebSocket';
+import { useUIStore } from '../../uiStore';
 import { GitDiff, GitDiffResult } from '../../types/protocol';
 import { ToggleSwitch } from '../ui/ToggleSwitch';
 
@@ -245,7 +246,8 @@ export function DiffTab({ filePath, worktreeId }: DiffTabProps) {
   const [diffData, setDiffData] = useState<DiffData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'split' | 'inline'>('split');
+  const viewMode = useUIStore((state) => state.diffViewMode);
+  const setDiffViewMode = useUIStore((state) => state.setDiffViewMode);
 
   useEffect(() => {
     setIsLoading(true);
@@ -469,7 +471,7 @@ content: {
           { value: 'split', icon: 'ri-layout-column-line', title: 'Split view' },
           { value: 'inline', icon: 'ri-layout-row-line', title: 'Inline view' },
         ]}
-        onChange={(value) => setViewMode(value as 'split' | 'inline')}
+        onChange={(value) => setDiffViewMode(value as 'split' | 'inline')}
       />
       </div>
 

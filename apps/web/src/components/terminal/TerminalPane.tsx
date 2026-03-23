@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Tabs } from '@base-ui/react';
 import { useStore, selectTerminalSessionsByWorktreeId, selectIsWorkspacesLoading } from '../../store';
+import { useUIStore } from '../../uiStore';
 import { useWebSocketClient } from '../../hooks/useWebSocket';
 import { Terminal, type TerminalRef } from './TerminalView';
 import { TerminalSkeleton } from './TerminalSkeleton';
@@ -69,12 +70,21 @@ export function TerminalPane({ worktreeId }: TerminalPaneProps) {
     }));
     setTabs(newTabs);
 
-    if (newTabs.length > 0 && (!activeTab || !newTabs.find(tab => tab.sessionId === activeTab))) {
+    const savedTabId = useUIStore.getState().activeTerminalTabIds[worktreeId];
+    if (savedTabId && newTabs.some(tab => tab.sessionId === savedTabId)) {
+      setActiveTab(savedTabId);
+    } else if (newTabs.length > 0 && (!activeTab || !newTabs.find(tab => tab.sessionId === activeTab))) {
       setActiveTab(newTabs[0].sessionId);
     } else if (newTabs.length === 0) {
       setActiveTab(null);
     }
-  }, [terminalSessions, activeTab]);
+  }, [terminalSessions, activeTab, worktreeId]);
+
+  useEffect(() => {
+    if (activeTab) {
+      useUIStore.getState().setActiveTerminalTabId(worktreeId, activeTab);
+    }
+  }, [activeTab, worktreeId]);
 
   const handleTabMouseDown = (sessionId: string, e: React.MouseEvent) => {
     if (e.button === 1) {

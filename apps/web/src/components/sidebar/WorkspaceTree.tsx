@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useEffect } from 'react';
 import { NodeApi } from 'react-arborist';
 import { useStore } from '../../store';
+import { useUIStore } from '../../uiStore';
 import { FileTree, FileTreeNode } from '../ui/FileTree';
 import { loadWorktreeDetails, getWebSocketClient } from '../../lib/ws';
 
@@ -23,6 +24,15 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
   const toggleWorkspaceExpanded = useStore((state) => state.toggleWorkspaceExpanded);
   const setActiveWorktree = useStore((state) => state.setActiveWorktree);
   const worktrees = useStore((state) => state.worktrees);
+  const persistedExpandedIds = useUIStore((state) => state.expandedWorkspaceIds);
+
+  const initialOpenState = useMemo(() => {
+    const openState: { [id: string]: boolean } = {};
+    for (const id of persistedExpandedIds) {
+      openState[id] = true;
+    }
+    return openState;
+  }, [persistedExpandedIds]);
 
   const treeData = useMemo<FileTreeNode[]>(() => {
     return workspaces.map((workspace) => {
@@ -116,6 +126,7 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
         onToggle={handleToggle}
         selection={activeWorktreeId || undefined}
         openByDefault={false}
+        initialOpenState={initialOpenState}
       />
     </div>
   );
