@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Tabs } from '@base-ui/react/tabs';
 import { useStore, selectActiveWorktree } from '../../store';
+import { useUIStore } from '../../uiStore';
 import { Toolbar } from './Toolbar';
 import { ChangesTab } from './ChangesTab';
 import { AllFilesTab } from './AllFilesTab';
@@ -11,7 +12,8 @@ export function ProjectPanel() {
   const activeWorktree = useStore(selectActiveWorktree);
   const [activeTab, setActiveTab] = useState<'changes' | 'all-files'>('changes');
   const [isPRDialogOpen, setIsPRDialogOpen] = useState(false);
-  const [changesViewMode, setChangesViewMode] = useState<'flat' | 'grouped'>('flat');
+  const changesViewMode = useUIStore((state) => state.changesViewMode);
+  const setChangesViewMode = useUIStore((state) => state.setChangesViewMode);
 
   const canCreatePR = activeWorktree?.status === 'active';
 

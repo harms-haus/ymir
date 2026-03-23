@@ -5,6 +5,7 @@ export type { AgentTab };
 import { ServerMessage, TerminalOutput, GitStatusEntry, AcpEventEnvelope, isAcpSessionInit, isAcpConfigOptionsUpdate, isAcpSessionStatus, isAcpPromptChunk, isAcpPromptComplete, isAcpToolUse, isAcpContextUpdate, isAcpError, isAcpResumeMarker } from './types/protocol';
 import { handleError } from './lib/error-recovery';
 import { showNotification } from './lib/tauri';
+import { useUIStore } from './uiStore';
 
 // Stable empty array reference to prevent infinite re-renders
 const EMPTY_AGENT_TABS: AgentTab[] = [];
@@ -467,7 +468,18 @@ export const useStore = create<AppState>()(
       
       setTerminalSessions: (terminalSessions) => set({ terminalSessions }),
       
-      setActiveWorktree: (activeWorktreeId) => set({ activeWorktreeId }),
+      setActiveWorktree: (activeWorktreeId) => {
+        useUIStore.getState().setActiveWorktreeId(activeWorktreeId);
+        set((state) => {
+          if (activeWorktreeId) {
+            const worktree = state.worktrees.find(wt => wt.id === activeWorktreeId);
+            if (worktree) {
+              useUIStore.getState().toggleExpandedWorkspaceId(worktree.workspaceId);
+            }
+          }
+          return { activeWorktreeId };
+        });
+      },
       
   setConnectionStatus: (connectionStatus) => set((state) => ({
     connectionStatus,
@@ -487,6 +499,7 @@ export const useStore = create<AppState>()(
           } else {
             expandedIds.add(workspaceId)
           }
+          useUIStore.getState().toggleExpandedWorkspaceId(workspaceId);
           return { expandedWorkspaceIds: expandedIds }
         }),
 
@@ -716,12 +729,14 @@ export const useStore = create<AppState>()(
       return { agentTabs: newTabs, activeAgentTabId: newActiveTabId };
     }),
 
-  setActiveAgentTab: (worktreeId, tabId) =>
-    set((state) => {
-      const newActiveTabId = new Map(state.activeAgentTabId);
-      newActiveTabId.set(worktreeId, tabId);
-      return { activeAgentTabId: newActiveTabId };
-    }),
+setActiveAgentTab: (worktreeId, tabId) => {
+        useUIStore.getState().setActiveAgentTabId(worktreeId, tabId);
+        set((state) => {
+          const newActiveTabId = new Map(state.activeAgentTabId);
+          newActiveTabId.set(worktreeId, tabId);
+          return { activeAgentTabId: newActiveTabId };
+        });
+      },
 
   updateAgentTab: (worktreeId, tabId, updates) =>
     set((state) => {
