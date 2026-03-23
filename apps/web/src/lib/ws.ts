@@ -47,6 +47,11 @@ export class YmirClient {
   private disconnectHandlers = new Set<() => void>();
   private reconnectHandlers = new Set<() => void>();
 
+  // ACP event batching to reduce store updates during streaming
+  private acpEventBuffer: Array<{ envelope: AcpEventEnvelope; worktreeId: string }> = [];
+  private acpFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly ACP_FLUSH_INTERVAL = 50; // ms - batch events within this window
+
   // Store beforeunload handler to prevent memory leaks
   private beforeUnloadHandler: (() => void) | null = null;
   
@@ -54,8 +59,8 @@ export class YmirClient {
     this.url = config.url;
     this.reconnectEnabled = config.reconnectEnabled ?? true;
     this.maxReconnectDelay = config.maxReconnectDelay ?? 30000; // 30 seconds
-    this.heartbeatInterval = config.heartbeatInterval ?? 30000; // 30 seconds
-    this.heartbeatTimeout = config.heartbeatTimeout ?? 5000; // 5 seconds
+    this.heartbeatInterval = config.heartbeatInterval ?? 30000;
+    this.heartbeatTimeout = config.heartbeatTimeout ?? 15000;
     
     this.connect();
 
@@ -99,14 +104,20 @@ export class YmirClient {
         this.send({ type: 'GetState', requestId: generateId() });
       };
       
-      this.ws.onmessage = (event) => {
-        try {
-          const message = this.decodeMessage(event.data);
+  this.ws.onmessage = (event) => {
+      try {
+        const message = this.decodeMessage(event.data);
+        // Yield to event loop to prevent blocking during high-frequency message streaming
+        // This allows heartbeat Pong responses to be processed
+        if (message.type === 'AcpWireEvent') {
+          setTimeout(() => this.handleMessage(message), 0);
+        } else {
           this.handleMessage(message);
-        } catch (error) {
-          console.error('Failed to decode message:', error);
         }
-      };
+      } catch (error) {
+        console.error('Failed to decode message:', error);
+      }
+    };
       
       this.ws.onerror = (error) => {
         console.error('WebSocket error:', error);
@@ -270,10 +281,11 @@ export class YmirClient {
     const decoded = decode(uint8Array) as { version: number; type: string; data: Record<string, unknown> };
     // Backend serde uses camelCase, so no conversion needed
     // Flatten nested structure: { version, type, data } -> { type, ...data }
-    return {
+    const result = {
       type: decoded.type,
       ...decoded.data
     } as ServerMessage;
+    return result;
   }
 
   private decodeAcpEnvelope(message: ServerMessage): AcpEventEnvelope | null {
@@ -281,56 +293,47 @@ export class YmirClient {
       return null;
     }
 
-    const wireEvent = message as { type: 'AcpWireEvent'; envelope: unknown };
+    const { type, ...envelopeFields } = message as unknown as Record<string, unknown>;
 
-    if (!wireEvent.envelope || typeof wireEvent.envelope !== 'object') {
-      console.error('[WS] [ACP] Malformed envelope: missing or invalid envelope object');
-      return null;
-    }
-
-    const envelope = wireEvent.envelope as Partial<AcpEventEnvelope>;
-
-    if (typeof envelope.sequence !== 'number') {
+    if (typeof envelopeFields.sequence !== 'number') {
       console.error('[WS] [ACP] Malformed envelope: missing or invalid sequence');
       return null;
     }
 
-    if (typeof envelope.timestamp !== 'number') {
+    if (typeof envelopeFields.timestamp !== 'number') {
       console.error('[WS] [ACP] Malformed envelope: missing or invalid timestamp');
       return null;
     }
 
-    if (typeof envelope.eventType !== 'string') {
+    if (typeof envelopeFields.eventType !== 'string') {
       console.error('[WS] [ACP] Malformed envelope: missing or invalid eventType');
       return null;
     }
 
-    if (!envelope.data || typeof envelope.data !== 'object') {
+    if (!envelopeFields.data || typeof envelopeFields.data !== 'object') {
       console.error('[WS] [ACP] Malformed envelope: missing or invalid data');
       return null;
     }
 
-    if (envelope.correlationId !== undefined) {
-      if (envelope.correlationId === null || typeof envelope.correlationId !== 'object') {
+    if (envelopeFields.correlationId !== undefined && envelopeFields.correlationId !== null) {
+      if (typeof envelopeFields.correlationId !== 'object') {
         console.error('[WS] [ACP] Malformed envelope: invalid correlationId');
         return null;
       }
     }
 
-    return envelope as AcpEventEnvelope;
+    return envelopeFields as unknown as AcpEventEnvelope;
   }
   
   private handleMessage(message: ServerMessage): void {
-    console.log('[WS] Received message type:', message.type, message);
     if (message.type === 'Pong') {
-      console.log('[WS] [Heartbeat] Received Pong, clearing timeout');
       this.handlePong();
     } else if (message.type === 'StateSnapshot') {
+      this.flushAcpBuffer();
       this.handleStateSnapshot(message);
     } else if (message.type === 'AcpWireEvent') {
       const envelope = this.decodeAcpEnvelope(message);
       if (envelope) {
-        console.log('[WS] [ACP] Decoded envelope:', envelope.eventType, envelope.sequence);
         const handlers = this.acpEventHandlers.get(envelope.eventType);
         if (handlers) {
           handlers.forEach(handler => {
@@ -343,8 +346,8 @@ export class YmirClient {
             handler(envelope);
           });
         }
-        return;
       }
+      this.bufferAcpEvent(message);
     } else {
       updateStateFromServerMessage(message);
     }
@@ -495,9 +498,45 @@ export class YmirClient {
   getStatus(): ConnectionStatus {
     return this.status;
   }
-  
+
   isConnected(): boolean {
     return this.status === 'open';
+  }
+
+  private bufferAcpEvent(message: ServerMessage): void {
+    const envelope = this.decodeAcpEnvelope(message);
+    if (!envelope) return;
+
+    const { activeWorktreeId } = useStore.getState();
+    const data = (message as unknown as Record<string, unknown>).data as Record<string, unknown> | undefined;
+    const worktreeId = (data?.worktreeId as string) ?? activeWorktreeId;
+
+    if (!worktreeId) return;
+
+    this.acpEventBuffer.push({ envelope, worktreeId });
+
+    if (!this.acpFlushTimer) {
+      this.acpFlushTimer = setTimeout(() => {
+        this.flushAcpBuffer();
+      }, this.ACP_FLUSH_INTERVAL);
+    }
+  }
+
+  private flushAcpBuffer(): void {
+    if (this.acpFlushTimer) {
+      clearTimeout(this.acpFlushTimer);
+      this.acpFlushTimer = null;
+    }
+
+    if (this.acpEventBuffer.length === 0) return;
+
+    const eventsToProcess = [...this.acpEventBuffer];
+    this.acpEventBuffer = [];
+
+    const { dispatchAccumulator } = useStore.getState();
+    for (const { envelope, worktreeId } of eventsToProcess) {
+      dispatchAccumulator({ type: 'EVENT_RECEIVED', envelope, worktreeId });
+    }
   }
 }
 

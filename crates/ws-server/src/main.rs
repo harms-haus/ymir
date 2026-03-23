@@ -49,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
     let activity_logger = Arc::new(ymir_ws_server::logging::ActivityLogger::new(db.clone()));
     activity_layer.set_logger(activity_logger.clone()).await;
 
-    let state = Arc::new(AppState::with_acp(db.clone(), shutdown_rx.clone()));
+    let state = AppState::with_acp(db.clone(), shutdown_rx.clone());
 
     // Initialize in-memory state from database
     state.initialize_from_db().await;

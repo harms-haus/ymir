@@ -124,15 +124,13 @@ export function AgentPane({ worktreeId }: AgentPaneProps) {
   }, [worktreeId, tabs, agentSessions, removeAgentTab, client]);
 
   const handleSendMessage = useCallback((message: string) => {
-    agentSessions.forEach(() => {
-      const sendMessage: AgentSend = {
-        type: 'AgentSend',
-        worktreeId,
-        message,
-      };
-      client.send(sendMessage);
-    });
-  }, [worktreeId, agentSessions.length, client]);
+    const sendMessage: AgentSend = {
+      type: 'AgentSend',
+      worktreeId,
+      message,
+    };
+    client.send(sendMessage);
+  }, [worktreeId, client]);
 
   const { state: contextMenuState, openMenu, closeMenu, handleAction } = useContextMenu({
     onClose: (tabId: string) => handleCloseTab(tabId),

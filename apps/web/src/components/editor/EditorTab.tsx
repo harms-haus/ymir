@@ -54,7 +54,6 @@ export function EditorTab({ filePath, worktreeId, sessionId: _sessionId }: Edito
     const wsClient = getWebSocketClient();
     const requestKey = `${worktreeId}:${filePath}`;
 
-    // Setup message handler first so we can receive the response
     const unsubscribe = wsClient.onMessage('FileContent', (msg: FileContentMessage) => {
       if (msg.worktreeId === worktreeId && msg.path === filePath) {
         const contentBytes = new Blob([msg.content]).size;
@@ -82,8 +81,8 @@ export function EditorTab({ filePath, worktreeId, sessionId: _sessionId }: Edito
       }
     });
 
-    // Only request if we haven't already requested this file
-    if (requestedRef.current !== requestKey) {
+    const shouldRequest = requestedRef.current !== requestKey;
+    if (shouldRequest) {
       requestedRef.current = requestKey;
       setFileState(prev => ({ ...prev, isLoading: true, error: null }));
       setHasUnsavedChanges(false);

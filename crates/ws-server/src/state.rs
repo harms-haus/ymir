@@ -144,13 +144,28 @@ impl AppState {
         state
     }
 
-    pub fn with_acp(db: Arc<Db>, shutdown_rx: watch::Receiver<bool>) -> Self {
+    pub fn with_acp(db: Arc<Db>, shutdown_rx: watch::Receiver<bool>) -> Arc<Self> {
         use crate::agent::start_acp_runtime;
         let mut state = Self::new(db, shutdown_rx);
         let broadcast_tx = state.broadcast_tx.clone();
-        let (handle, _join) = start_acp_runtime(broadcast_tx);
+        let (handle, _join) = start_acp_runtime(broadcast_tx.clone());
+
         state.acp_handle = Some(handle);
         state.pty_manager = Some(PtyManager::new());
+
+        let state = Arc::new(state);
+        let state_weak = Arc::downgrade(&state);
+        tokio::spawn(async move {
+            let mut broadcast_rx = broadcast_tx.subscribe();
+            while let Ok(msg) = broadcast_rx.recv().await {
+                if let Some(state) = state_weak.upgrade() {
+                    state.broadcast(msg).await;
+                } else {
+                    break;
+                }
+            }
+        });
+
         state
     }
 
@@ -202,11 +217,11 @@ impl AppState {
                     }
                 }
             }
-            Err(e) => tracing::warn!("Failed to load worktrees from DB: {}", e),
-        }
+    Err(e) => tracing::warn!("Failed to load worktrees from DB: {}", e),
+  }
 
-        tracing::info!("Initialized in-memory state from database");
-    }
+  tracing::info!("Initialized in-memory state from database");
+}
 
     #[cfg(test)]
     pub async fn new_test() -> Self {
