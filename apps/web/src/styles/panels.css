@@ -89,50 +89,70 @@
 
 /* Horizontal resize handles (between sidebar, main, project) */
 .panel-handle {
-  width: 4px;
-  background: hsl(var(--border));
+  width: 3px;
+  background: transparent;
   cursor: col-resize;
   position: relative;
   flex-shrink: 0;
-  /* Minimum hit area: 8px with negative margin */
-  margin-left: -2px;
-  margin-right: -2px;
-  padding-left: 2px;
-  padding-right: 2px;
+  margin-left: -4px;
+  margin-right: -4px;
+  padding-left: 4px;
+  padding-right: 4px;
   z-index: 10;
 }
 
-.panel-handle:hover,
-.panel-handle:focus {
-  background: hsl(var(--accent, 220 14% 10%));
+.panel-handle::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: hsl(var(--border));
+  transform: translateX(-50%);
 }
 
-.panel-handle[data-resize-handle-active] {
-  background: hsl(var(--accent, 220 14% 10%));
+.panel-handle:hover::before,
+.panel-handle:focus::before {
+  background: hsl(var(--primary));
+}
+
+.panel-handle[data-resize-handle-active]::before {
+  background: hsl(var(--primary));
 }
 
 /* Vertical resize handles (between agent and terminal) */
 .panel-handle-vertical {
-  height: 4px;
-  background: hsl(var(--border));
+  height: 3px;
+  background: transparent;
   cursor: row-resize;
   position: relative;
   flex-shrink: 0;
-  /* Minimum hit area: 8px with negative margin */
-  margin-top: -2px;
-  margin-bottom: -2px;
-  padding-top: 2px;
-  padding-bottom: 2px;
+  margin-top: -4px;
+  margin-bottom: -4px;
+  padding-top: 4px;
+  padding-bottom: 4px;
   z-index: 10;
 }
 
-.panel-handle-vertical:hover,
-.panel-handle-vertical:focus {
-  background: hsl(var(--accent, 220 14% 10%));
+.panel-handle-vertical::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: hsl(var(--border));
+  transform: translateY(-50%);
 }
 
-.panel-handle-vertical[data-resize-handle-active] {
-  background: hsl(var(--accent, 220 14% 10%));
+.panel-handle-vertical:hover::before,
+.panel-handle-vertical:focus::before {
+  background: hsl(var(--primary));
+}
+
+.panel-handle-vertical[data-resize-handle-active]::before {
+  background: hsl(var(--primary));
 }
 
 /* Status bar */

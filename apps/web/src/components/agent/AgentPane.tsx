@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef, useState } from 'react';
+import { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import { Tabs } from '@base-ui/react';
 import { useStore, selectActiveAgentTabId, selectAgentTabsByWorktreeId, selectIsWorkspacesLoading, AgentTab } from '../../store';
 import { useUIStore } from '../../uiStore';
@@ -65,6 +65,10 @@ export function AgentPane({ worktreeId }: AgentPaneProps) {
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   const agentSessions = allAgentSessions.filter((as) => as.worktreeId === worktreeId);
+  const tabSessionIds = useMemo(
+    () => new Set(tabs.map((tab) => tab.sessionId).filter((sessionId): sessionId is string => Boolean(sessionId))),
+    [tabs]
+  );
 
   const handleSpawnAgent = useCallback(() => {
     const agentType = 'opencode';
@@ -79,7 +83,6 @@ export function AgentPane({ worktreeId }: AgentPaneProps) {
   }, [worktreeId, client]);
 
   useEffect(() => {
-    const tabSessionIds = new Set(tabs.map((t) => t.sessionId));
     agentSessions.forEach((session) => {
       if (!addedTabsRef.current.has(session.id) && !tabSessionIds.has(session.id)) {
         const agentTab: AgentTab = {
@@ -92,7 +95,7 @@ export function AgentPane({ worktreeId }: AgentPaneProps) {
         addAgentTab(worktreeId, agentTab);
       }
     });
-  }, [worktreeId, tabs.length, agentSessions.length, addAgentTab]);
+  }, [worktreeId, tabSessionIds, agentSessions, addAgentTab]);
 
   useEffect(() => {
     if (tabs.length === 0 && worktreeId && agentSessions.length === 0 && !creationInProgressRef.current) {
@@ -354,24 +357,17 @@ function AgentTabContent({
       ) : (
         <span className="tab-label">{getTabLabel(tab)}</span>
       )}
-      <span
-        role="button"
-        tabIndex={0}
+      <button
+        type="button"
         onClick={(e) => {
           e.stopPropagation();
           onCloseTab(tab.id);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.stopPropagation();
-            onCloseTab(tab.id);
-          }
         }}
         className="tab-close"
         aria-label="Close tab"
       >
         ×
-      </span>
+      </button>
     </Tabs.Tab>
   );
 }

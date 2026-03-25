@@ -20,8 +20,11 @@ vi.mock('../AgentChat', () => ({
     <div data-testid={`agent-chat-${sessionId}`}>AgentChat: {agentType}</div>
   ),
 }));
-vi.mock('../editor/DiffTab', () => ({
+vi.mock('../../editor/DiffTab', () => ({
   DiffTab: ({ filePath }: { filePath: string }) => <div data-testid={`diff-${filePath}`}>Loading diff...</div>,
+}));
+vi.mock('../../editor/EditorTab', () => ({
+  EditorTab: ({ filePath }: { filePath: string }) => <div data-testid={`editor-${filePath}`}>Editor placeholder (T24)</div>,
 }));
 vi.mock('../../../hooks/useAgentStatus');
 
@@ -201,8 +204,6 @@ describe('AgentPane', () => {
     expect(screen.getByText('Editor placeholder (T24)')).toBeInTheDocument();
   });
 
-
-
   it('sends AgentSpawn message when + button is clicked', async () => {
     const tabs: AgentTab[] = [{ id: 'tab-1', type: 'agent', sessionId: 'agent-session-1', label: 'claude' }];
     const mockAgentSessions = [
@@ -247,6 +248,7 @@ describe('AgentPane', () => {
       );
     });
   });
+
 });
 
 describe('Agent Runtime Wiring', () => {
