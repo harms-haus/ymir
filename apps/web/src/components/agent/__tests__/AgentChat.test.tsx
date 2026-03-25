@@ -52,6 +52,14 @@ import type { AccumulatedThread, AccumulatedMessage, AccumulatedContentPart } fr
 vi.mock('../../../hooks/useWebSocket');
 vi.mock('../../../hooks/useAgentStatus');
 
+class ResizeObserverMock {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+(globalThis as typeof globalThis & { ResizeObserver?: typeof ResizeObserverMock }).ResizeObserver = ResizeObserverMock;
+
 describe('AgentChat', () => {
   const mockOnSendMessage = vi.fn();
   const mockOnMessage = vi.fn();
@@ -96,15 +104,16 @@ describe('AgentChat', () => {
     expect(screen.getByText('working')).toBeInTheDocument();
   });
 
-  it('displays agent name and subtitle', () => {
+  it('displays the selected agent and current status', () => {
     renderAgentChat();
-    expect(screen.getByText(/Claude/)).toBeInTheDocument();
-    expect(screen.getByText(/Plan Builder/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Claude/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/idle/)).toBeInTheDocument();
   });
 
-  it('displays helper text', () => {
+  it('displays mode and model selectors', () => {
     renderAgentChat();
-    expect(screen.getByText(/tab: switch agents/)).toBeInTheDocument();
+    expect(screen.getByText('Mode')).toBeInTheDocument();
+    expect(screen.getByText('Model')).toBeInTheDocument();
   });
 
   it('renders send button', () => {

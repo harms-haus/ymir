@@ -4,6 +4,7 @@ import {
   ThreadPrimitive,
   ComposerPrimitive,
   MessagePrimitive,
+  MessagePartPrimitive,
 } from '@assistant-ui/react';
 import { EventCard, EventContentPart } from './EventCards';
 import {
@@ -17,6 +18,7 @@ import {
 import { Select } from '@base-ui/react/select';
 import { useStore } from '../../store';
 import { useWebSocketClient } from '../../hooks/useWebSocket';
+import { useAgentStatus } from '../../hooks/useAgentStatus';
 import type { AcpSessionConfigOption } from '../../types/protocol';
 import '../../styles/agent.css';
 
@@ -187,19 +189,47 @@ function ConfigSelector({
 
 function UserMessage() {
   return (
-    <MessagePrimitive.Root className="agent-chat-message user-wrapper">
-      <div className="agent-chat-message user">
-        <MessagePrimitive.Content />
+    <MessagePrimitive.Root className="assistant-demo-message-row user">
+      <div className="assistant-demo-message user">
+        <MessagePrimitive.Parts
+          components={{
+            Text: () => (
+              <p className="assistant-demo-message-text user">
+                <MessagePartPrimitive.Text />
+              </p>
+            ),
+          }}
+        />
       </div>
     </MessagePrimitive.Root>
   );
 }
 
+function AgentToolPart(props: Parameters<typeof EventContentPart>[0]['part']) {
+  return <EventContentPart part={props} />;
+}
+
 function AgentMessage() {
   return (
-    <MessagePrimitive.Root className="agent-chat-message agent-wrapper">
-      <div className="agent-chat-message agent surface">
-        <MessagePrimitive.Content />
+    <MessagePrimitive.Root className="assistant-demo-message-row assistant">
+      <div className="assistant-demo-assistant-stack">
+        <MessagePrimitive.Parts
+          components={{
+            Text: () => (
+              <div className="assistant-demo-message assistant">
+                <p className="assistant-demo-message-text assistant">
+                  <MessagePartPrimitive.Text />
+                </p>
+              </div>
+            ),
+            tools: {
+              Fallback: AgentToolPart,
+            },
+            data: {
+              Fallback: AgentToolPart,
+            },
+          }}
+        />
       </div>
     </MessagePrimitive.Root>
   );
@@ -213,9 +243,11 @@ function AgentChatContent({
   worktreeId: string;
 }) {
   const client = useWebSocketClient();
+  const agentStatus = useAgentStatus(worktreeId);
   const [selectedAgentType, setSelectedAgentType] = useState(agentType);
   const thread = useStore((state) => state.acpAccumulator.threads.get(worktreeId));
   const configOptions = thread?.configOptions ?? EMPTY_CONFIG_OPTIONS;
+  const hasMessages = (thread?.messages.length ?? 0) > 0;
 
   const agentName = getAgentDisplayName(selectedAgentType);
   const modeOption = useMemo(
@@ -241,75 +273,81 @@ function AgentChatContent({
   }, []);
 
   return (
-    <div className="agent-chat">
-      <div className="agent-chat-messages">
-        <ThreadPrimitive.Root>
-          <ThreadPrimitive.If empty>
-            <div className="agent-chat-empty">
-              <i className="ri-robot-line agent-chat-empty-icon" />
-              <p>Start a conversation with {agentName}</p>
+    <div className="agent-chat agent-chat-demo">
+      <ThreadPrimitive.Root className={`assistant-demo-thread-root agent-chat-thread-root${hasMessages ? '' : ' empty'}`}>
+        <ThreadPrimitive.Viewport className={`assistant-demo-thread-viewport${hasMessages ? '' : ' empty'}`} autoScroll={false}>
+          {hasMessages && (
+            <div className="assistant-demo-thread-frame agent-chat-thread-frame">
+              <ThreadPrimitive.Messages>
+                {({ message }) =>
+                  message.role === 'user' ? (
+                    <UserMessage key={message.id} />
+                  ) : (
+                    <AgentMessage key={message.id} />
+                  )
+                }
+              </ThreadPrimitive.Messages>
             </div>
-          </ThreadPrimitive.If>
-          <ThreadPrimitive.Messages>
-            {({ message }) =>
-              message.role === 'user' ? (
-                <UserMessage key={message.id} />
-              ) : (
-                <AgentMessage key={message.id} />
-              )
-            }
-          </ThreadPrimitive.Messages>
-        </ThreadPrimitive.Root>
-      </div>
+          )}
 
-      <div className="agent-chat-input-area">
-        <ComposerPrimitive.Root className="au-composer-root">
-          <div className="au-composer-container">
-            <div className="au-composer-input-row">
-              <ComposerPrimitive.Input
-                className="au-composer-input"
-                placeholder={`Ask ${agentName.toLowerCase()}...`}
-              />
-              <ComposerPrimitive.Send className="au-composer-send" asChild>
-                <button type="button" aria-label="Send message">
-                  <i className="ri-send-plane-fill" />
-                </button>
-              </ComposerPrimitive.Send>
-            </div>
-            <div className="au-composer-footer compact">
-              <div className="au-composer-status-row">
-                <ConfigSelector
-                  option={modeOption}
-                  placeholder="Mode"
-                  className="mode-selector"
-                  onChange={(value) => {
-                    if (modeOption) {
-                      handleConfigChange(modeOption.id, value);
-                    }
-                  }}
+          <ThreadPrimitive.ViewportFooter className="assistant-demo-footer-shell">
+            <ComposerPrimitive.Root className="assistant-demo-composer-root">
+              <div className="assistant-demo-composer-shell">
+                <ComposerPrimitive.Input
+                  className="assistant-demo-composer-input"
+                  placeholder={`Ask ${agentName.toLowerCase()}...`}
                 />
-                <ConfigSelector
-                  option={modelOption}
-                  placeholder="Model"
-                  className="model-selector"
-                  onChange={(value) => {
-                    if (modelOption) {
-                      handleConfigChange(modelOption.id, value);
-                    }
-                  }}
-                />
+                <div className="assistant-demo-float-actions">
+                  <ComposerPrimitive.Send asChild>
+                    <button type="button" className="assistant-demo-float-button" aria-label="Send message">
+                      <i className="ri-send-plane-fill" />
+                    </button>
+                  </ComposerPrimitive.Send>
+                  <ComposerPrimitive.Cancel asChild>
+                    <button type="button" className="assistant-demo-float-button" aria-label="Stop generation">
+                      <i className="ri-stop-circle-line" />
+                    </button>
+                  </ComposerPrimitive.Cancel>
+                </div>
               </div>
-              <div className="au-composer-meta compact">
-                <AgentSelector
-                  worktreeId={worktreeId}
-                  currentAgentType={selectedAgentType}
-                  onAgentChange={handleAgentChange}
-                />
+
+              <div className="assistant-demo-composer-footer agent-chat-composer-footer">
+                <div className="assistant-demo-composer-controls">
+                  <ConfigSelector
+                    option={modeOption}
+                    placeholder="Mode"
+                    className="mode-selector"
+                    onChange={(value) => {
+                      if (modeOption) {
+                        handleConfigChange(modeOption.id, value);
+                      }
+                    }}
+                  />
+                  <ConfigSelector
+                    option={modelOption}
+                    placeholder="Model"
+                    className="model-selector"
+                    onChange={(value) => {
+                      if (modelOption) {
+                        handleConfigChange(modelOption.id, value);
+                      }
+                    }}
+                  />
+                </div>
+                <div className="assistant-demo-connection-state">
+                  <AgentSelector
+                    worktreeId={worktreeId}
+                    currentAgentType={selectedAgentType}
+                    onAgentChange={handleAgentChange}
+                  />
+                  <span className={`au-status-dot ${getStatusDotClass(agentStatus?.status ?? 'idle')}`} />
+                  <span className="assistant-demo-connection-label">{agentStatus?.status ?? 'idle'}</span>
+                </div>
               </div>
-            </div>
-          </div>
-        </ComposerPrimitive.Root>
-      </div>
+            </ComposerPrimitive.Root>
+          </ThreadPrimitive.ViewportFooter>
+        </ThreadPrimitive.Viewport>
+      </ThreadPrimitive.Root>
     </div>
   );
 }

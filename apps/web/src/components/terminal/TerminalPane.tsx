@@ -62,6 +62,9 @@ export function TerminalPane({ worktreeId }: TerminalPaneProps) {
   const creationInFlightRef = useRef(false);
   const nextTabIndexRef = useRef(1);
 
+  const prevSessionIdsRef = useRef<string>('');
+  const sessionIdsKey = terminalSessions.map(s => s.id).join(',');
+
   useEffect(() => {
     const newTabs = terminalSessions.map(session => ({
       sessionId: session.id,
@@ -71,14 +74,22 @@ export function TerminalPane({ worktreeId }: TerminalPaneProps) {
     setTabs(newTabs);
 
     const savedTabId = useUIStore.getState().activeTerminalTabIds[worktreeId];
+    const sessionsChanged = prevSessionIdsRef.current !== sessionIdsKey;
+
     if (savedTabId && newTabs.some(tab => tab.sessionId === savedTabId)) {
       setActiveTab(savedTabId);
-    } else if (newTabs.length > 0 && (!activeTab || !newTabs.find(tab => tab.sessionId === activeTab))) {
-      setActiveTab(newTabs[0].sessionId);
+    } else if (newTabs.length > 0 && sessionsChanged) {
+      setActiveTab(prev => 
+        prev && newTabs.find(tab => tab.sessionId === prev) 
+          ? prev 
+          : newTabs[0].sessionId
+      );
     } else if (newTabs.length === 0) {
       setActiveTab(null);
     }
-  }, [terminalSessions, activeTab, worktreeId]);
+
+    prevSessionIdsRef.current = sessionIdsKey;
+  }, [terminalSessions, worktreeId, sessionIdsKey]);
 
   useEffect(() => {
     if (activeTab) {
