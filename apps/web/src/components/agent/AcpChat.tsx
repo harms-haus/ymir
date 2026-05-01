@@ -12,7 +12,7 @@ interface AcpChatProps {
 }
 
 export function AcpChat({
-  sessionId,
+  sessionId: _sessionId,
   agentType,
   worktreeId,
   onSendMessage,
