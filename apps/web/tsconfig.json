@@ -18,9 +18,9 @@
     "noUncheckedSideEffectImports": true,
     "baseUrl": ".",
     "paths": {
-      "@harms-haus/acp-chat-core": ["../../acp-chat-ui-react/packages/acp-chat-core/src"],
-      "@harms-haus/acp-chat-react": ["../../acp-chat-ui-react/packages/acp-chat-react/src"],
-      "@harms-haus/acp-ws-bridge": ["../../acp-chat-ui-react/packages/acp-ws-bridge/src"]
+      "@harms-haus/acp-chat-core": ["../../../acp-chat-ui-react/packages/acp-chat-core/src"],
+      "@harms-haus/acp-chat-react": ["../../../acp-chat-ui-react/packages/acp-chat-react/src"],
+      "@harms-haus/acp-ws-bridge": ["../../../acp-chat-ui-react/packages/acp-ws-bridge/src"]
     }
   },
   "include": ["src"],
