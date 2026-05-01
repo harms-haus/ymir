@@ -16,13 +16,22 @@ use tracing_subscriber::prelude::*;
 use ymir_ws_server::db::Db;
 use ymir_ws_server::logging::ActivityLayer;
 use ymir_ws_server::bridge::{
-    decode_bridge_message, decode_client_message, server_message_to_envelope, DecodedMessage,
+    decode_client_message, server_message_to_envelope,
 };
 use ymir_ws_server::protocol::{
     ClientMessage, ServerMessage, PROTOCOL_VERSION,
 };
-use ymir_ws_server::router::route_message;
+use ymir_ws_server::router::{route_json_message, route_message};
 use ymir_ws_server::state::AppState;
+
+/// Transport format detected from incoming client messages.
+/// Used to choose the appropriate serialization for outgoing messages.
+#[derive(Clone, Copy, Debug, Default)]
+enum TransportMode {
+    #[default]
+    MessagePack,
+    Json,
+}
 
 const DEFAULT_PORT: u16 = 7319;
 
@@ -120,16 +129,28 @@ async fn handle_connection_loop(
     client_id: uuid::Uuid,
     rx: &mut tokio::sync::mpsc::Receiver<ServerMessage>,
 ) -> anyhow::Result<()> {
+    let mut transport_mode = TransportMode::MessagePack;
+
     loop {
         tokio::select! {
             Some(msg) = rx.recv() => {
-            if let Err(e) = send_ws_message(socket, msg).await {
-                error!(%client_id, error = %e, "Failed to send message to client");
-                return Err(e);
-            }
+                let send_result = match transport_mode {
+                    TransportMode::MessagePack => send_ws_message(socket, msg).await,
+                    TransportMode::Json => send_ws_message_json(socket, msg).await,
+                };
+                if let Err(e) = send_result {
+                    error!(%client_id, error = %e, "Failed to send message to client");
+                    return Err(e);
+                }
             }
             Some(result) = socket.next() => {
                 let msg = result?;
+                // Detect transport mode from incoming message type
+                match &msg {
+                    Message::Text(_) => transport_mode = TransportMode::Json,
+                    Message::Binary(_) => transport_mode = TransportMode::MessagePack,
+                    _ => {}
+                }
                 process_ws_message(state, client_id, msg).await?;
             }
             else => {
@@ -172,40 +193,10 @@ async fn process_ws_message(
             }
         }
         Message::Text(text) => {
-            debug!(%client_id, "Received text message, size: {}", text.len());
-            // New BridgeEnvelope JSON pathway
-            if let Some(decoded) = decode_bridge_message(&text) {
-                match decoded {
-                    DecodedMessage::Client(client_msg) => {
-                        debug!(%client_id, "Decoded BridgeEnvelope to ClientMessage: {:?}", client_msg.payload);
-                        if client_msg.version != PROTOCOL_VERSION {
-                            warn!(
-                                %client_id,
-                                version = client_msg.version,
-                                expected = PROTOCOL_VERSION,
-                                "Client protocol version mismatch"
-                            );
-                            return Ok(());
-                        }
-
-                        if let Some(response) = route_message(state.clone(), client_id, client_msg).await {
-                            state.send_to(client_id, response).await;
-                        }
-                    }
-                    DecodedMessage::UnsupportedVersion(err) => {
-                        warn!(
-                            %client_id,
-                            received = err.received,
-                            supported = ?err.supported,
-                            "Unsupported bridge envelope version"
-                        );
-                    }
-                    DecodedMessage::NonClient(msg) => {
-                        debug!(%client_id, "Received non-client BridgeMessage: {:?}", std::mem::discriminant(&msg));
-                        // Non-client messages (AcpPayload, StartAgent) are handled
-                        // through separate pathways — not yet wired up
-                    }
-                }
+            debug!(%client_id, "Received text message (JSON), size: {}", text.len());
+            // New JSON pathway: route through route_json_message (BridgeEnvelope)
+            if let Some(response) = route_json_message(state.clone(), client_id, &text).await {
+                state.send_to(client_id, response).await;
             } else if let Some(client_msg) = decode_client_message(&text) {
                 // Fallback: legacy JSON ClientMessage format
                 debug!(%client_id, "Decoded legacy JSON ClientMessage: {:?}", client_msg.payload);
@@ -251,7 +242,6 @@ async fn send_ws_message(socket: &mut WebSocket, msg: ServerMessage) -> anyhow::
 /// This is the JSON-text alternative to `send_ws_message` which uses MessagePack
 /// binary frames. Both functions are available during the transition period;
 /// the actual switch to JSON text frames happens in Phase 3.
-#[allow(dead_code)]
 async fn send_ws_message_json(socket: &mut WebSocket, msg: ServerMessage) -> anyhow::Result<()> {
     let timestamp_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

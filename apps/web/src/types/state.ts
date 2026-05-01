@@ -380,6 +380,7 @@ export interface AppState {
   activeWorktreeId: string | null;
   connectionStatus: ConnectionStatus;
   connectionError: string | null;
+  lastPongTimestamp: number;
   expandedWorkspaceIds: Set<string>;
   isWorkspacesLoading: boolean;
 
@@ -418,6 +419,7 @@ export interface AppState {
   setActiveWorktree: (worktreeId: string | null) => void;
   setConnectionStatus: (status: ConnectionStatus) => void;
   setConnectionError: (error: string | null) => void;
+  setLastPongTimestamp: (ts: number) => void;
   setWorkspacesLoading: (loading: boolean) => void;
   toggleWorkspaceExpanded: (workspaceId: string) => void;
   

@@ -24,7 +24,7 @@ import {
   AcpEventEnvelope,
   StateSnapshot,
 } from "../types/protocol";
-import { updateStateFromServerMessage, useStore, useToastStore } from "../store";
+import { updateStateFromServerMessage, useStore, useToastStore, handleBridgeMessage } from "../store";
 
 // Re-export ConnectionStatus with YmirClient-compatible naming
 export type ConnectionStatus = "connecting" | "open" | "closed" | "reconnecting";
@@ -267,6 +267,37 @@ export class YmirWsTransport {
   private handleEnvelope(envelope: BridgeEnvelope): void {
     try {
       const decoded = decodeBridgeJson(JSON.stringify(envelope));
+
+      // Route migrated message types directly through handleBridgeMessage
+      // instead of converting back to ServerMessage format.
+      // Migrated: workspace_event, worktree_event, git_response, file_response,
+      //   notification, error_response, agent_event, terminal_event, state_snapshot,
+      //   ping, pong, ack, acp_payload
+      // Unmigrated (stays on old path): bridge_status, stderr, process_exit, etc.
+      const migratedTypes: BridgeMessage["type"][] = [
+        "workspace_event",
+        "worktree_event",
+        "git_response",
+        "file_response",
+        "notification",
+        "error_response",
+        "agent_event",
+        "terminal_event",
+        "state_snapshot",
+        "ping",
+        "pong",
+        "ack",
+        "acp_payload",
+      ];
+
+      if (migratedTypes.includes(decoded.type)) {
+        handleBridgeMessage(decoded, (envelope) => {
+          this.client.send(JSON.stringify(envelope));
+        });
+        return;
+      }
+
+      // Legacy path: convert to ServerMessage for unmigrated types
       const serverMessage = this.bridgeMessageToServerMessage(decoded.message, decoded.type);
 
       if (!serverMessage) {
@@ -292,20 +323,6 @@ export class YmirWsTransport {
     message: BridgeMessage,
     envelopeType: BridgeMessage["type"]
   ): ServerMessage | null {
-    // Handle ping from server -> respond with pong
-    if (envelopeType === "ping") {
-      const payload = (message as any).payload as Record<string, unknown> | null;
-      const timestamp = (payload?.timestamp as number) ?? Date.now();
-      this.send({ type: "Pong", timestamp });
-      return null; // Ping is handled internally, not exposed as ServerMessage
-    }
-
-    // Handle pong from server
-    if (envelopeType === "pong") {
-      this.handlePong();
-      return { type: "Pong", timestamp: Date.now() } as ServerMessage;
-    }
-
     // Handle bridge_status (internal, not exposed)
     if (envelopeType === "bridge_status") {
       return null;

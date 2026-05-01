@@ -24,7 +24,7 @@ use crate::protocol::{ClientMessagePayload, ServerMessagePayload};
 
 // Re-export the lower-level helpers for advanced use cases.
 pub use super::decoder::{
-    decode_bridge_message, decode_client_message, extract_payload, DecodedMessage,
+    decode_bridge_message, decode_client_message, extract_payload,
 };
 pub use super::encoder::server_message_to_envelope;
 
@@ -202,37 +202,44 @@ fn payload_to_bridge_message(payload: &ServerMessagePayload) -> BridgeMessage {
 ///
 /// Returns None for message types that are not client requests (e.g., AcpPayload,
 /// StartAgent, or server-to-client passthrough types).
+///
+/// For payload-carrying BridgeMessage variants, the inner payload is in the
+/// `{type: "...", data: {...}}` format matching `ClientMessagePayload`'s
+/// `#[serde(tag = "type", content = "data")]` serialization. We attempt direct
+/// deserialization — if the type tag matches a client-side variant, we get the
+/// typed payload; otherwise deserialization fails and we return None.
 fn bridge_message_to_client_payload(message: &BridgeMessage) -> Option<ClientMessagePayload> {
-    match message {
-        // ACP payload passthrough — handled by ACP runtime, not the message router
-        BridgeMessage::AcpPayload { .. } => None,
+    let payload = match message {
+        // Messages that carry a payload field which might contain a client request.
+        // The payload is the original {type, data} structure from the MessagePack format.
+        BridgeMessage::Ping { payload }
+        | BridgeMessage::Pong { payload }
+        | BridgeMessage::Ack { payload }
+        | BridgeMessage::WorkspaceEvent { payload }
+        | BridgeMessage::WorktreeEvent { payload }
+        | BridgeMessage::GitResponse { payload }
+        | BridgeMessage::FileResponse { payload }
+        | BridgeMessage::AgentEvent { payload }
+        | BridgeMessage::TerminalEvent { payload }
+        | BridgeMessage::StateSnapshot { payload }
+        | BridgeMessage::Notification { payload }
+        | BridgeMessage::ErrorResponse { payload } => payload,
 
-        // StartAgent — handled by process spawning, not the message router
-        BridgeMessage::StartAgent { .. } => None,
-
-        // Client request: Ping
-        BridgeMessage::Ping { payload } => {
-            let ping: crate::protocol::Ping = serde_json::from_value(payload.clone()).ok()?;
-            Some(ClientMessagePayload::Ping(ping))
-        }
-
-        // Server-to-client passthrough types — not expected from clients
-        BridgeMessage::BridgeStatus { .. }
+        // Messages that never carry client requests
+        BridgeMessage::AcpPayload { .. }
+        | BridgeMessage::StartAgent { .. }
+        | BridgeMessage::BridgeStatus { .. }
         | BridgeMessage::Stderr { .. }
         | BridgeMessage::ProcessExit { .. }
-        | BridgeMessage::ReplayMetadata { .. }
-        | BridgeMessage::WorkspaceEvent { .. }
-        | BridgeMessage::WorktreeEvent { .. }
-        | BridgeMessage::GitResponse { .. }
-        | BridgeMessage::FileResponse { .. }
-        | BridgeMessage::AgentEvent { .. }
-        | BridgeMessage::TerminalEvent { .. }
-        | BridgeMessage::StateSnapshot { .. }
-        | BridgeMessage::Notification { .. }
-        | BridgeMessage::ErrorResponse { .. }
-        | BridgeMessage::Ack { .. }
-        | BridgeMessage::Pong { .. } => None,
-    }
+        | BridgeMessage::ReplayMetadata { .. } => return None,
+    };
+
+    // Try to deserialize the payload as a ClientMessagePayload.
+    // The payload is in {type: "...", data: {...}} format, which matches
+    // the #[serde(tag = "type", content = "data")] format of ClientMessagePayload.
+    // Server-only type tags (e.g., "StateSnapshot", "Error", "Notification")
+    // will fail to deserialize, correctly returning None.
+    serde_json::from_value(payload.clone()).ok()
 }
 
 #[cfg(test)]
