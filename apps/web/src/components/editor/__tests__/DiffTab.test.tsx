@@ -203,11 +203,11 @@ describe('DiffTab', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Split')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /split view/i })).toBeInTheDocument();
     });
 
-    const splitButton = screen.getByRole('button', { name: /split/i });
-    const inlineButton = screen.getByRole('button', { name: /inline/i });
+    const splitButton = screen.getByRole('button', { name: /split view/i });
+    const inlineButton = screen.getByRole('button', { name: /inline view/i });
 
     expect(splitButton).toHaveAttribute('aria-pressed', 'true');
     expect(inlineButton).toHaveAttribute('aria-pressed', 'false');
