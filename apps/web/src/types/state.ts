@@ -388,10 +388,6 @@ export interface AppState {
   agentTabs: Map<string, AgentTab[]>;
   activeAgentTabId: Map<string, string>;
 
-  // ACP Event Accumulator (connection-scoped, derived state)
-  // IMPORTANT: This is NOT the source of truth for worktree/session identity
-  acpAccumulator: AcpAccumulatorState;
-
   // File cache (caches file listings and git status until worktree changes)
   fileListCache: Map<string, FileListCache>;
   gitStatusCache: Map<string, GitStatusCache>;
@@ -489,11 +485,6 @@ addTerminalSession: (session: TerminalSessionState) => void;
 
   showAlertDialog: (config: AlertDialogConfig) => void;
   hideAlertDialog: () => void;
-
-  // ACP Accumulator actions
-  dispatchAccumulator: (action: AcpAccumulatorAction) => void;
-  flushAccumulator: () => void;
-  flushAccumulatorThread: (worktreeId: string) => void;
 
   // File cache actions
   setFileListCache: (worktreeId: string, files: string[]) => void;

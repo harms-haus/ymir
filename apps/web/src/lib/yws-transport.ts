@@ -17,7 +17,7 @@
 import { TransportClient, type TransportConfig, type BridgeEnvelope } from "@harms-haus/acp-ws-bridge";
 
 import { encodeClientMessage, decodeBridgeJson } from "./bridge-transport";
-import type { BridgeMessage } from "../types/bridge-envelope";
+import type { BridgeMessage, BridgePayload } from "../types/bridge-envelope";
 import {
   ClientMessage,
   ServerMessage,
@@ -25,6 +25,8 @@ import {
   StateSnapshot,
 } from "../types/protocol";
 import { updateStateFromServerMessage, useStore, useToastStore, handleBridgeMessage } from "../store";
+import { acpSessionManager, type CoreConnectionStatus } from "./acp-session-manager";
+import type { FullBridgeEnvelope } from "../types/bridge-envelope";
 
 // Re-export ConnectionStatus with YmirClient-compatible naming
 export type ConnectionStatus = "connecting" | "open" | "closed" | "reconnecting";
@@ -82,6 +84,9 @@ export class YmirWsTransport {
   private messageQueue: ClientMessage[] = [];
   private acpEventBuffer: Array<{ envelope: AcpEventEnvelope; worktreeId: string }> = [];
   private readonly ACP_FLUSH_INTERVAL = 50; // ms
+
+  // --- ACP Session Manager ---
+  private acpConfigured = false;
 
   // --- Handlers ---
   private messageHandlers = new Map<ServerMessage["type"], Set<(message: ServerMessage) => void>>();
@@ -161,6 +166,73 @@ export class YmirWsTransport {
     this.updateStatus("closed");
   }
 
+  /**
+   * Configure acpSessionManager with transport callbacks.
+   * Called once on first successful connection.
+   */
+  private configureAcpSessionManager(): void {
+    console.log("[YWS] Configuring acpSessionManager");
+    acpSessionManager.configure({
+      sendAcpPayload: (payload: Record<string, unknown>) => {
+        // Wrap the raw ACP JSON-RPC payload in a BridgeEnvelope and send
+        const envelope: FullBridgeEnvelope = {
+          version: 1,
+          seq: 0,
+          timestamp_ms: Date.now(),
+          extra_data: null,
+          type: "acp_payload",
+          payload: payload as BridgePayload,
+        };
+        this.client.send(JSON.stringify(envelope));
+      },
+      getConnectionStatus: (): CoreConnectionStatus => {
+        return this.status === "open" ? "connected" : "disconnected";
+      },
+      createTerminal: async (worktreeId, request) => {
+        return this.handleAcpTerminalCreate(worktreeId, request);
+      },
+    });
+  }
+
+  // ==========================================================================
+  // ACP terminal creation bridge
+  // ==========================================================================
+
+  /**
+   * Handle an agent-requested terminal/create by bridging it to ymir's
+   * existing PTY system.
+   *
+   * This sends a TerminalCreate message through ymir's WebSocket transport,
+   * which triggers the server to create a PTY session. The terminalId returned
+   * is a client-generated UUID that maps to the server-created session.
+   */
+  private async handleAcpTerminalCreate(
+    worktreeId: string,
+    request: Record<string, unknown>,
+  ): Promise<{ terminalId: string } | null> {
+    const command = (request.command as string) ?? "";
+    // Generate a unique terminal ID for this ACP terminal session
+    const terminalId = crypto.randomUUID?.() ?? generateFallbackId();
+
+    // Build the ymir TerminalCreate message.
+    // The command from the ACP request becomes the shell for the PTY.
+    const label = `agent-terminal-${terminalId.slice(0, 8)}`;
+    const message = {
+      type: "TerminalCreate" as const,
+      worktreeId,
+      label,
+      shell: typeof command === "string" ? command : undefined,
+    };
+
+    console.log(`[YWS] [Terminal] Agent requested terminal: command=${request.command}, worktree=${worktreeId}, id=${terminalId}`);
+
+    // Send through ymir's transport - this will queue if not connected
+    this.send(message);
+
+    // Return the terminalId so the agent can reference this terminal
+    return { terminalId };
+  }
+
   // ==========================================================================
   // Status handling
   // ==========================================================================
@@ -173,6 +245,12 @@ export class YmirWsTransport {
       const isReconnection = this.hasConnectedOnce;
       this.hasConnectedOnce = true;
       this.wasReconnecting = false;
+
+      // Configure acpSessionManager on first connection
+      if (!this.acpConfigured) {
+        this.configureAcpSessionManager();
+        this.acpConfigured = true;
+      }
 
       this.flushMessageQueue();
       this.startHeartbeat();
@@ -268,11 +346,17 @@ export class YmirWsTransport {
     try {
       const decoded = decodeBridgeJson(JSON.stringify(envelope));
 
+      // Route acp_payload directly through acpSessionManager
+      if (decoded.type === "acp_payload") {
+        this.handleAcpPayload(decoded.message);
+        return;
+      }
+
       // Route migrated message types directly through handleBridgeMessage
       // instead of converting back to ServerMessage format.
       // Migrated: workspace_event, worktree_event, git_response, file_response,
       //   notification, error_response, agent_event, terminal_event, state_snapshot,
-      //   ping, pong, ack, acp_payload
+      //   ping, pong, ack
       // Unmigrated (stays on old path): bridge_status, stderr, process_exit, etc.
       const migratedTypes: BridgeMessage["type"][] = [
         "workspace_event",
@@ -287,7 +371,6 @@ export class YmirWsTransport {
         "ping",
         "pong",
         "ack",
-        "acp_payload",
       ];
 
       if (migratedTypes.includes(decoded.type)) {
@@ -312,6 +395,24 @@ export class YmirWsTransport {
       }
     } catch (error) {
       console.error("[YWS] Failed to decode envelope:", error);
+    }
+  }
+
+  /**
+   * Handle incoming acp_payload BridgeMessage by routing it through
+   * acpSessionManager to the appropriate SessionController.
+   */
+  private handleAcpPayload(message: BridgeMessage): void {
+    const payload = (message as any).payload as Record<string, unknown> | null;
+    if (!payload) return;
+
+    // Extract worktreeId from payload data for routing
+    const { activeWorktreeId } = useStore.getState();
+    const data = (payload.data as Record<string, unknown>) ?? {};
+    const worktreeId = (data as any)?.worktreeId ?? activeWorktreeId;
+
+    if (worktreeId) {
+      acpSessionManager.handleAcpPayload(worktreeId, payload);
     }
   }
 
@@ -520,9 +621,9 @@ export class YmirWsTransport {
     const eventsToProcess = [...this.acpEventBuffer];
     this.acpEventBuffer = [];
 
-    const { dispatchAccumulator } = useStore.getState();
     for (const { envelope, worktreeId } of eventsToProcess) {
-      dispatchAccumulator({ type: "EVENT_RECEIVED", envelope, worktreeId });
+      // Route the ACP event envelope through acpSessionManager
+      acpSessionManager.handleAcpPayload(worktreeId, envelope as unknown as Record<string, unknown>);
     }
   }
 

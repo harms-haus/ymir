@@ -1,6 +1,7 @@
 import { encode, decode } from '@msgpack/msgpack';
 import { ClientMessage, ServerMessage, PROTOCOL_VERSION, StateSnapshot, AcpEventEnvelope } from '../types/protocol';
 import { updateStateFromServerMessage, useStore, useToastStore } from '../store';
+import { acpSessionManager } from './acp-session-manager';
 
 // Generate a UUID v4 for request IDs
 export function generateId(): string {
@@ -533,9 +534,9 @@ export class YmirClient {
     const eventsToProcess = [...this.acpEventBuffer];
     this.acpEventBuffer = [];
 
-    const { dispatchAccumulator } = useStore.getState();
+    // Route through acpSessionManager instead of dispatchAccumulator
     for (const { envelope, worktreeId } of eventsToProcess) {
-      dispatchAccumulator({ type: 'EVENT_RECEIVED', envelope, worktreeId });
+      acpSessionManager.handleAcpPayload(worktreeId, envelope as unknown as Record<string, unknown>);
     }
   }
 }
