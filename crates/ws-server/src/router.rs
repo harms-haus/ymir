@@ -1,18 +1,75 @@
 //! Message routing and dispatch for WebSocket server
 
-use crate::protocol::{
-    ClientMessage, ClientMessagePayload, Error, ServerMessage, ServerMessagePayload, FileListResult, FileContent,
-};
 use crate::agent::{
     handle_agent_cancel, handle_agent_send, handle_agent_set_config_option, handle_agent_spawn,
 };
+use crate::bridge::{decode_bridge_message, DecodedMessage};
+use crate::protocol::{
+    ClientMessage, ClientMessagePayload, Error, FileContent, FileListResult, ServerMessage,
+    ServerMessagePayload, PROTOCOL_VERSION,
+};
 use crate::pty::{
-    handle_terminal_create, handle_terminal_input, handle_terminal_kill, handle_terminal_request_history, handle_terminal_resize,
+    handle_terminal_create, handle_terminal_input, handle_terminal_kill,
+    handle_terminal_request_history, handle_terminal_resize,
 };
 use crate::state::AppState;
 use std::sync::Arc;
 use tracing::instrument;
 use uuid::Uuid;
+
+/// Route a JSON BridgeEnvelope message through the existing message router.
+///
+/// This is the JSON entry point for the router. It parses a raw JSON string
+/// as a BridgeEnvelope, extracts the BridgeMessage payload, converts it to
+/// a ClientMessagePayload, and routes it through the existing `route_message()`
+/// function.
+///
+/// Returns `Some(ServerMessage)` if a response was generated, `None` otherwise.
+/// Returns `None` if:
+/// - The JSON cannot be parsed as a BridgeEnvelope
+/// - The envelope version is unsupported
+/// - The message is not a client request (e.g., AcpPayload, StartAgent)
+/// - The client protocol version does not match
+#[instrument(skip(state, json_text), fields(client_id = %client_id))]
+pub async fn route_json_message(
+    state: Arc<AppState>,
+    client_id: Uuid,
+    json_text: &str,
+) -> Option<ServerMessage> {
+    let decoded = decode_bridge_message(json_text)?;
+
+    match decoded {
+        DecodedMessage::Client(client_msg) => {
+            if client_msg.version != PROTOCOL_VERSION {
+                tracing::warn!(
+                    %client_id,
+                    version = client_msg.version,
+                    expected = PROTOCOL_VERSION,
+                    "Client protocol version mismatch in JSON message"
+                );
+                return None;
+            }
+            route_message(state, client_id, client_msg).await
+        }
+        DecodedMessage::UnsupportedVersion(err) => {
+            tracing::warn!(
+                %client_id,
+                received = err.received,
+                supported = ?err.supported,
+                "Unsupported bridge envelope version in JSON message"
+            );
+            None
+        }
+        DecodedMessage::NonClient(msg) => {
+            tracing::debug!(
+                %client_id,
+                message_type = ?std::mem::discriminant(&msg),
+                "Received non-client BridgeMessage via JSON entry point"
+            );
+            None
+        }
+    }
+}
 
 /// Route a client message to the appropriate handler
 #[instrument(skip(state, message), fields(client_id = %client_id))]

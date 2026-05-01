@@ -2,7 +2,10 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { AppState, NotificationState, AgentTab, AlertDialogConfig, AgentSessionState, TerminalSessionState, AcpAccumulatorState, AcpAccumulatorAction, AccumulatedThread, AccumulatedMessage, AccumulatedTextContent, AccumulatedToolCard, AccumulatedContextCard, AccumulatedErrorCard, MAX_TOOL_OUTPUT_LENGTH, MAX_ACCUMULATED_MESSAGES, createInitialAccumulatorState, ThreadAccumulatedState, GitStats } from './types/state';
 export type { AgentTab };
-import { ServerMessage, TerminalOutput, GitStatusEntry, AcpEventEnvelope, isAcpSessionInit, isAcpConfigOptionsUpdate, isAcpSessionStatus, isAcpPromptChunk, isAcpPromptComplete, isAcpToolUse, isAcpContextUpdate, isAcpError, isAcpResumeMarker } from './types/protocol';
+import { ServerMessage, TerminalOutput, GitStatusEntry, AcpEventEnvelope, AcpCorrelationId, isAcpSessionInit, isAcpConfigOptionsUpdate, isAcpSessionStatus, isAcpPromptChunk, isAcpPromptComplete, isAcpToolUse, isAcpContextUpdate, isAcpError, isAcpResumeMarker } from './types/protocol';
+import type { DecodedBridgeMessage } from './lib/bridge-transport';
+import { isWorkspaceEvent, isWorktreeEvent, isGitResponse, isFileResponse, isNotificationMessage, isErrorResponse, isAckMessage, isPingMessage, isPongMessage, isAgentEvent, isTerminalEvent, isStateSnapshotMessage, isAcpPayload } from './types/bridge-envelope';
+import { encodePong } from './lib/bridge-transport';
 import { handleError } from './lib/error-recovery';
 import { showNotification } from './lib/tauri';
 import { useUIStore } from './uiStore';
@@ -21,6 +24,17 @@ export function setTerminalOutputCallback(callback: ((message: TerminalOutput) =
 
 export function getTerminalOutputCallback(): ((message: TerminalOutput) => void) | null {
   return terminalOutputCallback;
+}
+
+// File content callback registry (for routing FileContent to editor components)
+let fileContentCallback: ((message: { worktreeId: string; path: string; content: string }) => void) | null = null;
+
+export function setFileContentCallback(callback: ((message: { worktreeId: string; path: string; content: string }) => void) | null): void {
+  fileContentCallback = callback;
+}
+
+export function getFileContentCallback(): ((message: { worktreeId: string; path: string; content: string }) => void) | null {
+  return fileContentCallback;
 }
 
 // ----------------------------------------------------------------------------
@@ -408,6 +422,7 @@ export const useStore = create<AppState>()(
     activeWorktreeId: null,
     connectionStatus: 'closed',
     connectionError: null,
+    lastPongTimestamp: 0,
     expandedWorkspaceIds: new Set<string>(),
     isWorkspacesLoading: true,
 
@@ -488,6 +503,8 @@ export const useStore = create<AppState>()(
   })),
       
       setConnectionError: (connectionError) => set({ connectionError }),
+
+      setLastPongTimestamp: (lastPongTimestamp) => set({ lastPongTimestamp }),
 
       setWorkspacesLoading: (isWorkspacesLoading) => set({ isWorkspacesLoading }),
 
@@ -1150,6 +1167,480 @@ case 'TerminalUpdated': {
       }
       break;
     }
+  }
+}
+
+/**
+ * Handle a decoded BridgeEnvelope message from the bridge transport.
+ * This is an alternative path to updateStateFromServerMessage for messages
+ * that arrive wrapped in BridgeEnvelope format rather than raw MessagePack.
+ *
+ * For workspace_event messages, the payload contains:
+ *   { originalType: "WorkspaceCreated" | "WorkspaceDeleted" | ..., data: {...} }
+ * where data is the serde_json::Value that needs to be cast to the expected type.
+ */
+export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (envelope: unknown) => void): void {
+  const { type, message } = decoded;
+
+  switch (type) {
+    case 'workspace_event': {
+      if (!isWorkspaceEvent(message)) return;
+
+      const payload = message.payload as Record<string, unknown> | null;
+      if (!payload) return;
+
+      const originalType = payload.originalType as string | undefined;
+      const data = payload.data as Record<string, unknown> | undefined;
+
+      switch (originalType) {
+        case 'WorkspaceCreated': {
+          const workspace = (data as any)?.workspace;
+          if (workspace) {
+            useStore.getState().addWorkspace(workspace);
+          }
+          break;
+        }
+        case 'WorkspaceDeleted': {
+          const workspaceId = (data as any)?.workspaceId as string | undefined;
+          if (workspaceId) {
+            useStore.getState().removeWorkspace(workspaceId);
+          }
+          break;
+        }
+        case 'WorkspaceUpdated': {
+          const workspaceData = (data as any)?.workspace;
+          if (workspaceData?.id) {
+            useStore.getState().updateWorkspace(workspaceData.id, workspaceData);
+          }
+          break;
+        }
+        // Other workspace event types (WorkspaceRename) can be added here
+        default:
+          break;
+      }
+      break;
+    }
+
+    case 'worktree_event': {
+      if (!isWorktreeEvent(message)) return;
+
+      const payload = message.payload as Record<string, unknown> | null;
+      if (!payload) return;
+
+      const originalType = payload.originalType as string | undefined;
+      const data = payload.data as Record<string, unknown> | undefined;
+
+      switch (originalType) {
+        case 'WorktreeCreated': {
+          const worktree = (data as any)?.worktree;
+          if (worktree) {
+            useStore.getState().addWorktree(worktree);
+          }
+          break;
+        }
+        case 'WorktreeDeleted': {
+          const worktreeId = (data as any)?.worktreeId as string | undefined;
+          if (worktreeId) {
+            useStore.getState().removeWorktree(worktreeId);
+            useStore.getState().clearFileListCache(worktreeId);
+            useStore.getState().clearGitStatusCache(worktreeId);
+          }
+          break;
+        }
+        case 'WorktreeChanged': {
+          const worktree = (data as any)?.worktree;
+          if (worktree?.id) {
+            useStore.getState().updateWorktree(worktree.id, worktree);
+            useStore.getState().clearFileListCache(worktree.id);
+            useStore.getState().clearGitStatusCache(worktree.id);
+          }
+          break;
+        }
+        case 'WorktreeListResult': {
+          const worktrees = (data as any)?.worktrees as Array<any> | undefined;
+          if (worktrees) {
+            worktrees.forEach((worktree) => {
+              useStore.getState().addWorktree(worktree);
+            });
+          }
+          break;
+        }
+        case 'WorktreeDetailsResult': {
+          const { addAgentSession, addTerminalSession } = useStore.getState();
+          const worktrees = (data as any)?.worktrees as Array<any> | undefined;
+          const agentSessions = (data as any)?.agentSessions as Array<any> | undefined;
+          const terminalSessions = (data as any)?.terminalSessions as Array<any> | undefined;
+
+          if (worktrees) {
+            worktrees.forEach((worktree) => {
+              useStore.getState().addWorktree(worktree);
+            });
+          }
+          if (agentSessions) {
+            agentSessions.forEach((session) => {
+              addAgentSession(session as any);
+            });
+          }
+          if (terminalSessions) {
+            terminalSessions.forEach((session) => {
+              addTerminalSession(session);
+            });
+          }
+          break;
+        }
+        case 'WorktreeStatus': {
+          const worktree = (data as any)?.worktree;
+          if (worktree?.id) {
+            useStore.getState().updateWorktree(worktree.id, worktree);
+          }
+          break;
+        }
+        default:
+          break;
+      }
+      break;
+    }
+
+    case 'git_response': {
+      if (!isGitResponse(message)) return;
+
+      const payload = message.payload as Record<string, unknown> | null;
+      if (!payload) return;
+
+      const originalType = payload.originalType as string | undefined;
+      const data = payload.data as Record<string, unknown> | undefined;
+
+      switch (originalType) {
+        case 'GitStatusResult': {
+          const worktreeId = (data as any)?.worktreeId as string | undefined;
+          const entries = (data as any)?.entries as Array<{ path: string; statusCode: string }> | undefined;
+          if (worktreeId && entries) {
+            const transformed = entries.map((entry) => {
+              const statusCode = entry.statusCode;
+              let status: GitStatusEntry['status'] = 'modified';
+              let staged = false;
+
+              if (statusCode === '??') {
+                status = 'untracked';
+                staged = false;
+              } else if (statusCode.length >= 2) {
+                const stagedChar = statusCode[0];
+                const unstagedChar = statusCode[1];
+                if (stagedChar === 'A') { status = 'added'; staged = true; }
+                else if (stagedChar === 'D') { status = 'deleted'; staged = true; }
+                else if (stagedChar === 'R') { status = 'renamed'; staged = true; }
+                else if (stagedChar === 'M') { status = 'modified'; staged = true; }
+                else if (unstagedChar === 'M') { status = 'modified'; staged = false; }
+                else if (unstagedChar === 'D') { status = 'deleted'; staged = false; }
+              }
+
+              return { path: entry.path, status, staged } as GitStatusEntry;
+            });
+            useStore.getState().setGitStatusCache(worktreeId, transformed);
+          }
+          break;
+        }
+        case 'GitDiffResult': {
+          // GitDiffResult carries raw diff text; no store cache setter exists yet.
+          // Log for debugging; DiffTab consumes this via wsClient.onMessage.
+          const worktreeId = (data as any)?.worktreeId as string | undefined;
+          const filePath = (data as any)?.filePath as string | undefined;
+          const diff = (data as any)?.diff as string | undefined;
+          if (worktreeId && filePath && diff) {
+            // Future: dispatch to a gitDiffCache or UI handler when available.
+          }
+          break;
+        }
+        default:
+          break;
+      }
+      break;
+    }
+
+    case 'notification': {
+      if (!isNotificationMessage(message)) return;
+
+      const payload = message.payload as Record<string, unknown> | null;
+      if (!payload) return;
+
+      const data = payload.data as Record<string, unknown> | undefined;
+
+      // Handle notification (GitCommit/CreatePR success, info/warning/error)
+      const level = (data as any)?.level as 'info' | 'warning' | 'error' | undefined;
+      const title = (data as any)?.title as string | undefined;
+      const msg = (data as any)?.message as string | undefined;
+
+      if (level && msg) {
+        const notificationLevel = level === 'warning' ? 'warning' : level === 'error' ? 'error' : 'info';
+        useStore.getState().addNotification({
+          level: notificationLevel,
+          message: title ? `${title}: ${msg}` : msg,
+          duration: 5000,
+        } as any);
+        if (title) {
+          showNotification(title, msg);
+        }
+      }
+      break;
+    }
+
+    case 'error_response': {
+      if (!isErrorResponse(message)) return;
+
+      const payload = message.payload as Record<string, unknown> | null;
+      if (!payload) return;
+
+      const data = payload.data as Record<string, unknown> | undefined;
+
+      if (data) {
+        const error = data as any;
+        handleError({
+          type: 'Error',
+          code: error.code ?? 'unknown',
+          message: error.message ?? 'Unknown error',
+          details: error.details,
+          requestId: error.request_id,
+        });
+      }
+      break;
+    }
+
+    case 'file_response': {
+      if (!isFileResponse(message)) return;
+
+      const payload = message.payload as Record<string, unknown> | null;
+      if (!payload) return;
+
+      const originalType = payload.originalType as string | undefined;
+      const data = payload.data as Record<string, unknown> | undefined;
+
+      switch (originalType) {
+        case 'FileListResult': {
+          const worktreeId = (data as any)?.worktreeId as string | undefined;
+          const files = (data as any)?.files as string[] | undefined;
+          if (worktreeId && files) {
+            useStore.getState().setFileListCache(worktreeId, files);
+          }
+          break;
+        }
+        case 'FileContent': {
+          const worktreeId = (data as any)?.worktreeId as string | undefined;
+          const path = (data as any)?.path as string | undefined;
+          const content = (data as any)?.content as string | undefined;
+          if (worktreeId && path && content !== undefined) {
+            const cb = getFileContentCallback();
+            if (cb) {
+              cb({ worktreeId, path, content });
+            }
+          }
+          break;
+        }
+        default:
+          break;
+      }
+      break;
+    }
+
+    case 'agent_event': {
+      if (!isAgentEvent(message)) return;
+
+      const payload = message.payload as Record<string, unknown> | null;
+      if (!payload) return;
+
+      const originalType = payload.originalType as string | undefined;
+      const data = payload.data as Record<string, unknown> | undefined;
+
+      switch (originalType) {
+        case 'AgentStatusUpdate': {
+          const id = (data as any)?.id as string | undefined;
+          if (!id) break;
+          const existingSession = useStore.getState().agentSessions.find(as => as.id === id);
+          if (existingSession) {
+            useStore.getState().updateAgentSession(id, {
+              status: (data as any)?.status,
+            } as any);
+          } else {
+            useStore.getState().addAgentSession({
+              id,
+              worktreeId: (data as any)?.worktreeId,
+              agentType: (data as any)?.agentType,
+              status: (data as any)?.status,
+              acpSessionId: undefined,
+              startedAt: (data as any)?.startedAt,
+            } as any);
+          }
+          break;
+        }
+        case 'AgentRemoved': {
+          const id = (data as any)?.id as string | undefined;
+          if (id) {
+            useStore.getState().removeAgentSession(id);
+          }
+          break;
+        }
+        case 'AgentUpdated': {
+          const sessionId = (data as any)?.sessionId as string | undefined;
+          if (sessionId) {
+            useStore.getState().updateAgentSession(sessionId, {
+              ...((data as any)?.label !== undefined && { label: (data as any)?.label }),
+              ...((data as any)?.position !== undefined && { position: (data as any)?.position }),
+            });
+          }
+          break;
+        }
+        default:
+          break;
+      }
+      break;
+    }
+
+    case 'terminal_event': {
+      if (!isTerminalEvent(message)) return;
+
+      const payload = message.payload as Record<string, unknown> | null;
+      if (!payload) return;
+
+      const originalType = payload.originalType as string | undefined;
+      const data = payload.data as Record<string, unknown> | undefined;
+
+      switch (originalType) {
+        case 'TerminalCreated': {
+          const sessionId = (data as any)?.sessionId as string | undefined;
+          const worktreeId = (data as any)?.worktreeId as string | undefined;
+          const label = (data as any)?.label as string | null | undefined;
+          const shell = (data as any)?.shell as string | undefined;
+          if (sessionId && worktreeId && shell) {
+            useStore.getState().addTerminalSession({
+              id: sessionId,
+              worktreeId,
+              label: label ?? 'Terminal',
+              shell,
+              createdAt: Date.now(),
+            });
+          }
+          break;
+        }
+        case 'TerminalOutput': {
+          const sessionId = (data as any)?.sessionId as string | undefined;
+          const outputData = (data as any)?.data as string | undefined;
+          if (sessionId && outputData !== undefined) {
+            if (terminalOutputCallback) {
+              terminalOutputCallback({ type: 'TerminalOutput', sessionId, data: outputData });
+            }
+          }
+          break;
+        }
+        case 'TerminalRemoved': {
+          const sessionId = (data as any)?.sessionId as string | undefined;
+          if (sessionId) {
+            useStore.getState().removeTerminalSession(sessionId);
+          }
+          break;
+        }
+        case 'TerminalUpdated': {
+          const sessionId = (data as any)?.sessionId as string | undefined;
+          if (sessionId) {
+            useStore.getState().updateTerminalSession(sessionId, {
+              ...((data as any)?.label !== undefined && { label: (data as any)?.label ?? undefined }),
+              ...((data as any)?.position !== undefined && { position: (data as any)?.position ?? undefined }),
+            });
+          }
+          break;
+        }
+        case 'TerminalHistory': {
+          const sessionId = (data as any)?.sessionId as string | undefined;
+          const historyData = (data as any)?.data as string | undefined;
+          if (sessionId && historyData !== undefined) {
+            if (terminalOutputCallback) {
+              terminalOutputCallback({ type: 'TerminalOutput', sessionId, data: historyData });
+            }
+          }
+          break;
+        }
+        default:
+          break;
+      }
+      break;
+    }
+
+    case 'state_snapshot': {
+      if (!isStateSnapshotMessage(message)) return;
+
+      const payload = message.payload as Record<string, unknown> | null;
+      if (!payload) return;
+
+      const data = payload.data as Record<string, unknown> | undefined;
+      if (!data) return;
+
+      const { stateFromSnapshot } = useStore.getState();
+      stateFromSnapshot({
+        workspaces: data.workspaces as any[],
+        worktrees: data.worktrees as any[],
+        agentSessions: data.agentSessions as any[],
+        terminalSessions: data.terminalSessions as any[],
+      });
+      break;
+    }
+
+    // Additional BridgeMessage types can be handled here as needed.
+    // Existing MessagePack handling remains in updateStateFromServerMessage.
+
+    case 'ping': {
+      if (!isPingMessage(message)) return;
+      const payload = message.payload as Record<string, unknown> | null;
+      const timestamp = (payload?.timestamp as number) ?? Date.now();
+      if (sendFn) {
+        sendFn(encodePong({ timestamp }));
+      }
+      break;
+    }
+
+    case 'pong': {
+      if (!isPongMessage(message)) return;
+      useStore.getState().setLastPongTimestamp(Date.now());
+      break;
+    }
+
+    case 'ack': {
+      if (!isAckMessage(message)) return;
+      // Acknowledgment for rename/reorder ops — no state update needed,
+      // but handled here to complete the migration from legacy path.
+      break;
+    }
+
+    case 'acp_payload': {
+      if (!isAcpPayload(message)) return;
+
+      const payload = message.payload as Record<string, unknown> | null;
+      if (!payload) return;
+
+      // Extract AcpEventEnvelope fields from the raw ACP JSON-RPC payload
+      const sequence = (payload.sequence as number) ?? 0;
+      const correlationId = (payload.correlationId as AcpCorrelationId | undefined) ?? undefined;
+      const timestamp = (payload.timestamp as number) ?? 0;
+      const eventType = (payload.eventType as string) ?? '';
+      const data = (payload.data as Record<string, unknown>) ?? {};
+
+      // Build the AcpEventEnvelope
+      const envelope: AcpEventEnvelope = {
+        sequence,
+        correlationId,
+        timestamp,
+        eventType: eventType as any,
+        data: data as any,
+      };
+
+      // Route through existing acpAccumulatorReducer
+      const { dispatchAccumulator, activeWorktreeId } = useStore.getState();
+      const worktreeId = (data as any)?.worktreeId ?? activeWorktreeId;
+      if (worktreeId) {
+        dispatchAccumulator({ type: 'EVENT_RECEIVED', envelope, worktreeId });
+      }
+      break;
+    }
+
+    default:
+      break;
   }
 }
 
