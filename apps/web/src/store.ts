@@ -1,14 +1,16 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { AppState, NotificationState, AgentTab, AlertDialogConfig, AgentSessionState, TerminalSessionState, AcpAccumulatorState, AcpAccumulatorAction, AccumulatedThread, AccumulatedMessage, AccumulatedTextContent, AccumulatedToolCard, AccumulatedContextCard, AccumulatedErrorCard, MAX_TOOL_OUTPUT_LENGTH, MAX_ACCUMULATED_MESSAGES, createInitialAccumulatorState, ThreadAccumulatedState, GitStats } from './types/state';
+import { AppState, NotificationState, AgentTab, AlertDialogConfig, AgentSessionState, TerminalSessionState, GitStats } from './types/state';
 export type { AgentTab };
-import { ServerMessage, TerminalOutput, GitStatusEntry, AcpEventEnvelope, AcpCorrelationId, isAcpSessionInit, isAcpConfigOptionsUpdate, isAcpSessionStatus, isAcpPromptChunk, isAcpPromptComplete, isAcpToolUse, isAcpContextUpdate, isAcpError, isAcpResumeMarker } from './types/protocol';
+import { ServerMessage, TerminalOutput, GitStatusEntry } from './types/protocol';
 import type { DecodedBridgeMessage } from './lib/bridge-transport';
 import { isWorkspaceEvent, isWorktreeEvent, isGitResponse, isFileResponse, isNotificationMessage, isErrorResponse, isAckMessage, isPingMessage, isPongMessage, isAgentEvent, isTerminalEvent, isStateSnapshotMessage, isAcpPayload } from './types/bridge-envelope';
 import { encodePong } from './lib/bridge-transport';
 import { handleError } from './lib/error-recovery';
 import { showNotification } from './lib/tauri';
 import { useUIStore } from './uiStore';
+import { acpSessionManager } from './lib/acp-session-manager';
+import type { AcpStore } from '@harms-haus/acp-chat-react';
 
 // Stable empty array reference to prevent infinite re-renders
 const EMPTY_AGENT_TABS: AgentTab[] = [];
@@ -38,374 +40,12 @@ export function getFileContentCallback(): ((message: { worktreeId: string; path:
 }
 
 // ----------------------------------------------------------------------------
-// ACP Event Accumulator Reducer
+// ACP Store helpers (access AcpStore from acpSessionManager)
 // ----------------------------------------------------------------------------
-//
-// Pure reducer function for ACP event accumulation.
-// Connection-scoped: state is flushed on reconnect.
-// Derived state: NOT the source of truth for worktree/session identity.
 
-function generateMessageId(sequence: number): string {
-  return `msg-${sequence}`;
-}
-
-function createEmptyThread(worktreeId: string, acpSessionId: string, connectionGeneration: number): AccumulatedThread {
-  return {
-    worktreeId,
-    acpSessionId,
-    messages: [],
-    sessionStatus: 'Complete',
-    lastSequence: 0,
-    connectionGeneration,
-    isStreaming: false,
-    configOptions: [],
-  };
-}
-
-function truncateToolOutput(output: string | undefined): string | undefined {
-  if (!output) return undefined;
-  if (output.length <= MAX_TOOL_OUTPUT_LENGTH) return output;
-  return output.slice(0, MAX_TOOL_OUTPUT_LENGTH) + '...[truncated]';
-}
-
-export function acpAccumulatorReducer(
-  state: AcpAccumulatorState,
-  action: AcpAccumulatorAction
-): AcpAccumulatorState {
-  switch (action.type) {
-    case 'CONNECTION_RECONNECTED': {
-      const newGeneration = state.connectionGeneration + 1;
-      return {
-        connectionGeneration: newGeneration,
-        threads: new Map(),
-        pendingCorrelations: new Map(),
-        lastFlushTimestamp: Date.now(),
-      };
-    }
-
-    case 'FLUSH_ALL': {
-      return {
-        ...state,
-        threads: new Map(),
-        pendingCorrelations: new Map(),
-        lastFlushTimestamp: Date.now(),
-      };
-    }
-
-    case 'FLUSH_THREAD': {
-      const newThreads = new Map(state.threads);
-      newThreads.delete(action.worktreeId);
-      return {
-        ...state,
-        threads: newThreads,
-      };
-    }
-
-    case 'REBUILD_FROM_SNAPSHOT': {
-      const thread = createEmptyThread(action.worktreeId, action.acpSessionId, state.connectionGeneration);
-      const newThreads = new Map(state.threads);
-      newThreads.set(action.worktreeId, thread);
-      return {
-        ...state,
-        threads: newThreads,
-      };
-    }
-
-    case 'SET_STREAMING': {
-      const thread = state.threads.get(action.worktreeId);
-      if (!thread) return state;
-
-      const newThreads = new Map(state.threads);
-      newThreads.set(action.worktreeId, {
-        ...thread,
-        isStreaming: action.isStreaming,
-      });
-      return {
-        ...state,
-        threads: newThreads,
-      };
-    }
-
-    case 'USER_MESSAGE': {
-      const { worktreeId, content } = action;
-      let thread = state.threads.get(worktreeId);
-
-      if (!thread) {
-        thread = createEmptyThread(worktreeId, 'unknown', state.connectionGeneration);
-      }
-
-      const newMessage: AccumulatedMessage = {
-        id: generateMessageId(Date.now()),
-        role: 'user',
-        parts: [{ type: 'text', text: content, isStreaming: false }],
-        createdAt: Date.now(),
-        lastSequence: Date.now(),
-      };
-
-      const newThreads = new Map(state.threads);
-      newThreads.set(worktreeId, {
-        ...thread,
-        messages: [...thread.messages, newMessage],
-      });
-
-      return { ...state, threads: newThreads };
-    }
-
-    case 'EVENT_RECEIVED': {
-      const { envelope, worktreeId } = action;
-      const eventType = envelope.eventType;
-      const data = envelope.data;
-      const sequence = envelope.sequence;
-
-      let thread = state.threads.get(worktreeId);
-
-      if (isAcpSessionInit({ eventType, data } as any)) {
-        const sessionData = data as any;
-        if (!thread) {
-          thread = createEmptyThread(worktreeId, sessionData.acpSessionId, state.connectionGeneration);
-        }
-        const newThreads = new Map(state.threads);
-        newThreads.set(worktreeId, {
-          ...thread,
-          acpSessionId: sessionData.acpSessionId,
-          configOptions: sessionData.configOptions ?? [],
-        });
-        return { ...state, threads: newThreads };
-      }
-
-      // Create thread lazily if it doesn't exist (for any event type)
-      if (!thread) {
-        const acpSessionId = (data as any)?.acpSessionId ?? 'unknown';
-        thread = createEmptyThread(worktreeId, acpSessionId, state.connectionGeneration);
-      }
-
-      const newThreads = new Map(state.threads);
-      let updatedThread = { ...thread };
-      let changed = false;
-
-      if (isAcpSessionStatus({ eventType, data } as any)) {
-        const statusData = data as any;
-        updatedThread.sessionStatus = statusData.status;
-        changed = true;
-      }
-
-      else if (isAcpConfigOptionsUpdate({ eventType, data } as any)) {
-        const configData = data as any;
-        updatedThread.configOptions = configData.configOptions ?? [];
-        changed = true;
-      }
-
-      else if (isAcpPromptChunk({ eventType, data } as any)) {
-        const chunkData = data as any;
-        updatedThread.isStreaming = !chunkData.isFinal;
-        
-        let lastMessage = updatedThread.messages[updatedThread.messages.length - 1];
-        if (!lastMessage || lastMessage.role !== 'assistant') {
-          lastMessage = {
-            id: generateMessageId(sequence),
-            role: 'assistant',
-            parts: [],
-            createdAt: Date.now(),
-            lastSequence: sequence,
-          };
-          updatedThread.messages = [...updatedThread.messages, lastMessage];
-        }
-
-        const content = chunkData.content;
-        const isText = content?.type === 'Text';
-        const isStructured = content?.type === 'Structured';
-        const contentData = content?.data ?? '';
-
-        if (isText) {
-          let textPart = lastMessage.parts.find((p): p is AccumulatedTextContent => 
-            p.type === 'text'
-          ) as AccumulatedTextContent | undefined;
-
-          if (textPart) {
-            const newParts = lastMessage.parts.map(p => 
-              p.type === 'text' 
-                ? { ...p, text: p.text + contentData, isStreaming: !chunkData.isFinal }
-                : p
-            );
-            updatedThread.messages = updatedThread.messages.map((m, i) =>
-              i === updatedThread.messages.length - 1
-                ? { ...m, parts: newParts, lastSequence: sequence }
-                : m
-            );
-          } else {
-            const newTextPart: AccumulatedTextContent = {
-              type: 'text',
-              text: contentData,
-              isStreaming: !chunkData.isFinal,
-            };
-            const newParts = [...lastMessage.parts, newTextPart];
-            updatedThread.messages = updatedThread.messages.map((m, i) =>
-              i === updatedThread.messages.length - 1
-                ? { ...m, parts: newParts, lastSequence: sequence }
-                : m
-            );
-          }
-        } else if (isStructured) {
-          const newStructuredPart = {
-            type: 'structured' as const,
-            data: contentData,
-            isStreaming: !chunkData.isFinal,
-          };
-          const newParts = [...lastMessage.parts, newStructuredPart];
-          updatedThread.messages = updatedThread.messages.map((m, i) =>
-            i === updatedThread.messages.length - 1
-              ? { ...m, parts: newParts, lastSequence: sequence }
-              : m
-          );
-        }
-        changed = true;
-      }
-
-      else if (isAcpPromptComplete({ eventType, data } as any)) {
-        const completeData = data as any;
-        updatedThread.isStreaming = false;
-        if (completeData.reason === 'Error') {
-          updatedThread.sessionStatus = 'Complete';
-        }
-        changed = true;
-      }
-
-      else if (isAcpToolUse({ eventType, data } as any)) {
-        const toolData = data as any;
-        const toolUseId = toolData.toolUseId;
-        
-        let toolCardFound = false;
-        const newMessages = updatedThread.messages.map(msg => {
-          const newParts = msg.parts.map(part => {
-            if (part.type === 'tool' && part.toolUseId === toolUseId) {
-              toolCardFound = true;
-              return {
-                ...part,
-                status: toolData.status,
-                output: truncateToolOutput(toolData.output),
-                error: toolData.error,
-                updatedAt: Date.now(),
-              } as AccumulatedToolCard;
-            }
-            return part;
-          });
-          return { ...msg, parts: newParts };
-        });
-
-        if (!toolCardFound) {
-          let lastMessage = newMessages[newMessages.length - 1];
-          if (!lastMessage || lastMessage.role !== 'assistant') {
-            lastMessage = {
-              id: generateMessageId(sequence),
-              role: 'assistant',
-              parts: [],
-              createdAt: Date.now(),
-              lastSequence: sequence,
-            };
-            newMessages.push(lastMessage);
-          }
-
-          const newToolCard: AccumulatedToolCard = {
-            type: 'tool',
-            toolUseId,
-            toolName: toolData.toolName,
-            status: toolData.status,
-            input: toolData.input,
-            output: truncateToolOutput(toolData.output),
-            error: toolData.error,
-            updatedAt: Date.now(),
-          };
-
-          lastMessage.parts = [...lastMessage.parts, newToolCard];
-          lastMessage.lastSequence = sequence;
-        }
-
-        updatedThread.messages = newMessages;
-        changed = true;
-      }
-
-      else if (isAcpContextUpdate({ eventType, data } as any)) {
-        const contextData = data as any;
-        let lastMessage = updatedThread.messages[updatedThread.messages.length - 1];
-        if (!lastMessage || lastMessage.role !== 'assistant') {
-          lastMessage = {
-            id: generateMessageId(sequence),
-            role: 'assistant',
-            parts: [],
-            createdAt: Date.now(),
-            lastSequence: sequence,
-          };
-          updatedThread.messages = [...updatedThread.messages, lastMessage];
-        }
-
-        const contextCard: AccumulatedContextCard = {
-          type: 'context',
-          updateType: contextData.updateType,
-          data: contextData.data,
-          sequence,
-        };
-
-        updatedThread.messages = updatedThread.messages.map((m, i) =>
-          i === updatedThread.messages.length - 1
-            ? { ...m, parts: [...m.parts, contextCard], lastSequence: sequence }
-            : m
-        );
-        changed = true;
-      }
-
-      else if (isAcpError({ eventType, data } as any)) {
-        const errorData = data as any;
-        const errorCard: AccumulatedErrorCard = {
-          type: 'error',
-          code: errorData.code,
-          message: errorData.message,
-          details: errorData.details,
-          recoverable: errorData.recoverable,
-          sequence,
-        };
-
-        let lastMessage = updatedThread.messages[updatedThread.messages.length - 1];
-        if (!lastMessage) {
-          lastMessage = {
-            id: generateMessageId(sequence),
-            role: 'assistant',
-            parts: [errorCard],
-            createdAt: Date.now(),
-            lastSequence: sequence,
-          };
-          updatedThread.messages = [lastMessage];
-        } else {
-          updatedThread.messages = updatedThread.messages.map((m, i) =>
-            i === updatedThread.messages.length - 1
-              ? { ...m, parts: [...m.parts, errorCard], lastSequence: sequence }
-              : m
-          );
-        }
-        changed = true;
-      }
-
-      else if (isAcpResumeMarker({ eventType, data } as any)) {
-        const resumeData = data as any;
-        updatedThread.resumeCheckpoint = resumeData.checkpoint;
-        updatedThread.lastSequence = resumeData.lastSequence;
-        changed = true;
-      }
-
-      if (changed && sequence > updatedThread.lastSequence) {
-        updatedThread.lastSequence = sequence;
-      }
-
-      if (updatedThread.messages.length > MAX_ACCUMULATED_MESSAGES) {
-        updatedThread.messages = updatedThread.messages.slice(-MAX_ACCUMULATED_MESSAGES);
-      }
-
-      newThreads.set(worktreeId, updatedThread);
-      return { ...state, threads: newThreads };
-    }
-
-    default:
-      return state;
-  }
+/** Get the AcpStore for a worktree, or null if none exists. */
+export function getAcpStore(worktreeId: string): AcpStore | null {
+  return acpSessionManager.getAcpStore(worktreeId);
 }
 
 export const useStore = create<AppState>()(
@@ -429,9 +69,6 @@ export const useStore = create<AppState>()(
   // Agent pane tabs (per worktree)
   agentTabs: new Map(),
   activeAgentTabId: new Map(),
-
-  // ACP Event Accumulator (connection-scoped, derived state)
-  acpAccumulator: createInitialAccumulatorState(),
 
   // File cache (caches file listings and git status until worktree changes)
   fileListCache: new Map(),
@@ -528,7 +165,6 @@ export const useStore = create<AppState>()(
           agentSessions: snapshot.agentSessions,
           terminalSessions: snapshot.terminalSessions,
           isWorkspacesLoading: false,
-          acpAccumulator: acpAccumulatorReducer(state.acpAccumulator, { type: 'CONNECTION_RECONNECTED' }),
         }));
       },
 
@@ -884,21 +520,6 @@ setActiveAgentTab: (worktreeId, tabId) => {
       alertDialog: state.alertDialog ? { ...state.alertDialog, open: false } : null,
     })),
 
-  dispatchAccumulator: (action: AcpAccumulatorAction) =>
-    set((state) => ({
-      acpAccumulator: acpAccumulatorReducer(state.acpAccumulator, action),
-    })),
-
-  flushAccumulator: () =>
-    set((state) => ({
-      acpAccumulator: acpAccumulatorReducer(state.acpAccumulator, { type: 'FLUSH_ALL' }),
-    })),
-
-  flushAccumulatorThread: (worktreeId: string) =>
-    set((state) => ({
-      acpAccumulator: acpAccumulatorReducer(state.acpAccumulator, { type: 'FLUSH_THREAD', worktreeId }),
-    })),
-
   // File cache actions
   setFileListCache: (worktreeId: string, files: string[]) =>
     set((state) => {
@@ -1004,20 +625,10 @@ export const selectDbResetDialogOpen = (state: AppState) => state.dbResetDialog.
 
 export const selectAlertDialog = (state: AppState) => state.alertDialog;
 
-// ACP Accumulator selectors
-export const selectAccumulatorThread = (worktreeId: string) => (state: AppState): ThreadAccumulatedState => {
-  const thread = state.acpAccumulator.threads.get(worktreeId) ?? null;
-  return {
-    thread,
-    messageCount: thread?.messages.length ?? 0,
-    isStreaming: thread?.isStreaming ?? false,
-    sessionStatus: thread?.sessionStatus ?? 'Working',
-    hasErrors: thread?.messages.some(m => m.parts.some(p => p.type === 'error')) ?? false,
-  };
+// ACP Store selectors (read from AcpStore via acpSessionManager)
+export const selectAcpStoreForWorktree = (worktreeId: string) => (): ReturnType<typeof getAcpStore> => {
+  return getAcpStore(worktreeId);
 };
-
-export const selectAccumulatorConnectionGeneration = (state: AppState) =>
-  state.acpAccumulator.connectionGeneration;
 
 // File cache selectors
 export const selectFileListCache = (worktreeId: string) => (state: AppState) =>
@@ -1156,14 +767,11 @@ case 'TerminalUpdated': {
       break;
 
     case 'AcpWireEvent': {
-      const { dispatchAccumulator, activeWorktreeId } = useStore.getState();
-      const { type, ...envelope } = message as unknown as Record<string, unknown>;
-      const data = envelope.data as any;
-
-      const worktreeId = data?.worktreeId ?? activeWorktreeId;
-
+      const { activeWorktreeId } = useStore.getState();
+      const data = (message as unknown as Record<string, unknown>).data as Record<string, unknown> | undefined;
+      const worktreeId = (data?.worktreeId as string) ?? activeWorktreeId;
       if (worktreeId) {
-        dispatchAccumulator({ type: 'EVENT_RECEIVED', envelope: envelope as unknown as AcpEventEnvelope, worktreeId });
+        acpSessionManager.handleAcpPayload(worktreeId, message as unknown as Record<string, unknown>);
       }
       break;
     }
@@ -1614,27 +1222,13 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
       const payload = message.payload as Record<string, unknown> | null;
       if (!payload) return;
 
-      // Extract AcpEventEnvelope fields from the raw ACP JSON-RPC payload
-      const sequence = (payload.sequence as number) ?? 0;
-      const correlationId = (payload.correlationId as AcpCorrelationId | undefined) ?? undefined;
-      const timestamp = (payload.timestamp as number) ?? 0;
-      const eventType = (payload.eventType as string) ?? '';
+      // Route through acpSessionManager which feeds the raw ACP JSON-RPC payload
+      // to the appropriate SessionController via its transport.
+      const { activeWorktreeId } = useStore.getState();
       const data = (payload.data as Record<string, unknown>) ?? {};
-
-      // Build the AcpEventEnvelope
-      const envelope: AcpEventEnvelope = {
-        sequence,
-        correlationId,
-        timestamp,
-        eventType: eventType as any,
-        data: data as any,
-      };
-
-      // Route through existing acpAccumulatorReducer
-      const { dispatchAccumulator, activeWorktreeId } = useStore.getState();
       const worktreeId = (data as any)?.worktreeId ?? activeWorktreeId;
       if (worktreeId) {
-        dispatchAccumulator({ type: 'EVENT_RECEIVED', envelope, worktreeId });
+        acpSessionManager.handleAcpPayload(worktreeId, payload);
       }
       break;
     }

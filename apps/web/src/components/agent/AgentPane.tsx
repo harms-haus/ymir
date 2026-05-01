@@ -3,7 +3,7 @@ import { Tabs } from '@base-ui/react';
 import { useStore, selectActiveAgentTabId, selectAgentTabsByWorktreeId, selectIsWorkspacesLoading, AgentTab } from '../../store';
 import { useUIStore } from '../../uiStore';
 import { useWebSocketClient } from '../../hooks/useWebSocket';
-import { AgentChat } from './AgentChat';
+import { AcpChat } from './AcpChat';
 import { AgentSkeleton } from './AgentSkeleton';
 import { DiffTab } from '../editor/DiffTab';
 import { EditorTab } from '../editor/EditorTab';
@@ -264,7 +264,7 @@ export function AgentPane({ worktreeId }: AgentPaneProps) {
                   className="agent-panel-content"
                 >
                   {tab.type === 'agent' && sessionForTab && (
-                    <AgentChat
+                    <AcpChat
                       sessionId={sessionForTab.id}
                       agentType={sessionForTab.agentType}
                       worktreeId={worktreeId}
