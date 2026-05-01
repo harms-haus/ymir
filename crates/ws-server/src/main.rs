@@ -15,8 +15,11 @@ use tracing::{debug, error, info, warn};
 use tracing_subscriber::prelude::*;
 use ymir_ws_server::db::Db;
 use ymir_ws_server::logging::ActivityLayer;
+use ymir_ws_server::bridge::{
+    decode_bridge_message, decode_client_message, server_message_to_envelope, DecodedMessage,
+};
 use ymir_ws_server::protocol::{
-  ClientMessage, ServerMessage, PROTOCOL_VERSION,
+    ClientMessage, ServerMessage, PROTOCOL_VERSION,
 };
 use ymir_ws_server::router::route_message;
 use ymir_ws_server::state::AppState;
@@ -145,6 +148,7 @@ async fn process_ws_message(
     match msg {
         Message::Binary(data) => {
             info!(%client_id, "Received binary message, size: {}", data.len());
+            // Legacy MessagePack pathway
             match rmp_serde::from_slice::<ClientMessage>(&data) {
                 Ok(client_msg) => {
                     info!(%client_id, "Decoded message type: {:?}", client_msg.payload);
@@ -167,6 +171,61 @@ async fn process_ws_message(
                 }
             }
         }
+        Message::Text(text) => {
+            debug!(%client_id, "Received text message, size: {}", text.len());
+            // New BridgeEnvelope JSON pathway
+            if let Some(decoded) = decode_bridge_message(&text) {
+                match decoded {
+                    DecodedMessage::Client(client_msg) => {
+                        debug!(%client_id, "Decoded BridgeEnvelope to ClientMessage: {:?}", client_msg.payload);
+                        if client_msg.version != PROTOCOL_VERSION {
+                            warn!(
+                                %client_id,
+                                version = client_msg.version,
+                                expected = PROTOCOL_VERSION,
+                                "Client protocol version mismatch"
+                            );
+                            return Ok(());
+                        }
+
+                        if let Some(response) = route_message(state.clone(), client_id, client_msg).await {
+                            state.send_to(client_id, response).await;
+                        }
+                    }
+                    DecodedMessage::UnsupportedVersion(err) => {
+                        warn!(
+                            %client_id,
+                            received = err.received,
+                            supported = ?err.supported,
+                            "Unsupported bridge envelope version"
+                        );
+                    }
+                    DecodedMessage::NonClient(msg) => {
+                        debug!(%client_id, "Received non-client BridgeMessage: {:?}", std::mem::discriminant(&msg));
+                        // Non-client messages (AcpPayload, StartAgent) are handled
+                        // through separate pathways — not yet wired up
+                    }
+                }
+            } else if let Some(client_msg) = decode_client_message(&text) {
+                // Fallback: legacy JSON ClientMessage format
+                debug!(%client_id, "Decoded legacy JSON ClientMessage: {:?}", client_msg.payload);
+                if client_msg.version != PROTOCOL_VERSION {
+                    warn!(
+                        %client_id,
+                        version = client_msg.version,
+                        expected = PROTOCOL_VERSION,
+                        "Client protocol version mismatch"
+                    );
+                    return Ok(());
+                }
+
+                if let Some(response) = route_message(state.clone(), client_id, client_msg).await {
+                    state.send_to(client_id, response).await;
+                }
+            } else {
+                warn!(%client_id, "Failed to decode text message as BridgeEnvelope or ClientMessage");
+            }
+        }
         Message::Close(_) => {
             info!(%client_id, "Client requested close");
             return Ok(());
@@ -177,9 +236,6 @@ async fn process_ws_message(
         Message::Pong(_) => {
             debug!(%client_id, "WebSocket pong received");
         }
-        Message::Text(_) => {
-            warn!(%client_id, "Received text message, expecting binary MessagePack");
-        }
     }
     Ok(())
 }
@@ -187,6 +243,23 @@ async fn process_ws_message(
 async fn send_ws_message(socket: &mut WebSocket, msg: ServerMessage) -> anyhow::Result<()> {
     let bytes = rmp_serde::to_vec_named(&msg)?;
     socket.send(Message::Binary(bytes)).await?;
+    Ok(())
+}
+
+/// Sends a ServerMessage as a JSON text frame using the BridgeEnvelope format.
+///
+/// This is the JSON-text alternative to `send_ws_message` which uses MessagePack
+/// binary frames. Both functions are available during the transition period;
+/// the actual switch to JSON text frames happens in Phase 3.
+#[allow(dead_code)]
+async fn send_ws_message_json(socket: &mut WebSocket, msg: ServerMessage) -> anyhow::Result<()> {
+    let timestamp_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64;
+    let envelope = server_message_to_envelope(msg, timestamp_ms);
+    let json = serde_json::to_string(&envelope)?;
+    socket.send(Message::Text(json)).await?;
     Ok(())
 }
 
