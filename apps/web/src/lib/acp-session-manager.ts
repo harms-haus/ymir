@@ -10,7 +10,7 @@
  * - Routing ACP events from BridgeEnvelope acp_payload to the correct SessionController
  * - Exposing prompt sending through SessionController
  *
- * NOTE: This module does NOT replace the existing acpAccumulatorReducer yet (Task 20).
+ * Manages ACP sessions per worktree, routing payloads to SessionControllers.
  *       It runs alongside it, providing SessionController-managed state that can be
  *       consumed once the migration is complete.
  */
@@ -28,7 +28,7 @@ import {
   type CreateTerminalResponse,
   type TerminalCreateHandler,
 } from "@harms-haus/acp-chat-core";
-import { AcpStore, createAcpStore } from "@harms-haus/acp-chat-react";
+import { createAcpStore } from "@harms-haus/acp-chat-react";
 import type { AcpStore as AcpStoreType } from "@harms-haus/acp-chat-react";
 
 // ============================================================================

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { AppState, NotificationState, AgentTab, AlertDialogConfig, AgentSessionState, TerminalSessionState, GitStats } from './types/state';
 export type { AgentTab };
-import { ServerMessage, TerminalOutput, GitStatusEntry } from './types/protocol';
+import { TerminalOutput, GitStatusEntry } from './types/protocol';
 import type { DecodedBridgeMessage } from './lib/bridge-transport';
 import { isWorkspaceEvent, isWorktreeEvent, isGitResponse, isFileResponse, isNotificationMessage, isErrorResponse, isAckMessage, isPingMessage, isPongMessage, isAgentEvent, isTerminalEvent, isStateSnapshotMessage, isAcpPayload } from './types/bridge-envelope';
 import { encodePong } from './lib/bridge-transport';
@@ -159,7 +159,7 @@ export const useStore = create<AppState>()(
 
       // State management from server snapshot
       stateFromSnapshot: (snapshot) => {
-        set((state) => ({
+        set((_state) => ({
           workspaces: snapshot.workspaces,
           worktrees: snapshot.worktrees,
           agentSessions: snapshot.agentSessions,
@@ -637,155 +637,11 @@ export const selectFileListCache = (worktreeId: string) => (state: AppState) =>
 export const selectGitStatusCache = (worktreeId: string) => (state: AppState) =>
   state.gitStatusCache.get(worktreeId) ?? null;
 
-export function updateStateFromServerMessage(message: ServerMessage): void {
-  const { addWorkspace, updateWorkspace, removeWorkspace, addWorktree, updateWorktree, removeWorktree } = useStore.getState();
-  const { updateAgentSession, addTerminalSession, removeTerminalSession, addNotification } = useStore.getState();
-
-  switch (message.type) {
-    case 'WorkspaceCreated':
-      addWorkspace(message.workspace);
-      break;
-    
-    case 'WorkspaceUpdated':
-      updateWorkspace(message.workspace.id, message.workspace);
-      break;
-    
-    case 'WorkspaceDeleted':
-      removeWorkspace(message.workspaceId);
-      break;
-    
-    case 'WorktreeCreated':
-      addWorktree(message.worktree);
-      break;
-    
-    case 'WorktreeStatus':
-      updateWorktree(message.worktree.id, message.worktree);
-      break;
-    
-    case 'WorktreeChanged':
-      updateWorktree(message.worktree.id, message.worktree);
-      // Clear file caches when worktree changes (files modified on disk)
-      useStore.getState().clearFileListCache(message.worktree.id);
-      useStore.getState().clearGitStatusCache(message.worktree.id);
-      break;
-
-    case 'WorktreeDeleted':
-      removeWorktree(message.worktreeId);
-      // Clear caches for deleted worktree
-      useStore.getState().clearFileListCache(message.worktreeId);
-      useStore.getState().clearGitStatusCache(message.worktreeId);
-      break;
-
-    case 'WorktreeDetailsResult': {
-      const { addAgentSession, addWorktree } = useStore.getState();
-      message.worktrees.forEach((worktree) => { addWorktree(worktree); });
-      message.agentSessions.forEach((session) => { addAgentSession(session as any); });
-      message.terminalSessions.forEach((session) => { addTerminalSession(session); });
-      break;
-    }
-
-    case 'AgentStatusUpdate': {
-      const existingSession = useStore.getState().agentSessions.find(as => as.id === message.id);
-      if (existingSession) {
-        updateAgentSession(message.id, {
-          status: message.status,
-        } as any);
-      } else {
-        const addAgentSession = useStore.getState().addAgentSession;
-        addAgentSession({
-          id: message.id,
-          worktreeId: message.worktreeId,
-          agentType: message.agentType,
-          status: message.status,
-          acpSessionId: undefined,
-          startedAt: message.startedAt,
-        } as any);
-      }
-      break;
-    }
-    
-    case 'AgentOutput':
-      // Agent output is handled separately (not stored in main state)
-      break;
-    
-    case 'AgentRemoved': {
-      const removeAgentSession = useStore.getState().removeAgentSession;
-      removeAgentSession(message.id);
-      break;
-    }
-    
-    case 'TerminalCreated':
-      addTerminalSession({
-        id: message.sessionId,
-        worktreeId: message.worktreeId,
-        label: message.label ?? 'Terminal',
-        shell: message.shell,
-        createdAt: Date.now(),
-      });
-      break;
-    
-    case 'TerminalOutput':
-      // Terminal output is routed to TerminalProvider via callback
-      if (terminalOutputCallback) {
-        terminalOutputCallback(message);
-      }
-      break;
-
-case 'TerminalRemoved':
-            removeTerminalSession(message.sessionId);
-            break;
-
-case 'TerminalUpdated': {
-  const { updateTerminalSession } = useStore.getState();
-  updateTerminalSession(message.sessionId, {
-    ...(message.label != null && { label: message.label }),
-    ...(message.position != null && { position: message.position }),
-  });
-  break;
-}
-
-        case 'AgentUpdated': {
-            const { updateAgentSession } = useStore.getState();
-            updateAgentSession(message.sessionId, {
-                ...(message.label !== undefined && { label: message.label }),
-                ...(message.position !== undefined && { position: message.position }),
-            });
-            break;
-        }
-
-        case 'Notification':
-      addNotification({
-        level: message.level,
-        message: message.message,
-        duration: 5000,
-      } as any);
-      showNotification(message.title, message.message);
-      break;
-
-    case 'Error':
-      handleError(message);
-      break;
-
-    case 'AcpWireEvent': {
-      const { activeWorktreeId } = useStore.getState();
-      const data = (message as unknown as Record<string, unknown>).data as Record<string, unknown> | undefined;
-      const worktreeId = (data?.worktreeId as string) ?? activeWorktreeId;
-      if (worktreeId) {
-        acpSessionManager.handleAcpPayload(worktreeId, message as unknown as Record<string, unknown>);
-      }
-      break;
-    }
-  }
-}
-
 /**
- * Handle a decoded BridgeEnvelope message from the bridge transport.
- * This is an alternative path to updateStateFromServerMessage for messages
- * that arrive wrapped in BridgeEnvelope format rather than raw MessagePack.
- *
- * For workspace_event messages, the payload contains:
- *   { originalType: "WorkspaceCreated" | "WorkspaceDeleted" | ..., data: {...} }
- * where data is the serde_json::Value that needs to be cast to the expected type.
+ * Primary message handler for decoded BridgeEnvelope messages.
+ * Dispatches to domain-specific handlers based on the BridgeMessage type
+ * discriminator. All store mutations for BridgeEnvelope-wrapped messages
+ * flow through this function.
  */
 export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (envelope: unknown) => void): void {
   const { type, message } = decoded;
@@ -1191,7 +1047,6 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
     }
 
     // Additional BridgeMessage types can be handled here as needed.
-    // Existing MessagePack handling remains in updateStateFromServerMessage.
 
     case 'ping': {
       if (!isPingMessage(message)) return;

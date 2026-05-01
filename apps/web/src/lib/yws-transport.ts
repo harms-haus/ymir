@@ -8,7 +8,6 @@
  * - Exponential backoff reconnection (delegated to TransportClient)
  * - Status mapping between TransportClient and YmirClient conventions
  * - Message queueing for offline messages
- * - ACP event buffering for batched store updates
  *
  * Drop-in replacement for YmirClient from ws.ts.
  * Same public API so useWebSocket.ts and other consumers need minimal changes.
@@ -21,10 +20,8 @@ import type { BridgeMessage, BridgePayload } from "../types/bridge-envelope";
 import {
   ClientMessage,
   ServerMessage,
-  AcpEventEnvelope,
-  StateSnapshot,
 } from "../types/protocol";
-import { updateStateFromServerMessage, useStore, useToastStore, handleBridgeMessage } from "../store";
+import { handleBridgeMessage, useStore, useToastStore } from "../store";
 import { acpSessionManager, type CoreConnectionStatus } from "./acp-session-manager";
 import type { FullBridgeEnvelope } from "../types/bridge-envelope";
 
@@ -78,19 +75,15 @@ export class YmirWsTransport {
   // --- Timers ---
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private heartbeatTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
-  private acpFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
   // --- Queues & Buffers ---
   private messageQueue: ClientMessage[] = [];
-  private acpEventBuffer: Array<{ envelope: AcpEventEnvelope; worktreeId: string }> = [];
-  private readonly ACP_FLUSH_INTERVAL = 50; // ms
 
   // --- ACP Session Manager ---
   private acpConfigured = false;
 
   // --- Handlers ---
   private messageHandlers = new Map<ServerMessage["type"], Set<(message: ServerMessage) => void>>();
-  private acpEventHandlers = new Map<string, Set<(envelope: AcpEventEnvelope) => void>>();
   private statusHandlers = new Set<(status: ConnectionStatus) => void>();
   private disconnectHandlers = new Set<() => void>();
   private reconnectHandlers = new Set<() => void>();
@@ -331,13 +324,6 @@ export class YmirWsTransport {
     }, this.heartbeatTimeout);
   }
 
-  private handlePong(): void {
-    if (this.heartbeatTimeoutTimer) {
-      clearTimeout(this.heartbeatTimeoutTimer);
-      this.heartbeatTimeoutTimer = null;
-    }
-  }
-
   // ==========================================================================
   // Message handling
   // ==========================================================================
@@ -352,12 +338,10 @@ export class YmirWsTransport {
         return;
       }
 
-      // Route migrated message types directly through handleBridgeMessage
-      // instead of converting back to ServerMessage format.
-      // Migrated: workspace_event, worktree_event, git_response, file_response,
-      //   notification, error_response, agent_event, terminal_event, state_snapshot,
-      //   ping, pong, ack
-      // Unmigrated (stays on old path): bridge_status, stderr, process_exit, etc.
+      // All migrated BridgeMessage types are handled by handleBridgeMessage.
+      // This includes: workspace_event, worktree_event, git_response, file_response,
+      // notification, error_response, agent_event, terminal_event, state_snapshot,
+      // ping, pong, ack
       const migratedTypes: BridgeMessage["type"][] = [
         "workspace_event",
         "worktree_event",
@@ -380,19 +364,9 @@ export class YmirWsTransport {
         return;
       }
 
-      // Legacy path: convert to ServerMessage for unmigrated types
-      const serverMessage = this.bridgeMessageToServerMessage(decoded.message, decoded.type);
-
-      if (!serverMessage) {
-        return;
-      }
-
-      // Yield to event loop for high-frequency ACP events (allows heartbeat Pong to be processed)
-      if (serverMessage.type === "AcpWireEvent") {
-        setTimeout(() => this.handleMessage(serverMessage), 0);
-      } else {
-        this.handleMessage(serverMessage);
-      }
+      // Unmigrated types (bridge_status, stderr, process_exit, replay_metadata,
+      // start_agent) are logged but not processed by the store.
+      console.warn("[YWS] Unmigrated envelope type:", decoded.type);
     } catch (error) {
       console.error("[YWS] Failed to decode envelope:", error);
     }
@@ -414,125 +388,6 @@ export class YmirWsTransport {
     if (worktreeId) {
       acpSessionManager.handleAcpPayload(worktreeId, payload);
     }
-  }
-
-  /**
-   * Convert a BridgeMessage to a Ymir ServerMessage.
-   * The bridge wraps original message types in payload.originalType + payload.data.
-   */
-  private bridgeMessageToServerMessage(
-    message: BridgeMessage,
-    envelopeType: BridgeMessage["type"]
-  ): ServerMessage | null {
-    // Handle bridge_status (internal, not exposed)
-    if (envelopeType === "bridge_status") {
-      return null;
-    }
-
-    // Ymir-specific passthrough variants carry payload with originalType
-    const payload = (message as any).payload as Record<string, unknown> | null;
-    if (!payload) {
-      // Some bridge messages don't have payloads (stderr, process_exit, replay_metadata, start_agent)
-      // These aren't mapped to ServerMessage types
-      return null;
-    }
-
-    const originalType = payload.originalType as string | undefined;
-    const data = payload.data as Record<string, unknown> | undefined;
-
-    if (!originalType) {
-      // Fallback: treat payload itself as the message
-      return {
-        type: envelopeType as ServerMessage["type"],
-        ...(data ?? payload),
-      } as ServerMessage;
-    }
-
-    // Build the ServerMessage from originalType + data
-    return {
-      type: originalType as ServerMessage["type"],
-      ...(data ?? {}),
-    } as ServerMessage;
-  }
-
-  private handleMessage(message: ServerMessage): void {
-    if (message.type === "Pong") {
-      this.handlePong();
-    } else if (message.type === "StateSnapshot") {
-      this.flushAcpBuffer();
-      this.handleStateSnapshot(message);
-    } else if (message.type === "AcpWireEvent") {
-      const envelope = this.decodeAcpEnvelope(message);
-      if (envelope) {
-        const handlers = this.acpEventHandlers.get(envelope.eventType);
-        if (handlers) {
-          handlers.forEach((handler) => handler(envelope));
-        }
-        const allHandlers = this.acpEventHandlers.get("*");
-        if (allHandlers) {
-          allHandlers.forEach((handler) => handler(envelope));
-        }
-      }
-      this.bufferAcpEvent(message);
-    } else {
-      updateStateFromServerMessage(message);
-    }
-
-    // Dispatch to type-specific message handlers
-    const handlers = this.messageHandlers.get(message.type);
-    if (handlers) {
-      handlers.forEach((handler) => handler(message));
-    }
-  }
-
-  private handleStateSnapshot(message: StateSnapshot): void {
-    const { stateFromSnapshot } = useStore.getState();
-    stateFromSnapshot({
-      workspaces: message.workspaces,
-      worktrees: message.worktrees,
-      agentSessions: message.agentSessions,
-      terminalSessions: message.terminalSessions,
-    });
-  }
-
-  private decodeAcpEnvelope(message: ServerMessage): AcpEventEnvelope | null {
-    if (message.type !== "AcpWireEvent") {
-      return null;
-    }
-
-    const { type, ...envelopeFields } = message as unknown as Record<string, unknown>;
-
-    if (typeof envelopeFields.sequence !== "number") {
-      console.error("[YWS] [ACP] Malformed envelope: missing or invalid sequence");
-      return null;
-    }
-
-    if (typeof envelopeFields.timestamp !== "number") {
-      console.error("[YWS] [ACP] Malformed envelope: missing or invalid timestamp");
-      return null;
-    }
-
-    if (typeof envelopeFields.eventType !== "string") {
-      console.error("[YWS] [ACP] Malformed envelope: missing or invalid eventType");
-      return null;
-    }
-
-    if (!envelopeFields.data || typeof envelopeFields.data !== "object") {
-      console.error("[YWS] [ACP] Malformed envelope: missing or invalid data");
-      return null;
-    }
-
-    if (
-      envelopeFields.correlationId !== undefined &&
-      envelopeFields.correlationId !== null
-    ) {
-      if (typeof envelopeFields.correlationId !== "object") {
-        console.error("[YWS] [ACP] Malformed envelope: invalid correlationId");
-        return null;
-      }
-    }
-
-    return envelopeFields as unknown as AcpEventEnvelope;
   }
 
   // ==========================================================================
@@ -586,48 +441,6 @@ export class YmirWsTransport {
   }
 
   // ==========================================================================
-  // ACP event buffering
-  // ==========================================================================
-
-  private bufferAcpEvent(message: ServerMessage): void {
-    const envelope = this.decodeAcpEnvelope(message);
-    if (!envelope) return;
-
-    const { activeWorktreeId } = useStore.getState();
-    const data = (message as unknown as Record<string, unknown>).data as
-      | Record<string, unknown>
-      | undefined;
-    const worktreeId = (data?.worktreeId as string) ?? activeWorktreeId;
-
-    if (!worktreeId) return;
-
-    this.acpEventBuffer.push({ envelope, worktreeId });
-
-    if (!this.acpFlushTimer) {
-      this.acpFlushTimer = setTimeout(() => {
-        this.flushAcpBuffer();
-      }, this.ACP_FLUSH_INTERVAL);
-    }
-  }
-
-  private flushAcpBuffer(): void {
-    if (this.acpFlushTimer) {
-      clearTimeout(this.acpFlushTimer);
-      this.acpFlushTimer = null;
-    }
-
-    if (this.acpEventBuffer.length === 0) return;
-
-    const eventsToProcess = [...this.acpEventBuffer];
-    this.acpEventBuffer = [];
-
-    for (const { envelope, worktreeId } of eventsToProcess) {
-      // Route the ACP event envelope through acpSessionManager
-      acpSessionManager.handleAcpPayload(worktreeId, envelope as unknown as Record<string, unknown>);
-    }
-  }
-
-  // ==========================================================================
   // Public API (matching YmirClient interface)
   // ==========================================================================
 
@@ -649,41 +462,6 @@ export class YmirWsTransport {
       handlers.delete(wrappedCallback);
       if (handlers.size === 0) {
         this.messageHandlers.delete(type);
-      }
-    };
-  }
-
-  /** Subscribe to ACP events by type, or '*' for all events. Returns unsubscribe function. */
-  onAcpEvent(
-    eventTypeOrCallback: AcpEventEnvelope["eventType"] | "*" | ((envelope: AcpEventEnvelope) => void),
-    callback?: (envelope: AcpEventEnvelope) => void
-  ): () => void {
-    if (typeof eventTypeOrCallback === "function") {
-      const cb = eventTypeOrCallback;
-      const handlers = this.acpEventHandlers.get("*") || new Set();
-      handlers.add(cb);
-      this.acpEventHandlers.set("*", handlers);
-
-      return () => {
-        handlers.delete(cb);
-        if (handlers.size === 0) {
-          this.acpEventHandlers.delete("*");
-        }
-      };
-    }
-
-    const eventType = eventTypeOrCallback;
-    if (!callback) {
-      throw new Error("Callback is required when eventType is provided");
-    }
-    const handlers = this.acpEventHandlers.get(eventType) || new Set();
-    handlers.add(callback);
-    this.acpEventHandlers.set(eventType, handlers);
-
-    return () => {
-      handlers.delete(callback);
-      if (handlers.size === 0) {
-        this.acpEventHandlers.delete(eventType);
       }
     };
   }
@@ -792,4 +570,23 @@ export function resetYmirWsTransport(): void {
     transport.disconnect();
     transport = null;
   }
+}
+
+/**
+ * Load worktree details - convenience wrapper for use across the app.
+ * This is the migrated version of the old loadWorktreeDetails from ws.ts
+ */
+export async function loadWorktreeDetails(worktreeId: string): Promise<void> {
+  const transport = getYmirWsTransport();
+  transport.send({
+    type: 'GetWorktreeDetails',
+    workspaceId: worktreeId,
+    requestId: crypto.randomUUID?.() ?? generateFallbackId(),
+  });
+}
+
+// Legacy re-exports for backward compatibility during migration
+// TODO: Remove these once all imports are updated to use getYmirWsTransport directly
+export function getWebSocketClient(): YmirWsTransport {
+  return getYmirWsTransport();
 }
