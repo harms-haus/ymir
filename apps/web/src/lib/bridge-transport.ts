@@ -548,7 +548,10 @@ export function encodePing(
   data: Omit<Ping, 'type'>
 ): FullBridgeEnvelope {
   return makeEnvelope('ping', {
-    payload: data as BridgePayload,
+    payload: {
+      type: 'Ping',
+      data,
+    } as BridgePayload,
   });
 }
 
@@ -557,7 +560,10 @@ export function encodePong(
   data: Omit<Pong, 'type'>
 ): FullBridgeEnvelope {
   return makeEnvelope('pong', {
-    payload: data as BridgePayload,
+    payload: {
+      type: 'Pong',
+      data,
+    } as BridgePayload,
   });
 }
 
@@ -566,7 +572,10 @@ export function encodeAck(
   data: Omit<Ack, 'type'>
 ): FullBridgeEnvelope {
   return makeEnvelope('ack', {
-    payload: data as BridgePayload,
+    payload: {
+      type: 'Ack',
+      data,
+    } as BridgePayload,
   });
 }
 
