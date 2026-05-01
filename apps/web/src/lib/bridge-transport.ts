@@ -149,7 +149,7 @@ export function encodeWorkspaceCreate(
 ): FullBridgeEnvelope {
   return makeEnvelope('workspace_event', {
     payload: {
-      originalType: 'WorkspaceCreate',
+      type: 'WorkspaceCreate',
       data,
     } as BridgePayload,
   });
@@ -161,7 +161,7 @@ export function encodeWorkspaceDelete(
 ): FullBridgeEnvelope {
   return makeEnvelope('workspace_event', {
     payload: {
-      originalType: 'WorkspaceDelete',
+      type: 'WorkspaceDelete',
       data,
     } as BridgePayload,
   });
@@ -173,7 +173,7 @@ export function encodeWorkspaceRename(
 ): FullBridgeEnvelope {
   return makeEnvelope('workspace_event', {
     payload: {
-      originalType: 'WorkspaceRename',
+      type: 'WorkspaceRename',
       data,
     } as BridgePayload,
   });
@@ -185,7 +185,7 @@ export function encodeWorkspaceUpdate(
 ): FullBridgeEnvelope {
   return makeEnvelope('workspace_event', {
     payload: {
-      originalType: 'WorkspaceUpdate',
+      type: 'WorkspaceUpdate',
       data,
     } as BridgePayload,
   });
@@ -199,7 +199,7 @@ export function encodeWorktreeCreate(
 ): FullBridgeEnvelope {
   return makeEnvelope('worktree_event', {
     payload: {
-      originalType: 'WorktreeCreate',
+      type: 'WorktreeCreate',
       data,
     } as BridgePayload,
   });
@@ -211,7 +211,7 @@ export function encodeWorktreeDelete(
 ): FullBridgeEnvelope {
   return makeEnvelope('worktree_event', {
     payload: {
-      originalType: 'WorktreeDelete',
+      type: 'WorktreeDelete',
       data,
     } as BridgePayload,
   });
@@ -223,7 +223,7 @@ export function encodeWorktreeMerge(
 ): FullBridgeEnvelope {
   return makeEnvelope('worktree_event', {
     payload: {
-      originalType: 'WorktreeMerge',
+      type: 'WorktreeMerge',
       data,
     } as BridgePayload,
   });
@@ -235,7 +235,7 @@ export function encodeWorktreeList(
 ): FullBridgeEnvelope {
   return makeEnvelope('worktree_event', {
     payload: {
-      originalType: 'WorktreeList',
+      type: 'WorktreeList',
       data,
     } as BridgePayload,
   });
@@ -247,7 +247,7 @@ export function encodeWorktreeChangeBranch(
 ): FullBridgeEnvelope {
   return makeEnvelope('worktree_event', {
     payload: {
-      originalType: 'WorktreeChangeBranch',
+      type: 'WorktreeChangeBranch',
       data,
     } as BridgePayload,
   });
@@ -259,7 +259,7 @@ export function encodeGetWorktreeDetails(
 ): FullBridgeEnvelope {
   return makeEnvelope('worktree_event', {
     payload: {
-      originalType: 'GetWorktreeDetails',
+      type: 'GetWorktreeDetails',
       data,
     } as BridgePayload,
   });
@@ -273,7 +273,7 @@ export function encodeAgentSpawn(
 ): FullBridgeEnvelope {
   return makeEnvelope('agent_event', {
     payload: {
-      originalType: 'AgentSpawn',
+      type: 'AgentSpawn',
       data,
     } as BridgePayload,
   });
@@ -285,7 +285,7 @@ export function encodeAgentSend(
 ): FullBridgeEnvelope {
   return makeEnvelope('agent_event', {
     payload: {
-      originalType: 'AgentSend',
+      type: 'AgentSend',
       data,
     } as BridgePayload,
   });
@@ -297,7 +297,7 @@ export function encodeAgentCancel(
 ): FullBridgeEnvelope {
   return makeEnvelope('agent_event', {
     payload: {
-      originalType: 'AgentCancel',
+      type: 'AgentCancel',
       data,
     } as BridgePayload,
   });
@@ -309,7 +309,7 @@ export function encodeAgentSetConfigOption(
 ): FullBridgeEnvelope {
   return makeEnvelope('agent_event', {
     payload: {
-      originalType: 'AgentSetConfigOption',
+      type: 'AgentSetConfigOption',
       data,
     } as BridgePayload,
   });
@@ -321,7 +321,7 @@ export function encodeAgentRename(
 ): FullBridgeEnvelope {
   return makeEnvelope('agent_event', {
     payload: {
-      originalType: 'AgentRename',
+      type: 'AgentRename',
       data,
     } as BridgePayload,
   });
@@ -333,7 +333,7 @@ export function encodeAgentReorder(
 ): FullBridgeEnvelope {
   return makeEnvelope('agent_event', {
     payload: {
-      originalType: 'AgentReorder',
+      type: 'AgentReorder',
       data,
     } as BridgePayload,
   });
@@ -347,7 +347,7 @@ export function encodeTerminalInput(
 ): FullBridgeEnvelope {
   return makeEnvelope('terminal_event', {
     payload: {
-      originalType: 'TerminalInput',
+      type: 'TerminalInput',
       data,
     } as BridgePayload,
   });
@@ -359,7 +359,7 @@ export function encodeTerminalResize(
 ): FullBridgeEnvelope {
   return makeEnvelope('terminal_event', {
     payload: {
-      originalType: 'TerminalResize',
+      type: 'TerminalResize',
       data,
     } as BridgePayload,
   });
@@ -371,7 +371,7 @@ export function encodeTerminalCreate(
 ): FullBridgeEnvelope {
   return makeEnvelope('terminal_event', {
     payload: {
-      originalType: 'TerminalCreate',
+      type: 'TerminalCreate',
       data,
     } as BridgePayload,
   });
@@ -383,7 +383,7 @@ export function encodeTerminalKill(
 ): FullBridgeEnvelope {
   return makeEnvelope('terminal_event', {
     payload: {
-      originalType: 'TerminalKill',
+      type: 'TerminalKill',
       data,
     } as BridgePayload,
   });
@@ -395,7 +395,7 @@ export function encodeTerminalRename(
 ): FullBridgeEnvelope {
   return makeEnvelope('terminal_event', {
     payload: {
-      originalType: 'TerminalRename',
+      type: 'TerminalRename',
       data,
     } as BridgePayload,
   });
@@ -407,7 +407,7 @@ export function encodeTerminalReorder(
 ): FullBridgeEnvelope {
   return makeEnvelope('terminal_event', {
     payload: {
-      originalType: 'TerminalReorder',
+      type: 'TerminalReorder',
       data,
     } as BridgePayload,
   });
@@ -419,7 +419,7 @@ export function encodeTerminalRequestHistory(
 ): FullBridgeEnvelope {
   return makeEnvelope('terminal_event', {
     payload: {
-      originalType: 'TerminalRequestHistory',
+      type: 'TerminalRequestHistory',
       data,
     } as BridgePayload,
   });
@@ -433,7 +433,7 @@ export function encodeFileRead(
 ): FullBridgeEnvelope {
   return makeEnvelope('file_response', {
     payload: {
-      originalType: 'FileRead',
+      type: 'FileRead',
       data,
     } as BridgePayload,
   });
@@ -445,7 +445,7 @@ export function encodeFileWrite(
 ): FullBridgeEnvelope {
   return makeEnvelope('file_response', {
     payload: {
-      originalType: 'FileWrite',
+      type: 'FileWrite',
       data,
     } as BridgePayload,
   });
@@ -457,7 +457,7 @@ export function encodeFileList(
 ): FullBridgeEnvelope {
   return makeEnvelope('file_response', {
     payload: {
-      originalType: 'FileList',
+      type: 'FileList',
       data,
     } as BridgePayload,
   });
@@ -471,7 +471,7 @@ export function encodeGitStatus(
 ): FullBridgeEnvelope {
   return makeEnvelope('git_response', {
     payload: {
-      originalType: 'GitStatus',
+      type: 'GitStatus',
       data,
     } as BridgePayload,
   });
@@ -483,7 +483,7 @@ export function encodeGitDiff(
 ): FullBridgeEnvelope {
   return makeEnvelope('git_response', {
     payload: {
-      originalType: 'GitDiff',
+      type: 'GitDiff',
       data,
     } as BridgePayload,
   });
@@ -495,7 +495,7 @@ export function encodeGitCommit(
 ): FullBridgeEnvelope {
   return makeEnvelope('git_response', {
     payload: {
-      originalType: 'GitCommit',
+      type: 'GitCommit',
       data,
     } as BridgePayload,
   });
@@ -509,7 +509,7 @@ export function encodeCreatePR(
 ): FullBridgeEnvelope {
   return makeEnvelope('git_response', {
     payload: {
-      originalType: 'CreatePR',
+      type: 'CreatePR',
       data,
     } as BridgePayload,
   });
@@ -523,7 +523,7 @@ export function encodeGetState(
 ): FullBridgeEnvelope {
   return makeEnvelope('state_snapshot', {
     payload: {
-      originalType: 'GetState',
+      type: 'GetState',
       data,
     } as BridgePayload,
   });
@@ -535,7 +535,7 @@ export function encodeUpdateSettings(
 ): FullBridgeEnvelope {
   return makeEnvelope('state_snapshot', {
     payload: {
-      originalType: 'UpdateSettings',
+      type: 'UpdateSettings',
       data,
     } as BridgePayload,
   });
