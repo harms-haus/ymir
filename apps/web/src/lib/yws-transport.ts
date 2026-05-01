@@ -361,6 +361,10 @@ export class YmirWsTransport {
         handleBridgeMessage(decoded, (envelope) => {
           this.client.send(JSON.stringify(envelope));
         });
+        // Clear heartbeat timeout when receiving ping/pong/ack responses
+        if (decoded.type === "ping" || decoded.type === "pong" || decoded.type === "ack") {
+          this.clearHeartbeatTimeout();
+        }
         return;
       }
 
@@ -406,6 +410,13 @@ export class YmirWsTransport {
       }
     } else {
       this.queueMessage(message);
+    }
+  }
+
+  private clearHeartbeatTimeout(): void {
+    if (this.heartbeatTimeoutTimer) {
+      clearTimeout(this.heartbeatTimeoutTimer);
+      this.heartbeatTimeoutTimer = null;
     }
   }
 

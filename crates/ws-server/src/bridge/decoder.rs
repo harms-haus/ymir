@@ -147,14 +147,9 @@ pub fn extract_payload<'a, T: serde::de::DeserializeOwned>(
         | BridgeMessage::ReplayMetadata { .. } => return None,
     };
 
-    // The payload is a { "type": "...", "data": { ... } } structure from the original
-    // MessagePack format. Extract the "data" field for deserialization.
-    if let Some(data) = payload.get("data") {
-        serde_json::from_value(data.clone()).ok()
-    } else {
-        // Fallback: try to deserialize the entire payload
-        serde_json::from_value(payload).ok()
-    }
+    // The payload is the full ClientMessagePayload: { "type": "...", "data": { ... } }
+    // The entire payload IS the ClientMessagePayload, deserialize it directly.
+    serde_json::from_value(payload).ok()
 }
 
 #[cfg(test)]
