@@ -1,9 +1,9 @@
 /**
  * BridgeEnvelope encoder/decoder for the JSON-based transport layer.
  *
- * Replaces the @msgpack/msgpack pipeline with typed constructors for each
- * client message type (all 37) and a parser for incoming server envelopes
- * (all 18 BridgeMessage variants decoded into typed handler callbacks).
+ * Provides typed constructors for each client message type (all 37) and a parser
+ * for incoming server envelopes (all 18 BridgeMessage variants decoded into typed
+ * handler callbacks).
  *
  * Encoders produce FullBridgeEnvelope messages ready for JSON.stringify.
  * Decoder parses incoming FullBridgeEnvelope and returns DecodedBridgeMessage

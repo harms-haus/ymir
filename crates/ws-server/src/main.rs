@@ -15,23 +15,10 @@ use tracing::{debug, error, info, warn};
 use tracing_subscriber::prelude::*;
 use ymir_ws_server::db::Db;
 use ymir_ws_server::logging::ActivityLayer;
-use ymir_ws_server::bridge::{
-    decode_client_message, server_message_to_envelope,
-};
-use ymir_ws_server::protocol::{
-    ClientMessage, ServerMessage, PROTOCOL_VERSION,
-};
-use ymir_ws_server::router::{route_json_message, route_message};
+use ymir_ws_server::bridge::server_message_to_envelope;
+use ymir_ws_server::protocol::ServerMessage;
+use ymir_ws_server::router::route_json_message;
 use ymir_ws_server::state::AppState;
-
-/// Transport format detected from incoming client messages.
-/// Used to choose the appropriate serialization for outgoing messages.
-#[derive(Clone, Copy, Debug, Default)]
-enum TransportMode {
-    #[default]
-    MessagePack,
-    Json,
-}
 
 const DEFAULT_PORT: u16 = 7319;
 
@@ -129,15 +116,10 @@ async fn handle_connection_loop(
     client_id: uuid::Uuid,
     rx: &mut tokio::sync::mpsc::Receiver<ServerMessage>,
 ) -> anyhow::Result<()> {
-    let mut transport_mode = TransportMode::MessagePack;
-
     loop {
         tokio::select! {
             Some(msg) = rx.recv() => {
-                let send_result = match transport_mode {
-                    TransportMode::MessagePack => send_ws_message(socket, msg).await,
-                    TransportMode::Json => send_ws_message_json(socket, msg).await,
-                };
+                let send_result = send_ws_message(socket, msg).await;
                 if let Err(e) = send_result {
                     error!(%client_id, error = %e, "Failed to send message to client");
                     return Err(e);
@@ -145,12 +127,6 @@ async fn handle_connection_loop(
             }
             Some(result) = socket.next() => {
                 let msg = result?;
-                // Detect transport mode from incoming message type
-                match &msg {
-                    Message::Text(_) => transport_mode = TransportMode::Json,
-                    Message::Binary(_) => transport_mode = TransportMode::MessagePack,
-                    _ => {}
-                }
                 process_ws_message(state, client_id, msg).await?;
             }
             else => {
@@ -167,54 +143,14 @@ async fn process_ws_message(
     msg: Message,
 ) -> anyhow::Result<()> {
     match msg {
-        Message::Binary(data) => {
-            info!(%client_id, "Received binary message, size: {}", data.len());
-            // Legacy MessagePack pathway
-            match rmp_serde::from_slice::<ClientMessage>(&data) {
-                Ok(client_msg) => {
-                    info!(%client_id, "Decoded message type: {:?}", client_msg.payload);
-                    if client_msg.version != PROTOCOL_VERSION {
-                        warn!(
-                            %client_id,
-                            version = client_msg.version,
-                            expected = PROTOCOL_VERSION,
-                            "Client protocol version mismatch"
-                        );
-                        return Ok(());
-                    }
-
-                    if let Some(response) = route_message(state.clone(), client_id, client_msg).await {
-                        state.send_to(client_id, response).await;
-                    }
-                }
-                Err(e) => {
-                    error!(%client_id, error = %e, "Failed to decode MessagePack");
-                }
-            }
-        }
         Message::Text(text) => {
-            debug!(%client_id, "Received text message (JSON), size: {}", text.len());
-            // New JSON pathway: route through route_json_message (BridgeEnvelope)
+            info!(%client_id, "Received text message (JSON), size: {}", text.len());
             if let Some(response) = route_json_message(state.clone(), client_id, &text).await {
+                let response_json = serde_json::to_string(&response).unwrap_or_default();
+                info!(%client_id, "Sending response for text message, payload_type: {:?}, json_size: {}", response.payload, response_json.len());
                 state.send_to(client_id, response).await;
-            } else if let Some(client_msg) = decode_client_message(&text) {
-                // Fallback: legacy JSON ClientMessage format
-                debug!(%client_id, "Decoded legacy JSON ClientMessage: {:?}", client_msg.payload);
-                if client_msg.version != PROTOCOL_VERSION {
-                    warn!(
-                        %client_id,
-                        version = client_msg.version,
-                        expected = PROTOCOL_VERSION,
-                        "Client protocol version mismatch"
-                    );
-                    return Ok(());
-                }
-
-                if let Some(response) = route_message(state.clone(), client_id, client_msg).await {
-                    state.send_to(client_id, response).await;
-                }
             } else {
-                warn!(%client_id, "Failed to decode text message as BridgeEnvelope or ClientMessage");
+                warn!(%client_id, "Failed to decode text message as BridgeEnvelope");
             }
         }
         Message::Close(_) => {
@@ -227,22 +163,15 @@ async fn process_ws_message(
         Message::Pong(_) => {
             debug!(%client_id, "WebSocket pong received");
         }
+        Message::Binary(_) => {
+            warn!(%client_id, "Received binary message — MessagePack is no longer supported");
+        }
     }
     Ok(())
 }
 
-async fn send_ws_message(socket: &mut WebSocket, msg: ServerMessage) -> anyhow::Result<()> {
-    let bytes = rmp_serde::to_vec_named(&msg)?;
-    socket.send(Message::Binary(bytes)).await?;
-    Ok(())
-}
-
 /// Sends a ServerMessage as a JSON text frame using the BridgeEnvelope format.
-///
-/// This is the JSON-text alternative to `send_ws_message` which uses MessagePack
-/// binary frames. Both functions are available during the transition period;
-/// the actual switch to JSON text frames happens in Phase 3.
-async fn send_ws_message_json(socket: &mut WebSocket, msg: ServerMessage) -> anyhow::Result<()> {
+async fn send_ws_message(socket: &mut WebSocket, msg: ServerMessage) -> anyhow::Result<()> {
     let timestamp_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()

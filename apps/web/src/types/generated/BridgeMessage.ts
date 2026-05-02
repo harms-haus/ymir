@@ -59,50 +59,50 @@ cwd: string | null,
  */
 env: Array<[string, string]>, } | { "type": "workspace_event", 
 /**
- * The original MessagePack payload as structured JSON.
+ * The opaque payload as structured JSON.
  */
 payload: JsonValue, } | { "type": "worktree_event", 
 /**
- * The original MessagePack payload as structured JSON.
+ * The opaque payload as structured JSON.
  */
 payload: JsonValue, } | { "type": "git_response", 
 /**
- * The original MessagePack payload as structured JSON.
+ * The opaque payload as structured JSON.
  */
 payload: JsonValue, } | { "type": "file_response", 
 /**
- * The original MessagePack payload as structured JSON.
+ * The opaque payload as structured JSON.
  */
 payload: JsonValue, } | { "type": "agent_event", 
 /**
- * The original MessagePack payload as structured JSON.
+ * The opaque payload as structured JSON.
  */
 payload: JsonValue, } | { "type": "terminal_event", 
 /**
- * The original MessagePack payload as structured JSON.
+ * The opaque payload as structured JSON.
  */
 payload: JsonValue, } | { "type": "state_snapshot", 
 /**
- * The original MessagePack payload as structured JSON.
+ * The opaque payload as structured JSON.
  */
 payload: JsonValue, } | { "type": "notification", 
 /**
- * The original MessagePack payload as structured JSON.
+ * The opaque payload as structured JSON.
  */
 payload: JsonValue, } | { "type": "error_response", 
 /**
- * The original MessagePack payload as structured JSON.
+ * The opaque payload as structured JSON.
  */
 payload: JsonValue, } | { "type": "ack", 
 /**
- * The original MessagePack payload as structured JSON.
+ * The opaque payload as structured JSON.
  */
 payload: JsonValue, } | { "type": "ping", 
 /**
- * The original MessagePack payload as structured JSON.
+ * The opaque payload as structured JSON.
  */
 payload: JsonValue, } | { "type": "pong", 
 /**
- * The original MessagePack payload as structured JSON.
+ * The opaque payload as structured JSON.
  */
 payload: JsonValue, };

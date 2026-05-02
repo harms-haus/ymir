@@ -23,11 +23,10 @@ futures-util.workspace = true
 libsql = "0.5.0"
 uuid = { version = "1.10", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
-rmp-serde = "1.1"
+git2 = "0.18"
 portable-pty = "0.8"
 nix = { version = "0.27", features = ["process", "signal"] }
 libc = "0.2"
-git2 = "0.18"
 similar = { version = "2.7", default-features = false, features = ["text"] }
 notify = "6.1"
 thiserror.workspace = true

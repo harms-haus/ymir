@@ -112,8 +112,8 @@ fn payload_to_bridge_message(payload: ServerMessagePayload) -> BridgeMessage {
         },
 
         // State snapshot
-        ServerMessagePayload::StateSnapshot(data) => BridgeMessage::StateSnapshot {
-            payload: serde_json::to_value(&data).unwrap_or_default(),
+        ServerMessagePayload::StateSnapshot(_) => BridgeMessage::StateSnapshot {
+            payload: serde_json::to_value(&payload).unwrap_or_default(),
         },
 
         // Notifications
@@ -305,22 +305,17 @@ mod tests {
     #[test]
     fn test_acp_wire_event_maps_to_acp_payload() {
         use crate::protocol::{
-            AcpEvent, AcpEventEnvelope, AcpPromptChunk, ContentBlock, ContentBlockData,
+            AcpEvent, AcpEventEnvelope, AcpPromptComplete, AcpPromptCompleteReason,
         };
 
         let envelope = AcpEventEnvelope {
             sequence: 1,
             correlation_id: None,
             timestamp: 1234567890,
-            event: AcpEvent::PromptChunk(AcpPromptChunk {
+            event: AcpEvent::PromptComplete(AcpPromptComplete {
                 worktree_id: Uuid::new_v4(),
                 acp_session_id: "session-123".to_string(),
-                content: ContentBlock {
-                    r#type: ContentBlockData::Text {
-                        data: "Hello, world!".to_string(),
-                    },
-                },
-                is_final: false,
+                reason: AcpPromptCompleteReason::Normal,
             }),
         };
         let payload = ServerMessagePayload::AcpWireEvent(envelope);
@@ -346,7 +341,7 @@ mod tests {
         match bridge {
             BridgeMessage::TerminalEvent { payload } => {
                 assert_eq!(payload["type"], "TerminalOutput");
-                assert_eq!(payload["data"], "terminal output here");
+                assert_eq!(payload["data"]["data"], "terminal output here");
             }
             _ => panic!("Expected TerminalEvent BridgeMessage variant"),
         }
@@ -367,7 +362,7 @@ mod tests {
         match bridge {
             BridgeMessage::StateSnapshot { payload } => {
                 assert_eq!(payload["type"], "StateSnapshot");
-                assert!(payload["workspaces"].is_array());
+                assert!(payload["data"]["workspaces"].is_array());
             }
             _ => panic!("Expected StateSnapshot BridgeMessage variant"),
         }

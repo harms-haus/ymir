@@ -1,13 +1,13 @@
 use super::*;
-use serde::{Deserialize, Serialize};
+use serde_json;
 use uuid::Uuid;
 
-fn test_roundtrip<T>(original: T)
+fn test_json_roundtrip<T>(original: T)
 where
-    T: Serialize + for<'de> Deserialize<'de> + PartialEq + std::fmt::Debug,
+    T: serde::Serialize + for<'de> serde::Deserialize<'de> + PartialEq + std::fmt::Debug,
 {
-    let encoded = rmp_serde::to_vec(&original).expect("Failed to encode");
-    let decoded: T = rmp_serde::from_slice(&encoded).expect("Failed to decode");
+    let encoded = serde_json::to_string(&original).expect("Failed to encode");
+    let decoded: T = serde_json::from_str(&encoded).expect("Failed to decode");
     assert_eq!(original, decoded);
 }
 
@@ -33,18 +33,18 @@ fn test_server_message_creation() {
 }
 
 #[test]
-fn test_messagepack_roundtrip_client_message() {
+fn test_json_roundtrip_client_message() {
     let original = ClientMessage::new(ClientMessagePayload::Ping(Ping { timestamp: 12345 }));
-    let encoded = rmp_serde::to_vec(&original).expect("Failed to encode");
-    let decoded: ClientMessage = rmp_serde::from_slice(&encoded).expect("Failed to decode");
+    let encoded = serde_json::to_string(&original).expect("Failed to encode");
+    let decoded: ClientMessage = serde_json::from_str(&encoded).expect("Failed to decode");
     assert_eq!(original, decoded);
 }
 
 #[test]
-fn test_messagepack_roundtrip_server_message() {
+fn test_json_roundtrip_server_message() {
     let original = ServerMessage::new(ServerMessagePayload::Pong(Pong { timestamp: 12345 }));
-    let encoded = rmp_serde::to_vec(&original).expect("Failed to encode");
-    let decoded: ServerMessage = rmp_serde::from_slice(&encoded).expect("Failed to decode");
+    let encoded = serde_json::to_string(&original).expect("Failed to encode");
+    let decoded: ServerMessage = serde_json::from_str(&encoded).expect("Failed to decode");
     assert_eq!(original, decoded);
 }
 
@@ -57,7 +57,7 @@ fn test_workspace_create_roundtrip() {
         icon: Some("folder".to_string()),
         worktree_base_dir: Some(".worktrees".to_string()),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -65,7 +65,7 @@ fn test_workspace_delete_roundtrip() {
     let msg = ClientMessage::new(ClientMessagePayload::WorkspaceDelete(WorkspaceDelete {
         workspace_id: Uuid::new_v4(),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -74,7 +74,7 @@ fn test_workspace_rename_roundtrip() {
         workspace_id: Uuid::new_v4(),
         new_name: "renamed-workspace".to_string(),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -87,7 +87,7 @@ fn test_workspace_update_roundtrip() {
         settings: Some("{\"theme\":\"dark\"}".to_string()),
         request_id: Some(Uuid::new_v4()),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -99,7 +99,7 @@ fn test_worktree_create_roundtrip() {
         request_id: None,
         use_existing_branch: None,
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -107,7 +107,7 @@ fn test_worktree_delete_roundtrip() {
     let msg = ClientMessage::new(ClientMessagePayload::WorktreeDelete(WorktreeDelete {
         worktree_id: Uuid::new_v4(),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -117,7 +117,7 @@ fn test_worktree_merge_roundtrip() {
         squash: true,
         delete_after: false,
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -125,7 +125,7 @@ fn test_worktree_list_roundtrip() {
     let msg = ClientMessage::new(ClientMessagePayload::WorktreeList(WorktreeList {
         workspace_id: Uuid::new_v4(),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -134,7 +134,7 @@ fn test_agent_spawn_roundtrip() {
         worktree_id: Uuid::new_v4(),
         agent_type: "test-agent".to_string(),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -143,7 +143,7 @@ fn test_agent_send_roundtrip() {
         worktree_id: Uuid::new_v4(),
         message: "Hello agent".to_string(),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -152,7 +152,7 @@ fn test_agent_cancel_roundtrip() {
         worktree_id: Uuid::new_v4(),
         session_id: Uuid::new_v4(),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -161,7 +161,7 @@ fn test_terminal_input_roundtrip() {
         session_id: Uuid::new_v4(),
         data: "ls -la\n".to_string(),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -171,7 +171,7 @@ fn test_terminal_resize_roundtrip() {
         cols: 120,
         rows: 40,
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -181,7 +181,7 @@ fn test_terminal_create_roundtrip() {
         label: Some("main-terminal".to_string()),
         shell: Some("/bin/bash".to_string()),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -190,7 +190,7 @@ fn test_file_read_roundtrip() {
         worktree_id: Uuid::new_v4(),
         path: "src/main.rs".to_string(),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -200,7 +200,7 @@ fn test_file_write_roundtrip() {
         path: "src/main.rs".to_string(),
         content: "fn main() {}".to_string(),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -208,7 +208,7 @@ fn test_git_status_roundtrip() {
     let msg = ClientMessage::new(ClientMessagePayload::GitStatus(GitStatus {
         worktree_id: Uuid::new_v4(),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -217,7 +217,7 @@ fn test_git_diff_roundtrip() {
         worktree_id: Uuid::new_v4(),
         file_path: Some("src/main.rs".to_string()),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -227,7 +227,7 @@ fn test_git_commit_roundtrip() {
         message: "Initial commit".to_string(),
         files: Some(vec!["src/main.rs".to_string()]),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -237,7 +237,7 @@ fn test_create_pr_roundtrip() {
         title: "Add new feature".to_string(),
         body: Some("This PR adds...".to_string()),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -245,7 +245,7 @@ fn test_get_state_roundtrip() {
     let msg = ClientMessage::new(ClientMessagePayload::GetState(GetState {
         request_id: Uuid::new_v4(),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -254,13 +254,13 @@ fn test_update_settings_roundtrip() {
         key: "theme".to_string(),
         value: "dark".to_string(),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
 fn test_ping_roundtrip() {
     let msg = ClientMessage::new(ClientMessagePayload::Ping(Ping { timestamp: 12345 }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -273,7 +273,7 @@ fn test_state_snapshot_roundtrip() {
         terminal_sessions: vec![],
         settings: vec![],
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -303,7 +303,7 @@ fn test_client_message_sizes_are_reasonable() {
     ];
 
     for (name, msg) in test_cases {
-        let encoded = rmp_serde::to_vec(&msg).expect("Failed to encode");
+        let encoded = serde_json::to_vec(&msg).expect("Failed to encode");
         let size_kb = encoded.len() as f64 / 1024.0;
         assert!(
             size_kb < 1.0,
@@ -344,7 +344,7 @@ fn test_server_message_sizes_are_reasonable() {
     ];
 
     for (name, msg) in test_cases {
-        let encoded = rmp_serde::to_vec(&msg).expect("Failed to encode");
+        let encoded = serde_json::to_vec(&msg).expect("Failed to encode");
         let size_kb = encoded.len() as f64 / 1024.0;
         assert!(
             size_kb < 1.0,
@@ -360,7 +360,7 @@ fn test_workspace_deleted_roundtrip() {
     let msg = ServerMessage::new(ServerMessagePayload::WorkspaceDeleted(WorkspaceDeleted {
         workspace_id: Uuid::new_v4(),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -378,7 +378,7 @@ fn test_workspace_updated_roundtrip() {
             updated_at: 0,
         },
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -395,7 +395,7 @@ fn test_worktree_created_roundtrip() {
             git_stats: None,
         },
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -403,7 +403,7 @@ fn test_worktree_deleted_roundtrip() {
     let msg = ServerMessage::new(ServerMessagePayload::WorktreeDeleted(WorktreeDeleted {
         worktree_id: Uuid::new_v4(),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -412,7 +412,7 @@ fn test_worktree_status_roundtrip() {
         worktree_id: Uuid::new_v4(),
         status: "active".to_string(),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -424,7 +424,7 @@ fn test_agent_status_update_roundtrip() {
         status: AgentStatus::Working,
         started_at: 12345,
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -433,7 +433,7 @@ fn test_agent_output_roundtrip() {
         worktree_id: Uuid::new_v4(),
         output: "Agent output".to_string(),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -442,7 +442,7 @@ fn test_agent_prompt_roundtrip() {
         worktree_id: Uuid::new_v4(),
         prompt: "Enter value:".to_string(),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -451,7 +451,7 @@ fn test_terminal_output_roundtrip() {
         session_id: Uuid::new_v4(),
         data: "terminal output".to_string(),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -462,7 +462,7 @@ fn test_terminal_created_roundtrip() {
         label: Some("term".to_string()),
         shell: "/bin/bash".to_string(),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -470,7 +470,7 @@ fn test_terminal_removed_roundtrip() {
     let msg = ServerMessage::new(ServerMessagePayload::TerminalRemoved(TerminalRemoved {
         session_id: Uuid::new_v4(),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -480,7 +480,7 @@ fn test_file_content_roundtrip() {
         path: "file.rs".to_string(),
         content: "content".to_string(),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -499,7 +499,7 @@ fn test_git_status_result_roundtrip() {
             },
         ],
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -509,7 +509,7 @@ fn test_git_diff_result_roundtrip() {
         file_path: Some("file.rs".to_string()),
         diff: "diff output".to_string(),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -520,13 +520,13 @@ fn test_error_roundtrip() {
         details: Some("Additional details".to_string()),
         request_id: None,
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
 fn test_pong_roundtrip() {
     let msg = ServerMessage::new(ServerMessagePayload::Pong(Pong { timestamp: 12345 }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
@@ -536,14 +536,14 @@ fn test_notification_roundtrip() {
         title: "Info".to_string(),
         message: "Message".to_string(),
     }));
-    test_roundtrip(msg);
+    test_json_roundtrip(msg);
 }
 
 #[test]
 fn test_acp_correlation_id_roundtrip() {
     let id = AcpCorrelationId("corr-123".to_string());
-    let encoded = rmp_serde::to_vec(&id).expect("Failed to encode");
-    let decoded: AcpCorrelationId = rmp_serde::from_slice(&encoded).expect("Failed to decode");
+    let encoded = serde_json::to_string(&id).expect("Failed to encode");
+    let decoded: AcpCorrelationId = serde_json::from_str(&encoded).expect("Failed to decode");
     assert_eq!(id, decoded);
 }
 
@@ -563,7 +563,7 @@ fn test_acp_event_envelope_roundtrip() {
             config_options: Vec::new(),
         }),
     };
-    test_roundtrip(envelope);
+    test_json_roundtrip(envelope);
 }
 
 #[test]
@@ -577,7 +577,7 @@ fn test_acp_session_init_roundtrip() {
         },
         config_options: Vec::new(),
     };
-    test_roundtrip(event);
+    test_json_roundtrip(event);
 }
 
 #[test]
@@ -587,7 +587,7 @@ fn test_acp_session_status_event_roundtrip() {
         acp_session_id: "session-123".to_string(),
         status: AcpSessionStatus::Working,
     };
-    test_roundtrip(event);
+    test_json_roundtrip(event);
 }
 
 #[test]
@@ -598,7 +598,7 @@ fn test_acp_prompt_chunk_text_roundtrip() {
         content: AcpChunkContent::Text("Hello, world!".to_string()),
         is_final: false,
     };
-    test_roundtrip(event);
+    test_json_roundtrip(event);
 }
 
 #[test]
@@ -609,7 +609,7 @@ fn test_acp_prompt_chunk_structured_roundtrip() {
         content: AcpChunkContent::Structured(r#"{"key":"value"}"#.to_string()),
         is_final: true,
     };
-    test_roundtrip(event);
+    test_json_roundtrip(event);
 }
 
 #[test]
@@ -619,7 +619,7 @@ fn test_acp_prompt_complete_roundtrip() {
         acp_session_id: "session-123".to_string(),
         reason: AcpPromptCompleteReason::Normal,
     };
-    test_roundtrip(event);
+    test_json_roundtrip(event);
 }
 
 #[test]
@@ -634,7 +634,7 @@ fn test_acp_tool_use_event_roundtrip() {
         output: None,
         error: None,
     };
-    test_roundtrip(event);
+    test_json_roundtrip(event);
 }
 
 #[test]
@@ -645,7 +645,7 @@ fn test_acp_context_update_roundtrip() {
         update_type: AcpContextUpdateType::FileRead,
         data: r#"{"path":"test.ts"}"#.to_string(),
     };
-    test_roundtrip(event);
+    test_json_roundtrip(event);
 }
 
 #[test]
@@ -658,7 +658,7 @@ fn test_acp_error_roundtrip() {
         details: Some(r#"{"exitCode":1}"#.to_string()),
         recoverable: false,
     };
-    test_roundtrip(event);
+    test_json_roundtrip(event);
 }
 
 #[test]
@@ -669,7 +669,7 @@ fn test_acp_resume_marker_roundtrip() {
         last_sequence: 42,
         checkpoint: Some("base64-checkpoint".to_string()),
     };
-    test_roundtrip(marker);
+    test_json_roundtrip(marker);
 }
 
 #[test]
@@ -679,7 +679,7 @@ fn test_acp_resume_request_roundtrip() {
         acp_session_id: "session-123".to_string(),
         from_sequence: 10,
     };
-    test_roundtrip(request);
+    test_json_roundtrip(request);
 }
 
 #[test]
@@ -689,7 +689,7 @@ fn test_acp_ack_roundtrip() {
         acp_session_id: "session-123".to_string(),
         last_sequence: 42,
     };
-    test_roundtrip(ack);
+    test_json_roundtrip(ack);
 }
 
 #[test]
@@ -753,6 +753,6 @@ fn test_acp_event_variants_roundtrip() {
     ];
 
     for event in events {
-        test_roundtrip(event);
+        test_json_roundtrip(event);
     }
 }

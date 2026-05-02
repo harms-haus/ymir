@@ -31,15 +31,15 @@ pub fn fixture_dir() -> PathBuf {
 /// ```ignore
 /// let msg = ClientMessage::new(ClientMessagePayload::Ping(Ping { timestamp: 12345 }));
 /// let path = write_fixture("ping_message", &msg)?;
-/// // File created at: <workspace>/test-fixtures/ping_message.msgpack
+/// // File created at: <workspace>/test-fixtures/ping_message.json
 /// ```
 pub fn write_fixture<T: Serialize>(name: &str, data: &T) -> Result<PathBuf> {
     let fixture_dir = fixture_dir();
     std::fs::create_dir_all(&fixture_dir)?;
 
-    let file_path = fixture_dir.join(format!("{}.msgpack", name));
-    let bytes = rmp_serde::to_vec(data)?;
-    std::fs::write(&file_path, bytes)?;
+    let file_path = fixture_dir.join(format!("{}.json", name));
+    let json = serde_json::to_string(data)?;
+    std::fs::write(&file_path, json)?;
 
     Ok(file_path)
 }
@@ -60,7 +60,7 @@ mod tests {
         let path = write_fixture("test_vec", &test_data)?;
 
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/test_vec.msgpack"));
+        assert!(path.ends_with("test-fixtures/test_vec.json"));
 
         // Cleanup
         std::fs::remove_file(path)?;
@@ -83,8 +83,8 @@ mod tests {
         };
 
         let path = write_fixture("test_struct", &original)?;
-        let bytes = std::fs::read(&path)?;
-        let decoded: TestStruct = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: TestStruct = serde_json::from_str(&json)?;
 
         assert_eq!(original, decoded);
 
@@ -107,10 +107,10 @@ mod tests {
 
         let path = write_fixture("WorkspaceCreate", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/WorkspaceCreate.msgpack"));
+        assert!(path.ends_with("test-fixtures/WorkspaceCreate.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ClientMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ClientMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -128,10 +128,10 @@ mod tests {
 
         let path = write_fixture("WorkspaceRename", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/WorkspaceRename.msgpack"));
+        assert!(path.ends_with("test-fixtures/WorkspaceRename.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ClientMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ClientMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -153,10 +153,10 @@ mod tests {
 
         let path = write_fixture("WorkspaceUpdate", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/WorkspaceUpdate.msgpack"));
+        assert!(path.ends_with("test-fixtures/WorkspaceUpdate.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ClientMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ClientMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -174,10 +174,10 @@ mod tests {
 
         let path = write_fixture("AgentSpawn", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/AgentSpawn.msgpack"));
+        assert!(path.ends_with("test-fixtures/AgentSpawn.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ClientMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ClientMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -195,10 +195,10 @@ mod tests {
 
         let path = write_fixture("AgentSend", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/AgentSend.msgpack"));
+        assert!(path.ends_with("test-fixtures/AgentSend.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ClientMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ClientMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -216,10 +216,10 @@ mod tests {
 
         let path = write_fixture("AgentCancel", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/AgentCancel.msgpack"));
+        assert!(path.ends_with("test-fixtures/AgentCancel.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ClientMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ClientMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -236,10 +236,10 @@ mod tests {
 
         let path = write_fixture("WorktreeDelete", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/WorktreeDelete.msgpack"));
+        assert!(path.ends_with("test-fixtures/WorktreeDelete.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ClientMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ClientMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -256,10 +256,10 @@ mod tests {
 
         let path = write_fixture("WorktreeList", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/WorktreeList.msgpack"));
+        assert!(path.ends_with("test-fixtures/WorktreeList.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ClientMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ClientMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -278,10 +278,10 @@ mod tests {
 
         let path = write_fixture("WorktreeMerge", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/WorktreeMerge.msgpack"));
+        assert!(path.ends_with("test-fixtures/WorktreeMerge.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ClientMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ClientMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -299,10 +299,10 @@ mod tests {
 
         let path = write_fixture("AgentOutput", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/AgentOutput.msgpack"));
+        assert!(path.ends_with("test-fixtures/AgentOutput.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ServerMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ServerMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -320,10 +320,10 @@ mod tests {
 
         let path = write_fixture("AgentPrompt", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/AgentPrompt.msgpack"));
+        assert!(path.ends_with("test-fixtures/AgentPrompt.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ServerMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ServerMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -341,10 +341,10 @@ mod tests {
 
         let path = write_fixture("TerminalInput", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/TerminalInput.msgpack"));
+        assert!(path.ends_with("test-fixtures/TerminalInput.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ClientMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ClientMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -363,10 +363,10 @@ mod tests {
 
         let path = write_fixture("TerminalCreate", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/TerminalCreate.msgpack"));
+        assert!(path.ends_with("test-fixtures/TerminalCreate.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ClientMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ClientMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -384,10 +384,10 @@ mod tests {
 
         let path = write_fixture("TerminalOutput", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/TerminalOutput.msgpack"));
+        assert!(path.ends_with("test-fixtures/TerminalOutput.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ServerMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ServerMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -406,10 +406,10 @@ mod tests {
 
         let path = write_fixture("TerminalResize", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/TerminalResize.msgpack"));
+        assert!(path.ends_with("test-fixtures/TerminalResize.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ClientMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ClientMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -426,10 +426,10 @@ mod tests {
 
         let path = write_fixture("TerminalKill", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/TerminalKill.msgpack"));
+        assert!(path.ends_with("test-fixtures/TerminalKill.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ClientMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ClientMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -449,10 +449,10 @@ mod tests {
 
         let path = write_fixture("TerminalCreated", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/TerminalCreated.msgpack"));
+        assert!(path.ends_with("test-fixtures/TerminalCreated.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ServerMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ServerMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -475,10 +475,10 @@ mod tests {
 
         let path = write_fixture("AgentStatusUpdate", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/AgentStatusUpdate.msgpack"));
+        assert!(path.ends_with("test-fixtures/AgentStatusUpdate.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ServerMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ServerMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -496,10 +496,10 @@ mod tests {
 
         let path = write_fixture("FileRead", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/FileRead.msgpack"));
+        assert!(path.ends_with("test-fixtures/FileRead.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ClientMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ClientMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -518,10 +518,10 @@ mod tests {
 
         let path = write_fixture("FileWrite", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/FileWrite.msgpack"));
+        assert!(path.ends_with("test-fixtures/FileWrite.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ClientMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ClientMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -538,10 +538,10 @@ mod tests {
 
         let path = write_fixture("GitStatus", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/GitStatus.msgpack"));
+        assert!(path.ends_with("test-fixtures/GitStatus.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ClientMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ClientMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -560,10 +560,10 @@ mod tests {
 
         let path = write_fixture("FileContent", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/FileContent.msgpack"));
+        assert!(path.ends_with("test-fixtures/FileContent.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ServerMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ServerMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -581,10 +581,10 @@ mod tests {
 
         let path = write_fixture("GitDiff", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/GitDiff.msgpack"));
+        assert!(path.ends_with("test-fixtures/GitDiff.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ClientMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ClientMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -603,10 +603,10 @@ mod tests {
 
         let path = write_fixture("GitCommit", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/GitCommit.msgpack"));
+        assert!(path.ends_with("test-fixtures/GitCommit.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ClientMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ClientMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -625,10 +625,10 @@ mod tests {
 
         let path = write_fixture("GitDiffResult", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/GitDiffResult.msgpack"));
+        assert!(path.ends_with("test-fixtures/GitDiffResult.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ServerMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ServerMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -647,10 +647,10 @@ mod tests {
 
         let path = write_fixture("CreatePR", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/CreatePR.msgpack"));
+        assert!(path.ends_with("test-fixtures/CreatePR.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ClientMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ClientMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -679,10 +679,10 @@ mod tests {
 
         let path = write_fixture("GitStatusResult", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/GitStatusResult.msgpack"));
+        assert!(path.ends_with("test-fixtures/GitStatusResult.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ServerMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ServerMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -747,10 +747,10 @@ mod tests {
 
         let path = write_fixture("StateSnapshot", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/StateSnapshot.msgpack"));
+        assert!(path.ends_with("test-fixtures/StateSnapshot.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ServerMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ServerMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -767,10 +767,10 @@ mod tests {
 
         let path = write_fixture("UpdateSettings", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/UpdateSettings.msgpack"));
+        assert!(path.ends_with("test-fixtures/UpdateSettings.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ClientMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ClientMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -784,10 +784,10 @@ mod tests {
 
         let path = write_fixture("Pong", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/Pong.msgpack"));
+        assert!(path.ends_with("test-fixtures/Pong.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ServerMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ServerMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -801,10 +801,10 @@ mod tests {
 
         let path = write_fixture("Ping", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/Ping.msgpack"));
+        assert!(path.ends_with("test-fixtures/Ping.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ClientMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ClientMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -821,10 +821,10 @@ mod tests {
 
         let path = write_fixture("GetState", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/GetState.msgpack"));
+        assert!(path.ends_with("test-fixtures/GetState.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ClientMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ClientMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -842,10 +842,10 @@ mod tests {
 
         let path = write_fixture("Ack", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/Ack.msgpack"));
+        assert!(path.ends_with("test-fixtures/Ack.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ClientMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ClientMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -863,10 +863,10 @@ mod tests {
 
         let path = write_fixture("AckError", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/AckError.msgpack"));
+        assert!(path.ends_with("test-fixtures/AckError.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ClientMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ClientMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -886,10 +886,10 @@ mod tests {
 
         let path = write_fixture("Notification", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/Notification.msgpack"));
+        assert!(path.ends_with("test-fixtures/Notification.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ServerMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ServerMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -918,10 +918,10 @@ mod tests {
 
         let path = write_fixture("WorkspaceCreated", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/WorkspaceCreated.msgpack"));
+        assert!(path.ends_with("test-fixtures/WorkspaceCreated.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ServerMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ServerMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -938,10 +938,10 @@ mod tests {
 
         let path = write_fixture("WorkspaceDeleted", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/WorkspaceDeleted.msgpack"));
+        assert!(path.ends_with("test-fixtures/WorkspaceDeleted.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ServerMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ServerMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -970,10 +970,10 @@ mod tests {
 
         let path = write_fixture("WorkspaceUpdated", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/WorkspaceUpdated.msgpack"));
+        assert!(path.ends_with("test-fixtures/WorkspaceUpdated.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ServerMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ServerMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -990,10 +990,10 @@ mod tests {
 
         let path = write_fixture("WorktreeDeleted", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/WorktreeDeleted.msgpack"));
+        assert!(path.ends_with("test-fixtures/WorktreeDeleted.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ServerMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ServerMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())
@@ -1022,10 +1022,10 @@ mod tests {
 
         let path = write_fixture("WorktreeCreated", &msg)?;
         assert!(path.exists());
-        assert!(path.ends_with("test-fixtures/WorktreeCreated.msgpack"));
+        assert!(path.ends_with("test-fixtures/WorktreeCreated.json"));
 
-        let bytes = std::fs::read(&path)?;
-        let decoded: ServerMessage = rmp_serde::from_slice(&bytes)?;
+        let json = std::fs::read_to_string(&path)?;
+        let decoded: ServerMessage = serde_json::from_str(&json)?;
         assert_eq!(msg, decoded);
 
         Ok(())

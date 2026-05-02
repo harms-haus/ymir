@@ -319,7 +319,7 @@ export class YmirWsTransport {
     }
 
     this.heartbeatTimeoutTimer = setTimeout(() => {
-      console.warn(`[YWS] [Heartbeat] Timeout after ${this.heartbeatTimeout}ms - closing connection`);
+      console.warn(`[YWS] [Heartbeat] Timeout after ${this.heartbeatTimeout}ms - no pong received, closing connection`);
       this.client.disconnect().catch(() => {});
     }, this.heartbeatTimeout);
   }
@@ -363,6 +363,7 @@ export class YmirWsTransport {
         });
         // Clear heartbeat timeout when receiving ping/pong/ack responses
         if (decoded.type === "ping" || decoded.type === "pong" || decoded.type === "ack") {
+          console.log(`[YWS] [Heartbeat] Received ${decoded.type} at ${Date.now()}`);
           this.clearHeartbeatTimeout();
         }
         return;
