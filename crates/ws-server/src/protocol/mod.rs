@@ -1,22 +1,14 @@
-//! MessagePack protocol types for Ymir WebSocket communication
+//! Protocol types for Ymir WebSocket communication
 //!
 //! This module defines all message types for the Ymir protocol, including
 //! client-to-server requests, server-to-client responses, and bidirectional messages.
 //! All messages include a version header for protocol compatibility.
 //!
-//! # WS-ACP Wire Contract
+//! # Wire Format
 //!
-//! The WS-ACP wire contract defines a stateless event vocabulary for communication
-//! between the Rust ACP bridge and the TypeScript side. Key properties:
-//!
-//! - **Ordering**: Events carry monotonically increasing sequence numbers per session
-//! - **Idempotency**: Events with duplicate sequence numbers are safe to replay
-//! - **Resumability**: Client can request replay from last known sequence via `AcpResumeRequest`
-//! - **Error Envelopes**: All failures are captured in structured `AcpError` types
-//!
-//! The ACP bridge translates between ACP JSON-RPC (over stdio) and these WebSocket
-//! events. The TypeScript client accumulates these events into UI-appropriate structures.
-//! This layer does NOT contain assistant-ui message parts or accumulated UI state.
+//! All messages are serialized as JSON text frames using the BridgeEnvelope format.
+//! Each ServerMessagePayload variant is mapped to a BridgeMessage discriminant
+//! with the payload data serialized as structured JSON.
 
 mod acp;
 mod agent;

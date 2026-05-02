@@ -1,7 +1,7 @@
 //! Bridge encoder/decoder for ws-server.
 //!
 //! This module provides JSON serialization/deserialization helpers for BridgeEnvelope
-//! messages, enabling the server-side of the binary-to-text WebSocket transition.
+//! messages for the WebSocket transport.
 //!
 //! ## Encoder (server -> client)
 //!
@@ -15,18 +15,6 @@
 //! extracts typed `ClientMessagePayload` variants for routing to existing handlers.
 //! Non-client messages (AcpPayload, StartAgent) are returned as `NonClient` for
 //! separate handling pathways.
-//!
-//! ## Backward Compatibility
-//!
-//! During the transition, both the legacy MessagePack binary format and the new
-//! BridgeEnvelope JSON format are supported. The existing `ClientMessagePayload`
-//! and `ServerMessagePayload` enums are preserved and will be removed in Phase 5.
-//!
-//! ## Protocol Version
-//!
-//! The `PROTOCOL_VERSION` constant from `crate::protocol` is maintained for
-//! backward compatibility checks. The BridgeEnvelope uses its own
-//! `ENVELOPE_VERSION` from the `harms_haus_acp_ws_bridge` crate.
 
 mod bridge_codec;
 mod decoder;

@@ -57,14 +57,6 @@ pub fn decode_bridge_message(text: &str) -> Option<DecodedMessage> {
     }
 }
 
-/// Attempts to parse a JSON text message directly as the legacy ClientMessage format
-/// (the `{version, type, data}` format used by the current TypeScript client).
-///
-/// This is a separate pathway for backward compatibility during the transition.
-pub fn decode_client_message(text: &str) -> Option<ClientMessage> {
-    serde_json::from_str::<ClientMessage>(text).ok()
-}
-
 /// Maps a BridgeMessage variant to a ClientMessagePayload for routing.
 ///
 /// Returns None for message types that are not client requests (e.g., AcpPayload,
@@ -78,7 +70,7 @@ pub fn decode_client_message(text: &str) -> Option<ClientMessage> {
 fn bridge_message_to_client_payload(message: &BridgeMessage) -> Option<ClientMessagePayload> {
     let payload = match message {
         // Messages that carry a payload field which might contain a client request.
-        // The payload is the original {type, data} structure from the MessagePack format.
+        // The payload is the original {type, data} structure from the bridge envelope format.
         BridgeMessage::Ping { payload }
         | BridgeMessage::Pong { payload }
         | BridgeMessage::Ack { payload }
@@ -305,37 +297,6 @@ mod tests {
     }
 
     // ========================================================================
-    // Tests for decode_client_message
-    // ========================================================================
-
-    #[test]
-    fn test_decode_legacy_client_message() {
-        let json = serde_json::json!({
-            "version": 1,
-            "type": "Ping",
-            "data": { "timestamp": 12345 }
-        });
-
-        let msg = decode_client_message(&json.to_string());
-        assert!(msg.is_some());
-
-        let msg = msg.unwrap();
-        assert_eq!(msg.version, 1);
-        match msg.payload {
-            ClientMessagePayload::Ping(ping) => {
-                assert_eq!(ping.timestamp, 12345);
-            }
-            _ => panic!("Expected Ping payload"),
-        }
-    }
-
-    #[test]
-    fn test_decode_legacy_client_message_invalid_json() {
-        let result = decode_client_message("not json");
-        assert!(result.is_none());
-    }
-
-    // ========================================================================
     // Tests for extract_payload
     // ========================================================================
 
@@ -364,7 +325,7 @@ mod tests {
         let extracted: Option<serde_json::Value> = extract_payload(&message, "WorkspaceEvent");
         assert!(extracted.is_some());
         let val = extracted.unwrap();
-        assert_eq!(val["workspace"]["name"], "extract-test");
+        assert_eq!(val["data"]["workspace"]["name"], "extract-test");
     }
 
     #[test]
@@ -382,7 +343,7 @@ mod tests {
         let extracted: Option<serde_json::Value> = extract_payload(&message, "TerminalOutput");
         assert!(extracted.is_some());
         let val = extracted.unwrap();
-        assert_eq!(val["data"], "output line 1\n");
+        assert_eq!(val["data"]["data"], "output line 1\n");
     }
 
     #[test]

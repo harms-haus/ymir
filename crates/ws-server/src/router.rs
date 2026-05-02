@@ -80,6 +80,7 @@ pub async fn route_message(
 ) -> Option<ServerMessage> {
     let response = match message.payload {
         ClientMessagePayload::Ping(ping) => {
+            tracing::info!(%client_id, timestamp = ping.timestamp, "Ping received, sending Pong");
             state.update_activity(client_id).await;
             Some(ServerMessage::new(ServerMessagePayload::Pong(
                 crate::protocol::Pong {

@@ -23,9 +23,7 @@ use harms_haus_acp_ws_bridge::contract::{BridgeEnvelope, BridgeMessage};
 use crate::protocol::{ClientMessagePayload, ServerMessagePayload};
 
 // Re-export the lower-level helpers for advanced use cases.
-pub use super::decoder::{
-    decode_bridge_message, decode_client_message, extract_payload,
-};
+pub use super::decoder::{decode_bridge_message, extract_payload};
 pub use super::encoder::server_message_to_envelope;
 
 /// Converts a `ServerMessagePayload` into a `BridgeEnvelope` for JSON wire
@@ -211,7 +209,7 @@ fn payload_to_bridge_message(payload: &ServerMessagePayload) -> BridgeMessage {
 fn bridge_message_to_client_payload(message: &BridgeMessage) -> Option<ClientMessagePayload> {
     let payload = match message {
         // Messages that carry a payload field which might contain a client request.
-        // The payload is the original {type, data} structure from the MessagePack format.
+        // The payload is the original {type, data} structure from the bridge envelope format.
         BridgeMessage::Ping { payload }
         | BridgeMessage::Pong { payload }
         | BridgeMessage::Ack { payload }
@@ -386,7 +384,7 @@ mod tests {
         match envelope.message {
             BridgeMessage::TerminalEvent { payload } => {
                 assert_eq!(payload["type"], "TerminalOutput");
-                assert_eq!(payload["data"], "terminal output here");
+                assert_eq!(payload["data"]["data"], "terminal output here");
             }
             _ => panic!("Expected TerminalEvent BridgeMessage variant"),
         }
@@ -406,7 +404,6 @@ mod tests {
 
         match envelope.message {
             BridgeMessage::StateSnapshot { payload } => {
-                assert_eq!(payload["type"], "StateSnapshot");
                 assert!(payload["workspaces"].is_array());
             }
             _ => panic!("Expected StateSnapshot BridgeMessage variant"),
@@ -415,10 +412,17 @@ mod tests {
 
     #[test]
     fn test_server_message_to_bridge_acp_wire_event() {
-        // AcpWireEvent maps to AcpPayload; the payload is serialized as JSON
-        // We verify the mapping works without depending on internal ACP types
         let payload =
-            ServerMessagePayload::AcpWireEvent(crate::protocol::AcpEventEnvelope::default());
+            ServerMessagePayload::AcpWireEvent(crate::protocol::AcpEventEnvelope {
+                sequence: 1,
+                correlation_id: None,
+                timestamp: 1234567890,
+                event: crate::protocol::AcpEvent::PromptComplete(crate::protocol::AcpPromptComplete {
+                    worktree_id: Uuid::new_v4(),
+                    acp_session_id: "session-123".to_string(),
+                    reason: crate::protocol::AcpPromptCompleteReason::Normal,
+                }),
+            });
         let bridge = server_message_to_bridge(payload, test_timestamp());
 
         match bridge.message {

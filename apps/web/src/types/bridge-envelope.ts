@@ -96,7 +96,7 @@ export interface StartAgentMessage {
  */
 export interface WorkspaceEventMessage {
   type: "workspace_event";
-  /** The original MessagePack payload as structured JSON. */
+  /** The opaque payload as structured JSON. */
   payload: BridgePayload;
 }
 
@@ -107,7 +107,7 @@ export interface WorkspaceEventMessage {
  */
 export interface WorktreeEventMessage {
   type: "worktree_event";
-  /** The original MessagePack payload as structured JSON. */
+  /** The opaque payload as structured JSON. */
   payload: BridgePayload;
 }
 
@@ -117,7 +117,7 @@ export interface WorktreeEventMessage {
  */
 export interface GitResponseMessage {
   type: "git_response";
-  /** The original MessagePack payload as structured JSON. */
+  /** The opaque payload as structured JSON. */
   payload: BridgePayload;
 }
 
@@ -127,7 +127,7 @@ export interface GitResponseMessage {
  */
 export interface FileResponseMessage {
   type: "file_response";
-  /** The original MessagePack payload as structured JSON. */
+  /** The opaque payload as structured JSON. */
   payload: BridgePayload;
 }
 
@@ -137,7 +137,7 @@ export interface FileResponseMessage {
  */
 export interface AgentEventMessage {
   type: "agent_event";
-  /** The original MessagePack payload as structured JSON. */
+  /** The opaque payload as structured JSON. */
   payload: BridgePayload;
 }
 
@@ -148,7 +148,7 @@ export interface AgentEventMessage {
  */
 export interface TerminalEventMessage {
   type: "terminal_event";
-  /** The original MessagePack payload as structured JSON. */
+  /** The opaque payload as structured JSON. */
   payload: BridgePayload;
 }
 
@@ -158,7 +158,7 @@ export interface TerminalEventMessage {
  */
 export interface StateSnapshotMessage {
   type: "state_snapshot";
-  /** The original MessagePack payload as structured JSON. */
+  /** The opaque payload as structured JSON. */
   payload: BridgePayload;
 }
 
@@ -168,7 +168,7 @@ export interface StateSnapshotMessage {
  */
 export interface NotificationMessage {
   type: "notification";
-  /** The original MessagePack payload as structured JSON. */
+  /** The opaque payload as structured JSON. */
   payload: BridgePayload;
 }
 
@@ -178,7 +178,7 @@ export interface NotificationMessage {
  */
 export interface ErrorResponseMessage {
   type: "error_response";
-  /** The original MessagePack payload as structured JSON. */
+  /** The opaque payload as structured JSON. */
   payload: BridgePayload;
 }
 
@@ -188,7 +188,7 @@ export interface ErrorResponseMessage {
  */
 export interface AckMessage {
   type: "ack";
-  /** The original MessagePack payload as structured JSON. */
+  /** The opaque payload as structured JSON. */
   payload: BridgePayload;
 }
 
@@ -198,7 +198,7 @@ export interface AckMessage {
  */
 export interface PingMessage {
   type: "ping";
-  /** The original MessagePack payload as structured JSON. */
+  /** The opaque payload as structured JSON. */
   payload: BridgePayload;
 }
 
@@ -208,7 +208,7 @@ export interface PingMessage {
  */
 export interface PongMessage {
   type: "pong";
-  /** The original MessagePack payload as structured JSON. */
+  /** The opaque payload as structured JSON. */
   payload: BridgePayload;
 }
 

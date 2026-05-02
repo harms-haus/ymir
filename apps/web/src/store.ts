@@ -1027,6 +1027,8 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
       break;
     }
 
+    // State snapshot response to GetState request. Carries the full
+    // application state snapshot as structured JSON.
     case 'state_snapshot': {
       if (!isStateSnapshotMessage(message)) return;
 
@@ -1034,14 +1036,22 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
       if (!payload) return;
 
       const data = payload.data as Record<string, unknown> | undefined;
+      console.log('[Store] state_snapshot received:', {
+        hasPayload: !!payload,
+        payloadKeys: payload ? Object.keys(payload) : 'N/A',
+        hasData: !!data,
+        dataKeys: data ? Object.keys(data) : 'N/A',
+        workspaceCount: Array.isArray(data?.workspaces) ? (data.workspaces as any[]).length : 'N/A',
+      });
+
       if (!data) return;
 
       const { stateFromSnapshot } = useStore.getState();
       stateFromSnapshot({
-        workspaces: data.workspaces as any[],
-        worktrees: data.worktrees as any[],
-        agentSessions: data.agentSessions as any[],
-        terminalSessions: data.terminalSessions as any[],
+        workspaces: (data.workspaces as unknown) as any[],
+        worktrees: (data.worktrees as unknown) as any[],
+        agentSessions: (data.agentSessions as unknown) as any[],
+        terminalSessions: (data.terminalSessions as unknown) as any[],
       });
       break;
     }
