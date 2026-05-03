@@ -709,8 +709,8 @@ async fn handle_create_pr(state: Arc<AppState>, msg: crate::protocol::CreatePR) 
 #[instrument(skip(state))]
 async fn handle_file_list(state: Arc<AppState>, msg: crate::protocol::FileList) -> ServerMessage {
     let worktree_id = msg.worktree_id;
-    let _path = msg.path.unwrap_or_default();
-    
+    let path = msg.path;
+
     let worktrees = state.worktrees.read().await;
     let worktree = match worktrees.get(&worktree_id) {
         Some(wt) => wt,
@@ -723,36 +723,53 @@ async fn handle_file_list(state: Arc<AppState>, msg: crate::protocol::FileList) 
             }));
         }
     };
-    
+
     let base_path = std::path::PathBuf::from(worktree.path.clone());
-    let mut files = Vec::new();
-    
-    // Helper function to collect files recursively
-    fn collect_files(dir: &std::path::Path, base: &std::path::Path, files: &mut Vec<String>) {
-        if let Ok(entries) = std::fs::read_dir(dir) {
+    let target_path = match &path {
+        Some(p) if !p.is_empty() => base_path.join(p),
+        _ => base_path.clone(),
+    };
+
+    // Known large directories to skip
+    const SKIPPED_DIRS: &[&str] = &[
+        ".git", "node_modules", ".venv", "venv", "__pycache__", "target",
+        "dist", "build", ".next", "out", ".cache", "coverage", "vendor",
+        ".tox", ".mypy_cache", ".pytest_cache",
+    ];
+
+    let files = tokio::task::spawn_blocking(move || {
+        let mut result = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(&target_path) {
             for entry in entries.flatten() {
                 let entry_path = entry.path();
-                if entry_path.file_name().and_then(|n| n.to_str()) == Some(".git") {
-                    continue; // Skip .git directory
+                let name = match entry_path.file_name().and_then(|n| n.to_str()) {
+                    Some(n) => n,
+                    None => continue,
+                };
+
+                // Skip known large directories
+                if SKIPPED_DIRS.contains(&name) {
+                    continue;
                 }
+
                 if entry_path.is_dir() {
-                    collect_files(&entry_path, base, files);
-                } else if let Ok(relative_path) = entry_path.strip_prefix(base) {
-                    if let Some(path_str) = relative_path.to_str() {
-                        files.push(path_str.to_string());
-                    }
+                    // Append "/" to distinguish directories from files
+                    result.push(format!("{}/", name));
+                } else {
+                    result.push(name.to_string());
                 }
             }
         }
-    }
-    
-    // Collect files from worktree directory
-    collect_files(&base_path, &base_path, &mut files);
-    files.sort();
-    
+        result.sort();
+        result
+    })
+    .await
+    .unwrap_or_default();
+
     ServerMessage::new(ServerMessagePayload::FileListResult(FileListResult {
         worktree_id,
         files,
+        path: path.clone(),
         request_id: None,
     }))
 }

@@ -150,6 +150,35 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
     };
   }, []);
 
+  // Auto-select when worktrees arrive via WorktreeDetailsResult
+  // (StateSnapshot sends empty worktrees array, details come lazily)
+  useEffect(() => {
+    if (worktrees.length === 0) return;
+
+    const state = useStore.getState();
+    if (state.activeWorktreeId) return;
+    if (state.workspaces.length === 0) return;
+
+    const firstWorkspace = state.workspaces[0];
+    const workspaceWorktrees = worktrees
+      .filter((wt) => wt.workspaceId === firstWorkspace.id)
+      .sort((a, b) => {
+        if (a.isMain && !b.isMain) return -1;
+        if (!a.isMain && b.isMain) return 1;
+        return a.createdAt - b.createdAt;
+      });
+
+    const mainWorktree = workspaceWorktrees.find((wt) => wt.isMain);
+    const targetWorktree = mainWorktree || workspaceWorktrees[0];
+
+    if (targetWorktree) {
+      if (!state.expandedWorkspaceIds.has(firstWorkspace.id)) {
+        state.toggleWorkspaceExpanded(firstWorkspace.id);
+      }
+      state.setActiveWorktree(targetWorktree.id);
+    }
+  }, [worktrees.length]);
+
   if (workspaces.length === 0) {
     return null;
   }

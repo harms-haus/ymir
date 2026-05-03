@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useStore, selectActiveWorktree, selectGitStatusCache, AgentTab } from '../../store';
 import { getWebSocketClient } from '../../lib/ws';
 import { FileTree, FileTreeNode } from '../ui/FileTree';
@@ -9,69 +9,6 @@ import type { GitStatusEntry } from '../../types/protocol';
 interface ChangesTabProps {
   viewMode: 'flat' | 'grouped';
 }
-
-export function ChangesTab({ viewMode }: ChangesTabProps) {
-  const activeWorktree = useStore(selectActiveWorktree);
-  const gitStatusCache = useStore(selectGitStatusCache(activeWorktree?.id ?? ''));
-  const [files, setFiles] = useState<GitStatusEntry[]>(gitStatusCache?.entries ?? []);
-  const [isLoading, setIsLoading] = useState(!gitStatusCache);
-  const setGitStatusCache = useStore((state) => state.setGitStatusCache);
-  const addAgentTab = useStore((state) => state.addAgentTab);
-  const wsClient = getWebSocketClient();
-
-  const handleViewDiff = useCallback((filePath: string) => {
-    if (!activeWorktree) return;
-
-    const tabId = `diff-${filePath}`;
-
-    const diffTab: AgentTab = {
-      id: tabId,
-      type: 'diff',
-      filePath,
-      label: `Diff: ${filePath.split('/').pop()}`,
-    };
-
-    addAgentTab(activeWorktree.id, diffTab);
-    useStore.getState().setActiveAgentTab(activeWorktree.id, tabId);
-  }, [activeWorktree, addAgentTab]);
-
-  useEffect(() => {
-    if (!activeWorktree) {
-      setFiles([]);
-      return;
-    }
-
-    const unsubscribe = wsClient.onMessage('GitStatusResult', (message) => {
-      if (message.worktreeId === activeWorktree.id) {
-        const entries = transformStatusEntries(message.entries);
-        setFiles(entries);
-        setGitStatusCache(activeWorktree.id, entries);
-        setIsLoading(false);
-      }
-    });
-
-    if (!gitStatusCache) {
-      setIsLoading(true);
-      wsClient.send({
-        type: 'GitStatus',
-        worktreeId: activeWorktree.id,
-      });
-    }
-
-    return unsubscribe;
-  }, [activeWorktree, wsClient, gitStatusCache, setGitStatusCache]);
-
-
-
-  const treeData: FileTreeNode[] = viewMode === 'flat'
-    ? files.map((file) => ({
-      id: file.path,
-      name: file.path,
-      type: 'file' as const,
-      data: { status: file.status, staged: file.staged },
-      isDeleted: file.status === 'deleted',
-    }))
-    : buildNestedTree(files);
 
 function buildNestedTree(files: GitStatusEntry[]): FileTreeNode[] {
   const root: FileTreeNode[] = [];
@@ -132,6 +69,85 @@ function buildNestedTree(files: GitStatusEntry[]): FileTreeNode[] {
   return root;
 }
 
+export function ChangesTab({ viewMode }: ChangesTabProps) {
+  const activeWorktree = useStore(selectActiveWorktree);
+  const gitStatusCache = useStore(selectGitStatusCache(activeWorktree?.id ?? ''));
+  const [files, setFiles] = useState<GitStatusEntry[]>(gitStatusCache?.entries ?? []);
+  const [isLoading, setIsLoading] = useState(!gitStatusCache);
+  const setGitStatusCache = useStore((state) => state.setGitStatusCache);
+  const addAgentTab = useStore((state) => state.addAgentTab);
+  const wsClient = getWebSocketClient();
+
+  const handleViewDiff = useCallback((filePath: string) => {
+    if (!activeWorktree) return;
+
+    const tabId = `diff-${filePath}`;
+
+    const diffTab: AgentTab = {
+      id: tabId,
+      type: 'diff',
+      filePath,
+      label: `Diff: ${filePath.split('/').pop()}`,
+    };
+
+    addAgentTab(activeWorktree.id, diffTab);
+    useStore.getState().setActiveAgentTab(activeWorktree.id, tabId);
+  }, [activeWorktree, addAgentTab]);
+
+  useEffect(() => {
+    if (!activeWorktree) {
+      setFiles([]);
+      return;
+    }
+
+    const unsubscribe = wsClient.onMessage('GitStatusResult', (message) => {
+      if (message.worktreeId === activeWorktree.id) {
+        const entries = transformStatusEntries(message.entries);
+        setFiles(entries);
+        setGitStatusCache(activeWorktree.id, entries);
+        setIsLoading(false);
+      }
+    });
+
+    if (!gitStatusCache) {
+      setIsLoading(true);
+      wsClient.send({
+        type: 'GitStatus',
+        worktreeId: activeWorktree.id,
+      });
+    }
+
+    return unsubscribe;
+  }, [activeWorktree, wsClient, gitStatusCache, setGitStatusCache]);
+
+  // Pre-compute dirsWithChanges for O(1) lookup
+  const dirsWithChanges = useMemo(() => {
+    const dirs = new Set<string>();
+    for (const entry of files) {
+      const parts = entry.path.split('/');
+      let prefix = '';
+      for (let i = 0; i < parts.length - 1; i++) {
+        prefix = prefix ? `${prefix}/${parts[i]}` : parts[i];
+        dirs.add(prefix);
+      }
+    }
+    return dirs;
+  }, [files]);
+
+  // Memoize treeData
+  const treeData: FileTreeNode[] = useMemo(() => {
+    if (viewMode === 'flat') {
+      return files.map((file) => ({
+        id: file.path,
+        name: file.path,
+        type: 'file' as const,
+        data: { status: file.status, staged: file.staged },
+        isDeleted: file.status === 'deleted',
+      }));
+    }
+    return buildNestedTree(files);
+  }, [files, viewMode]);
+
   if (!activeWorktree) {
     return (
       <div style={{ padding: '24px', textAlign: 'center', color: 'hsl(var(--muted-foreground))' }}>
@@ -154,20 +170,16 @@ function buildNestedTree(files: GitStatusEntry[]): FileTreeNode[] {
     );
   }
 
-  function folderHasChanges(folderId: string): boolean {
-    return files.some(f => f.path.startsWith(folderId + '/'));
-  }
-
   return (
     <div style={{ height: '100%' }}>
-  <FileTree
-    data={treeData}
-    onActivate={(node) => {
-      if (node.data.type === 'file') {
-        handleViewDiff(node.id);
-      }
-    }}
-    openByDefault={viewMode === 'grouped'}
+      <FileTree
+        data={treeData}
+        onActivate={(node) => {
+          if (node.data.type === 'file') {
+            handleViewDiff(node.id);
+          }
+        }}
+        openByDefault={viewMode === 'grouped'}
         renderRightContent={(node) => {
           if (node.type === 'file') {
             if (!node.data?.status) return null;
@@ -178,7 +190,7 @@ function buildNestedTree(files: GitStatusEntry[]): FileTreeNode[] {
               />
             );
           }
-          if (node.type === 'directory' && folderHasChanges(node.id)) {
+          if (node.type === 'directory' && dirsWithChanges.has(node.id)) {
             return (
               <span
                 style={{

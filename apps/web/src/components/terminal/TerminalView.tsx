@@ -12,7 +12,7 @@ import {
   useCallback,
 } from 'react';
 import { init, Terminal as GhosttyTerminal, FitAddon } from 'ghostty-web';
-import { getWebSocketClient } from '../../lib/ws';
+import { getWebSocketClient, generateId } from '../../lib/ws';
 import type { TerminalInput, TerminalResize, TerminalHistory } from '../../types/protocol';
 
 // ============================================================================
@@ -133,7 +133,7 @@ export const Terminal = forwardRef<TerminalRef, TerminalProps>(
           resizeObserver.observe(containerRef.current);
         }
 
-        const requestId = crypto.randomUUID();
+        const requestId = generateId();
         wsClientRef.current.send({
           type: 'TerminalRequestHistory',
           sessionId: terminalSessionId,

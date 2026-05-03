@@ -357,17 +357,24 @@ function AgentTabContent({
       ) : (
         <span className="tab-label">{getTabLabel(tab)}</span>
       )}
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={(e) => {
           e.stopPropagation();
           onCloseTab(tab.id);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.stopPropagation();
+            onCloseTab(tab.id);
+          }
         }}
         className="tab-close"
         aria-label="Close tab"
       >
         ×
-      </button>
+      </div>
     </Tabs.Tab>
   );
 }

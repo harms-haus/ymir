@@ -31,6 +31,15 @@ export interface Error {
   requestId?: string;
 }
 
+/** Dispatched when an error_response envelope arrives without a payload.type field. */
+export interface ErrorResponse {
+  type: 'ErrorResponse';
+  code: string;
+  message: string;
+  details?: string;
+  requestId?: string;
+}
+
 export const ErrorCodes = {
   PTY_CRASH: 'pty_crash',
   GIT_FAILURE: 'git_failure',
@@ -364,6 +373,7 @@ export interface FileListResult {
   type: 'FileListResult';
   worktreeId: string;
   files: string[];
+  path?: string;
   requestId?: string;
 }
 
@@ -839,6 +849,7 @@ export type ServerMessage =
     | GitStatusResult
     | GitDiffResult
     | Error
+    | ErrorResponse
     | Ping
     | Pong
     | Notification

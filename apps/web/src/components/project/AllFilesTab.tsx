@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { NodeApi } from 'react-arborist';
 import { useStore, selectActiveWorktree, selectFileListCache, selectGitStatusCache, AgentTab } from '../../store';
 import { getWebSocketClient } from '../../lib/ws';
@@ -8,66 +8,55 @@ import { ProjectSkeleton } from './ProjectSkeleton';
 import type { FileList, GitStatusEntry } from '../../types/protocol';
 
 function buildFileTree(
-  paths: string[],
+  rootPaths: string[],
+  loadedChildren: Map<string, string[]>,
   gitStatusMap: Map<string, GitStatusEntry>
 ): FileTreeNode[] {
   const root: FileTreeNode[] = [];
   const nodeMap = new Map<string, FileTreeNode>();
 
-  const sortedPaths = [...paths].sort();
+  function buildNodes(paths: string[], parentPath: string): FileTreeNode[] {
+    const nodes: FileTreeNode[] = [];
 
-  for (const path of sortedPaths) {
-    const parts = path.split('/');
-    let currentPath = '';
-    const gitStatus = gitStatusMap.get(path);
+    for (const rawPath of paths) {
+      const isDir = rawPath.endsWith('/');
+      const name = isDir ? rawPath.slice(0, -1) : rawPath;
+      const fullPath = parentPath ? `${parentPath}/${name}` : name;
 
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      const parentPath = currentPath;
-      currentPath = currentPath ? `${currentPath}/${part}` : part;
-      const isLastPart = i === parts.length - 1;
-      const partGitStatus = isLastPart ? gitStatus : undefined;
+      if (nodeMap.has(fullPath)) continue;
 
-      if (!nodeMap.has(currentPath)) {
-        const node: FileTreeNode = {
-          id: currentPath,
-          name: part,
-          type: isLastPart ? 'file' : 'directory',
-          children: isLastPart ? undefined : [],
-          data: partGitStatus ? { status: partGitStatus.status, staged: partGitStatus.staged } : undefined,
-          isDeleted: partGitStatus?.status === 'deleted',
-        };
+      const gitStatus = gitStatusMap.get(fullPath);
+      const node: FileTreeNode = {
+        id: fullPath,
+        name,
+        type: isDir ? 'directory' : 'file',
+        children: isDir ? [] : undefined,
+        data: gitStatus ? { status: gitStatus.status, staged: gitStatus.staged } : undefined,
+        isDeleted: gitStatus?.status === 'deleted',
+      };
 
-        nodeMap.set(currentPath, node);
+      nodeMap.set(fullPath, node);
+      nodes.push(node);
 
-        if (parentPath) {
-          const parent = nodeMap.get(parentPath);
-          if (parent && parent.children) {
-            parent.children.push(node);
-          }
-        } else {
-          root.push(node);
-        }
+      // If this is a loaded directory, recursively build its children
+      if (isDir && loadedChildren.has(fullPath)) {
+        const children = buildNodes(loadedChildren.get(fullPath)!, fullPath);
+        node.children = children;
       }
     }
-  }
 
-  function sortChildren(nodes: FileTreeNode[]) {
+    // Sort: directories first, then alphabetically
     nodes.sort((a, b) => {
-      if (a.type !== b.type) {
-        return a.type === 'directory' ? -1 : 1;
-      }
+      if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
       return a.name.localeCompare(b.name);
     });
 
-    for (const node of nodes) {
-      if (node.children) {
-        sortChildren(node.children);
-      }
-    }
+    return nodes;
   }
 
-  sortChildren(root);
+  const rootNodes = buildNodes(rootPaths, '');
+  root.push(...rootNodes);
+
   return root;
 }
 
@@ -78,9 +67,14 @@ export function AllFilesTab() {
   const [files, setFiles] = useState<string[]>(fileListCache?.files ?? []);
   const [isLoading, setIsLoading] = useState(!fileListCache);
   const [gitStatusEntries, setGitStatusEntries] = useState<GitStatusEntry[]>(gitStatusCache?.entries ?? []);
+  const [loadedChildren, setLoadedChildren] = useState<Map<string, string[]>>(new Map());
+  const [loadingDirs, setLoadingDirs] = useState<Set<string>>(new Set());
   const setFileListCache = useStore((state) => state.setFileListCache);
   const setGitStatusCache = useStore((state) => state.setGitStatusCache);
   const addAgentTab = useStore((state) => state.addAgentTab);
+  const pendingFileListWorktreeId = useRef<string | null>(null);
+  const fileListTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingDirRequests = useRef<Map<string, string>>(new Map()); // path -> worktreeId
 
   const handleEdit = useCallback((node: NodeApi<FileTreeNode>) => {
     if (node.data.type === 'file' && activeWorktree) {
@@ -104,6 +98,31 @@ export function AllFilesTab() {
     console.log('Context menu for:', node.data.id);
   }, []);
 
+  // Lazy load directory children on toggle
+  const handleToggle = useCallback((id: string) => {
+    if (!activeWorktree) return;
+    if (loadedChildren.has(id)) return; // already loaded
+    if (loadingDirs.has(id)) return; // already loading
+
+    const client = getWebSocketClient();
+
+    // Track this as a pending directory request
+    pendingDirRequests.current.set(id, activeWorktree.id);
+
+    setLoadingDirs((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+
+    const fileListMsg: FileList = {
+      type: 'FileList',
+      worktreeId: activeWorktree.id,
+      path: id,
+    };
+    client.send(fileListMsg);
+  }, [activeWorktree, loadedChildren, loadingDirs]);
+
   useEffect(() => {
     if (!activeWorktree) {
       setFiles([]);
@@ -112,25 +131,81 @@ export function AllFilesTab() {
 
     const client = getWebSocketClient();
 
+    // Fix 4: Subscribe to Error messages to recover from server errors
+    const unsubscribeError = client.onMessage('ErrorResponse', (_message) => {
+      console.warn('[AllFilesTab] Received Error message, clearing loading state');
+      setIsLoading(false);
+      setLoadingDirs(new Set());
+      pendingDirRequests.current.clear();
+    });
+
     const unsubscribe = client.onMessage('FileListResult', (message) => {
+      // Check if this is a directory-specific response by matching on path
+      const dirPath = message.path;
+      if (dirPath && pendingDirRequests.current.has(dirPath)) {
+        // This is a lazy-loaded directory response - merge children
+        setLoadedChildren((prev) => {
+          const next = new Map(prev);
+          next.set(dirPath, message.files);
+          return next;
+        });
+        setLoadingDirs((prev) => {
+          const next = new Set(prev);
+          next.delete(dirPath);
+          return next;
+        });
+        pendingDirRequests.current.delete(dirPath);
+        return;
+      }
+
+      // Root-level response
       if (message.worktreeId === activeWorktree.id) {
         setFiles(message.files);
         setFileListCache(activeWorktree.id, message.files);
         setIsLoading(false);
+        pendingFileListWorktreeId.current = null;
+      } else if (pendingFileListWorktreeId.current === message.worktreeId) {
+        console.warn(
+          `[AllFilesTab] FileListResult for worktree ${message.worktreeId} arrived after switching to ${activeWorktree.id}. Applying anyway to prevent stuck state.`
+        );
+        setFiles(message.files);
+        setFileListCache(message.worktreeId, message.files);
       }
     });
 
+    // Clear any previous timeout
+    if (fileListTimeoutRef.current) {
+      clearTimeout(fileListTimeoutRef.current);
+      fileListTimeoutRef.current = null;
+    }
+
     if (!fileListCache) {
       setIsLoading(true);
+      pendingFileListWorktreeId.current = activeWorktree.id;
       const fileListMsg: FileList = {
         type: 'FileList',
         worktreeId: activeWorktree.id,
       };
       client.send(fileListMsg);
+
+      // Fix 1: Loading timeout — if FileListResult doesn't arrive within 15s, recover
+      fileListTimeoutRef.current = setTimeout(() => {
+        console.warn(
+          `[AllFilesTab] FileListResult timeout after 15s for worktree ${activeWorktree.id}. Clearing cache and recovering.`
+        );
+        setFileListCache(activeWorktree.id, []);
+        setIsLoading(false);
+        pendingFileListWorktreeId.current = null;
+      }, 15000);
     }
 
     return () => {
       unsubscribe();
+      unsubscribeError();
+      if (fileListTimeoutRef.current) {
+        clearTimeout(fileListTimeoutRef.current);
+        fileListTimeoutRef.current = null;
+      }
     };
   }, [activeWorktree, fileListCache, setFileListCache]);
 
@@ -162,12 +237,34 @@ export function AllFilesTab() {
     };
   }, [activeWorktree, gitStatusCache, setGitStatusCache]);
 
-  const gitStatusMap = new Map<string, GitStatusEntry>();
-  for (const entry of gitStatusEntries) {
-    gitStatusMap.set(entry.path, entry);
-  }
+  // Memoize gitStatusMap
+  const gitStatusMap = useMemo(() => {
+    const m = new Map<string, GitStatusEntry>();
+    for (const entry of gitStatusEntries) {
+      m.set(entry.path, entry);
+    }
+    return m;
+  }, [gitStatusEntries]);
 
-  const treeData = buildFileTree(files, gitStatusMap);
+  // Pre-compute dirsWithChanges for O(1) lookup
+  const dirsWithChanges = useMemo(() => {
+    const dirs = new Set<string>();
+    for (const entry of gitStatusEntries) {
+      const parts = entry.path.split('/');
+      let prefix = '';
+      for (let i = 0; i < parts.length - 1; i++) {
+        prefix = prefix ? `${prefix}/${parts[i]}` : parts[i];
+        dirs.add(prefix);
+      }
+    }
+    return dirs;
+  }, [gitStatusEntries]);
+
+  // Memoize treeData with lazy loaded children
+  const treeData = useMemo(
+    () => buildFileTree(files, loadedChildren, gitStatusMap),
+    [files, loadedChildren, gitStatusMap]
+  );
 
   if (!activeWorktree) {
     return (
@@ -191,16 +288,13 @@ export function AllFilesTab() {
     );
   }
 
-  function folderHasChanges(folderId: string): boolean {
-    return gitStatusEntries.some(f => f.path.startsWith(folderId + '/'));
-  }
-
   return (
     <div style={{ height: '100%' }}>
       <FileTree
         data={treeData}
         onActivate={handleEdit}
         onContextMenu={handleContextMenu}
+        onToggle={handleToggle}
         openByDefault={false}
         renderRightContent={(node) => {
           if (node.type === 'file') {
@@ -212,7 +306,7 @@ export function AllFilesTab() {
               />
             );
           }
-          if (node.type === 'directory' && folderHasChanges(node.id)) {
+          if (node.type === 'directory' && dirsWithChanges.has(node.id)) {
             return (
               <span
                 style={{

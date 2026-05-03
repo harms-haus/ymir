@@ -129,7 +129,10 @@ export const useStore = create<AppState>()(
               useUIStore.getState().toggleExpandedWorkspaceId(worktree.workspaceId);
             }
           }
-          return { activeWorktreeId };
+          // Keep file list cache on worktree switch — lazy loading makes root list small/fast
+          return {
+            activeWorktreeId,
+          };
         });
       },
       
@@ -653,34 +656,24 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
       const payload = message.payload as Record<string, unknown> | null;
       if (!payload) return;
 
-      const originalType = payload.originalType as string | undefined;
-      const data = payload.data as Record<string, unknown> | undefined;
+      // Payload is the raw struct (e.g. { workspace: {...} }), NOT wrapped in { originalType, data }
+      const data = (payload.data as Record<string, unknown> | undefined) ?? payload;
 
-      switch (originalType) {
-        case 'WorkspaceCreated': {
-          const workspace = (data as any)?.workspace;
-          if (workspace) {
+      if (data.workspace !== undefined) {
+        const workspace = (data as any)?.workspace;
+        if (workspace) {
+          const existing = useStore.getState().workspaces.find(w => w.id === workspace.id);
+          if (existing) {
+            useStore.getState().updateWorkspace(workspace.id, workspace);
+          } else {
             useStore.getState().addWorkspace(workspace);
           }
-          break;
         }
-        case 'WorkspaceDeleted': {
-          const workspaceId = (data as any)?.workspaceId as string | undefined;
-          if (workspaceId) {
-            useStore.getState().removeWorkspace(workspaceId);
-          }
-          break;
+      } else if (data.workspaceId !== undefined) {
+        const workspaceId = (data as any)?.workspaceId as string | undefined;
+        if (workspaceId) {
+          useStore.getState().removeWorkspace(workspaceId);
         }
-        case 'WorkspaceUpdated': {
-          const workspaceData = (data as any)?.workspace;
-          if (workspaceData?.id) {
-            useStore.getState().updateWorkspace(workspaceData.id, workspaceData);
-          }
-          break;
-        }
-        // Other workspace event types (WorkspaceRename) can be added here
-        default:
-          break;
       }
       break;
     }
@@ -691,76 +684,54 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
       const payload = message.payload as Record<string, unknown> | null;
       if (!payload) return;
 
-      const originalType = payload.originalType as string | undefined;
-      const data = payload.data as Record<string, unknown> | undefined;
+      // Payload is the raw struct (e.g. { worktrees, agentSessions, terminalSessions }),
+      // NOT wrapped in { originalType, data }
+      const data = (payload.data as Record<string, unknown> | undefined) ?? payload;
 
-      switch (originalType) {
-        case 'WorktreeCreated': {
-          const worktree = (data as any)?.worktree;
-          if (worktree) {
+      // Detect event type from payload structure
+      if (data.worktrees !== undefined) {
+        // WorktreeDetailsResult or WorktreeListResult
+        const { addAgentSession, addTerminalSession } = useStore.getState();
+        const worktrees = (data as any)?.worktrees as Array<any> | undefined;
+        const agentSessions = (data as any)?.agentSessions as Array<any> | undefined;
+        const terminalSessions = (data as any)?.terminalSessions as Array<any> | undefined;
+
+        if (worktrees) {
+          worktrees.forEach((worktree) => {
+            useStore.getState().addWorktree(worktree);
+          });
+        }
+        if (agentSessions) {
+          agentSessions.forEach((session) => {
+            addAgentSession(session as any);
+          });
+        }
+        if (terminalSessions) {
+          terminalSessions.forEach((session) => {
+            addTerminalSession(session);
+          });
+        }
+      } else if (data.worktree !== undefined) {
+        // WorktreeCreated, WorktreeChanged, or WorktreeStatus
+        const worktree = (data as any)?.worktree;
+        if (worktree?.id) {
+          const existing = useStore.getState().worktrees.find(wt => wt.id === worktree.id);
+          if (existing) {
+            useStore.getState().updateWorktree(worktree.id, worktree);
+          } else {
             useStore.getState().addWorktree(worktree);
           }
-          break;
+          useStore.getState().clearFileListCache(worktree.id);
+          useStore.getState().clearGitStatusCache(worktree.id);
         }
-        case 'WorktreeDeleted': {
-          const worktreeId = (data as any)?.worktreeId as string | undefined;
-          if (worktreeId) {
-            useStore.getState().removeWorktree(worktreeId);
-            useStore.getState().clearFileListCache(worktreeId);
-            useStore.getState().clearGitStatusCache(worktreeId);
-          }
-          break;
+      } else if (data.worktreeId !== undefined) {
+        // WorktreeDeleted
+        const worktreeId = (data as any)?.worktreeId as string | undefined;
+        if (worktreeId) {
+          useStore.getState().removeWorktree(worktreeId);
+          useStore.getState().clearFileListCache(worktreeId);
+          useStore.getState().clearGitStatusCache(worktreeId);
         }
-        case 'WorktreeChanged': {
-          const worktree = (data as any)?.worktree;
-          if (worktree?.id) {
-            useStore.getState().updateWorktree(worktree.id, worktree);
-            useStore.getState().clearFileListCache(worktree.id);
-            useStore.getState().clearGitStatusCache(worktree.id);
-          }
-          break;
-        }
-        case 'WorktreeListResult': {
-          const worktrees = (data as any)?.worktrees as Array<any> | undefined;
-          if (worktrees) {
-            worktrees.forEach((worktree) => {
-              useStore.getState().addWorktree(worktree);
-            });
-          }
-          break;
-        }
-        case 'WorktreeDetailsResult': {
-          const { addAgentSession, addTerminalSession } = useStore.getState();
-          const worktrees = (data as any)?.worktrees as Array<any> | undefined;
-          const agentSessions = (data as any)?.agentSessions as Array<any> | undefined;
-          const terminalSessions = (data as any)?.terminalSessions as Array<any> | undefined;
-
-          if (worktrees) {
-            worktrees.forEach((worktree) => {
-              useStore.getState().addWorktree(worktree);
-            });
-          }
-          if (agentSessions) {
-            agentSessions.forEach((session) => {
-              addAgentSession(session as any);
-            });
-          }
-          if (terminalSessions) {
-            terminalSessions.forEach((session) => {
-              addTerminalSession(session);
-            });
-          }
-          break;
-        }
-        case 'WorktreeStatus': {
-          const worktree = (data as any)?.worktree;
-          if (worktree?.id) {
-            useStore.getState().updateWorktree(worktree.id, worktree);
-          }
-          break;
-        }
-        default:
-          break;
       }
       break;
     }
@@ -771,52 +742,39 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
       const payload = message.payload as Record<string, unknown> | null;
       if (!payload) return;
 
-      const originalType = payload.originalType as string | undefined;
-      const data = payload.data as Record<string, unknown> | undefined;
+      // Payload is the raw struct, NOT wrapped in { originalType, data }
+      const data = (payload.data as Record<string, unknown> | undefined) ?? payload;
 
-      switch (originalType) {
-        case 'GitStatusResult': {
-          const worktreeId = (data as any)?.worktreeId as string | undefined;
-          const entries = (data as any)?.entries as Array<{ path: string; statusCode: string }> | undefined;
-          if (worktreeId && entries) {
-            const transformed = entries.map((entry) => {
-              const statusCode = entry.statusCode;
-              let status: GitStatusEntry['status'] = 'modified';
-              let staged = false;
+      if (data.worktreeId !== undefined && data.entries !== undefined) {
+        // GitStatusResult
+        const worktreeId = (data as any)?.worktreeId as string | undefined;
+        const entries = (data as any)?.entries as Array<{ path: string; statusCode: string }> | undefined;
+        if (worktreeId && entries) {
+          const transformed = entries.map((entry) => {
+            const statusCode = entry.statusCode;
+            let status: GitStatusEntry['status'] = 'modified';
+            let staged = false;
 
-              if (statusCode === '??') {
-                status = 'untracked';
-                staged = false;
-              } else if (statusCode.length >= 2) {
-                const stagedChar = statusCode[0];
-                const unstagedChar = statusCode[1];
-                if (stagedChar === 'A') { status = 'added'; staged = true; }
-                else if (stagedChar === 'D') { status = 'deleted'; staged = true; }
-                else if (stagedChar === 'R') { status = 'renamed'; staged = true; }
-                else if (stagedChar === 'M') { status = 'modified'; staged = true; }
-                else if (unstagedChar === 'M') { status = 'modified'; staged = false; }
-                else if (unstagedChar === 'D') { status = 'deleted'; staged = false; }
-              }
+            if (statusCode === '??') {
+              status = 'untracked';
+              staged = false;
+            } else if (statusCode.length >= 2) {
+              const stagedChar = statusCode[0];
+              const unstagedChar = statusCode[1];
+              if (stagedChar === 'A') { status = 'added'; staged = true; }
+              else if (stagedChar === 'D') { status = 'deleted'; staged = true; }
+              else if (stagedChar === 'R') { status = 'renamed'; staged = true; }
+              else if (stagedChar === 'M') { status = 'modified'; staged = true; }
+              else if (unstagedChar === 'M') { status = 'modified'; staged = false; }
+              else if (unstagedChar === 'D') { status = 'deleted'; staged = false; }
+            }
 
-              return { path: entry.path, status, staged } as GitStatusEntry;
-            });
-            useStore.getState().setGitStatusCache(worktreeId, transformed);
-          }
-          break;
+            return { path: entry.path, status, staged } as GitStatusEntry;
+          });
+          useStore.getState().setGitStatusCache(worktreeId, transformed);
         }
-        case 'GitDiffResult': {
-          // GitDiffResult carries raw diff text; no store cache setter exists yet.
-          // Log for debugging; DiffTab consumes this via wsClient.onMessage.
-          const worktreeId = (data as any)?.worktreeId as string | undefined;
-          const filePath = (data as any)?.filePath as string | undefined;
-          const diff = (data as any)?.diff as string | undefined;
-          if (worktreeId && filePath && diff) {
-            // Future: dispatch to a gitDiffCache or UI handler when available.
-          }
-          break;
-        }
-        default:
-          break;
+      } else if (data.worktreeId !== undefined && data.filePath !== undefined && data.diff !== undefined) {
+        // GitDiffResult — no store cache setter yet, DiffTab consumes via wsClient.onMessage
       }
       break;
     }
@@ -827,9 +785,10 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
       const payload = message.payload as Record<string, unknown> | null;
       if (!payload) return;
 
-      const data = payload.data as Record<string, unknown> | undefined;
+      // Extract data from the wrapped payload { type, data }
+      const data = (payload.data as Record<string, unknown> | undefined)
+        ?? (payload.level !== undefined ? payload : undefined);
 
-      // Handle notification (GitCommit/CreatePR success, info/warning/error)
       const level = (data as any)?.level as 'info' | 'warning' | 'error' | undefined;
       const title = (data as any)?.title as string | undefined;
       const msg = (data as any)?.message as string | undefined;
@@ -854,7 +813,9 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
       const payload = message.payload as Record<string, unknown> | null;
       if (!payload) return;
 
-      const data = payload.data as Record<string, unknown> | undefined;
+      // Extract data from the wrapped payload { type, data }
+      const data = (payload.data as Record<string, unknown> | undefined)
+        ?? (payload.code !== undefined ? payload : undefined);
 
       if (data) {
         const error = data as any;
@@ -863,7 +824,7 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
           code: error.code ?? 'unknown',
           message: error.message ?? 'Unknown error',
           details: error.details,
-          requestId: error.request_id,
+          requestId: error.requestId,
         });
       }
       break;
@@ -875,32 +836,27 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
       const payload = message.payload as Record<string, unknown> | null;
       if (!payload) return;
 
-      const originalType = payload.originalType as string | undefined;
-      const data = payload.data as Record<string, unknown> | undefined;
+      // Payload is the raw struct, NOT wrapped in { originalType, data }
+      const data = (payload.data as Record<string, unknown> | undefined) ?? payload;
 
-      switch (originalType) {
-        case 'FileListResult': {
-          const worktreeId = (data as any)?.worktreeId as string | undefined;
-          const files = (data as any)?.files as string[] | undefined;
-          if (worktreeId && files) {
-            useStore.getState().setFileListCache(worktreeId, files);
-          }
-          break;
+      if (data.worktreeId !== undefined && data.files !== undefined) {
+        // FileListResult
+        const worktreeId = (data as any)?.worktreeId as string | undefined;
+        const files = (data as any)?.files as string[] | undefined;
+        if (worktreeId && files) {
+          useStore.getState().setFileListCache(worktreeId, files);
         }
-        case 'FileContent': {
-          const worktreeId = (data as any)?.worktreeId as string | undefined;
-          const path = (data as any)?.path as string | undefined;
-          const content = (data as any)?.content as string | undefined;
-          if (worktreeId && path && content !== undefined) {
-            const cb = getFileContentCallback();
-            if (cb) {
-              cb({ worktreeId, path, content });
-            }
+      } else if (data.worktreeId !== undefined && data.path !== undefined && data.content !== undefined) {
+        // FileContent
+        const worktreeId = (data as any)?.worktreeId as string | undefined;
+        const path = (data as any)?.path as string | undefined;
+        const content = (data as any)?.content as string | undefined;
+        if (worktreeId && path && content !== undefined) {
+          const cb = getFileContentCallback();
+          if (cb) {
+            cb({ worktreeId, path, content });
           }
-          break;
         }
-        default:
-          break;
       }
       break;
     }
@@ -911,49 +867,43 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
       const payload = message.payload as Record<string, unknown> | null;
       if (!payload) return;
 
-      const originalType = payload.originalType as string | undefined;
-      const data = payload.data as Record<string, unknown> | undefined;
+      // Payload is the raw struct, NOT wrapped in { originalType, data }
+      const data = (payload.data as Record<string, unknown> | undefined) ?? payload;
 
-      switch (originalType) {
-        case 'AgentStatusUpdate': {
-          const id = (data as any)?.id as string | undefined;
-          if (!id) break;
-          const existingSession = useStore.getState().agentSessions.find(as => as.id === id);
-          if (existingSession) {
-            useStore.getState().updateAgentSession(id, {
-              status: (data as any)?.status,
-            } as any);
-          } else {
-            useStore.getState().addAgentSession({
-              id,
-              worktreeId: (data as any)?.worktreeId,
-              agentType: (data as any)?.agentType,
-              status: (data as any)?.status,
-              acpSessionId: undefined,
-              startedAt: (data as any)?.startedAt,
-            } as any);
-          }
-          break;
+      if (data.id !== undefined && data.status !== undefined) {
+        // AgentStatusUpdate
+        const id = (data as any)?.id as string | undefined;
+        if (!id) break;
+        const existingSession = useStore.getState().agentSessions.find(as => as.id === id);
+        if (existingSession) {
+          useStore.getState().updateAgentSession(id, {
+            status: (data as any)?.status,
+          } as any);
+        } else {
+          useStore.getState().addAgentSession({
+            id,
+            worktreeId: (data as any)?.worktreeId,
+            agentType: (data as any)?.agentType,
+            status: (data as any)?.status,
+            acpSessionId: undefined,
+            startedAt: (data as any)?.startedAt,
+          } as any);
         }
-        case 'AgentRemoved': {
-          const id = (data as any)?.id as string | undefined;
-          if (id) {
-            useStore.getState().removeAgentSession(id);
-          }
-          break;
+      } else if (data.id !== undefined && data.status === undefined) {
+        // AgentRemoved
+        const id = (data as any)?.id as string | undefined;
+        if (id) {
+          useStore.getState().removeAgentSession(id);
         }
-        case 'AgentUpdated': {
-          const sessionId = (data as any)?.sessionId as string | undefined;
-          if (sessionId) {
-            useStore.getState().updateAgentSession(sessionId, {
-              ...((data as any)?.label !== undefined && { label: (data as any)?.label }),
-              ...((data as any)?.position !== undefined && { position: (data as any)?.position }),
-            });
-          }
-          break;
+      } else if (data.sessionId !== undefined) {
+        // AgentUpdated
+        const sessionId = (data as any)?.sessionId as string | undefined;
+        if (sessionId) {
+          useStore.getState().updateAgentSession(sessionId, {
+            ...((data as any)?.label !== undefined && { label: (data as any)?.label }),
+            ...((data as any)?.position !== undefined && { position: (data as any)?.position }),
+          });
         }
-        default:
-          break;
       }
       break;
     }
@@ -964,87 +914,67 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
       const payload = message.payload as Record<string, unknown> | null;
       if (!payload) return;
 
-      const originalType = payload.originalType as string | undefined;
-      const data = payload.data as Record<string, unknown> | undefined;
+      // Payload is the raw struct, NOT wrapped in { originalType, data }
+      const data = (payload.data as Record<string, unknown> | undefined) ?? payload;
 
-      switch (originalType) {
-        case 'TerminalCreated': {
-          const sessionId = (data as any)?.sessionId as string | undefined;
-          const worktreeId = (data as any)?.worktreeId as string | undefined;
-          const label = (data as any)?.label as string | null | undefined;
-          const shell = (data as any)?.shell as string | undefined;
-          if (sessionId && worktreeId && shell) {
-            useStore.getState().addTerminalSession({
-              id: sessionId,
-              worktreeId,
-              label: label ?? 'Terminal',
-              shell,
-              createdAt: Date.now(),
-            });
-          }
-          break;
+      if (data.sessionId !== undefined && data.worktreeId !== undefined && data.shell !== undefined) {
+        // TerminalCreated
+        const sessionId = (data as any)?.sessionId as string | undefined;
+        const worktreeId = (data as any)?.worktreeId as string | undefined;
+        const label = (data as any)?.label as string | null | undefined;
+        const shell = (data as any)?.shell as string | undefined;
+        if (sessionId && worktreeId && shell) {
+          useStore.getState().addTerminalSession({
+            id: sessionId,
+            worktreeId,
+            label: label ?? 'Terminal',
+            shell,
+            createdAt: Date.now(),
+          });
         }
-        case 'TerminalOutput': {
-          const sessionId = (data as any)?.sessionId as string | undefined;
-          const outputData = (data as any)?.data as string | undefined;
-          if (sessionId && outputData !== undefined) {
-            if (terminalOutputCallback) {
-              terminalOutputCallback({ type: 'TerminalOutput', sessionId, data: outputData });
-            }
+      } else if (data.sessionId !== undefined && data.data !== undefined && data.worktreeId === undefined && data.shell === undefined && data.label === undefined && data.position === undefined) {
+        // TerminalOutput or TerminalHistory (has sessionId + data field for output/history)
+        const sessionId = (data as any)?.sessionId as string | undefined;
+        const outputData = (data as any)?.data as string | undefined;
+        if (sessionId && outputData !== undefined) {
+          if (terminalOutputCallback) {
+            terminalOutputCallback({ type: 'TerminalOutput', sessionId, data: outputData });
           }
-          break;
         }
-        case 'TerminalRemoved': {
-          const sessionId = (data as any)?.sessionId as string | undefined;
-          if (sessionId) {
-            useStore.getState().removeTerminalSession(sessionId);
-          }
-          break;
-        }
-        case 'TerminalUpdated': {
-          const sessionId = (data as any)?.sessionId as string | undefined;
-          if (sessionId) {
+      } else if (data.sessionId !== undefined && data.worktreeId === undefined && data.shell === undefined && data.data === undefined) {
+        // TerminalRemoved or TerminalUpdated
+        const sessionId = (data as any)?.sessionId as string | undefined;
+        if (sessionId) {
+          if (data.label !== undefined || data.position !== undefined) {
+            // TerminalUpdated
             useStore.getState().updateTerminalSession(sessionId, {
               ...((data as any)?.label !== undefined && { label: (data as any)?.label ?? undefined }),
               ...((data as any)?.position !== undefined && { position: (data as any)?.position ?? undefined }),
             });
+          } else {
+            // TerminalRemoved
+            useStore.getState().removeTerminalSession(sessionId);
           }
-          break;
         }
-        case 'TerminalHistory': {
-          const sessionId = (data as any)?.sessionId as string | undefined;
-          const historyData = (data as any)?.data as string | undefined;
-          if (sessionId && historyData !== undefined) {
-            if (terminalOutputCallback) {
-              terminalOutputCallback({ type: 'TerminalOutput', sessionId, data: historyData });
-            }
-          }
-          break;
-        }
-        default:
-          break;
       }
       break;
     }
 
     // State snapshot response to GetState request. Carries the full
     // application state snapshot as structured JSON.
+    // Payload format: { type: "StateSnapshot", data: { workspaces, worktrees, ... } }
     case 'state_snapshot': {
       if (!isStateSnapshotMessage(message)) return;
 
       const payload = message.payload as Record<string, unknown> | null;
       if (!payload) return;
 
-      const data = payload.data as Record<string, unknown> | undefined;
-      console.log('[Store] state_snapshot received:', {
-        hasPayload: !!payload,
-        payloadKeys: payload ? Object.keys(payload) : 'N/A',
-        hasData: !!data,
-        dataKeys: data ? Object.keys(data) : 'N/A',
-        workspaceCount: Array.isArray(data?.workspaces) ? (data.workspaces as any[]).length : 'N/A',
-      });
-
-      if (!data) return;
+      // Extract data from the wrapped payload { type, data }
+      const data = (payload.data as Record<string, unknown> | undefined)
+        ?? (payload.workspaces !== undefined ? payload : undefined);
+      if (!data) {
+        return;
+      }
 
       const { stateFromSnapshot } = useStore.getState();
       stateFromSnapshot({

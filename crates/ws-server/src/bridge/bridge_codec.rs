@@ -699,6 +699,7 @@ mod tests {
             ServerMessagePayload::FileListResult(FileListResult {
                 worktree_id: Uuid::new_v4(),
                 files: vec!["test.txt".to_string()],
+                path: None,
                 request_id: None,
             }),
         ];

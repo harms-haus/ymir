@@ -15,7 +15,7 @@
 
 import { TransportClient, type TransportConfig, type BridgeEnvelope } from "@harms-haus/acp-ws-bridge";
 
-import { encodeClientMessage, decodeBridgeJson } from "./bridge-transport";
+import { encodeClientMessage, decodeBridgeJson, type DecodedBridgeMessage } from "./bridge-transport";
 import type { BridgeMessage, BridgePayload } from "../types/bridge-envelope";
 import {
   ClientMessage,
@@ -361,6 +361,8 @@ export class YmirWsTransport {
         handleBridgeMessage(decoded, (envelope) => {
           this.client.send(JSON.stringify(envelope));
         });
+        // Dispatch to registered onMessage handlers
+        this.dispatchOnMessageHandlers(decoded);
         // Clear heartbeat timeout when receiving ping/pong/ack responses
         if (decoded.type === "ping" || decoded.type === "pong" || decoded.type === "ack") {
           console.log(`[YWS] [Heartbeat] Received ${decoded.type} at ${Date.now()}`);
@@ -370,7 +372,8 @@ export class YmirWsTransport {
       }
 
       // Unmigrated types (bridge_status, stderr, process_exit, replay_metadata,
-      // start_agent) are logged but not processed by the store.
+      // start_agent) — still dispatch to any registered handlers
+      this.dispatchOnMessageHandlers(decoded);
       console.warn("[YWS] Unmigrated envelope type:", decoded.type);
     } catch (error) {
       console.error("[YWS] Failed to decode envelope:", error);
@@ -476,6 +479,67 @@ export class YmirWsTransport {
         this.messageHandlers.delete(type);
       }
     };
+  }
+
+  /** Dispatch decoded BridgeEnvelope to registered onMessage handlers. */
+  private dispatchOnMessageHandlers(decoded: DecodedBridgeMessage): void {
+    const { type, message } = decoded;
+    const payload = (message as any)?.payload as Record<string, unknown> | null;
+
+    // Reconstruct the PascalCase ServerMessage type and payload
+    let dispatchType: string;
+    let dispatchMsg: Record<string, unknown>;
+
+    if (payload?.originalType) {
+      // Wrapped messages: extract the original ServerMessage type from payload
+      dispatchType = payload.originalType as string;
+      dispatchMsg = { type: dispatchType, ...(payload.data as Record<string, unknown> ?? {}) };
+    } else if (payload?.type && typeof payload.type === "string") {
+      // Server passthrough envelopes (file_response, git_response, agent_event,
+      // terminal_event, workspace_event, worktree_event) carry the concrete
+      // ServerMessage type in payload.type (e.g. "FileListResult").  Use that
+      // instead of the generic envelope discriminator so that onMessage
+      // subscribers receive the message they registered for.
+      dispatchType = payload.type as string;
+      const innerData = payload.data as Record<string, unknown> | undefined;
+      dispatchMsg = { type: dispatchType, ...(innerData ?? {}) };
+    } else {
+      // Fix 3: payload.type is missing — try to detect the message type by
+      // inspecting the payload structure before falling back to envelope-type.
+      if (payload && Array.isArray((payload as Record<string, unknown>).files)) {
+        // Detect FileListResult by presence of `files` array field
+        dispatchType = "FileListResult";
+        dispatchMsg = { type: dispatchType, ...(payload as Record<string, unknown>) };
+        console.warn(
+          `[YWS] dispatchOnMessageHandlers: payload.type missing, detected FileListResult by 'files' array field`
+        );
+      } else if (payload && Array.isArray((payload as Record<string, unknown>).entries)) {
+        // Detect GitStatusResult by presence of `entries` array field
+        dispatchType = "GitStatusResult";
+        dispatchMsg = { type: dispatchType, ...(payload as Record<string, unknown>) };
+        console.warn(
+          `[YWS] dispatchOnMessageHandlers: payload.type missing, detected GitStatusResult by 'entries' array field`
+        );
+      } else {
+        // Direct messages: convert snake_case envelope type to PascalCase
+        dispatchType = type.replace(/(^|_)([a-z])/g, (_, __, c) => c.toUpperCase());
+        dispatchMsg = { type: dispatchType, ...(payload ?? {}) };
+        console.warn(
+          `[YWS] dispatchOnMessageHandlers: payload.type missing, falling back to envelope-type dispatch (${dispatchType})`
+        );
+      }
+    }
+
+    const handlers = this.messageHandlers.get(dispatchType as ServerMessage["type"]);
+    if (handlers) {
+      for (const handler of handlers) {
+        try {
+          handler(dispatchMsg as unknown as ServerMessage);
+        } catch (err) {
+          console.error(`[YWS] onMessage handler error for ${dispatchType}:`, err);
+        }
+      }
+    }
   }
 
   /** Subscribe to connection status changes. Returns unsubscribe function. */
