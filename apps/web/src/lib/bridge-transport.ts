@@ -78,6 +78,9 @@ import type {
   TerminalResize,
   TerminalCreate,
   TerminalKill,
+  TerminalMount,
+  TerminalUnmount,
+  TerminalTabClose,
   TerminalRename,
   TerminalReorder,
   TerminalRequestHistory,
@@ -389,6 +392,42 @@ export function encodeTerminalKill(
   });
 }
 
+/** Encode TerminalMount into a BridgeEnvelope. */
+export function encodeTerminalMount(
+  data: Omit<TerminalMount, 'type'>
+): FullBridgeEnvelope {
+  return makeEnvelope('terminal_event', {
+    payload: {
+      type: 'TerminalMount',
+      data,
+    } as BridgePayload,
+  });
+}
+
+/** Encode TerminalUnmount into a BridgeEnvelope. */
+export function encodeTerminalUnmount(
+  data: Omit<TerminalUnmount, 'type'>
+): FullBridgeEnvelope {
+  return makeEnvelope('terminal_event', {
+    payload: {
+      type: 'TerminalUnmount',
+      data,
+    } as BridgePayload,
+  });
+}
+
+/** Encode TerminalTabClose into a BridgeEnvelope. */
+export function encodeTerminalTabClose(
+  data: Omit<TerminalTabClose, 'type'>
+): FullBridgeEnvelope {
+  return makeEnvelope('terminal_event', {
+    payload: {
+      type: 'TerminalTabClose',
+      data,
+    } as BridgePayload,
+  });
+}
+
 /** Encode TerminalRename into a BridgeEnvelope. */
 export function encodeTerminalRename(
   data: Omit<TerminalRename, 'type'>
@@ -687,6 +726,12 @@ export function encodeClientMessage(
       return encodeTerminalCreate(payload as unknown as Omit<TerminalCreate, 'type'>);
     case 'TerminalKill':
       return encodeTerminalKill(payload as unknown as Omit<TerminalKill, 'type'>);
+    case 'TerminalMount':
+      return encodeTerminalMount(payload as unknown as Omit<TerminalMount, 'type'>);
+    case 'TerminalUnmount':
+      return encodeTerminalUnmount(payload as unknown as Omit<TerminalUnmount, 'type'>);
+    case 'TerminalTabClose':
+      return encodeTerminalTabClose(payload as unknown as Omit<TerminalTabClose, 'type'>);
     case 'TerminalRename':
       return encodeTerminalRename(payload as unknown as Omit<TerminalRename, 'type'>);
     case 'TerminalReorder':
