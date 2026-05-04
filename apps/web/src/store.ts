@@ -156,7 +156,7 @@ export const useStore = create<AppState>()(
           workspaces: snapshot.workspaces,
           worktrees: snapshot.worktrees,
           agentSessions: snapshot.agentSessions,
-          terminalTabs: snapshot.terminalTabs,
+          terminalTabs: (snapshot.terminalTabs as any) ?? (snapshot as any).terminalSessions ?? [],
           isWorkspacesLoading: false,
         }));
       },
@@ -692,7 +692,8 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
         const { addAgentSession, addTerminalTab } = useStore.getState();
         const worktrees = (data as any)?.worktrees as Array<any> | undefined;
         const agentSessions = (data as any)?.agentSessions as Array<any> | undefined;
-        const terminalTabs = (data as any)?.terminalTabs as Array<any> | undefined;
+        const terminalTabs = (data as any)?.terminalTabs as Array<any> | undefined
+          ?? (data as any)?.terminalSessions as Array<any> | undefined;
 
         if (worktrees) {
           worktrees.forEach((worktree) => {
@@ -1134,7 +1135,7 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
         workspaces: (data.workspaces as unknown) as any[],
         worktrees: (data.worktrees as unknown) as any[],
         agentSessions: (data.agentSessions as unknown) as any[],
-        terminalTabs: (data.terminalTabs as unknown) as any[],
+        terminalTabs: (data.terminalTabs as unknown) as any[] ?? (data as any).terminalSessions ?? [],
       });
       break;
     }
