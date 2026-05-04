@@ -1066,6 +1066,11 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
           const worktreeId = (data as any)?.worktreeId as string | undefined;
           const label = (data as any)?.label as string | null | undefined;
           if (sessionId && worktreeId) {
+            // Guard: skip if tab already exists (TerminalMounted may have already added it)
+            const existing = useStore.getState().terminalTabs.find(
+              (tt) => tt.activeSessionId === sessionId || tt.id === `legacy-${sessionId}`
+            );
+            if (existing) break;
             useStore.getState().addTerminalTab({
               id: `legacy-${sessionId}`,
               worktreeId,

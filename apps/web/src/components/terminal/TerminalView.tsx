@@ -260,7 +260,7 @@ export const Terminal = forwardRef<TerminalRef, TerminalProps>(
         }
 
         // Request terminal history AFTER terminal is ready
-        const requestId = crypto.randomUUID();
+        const requestId = generateId();
         const historyRequest: TerminalRequestHistory = {
           type: 'TerminalRequestHistory',
           tabId: tabIdRef.current,
