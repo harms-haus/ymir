@@ -1,9 +1,7 @@
 /**
- * MessagePack Protocol Types for Ymir WebSocket Communication
+ * Protocol Types for Ymir WebSocket Communication
  * Mirrors Rust protocol types defined in crates/ws-server/src/protocol.rs
  */
-
-import { encode, decode } from '@msgpack/msgpack';
 
 // ============================================================================
 // Shared Types
@@ -27,6 +25,15 @@ export interface Pong {
 
 export interface Error {
   type: 'Error';
+  code: string;
+  message: string;
+  details?: string;
+  requestId?: string;
+}
+
+/** Dispatched when an error_response envelope arrives without a payload.type field. */
+export interface ErrorResponse {
+  type: 'ErrorResponse';
   code: string;
   message: string;
   details?: string;
@@ -308,7 +315,7 @@ export interface TerminalKill {
 
 export interface TerminalRename {
     type: 'TerminalRename';
-    sessionId: string;
+    tabId: string;
     newLabel: string;
     requestId?: string;
 }
@@ -316,13 +323,14 @@ export interface TerminalRename {
 export interface TerminalReorder {
   type: 'TerminalReorder';
   worktreeId: string;
-  sessionIds: string[];
+  tabIds: string[];
   requestId?: string;
 }
 
 export interface TerminalRequestHistory {
   type: 'TerminalRequestHistory';
   sessionId: string;
+  tabId: string;
   requestId: string;
   limit?: number;
 }
@@ -366,6 +374,7 @@ export interface FileListResult {
   type: 'FileListResult';
   worktreeId: string;
   files: string[];
+  path?: string;
   requestId?: string;
 }
 
@@ -454,11 +463,7 @@ export interface WorktreeStatus {
   type: 'WorktreeStatus';
   worktreeId: string;
   status: string;
-}
-
-export interface WorktreeStatus {
-  type: 'WorktreeStatus';
-  worktree: Worktree;
+  worktree?: Worktree;
 }
 
 // Agent events
@@ -522,6 +527,70 @@ export interface TerminalHistory {
   type: 'TerminalHistory';
   sessionId: string;
   data: string;
+}
+
+// Terminal tab types (tab-based terminal management)
+export interface TerminalMount {
+  type: 'TerminalMount';
+  tabId: string;
+  worktreeId: string;
+  label?: string;
+  shell?: string;
+}
+
+export interface TerminalUnmount {
+  type: 'TerminalUnmount';
+  tabId: string;
+  sessionId: string;
+}
+
+export interface TerminalTabClose {
+  type: 'TerminalTabClose';
+  tabId: string;
+}
+
+export interface TerminalMounted {
+  type: 'TerminalMounted';
+  tabId: string;
+  sessionId: string;
+  worktreeId: string;
+  label?: string;
+  shell: string;
+}
+
+export interface TerminalSessionEnded {
+  type: 'TerminalSessionEnded';
+  tabId: string;
+  sessionId: string;
+  reason: string;
+}
+
+export interface TerminalTabHistory {
+  type: 'TerminalTabHistory';
+  tabId: string;
+  data: string;
+}
+
+export interface TerminalTabList {
+  type: 'TerminalTabList';
+  worktreeId: string;
+  tabs: TabSessionData[];
+}
+
+export interface TerminalTabClosed {
+  type: 'TerminalTabClosed';
+  tabId: string;
+}
+
+export interface TabSessionData {
+  id: string;
+  tabId: string;
+  worktreeId: string;
+  label?: string;
+  shell: string;
+  activeSessionId: string | null;
+  status: string;
+  createdAt: number;
 }
 
 export interface AgentUpdated {
@@ -807,6 +876,9 @@ export type ClientMessage =
   | TerminalRename
   | TerminalReorder
   | TerminalRequestHistory
+  | TerminalMount
+  | TerminalUnmount
+  | TerminalTabClose
   | FileRead
     | FileWrite
     | FileList
@@ -840,11 +912,17 @@ export type ServerMessage =
   | TerminalRemoved
   | TerminalUpdated
   | TerminalHistory
+  | TerminalMounted
+  | TerminalSessionEnded
+  | TerminalTabHistory
+  | TerminalTabList
+  | TerminalTabClosed
   | FileContentMessage
     | FileListResult
     | GitStatusResult
     | GitDiffResult
     | Error
+    | ErrorResponse
     | Ping
     | Pong
     | Notification
@@ -1094,125 +1172,3 @@ export function isAcpWireEvent(message: AnyMessage | UnknownMessage): message is
   return message.type === 'AcpWireEvent';
 }
 
-// ============================================================================
-// Message Encoding/Decoding
-// ============================================================================
-
-/**
- * Encodes a message to MessagePack binary format
- * @param message - The message to encode
- * @returns ArrayBuffer containing the encoded message
- */
-export function encodeMessage(message: AnyMessage): ArrayBuffer {
-  const encoded = encode(message);
-  return encoded.buffer.slice(encoded.byteOffset, encoded.byteOffset + encoded.byteLength);
-}
-
-/**
- * Decodes a MessagePack binary message to a typed message
- * @param data - The binary data to decode
- * @returns The decoded message, or UnknownMessage if type is unrecognized
- */
-export function decodeMessage(data: ArrayBuffer | Uint8Array): AnyMessage | UnknownMessage {
-  try {
-    const decoded = decode(data);
-    
-    // Validate that the decoded object has a type field
-    if (typeof decoded !== 'object' || decoded === null || !('type' in decoded)) {
-      return {
-        type: 'UnknownMessage',
-        rawData: decoded
-      };
-    }
-    
-    // Check if the type is a valid message type
-    const validTypes = [
-      // Client messages
-      'WorkspaceCreate', 'WorkspaceDelete', 'WorkspaceRename', 'WorkspaceUpdate',
-      'WorktreeCreate', 'WorktreeDelete', 'WorktreeMerge', 'WorktreeList', 'WorktreeChangeBranch',
-      'AgentSpawn', 'AgentSend', 'AgentCancel', 'AgentSetConfigOption',
-      'TerminalInput', 'TerminalResize', 'TerminalCreate', 'TerminalKill',
-      'FileRead', 'FileWrite', 'FileList',
-      'GitStatus', 'GitDiff', 'GitCommit',
-      'CreatePR',
-      'GetState', 'UpdateSettings',
-      'Ping',
-      // Server messages
-      'StateSnapshot',
-      'WorkspaceCreated', 'WorkspaceDeleted', 'WorkspaceUpdated',
-      'WorktreeCreated', 'WorktreeDeleted', 'WorktreeChanged', 'WorktreeStatus',
-      'AgentStatusUpdate', 'AgentOutput', 'AgentPrompt',
-      'TerminalOutput', 'TerminalCreated', 'TerminalRemoved',
-      'FileContent', 'FileListResult',
-      'GitStatusResult', 'GitDiffResult',
-      'Error', 'Pong', 'Notification',
-      'AcpWireEvent',
-      // Bidirectional
-      'Ack'
-    ];
-    
-    if (!validTypes.includes((decoded as any).type)) {
-      return {
-        type: 'UnknownMessage',
-        rawData: decoded
-      };
-    }
-    
-    // TypeScript will infer the correct type based on the type field
-    return decoded as AnyMessage;
-  } catch (error) {
-    return {
-      type: 'UnknownMessage',
-      rawData: data
-    };
-  }
-}
-
-/**
- * Decodes a message and validates it against a specific type guard
- * @param data - The binary data to decode
- * @param typeGuard - The type guard function to validate against
- * @returns The decoded message if it matches the type guard, or UnknownMessage
- */
-export function decodeAndValidate<T extends AnyMessage>(
-  data: ArrayBuffer | Uint8Array,
-  typeGuard: (msg: AnyMessage | UnknownMessage) => msg is T
-): T | UnknownMessage {
-  const decoded = decodeMessage(data);
-  
-  if (typeGuard(decoded)) {
-    return decoded;
-  }
-  
-  return {
-    type: 'UnknownMessage',
-    rawData: decoded
-  };
-}
-
-// ============================================================================
-// Version Header
-// ============================================================================
-
-export const PROTOCOL_VERSION = 1;
-
-/**
- * Wraps a message with protocol version header
- * @param message - The message to wrap
- * @returns Message with version header
- */
-export function withVersion<T extends AnyMessage>(message: T): T & { version: number } {
-  return {
-    ...message,
-    version: PROTOCOL_VERSION
-  };
-}
-
-/**
- * Checks if a message has the correct protocol version
- * @param message - The message to check
- * @returns true if version matches or is missing (for backward compatibility)
- */
-export function checkVersion(message: any): boolean {
-  return !message.version || message.version === PROTOCOL_VERSION;
-}

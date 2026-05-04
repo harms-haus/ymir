@@ -1,10 +1,11 @@
 //! Terminal-related protocol types
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
 
-use super::uuid_serde;
+use super::{optional_uuid_serde, uuid_serde};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(rename_all = "camelCase")]
@@ -27,6 +28,8 @@ pub struct TerminalResize {
     pub rows: u16,
 }
 
+// ── Legacy types (kept for backward compatibility, phased out later by handlers) ──
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -48,6 +51,9 @@ pub struct TerminalSessionData {
     #[serde(with = "uuid_serde")]
     #[ts(type = "string")]
     pub worktree_id: Uuid,
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub tab_id: Uuid,
     pub label: Option<String>,
     pub shell: String,
     pub created_at: u64,
@@ -92,7 +98,7 @@ pub struct TerminalRemoved {
 pub struct TerminalRename {
     #[serde(with = "uuid_serde")]
     #[ts(type = "string")]
-    pub session_id: Uuid,
+    pub tab_id: Uuid,
     pub new_label: String,
     #[serde(with = "uuid_serde")]
     #[ts(type = "string")]
@@ -107,7 +113,7 @@ pub struct TerminalReorder {
     #[ts(type = "string")]
     pub worktree_id: Uuid,
     #[ts(type = "string[]")]
-    pub session_ids: Vec<Uuid>,
+    pub tab_ids: Vec<Uuid>,
     #[serde(with = "uuid_serde")]
     #[ts(type = "string")]
     pub request_id: Uuid,
@@ -150,6 +156,9 @@ pub struct TerminalRequestHistory {
     pub session_id: Uuid,
     #[serde(with = "uuid_serde")]
     #[ts(type = "string")]
+    pub tab_id: Uuid,
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
     pub request_id: Uuid,
     pub limit: Option<u32>,
 }
@@ -162,4 +171,132 @@ pub struct TerminalHistory {
     #[ts(type = "string")]
     pub session_id: Uuid,
     pub data: String,
+}
+
+// ── Tab-Session Lifecycle Types ──
+
+/// Client→Server: Request to mount a new terminal tab
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TerminalMount {
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub tab_id: Uuid,
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    pub label: Option<String>,
+    pub shell: Option<String>,
+}
+
+/// Client→Server: Request to unmount a terminal tab
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TerminalUnmount {
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub tab_id: Uuid,
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub session_id: Uuid,
+}
+
+/// Client→Server: Request to close a terminal tab
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TerminalTabClose {
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub tab_id: Uuid,
+}
+
+/// Server→Client: Confirmation that a terminal tab has been mounted
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TerminalMounted {
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub tab_id: Uuid,
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub session_id: Uuid,
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    pub label: Option<String>,
+    pub shell: String,
+}
+
+/// Server→Client: Notification that a terminal session has ended
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TerminalSessionEnded {
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub tab_id: Uuid,
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub session_id: Uuid,
+    pub reason: String,
+}
+
+/// Server→Client: History data for a specific tab
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TerminalTabHistory {
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub tab_id: Uuid,
+    pub data: String,
+}
+
+/// Server→Client: List of tabs for a worktree
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TerminalTabList {
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    pub tabs: Vec<TabSessionData>,
+}
+
+/// Server→Client: Notification that a tab has been closed
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TerminalTabClosed {
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub tab_id: Uuid,
+}
+
+/// Data about a tab and its associated session(s)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TabSessionData {
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub id: Uuid,
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub tab_id: Uuid,
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    pub label: Option<String>,
+    pub shell: String,
+    #[serde(with = "optional_uuid_serde", skip_serializing_if = "Option::is_none")]
+    #[ts(type = "string | null")]
+    pub active_session_id: Option<Uuid>,
+    pub status: String,
+    #[ts(type = "string")]
+    pub created_at: DateTime<Utc>,
 }

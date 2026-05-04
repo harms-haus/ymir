@@ -141,6 +141,10 @@ impl AppState {
     pub fn with_pty_manager(db: Arc<Db>, shutdown_rx: watch::Receiver<bool>) -> Self {
         let mut state = Self::new(db, shutdown_rx);
         state.pty_manager = Some(PtyManager::new());
+        // Wire up broadcast channel so TTL expiry can broadcast TerminalSessionEnded
+        if let Some(manager) = &state.pty_manager {
+            manager.set_broadcast_tx(state.broadcast_tx.clone());
+        }
         state
     }
 
@@ -152,6 +156,11 @@ impl AppState {
 
         state.acp_handle = Some(handle);
         state.pty_manager = Some(PtyManager::new());
+
+        // Wire up broadcast channel so TTL expiry can broadcast TerminalSessionEnded
+        if let Some(manager) = &state.pty_manager {
+            manager.set_broadcast_tx(broadcast_tx.clone());
+        }
 
         let state = Arc::new(state);
         let state_weak = Arc::downgrade(&state);

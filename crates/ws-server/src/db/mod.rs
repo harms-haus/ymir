@@ -117,6 +117,15 @@ const SCHEMA_MIGRATIONS: &[&str] = &[
     r#"
     CREATE INDEX IF NOT EXISTS idx_terminal_output_timestamp ON terminal_output(timestamp);
     "#,
+    // Phase 1: Tab-Session Separation — add tab_id, status, ended_at, ended_reason to terminal_sessions
+    r#"
+    ALTER TABLE terminal_sessions ADD COLUMN tab_id TEXT;
+    ALTER TABLE terminal_sessions ADD COLUMN status TEXT DEFAULT 'active';
+    ALTER TABLE terminal_sessions ADD COLUMN ended_at TEXT;
+    ALTER TABLE terminal_sessions ADD COLUMN ended_reason TEXT;
+    CREATE INDEX IF NOT EXISTS idx_terminal_sessions_tab ON terminal_sessions(tab_id);
+    UPDATE terminal_sessions SET tab_id = id WHERE tab_id IS NULL;
+    "#,
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -161,6 +170,10 @@ pub struct TerminalSession {
     pub shell: String,
     pub created_at: String,
     pub position: i64,
+    pub tab_id: Option<String>,
+    pub status: String,
+    pub ended_at: Option<String>,
+    pub ended_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -696,8 +709,8 @@ impl Db {
         let mut stmt = conn
             .prepare(
                 r#"
-            INSERT INTO terminal_sessions (id, worktree_id, label, shell, created_at)
-            VALUES (?1, ?2, ?3, ?4, ?5)
+            INSERT INTO terminal_sessions (id, worktree_id, label, shell, created_at, tab_id, status)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
             "#,
             )
             .await?;
@@ -708,6 +721,8 @@ impl Db {
             session.label.as_deref(),
             session.shell.as_str(),
             session.created_at.as_str(),
+            session.tab_id.as_deref().unwrap_or(session.id.as_str()),
+            session.status.as_str(),
         ))
         .await?;
 
@@ -717,7 +732,7 @@ impl Db {
 
     pub async fn get_terminal_session(&self, id: &str) -> Result<Option<TerminalSession>> {
 let conn = self.conn()?;
-    let mut stmt = conn.prepare("SELECT id, worktree_id, label, shell, created_at, COALESCE(position, 0) FROM terminal_sessions WHERE id = ?1").await?;
+    let mut stmt = conn.prepare("SELECT id, worktree_id, label, shell, created_at, COALESCE(position, 0), tab_id, status, ended_at, ended_reason FROM terminal_sessions WHERE id = ?1").await?;
     let mut rows = stmt.query([id]).await?;
 
     if let Some(row) = rows.next().await? {
@@ -728,6 +743,10 @@ let conn = self.conn()?;
         shell: row.get(3)?,
         created_at: row.get(4)?,
         position: row.get(5)?,
+        tab_id: row.get(6)?,
+        status: row.get(7)?,
+        ended_at: row.get(8)?,
+        ended_reason: row.get(9)?,
       }))
     } else {
       Ok(None)
@@ -737,7 +756,7 @@ let conn = self.conn()?;
 pub async fn list_terminal_sessions(&self, worktree_id: &str) -> Result<Vec<TerminalSession>> {
     let conn = self.conn()?;
     let mut stmt = conn.prepare(
-      "SELECT id, worktree_id, label, shell, created_at, COALESCE(position, 0) FROM terminal_sessions WHERE worktree_id = ?1 ORDER BY COALESCE(position, 0) ASC"
+      "SELECT id, worktree_id, label, shell, created_at, COALESCE(position, 0), tab_id, status, ended_at, ended_reason FROM terminal_sessions WHERE worktree_id = ?1 ORDER BY COALESCE(position, 0) ASC"
     ).await?;
     let mut rows = stmt.query([worktree_id]).await?;
     let mut sessions = Vec::new();
@@ -750,6 +769,10 @@ pub async fn list_terminal_sessions(&self, worktree_id: &str) -> Result<Vec<Term
         shell: row.get(3)?,
         created_at: row.get(4)?,
         position: row.get(5)?,
+        tab_id: row.get(6)?,
+        status: row.get(7)?,
+        ended_at: row.get(8)?,
+        ended_reason: row.get(9)?,
       });
     }
 
@@ -834,7 +857,7 @@ pub async fn list_terminal_sessions(&self, worktree_id: &str) -> Result<Vec<Term
     pub async fn list_all_terminal_sessions(&self) -> Result<Vec<TerminalSession>> {
         let conn = self.conn()?;
         let mut stmt = conn.prepare(
-            "SELECT id, worktree_id, label, shell, created_at, COALESCE(position, 0) FROM terminal_sessions ORDER BY COALESCE(position, 0) ASC"
+            "SELECT id, worktree_id, label, shell, created_at, COALESCE(position, 0), tab_id, status, ended_at, ended_reason FROM terminal_sessions ORDER BY COALESCE(position, 0) ASC"
         ).await?;
         let mut rows = stmt.query(()).await?;
         let mut sessions = Vec::new();
@@ -847,6 +870,10 @@ pub async fn list_terminal_sessions(&self, worktree_id: &str) -> Result<Vec<Term
                 shell: row.get(3)?,
                 created_at: row.get(4)?,
                 position: row.get(5)?,
+                tab_id: row.get(6)?,
+                status: row.get(7)?,
+                ended_at: row.get(8)?,
+                ended_reason: row.get(9)?,
             });
         }
 
@@ -859,6 +886,284 @@ pub async fn list_terminal_sessions(&self, worktree_id: &str) -> Result<Vec<Term
       .execute("DELETE FROM terminal_sessions", ())
       .await?;
     Ok(rows_affected as usize)
+  }
+
+  // --- Tab-Session Separation methods (Phase 1) ---
+
+  /// Create a terminal tab record. The tab is the stable identity that persists
+  /// across page refreshes. A session is created alongside it.
+  pub async fn create_terminal_tab(
+    &self,
+    tab_id: &str,
+    worktree_id: &str,
+    label: Option<&str>,
+    shell: &str,
+  ) -> Result<String> {
+    let conn = self.conn()?;
+    let session_id = uuid::Uuid::new_v4().to_string();
+    let now = chrono::Utc::now().to_rfc3339();
+
+    let mut stmt = conn
+      .prepare(
+        r#"
+        INSERT INTO terminal_sessions (id, worktree_id, label, shell, created_at, tab_id, status)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'active')
+        "#,
+      )
+      .await?;
+
+    stmt.execute((
+      session_id.as_str(),
+      worktree_id,
+      label,
+      shell,
+      now.as_str(),
+      tab_id,
+    ))
+    .await?;
+
+    debug!("Created terminal tab {} with session {}", tab_id, session_id);
+    Ok(session_id)
+  }
+
+  /// Get the most recent active session for a given tab_id.
+  pub async fn get_active_tab_session(&self, tab_id: &str) -> Result<Option<TerminalSession>> {
+    let conn = self.conn()?;
+    let mut stmt = conn
+      .prepare(
+        r#"
+        SELECT id, worktree_id, label, shell, created_at, COALESCE(position, 0), tab_id, status, ended_at, ended_reason
+        FROM terminal_sessions
+        WHERE tab_id = ?1 AND status = 'active'
+        ORDER BY created_at DESC
+        LIMIT 1
+        "#,
+      )
+      .await?;
+    let mut rows = stmt.query([tab_id]).await?;
+
+    if let Some(row) = rows.next().await? {
+      Ok(Some(TerminalSession {
+        id: row.get(0)?,
+        worktree_id: row.get(1)?,
+        label: row.get(2)?,
+        shell: row.get(3)?,
+        created_at: row.get(4)?,
+        position: row.get(5)?,
+        tab_id: row.get(6)?,
+        status: row.get(7)?,
+        ended_at: row.get(8)?,
+        ended_reason: row.get(9)?,
+      }))
+    } else {
+      Ok(None)
+    }
+  }
+
+  /// Get the most recent ended session for a given tab_id (for respawn context).
+  pub async fn get_ended_tab_session(&self, tab_id: &str) -> Result<Option<TerminalSession>> {
+    let conn = self.conn()?;
+    let mut stmt = conn
+      .prepare(
+        r#"
+        SELECT id, worktree_id, label, shell, created_at, COALESCE(position, 0), tab_id, status, ended_at, ended_reason
+        FROM terminal_sessions
+        WHERE tab_id = ?1 AND status != 'active'
+        ORDER BY created_at DESC
+        LIMIT 1
+        "#,
+      )
+      .await?;
+    let mut rows = stmt.query([tab_id]).await?;
+
+    if let Some(row) = rows.next().await? {
+      Ok(Some(TerminalSession {
+        id: row.get(0)?,
+        worktree_id: row.get(1)?,
+        label: row.get(2)?,
+        shell: row.get(3)?,
+        created_at: row.get(4)?,
+        position: row.get(5)?,
+        tab_id: row.get(6)?,
+        status: row.get(7)?,
+        ended_at: row.get(8)?,
+        ended_reason: row.get(9)?,
+      }))
+    } else {
+      Ok(None)
+    }
+  }
+
+  /// Link a session to a tab by updating the tab_id on a session row.
+  /// Used when a new PTY session is spawned for an existing tab.
+  pub async fn link_tab_session(&self, tab_id: &str, session_id: &str) -> Result<bool> {
+    let conn = self.conn()?;
+    let rows_affected = conn
+      .execute(
+        "UPDATE terminal_sessions SET tab_id = ?1, status = 'active', ended_at = NULL, ended_reason = NULL, updated_at = datetime('now') WHERE id = ?2",
+        libsql::params![tab_id, session_id],
+      )
+      .await?;
+    debug!(
+      "Linked tab {} to session {} (rows affected: {})",
+      tab_id, session_id, rows_affected
+    );
+    Ok(rows_affected > 0)
+  }
+
+  /// End a session by setting status, ended_at, and ended_reason.
+  pub async fn end_tab_session(&self, session_id: &str, reason: &str) -> Result<bool> {
+    let conn = self.conn()?;
+    let rows_affected = conn
+      .execute(
+        "UPDATE terminal_sessions SET status = 'ended', ended_at = datetime('now'), ended_reason = ?1, updated_at = datetime('now') WHERE id = ?2",
+        libsql::params![reason, session_id],
+      )
+      .await?;
+    debug!(
+      "Ended session {} with reason '{}' (rows affected: {})",
+      session_id, reason, rows_affected
+    );
+    Ok(rows_affected > 0)
+  }
+
+  /// Close a terminal tab: end its active session and mark the tab as closed.
+  /// This effectively removes the tab's identity from the active set.
+  pub async fn close_terminal_tab(&self, tab_id: &str) -> Result<bool> {
+    let conn = self.conn()?;
+    // Delete all output for sessions belonging to this tab
+    conn.execute(
+      "DELETE FROM terminal_output WHERE session_id IN (SELECT id FROM terminal_sessions WHERE tab_id = ?1)",
+      libsql::params![tab_id],
+    ).await?;
+    // Delete all sessions for this tab
+    conn.execute(
+      "DELETE FROM terminal_sessions WHERE tab_id = ?1",
+      libsql::params![tab_id],
+    ).await?;
+    debug!("Deleted tab {} and all its sessions", tab_id);
+    Ok(true)
+  }
+
+  /// Get terminal output for a tab by JOINing terminal_output with terminal_sessions
+  /// on session_id, filtering by tab_id. Returns all output across all sessions for
+  /// the given tab.
+  pub async fn get_terminal_output_by_tab(
+    &self,
+    tab_id: &str,
+    limit: Option<i64>,
+  ) -> Result<Vec<String>> {
+    let conn = self.conn()?;
+    let limit = limit.unwrap_or(1000);
+
+    let mut stmt = conn
+      .prepare(
+        r#"
+        SELECT o.data FROM terminal_output o
+        INNER JOIN terminal_sessions s ON o.session_id = s.id
+        WHERE s.tab_id = ?1
+        ORDER BY o.id ASC
+        LIMIT ?2
+        "#,
+      )
+      .await?;
+
+    let mut rows = stmt
+      .query((tab_id, limit.to_string().as_str()))
+      .await?;
+    let mut output = Vec::new();
+
+    while let Some(row) = rows.next().await? {
+      output.push(row.get::<String>(0)?);
+    }
+
+    debug!(
+      "Retrieved {} output rows for tab {}",
+      output.len(),
+      tab_id
+    );
+    Ok(output)
+  }
+
+  /// List all terminal sessions for a given tab_id.
+  pub async fn list_terminal_sessions_for_tab(&self, tab_id: &str) -> Result<Vec<TerminalSession>> {
+    let conn = self.conn()?;
+    let mut stmt = conn
+      .prepare(
+        r#"
+        SELECT id, worktree_id, label, shell, created_at, COALESCE(position, 0), tab_id, status, ended_at, ended_reason
+        FROM terminal_sessions
+        WHERE tab_id = ?1
+        ORDER BY created_at ASC
+        "#,
+      )
+      .await?;
+    let mut rows = stmt.query([tab_id]).await?;
+    let mut sessions = Vec::new();
+
+    while let Some(row) = rows.next().await? {
+      sessions.push(TerminalSession {
+        id: row.get(0)?,
+        worktree_id: row.get(1)?,
+        label: row.get(2)?,
+        shell: row.get(3)?,
+        created_at: row.get(4)?,
+        position: row.get(5)?,
+        tab_id: row.get(6)?,
+        status: row.get(7)?,
+        ended_at: row.get(8)?,
+        ended_reason: row.get(9)?,
+      });
+    }
+
+    debug!(
+      "Retrieved {} sessions for tab {}",
+      sessions.len(),
+      tab_id
+    );
+    Ok(sessions)
+  }
+
+  /// List all tabs for a worktree, returning the most recent session info per tab.
+  /// Only returns tabs with at least one session (active or recently ended).
+  pub async fn list_terminal_tabs(&self, worktree_id: &str) -> Result<Vec<TerminalSession>> {
+    let conn = self.conn()?;
+    let mut stmt = conn
+      .prepare(
+        r#"
+        SELECT s.id, s.worktree_id, s.label, s.shell, s.created_at, COALESCE(s.position, 0), s.tab_id, s.status, s.ended_at, s.ended_reason
+        FROM terminal_sessions s
+        INNER JOIN (
+          SELECT tab_id, MAX(created_at) as max_created
+          FROM terminal_sessions
+          WHERE worktree_id = ?1
+          GROUP BY tab_id
+        ) latest ON s.tab_id = latest.tab_id AND s.created_at = latest.max_created
+        WHERE s.worktree_id = ?1
+        ORDER BY COALESCE(s.position, 0) ASC
+        "#,
+      )
+      .await?;
+    let mut rows = stmt.query([worktree_id]).await?;
+    let mut sessions = Vec::new();
+
+    while let Some(row) = rows.next().await? {
+      sessions.push(TerminalSession {
+        id: row.get(0)?,
+        worktree_id: row.get(1)?,
+        label: row.get(2)?,
+        shell: row.get(3)?,
+        created_at: row.get(4)?,
+        position: row.get(5)?,
+        tab_id: row.get(6)?,
+        status: row.get(7)?,
+        ended_at: row.get(8)?,
+        ended_reason: row.get(9)?,
+      });
+    }
+
+    debug!("Listed {} terminal tabs for worktree {}", sessions.len(), worktree_id);
+    Ok(sessions)
   }
 }
 
@@ -1146,6 +1451,42 @@ mod tests {
         Uuid::new_v4().to_string()
     }
 
+    /// Create a workspace and worktree to satisfy foreign key constraints
+    /// for terminal_sessions (which references worktrees).
+    async fn setup_worktree(db: &Db) -> String {
+        let workspace_id = generate_uuid();
+        let workspace = Workspace {
+            id: workspace_id.clone(),
+            name: "Test Workspace".to_string(),
+            root_path: "/test/path".to_string(),
+            color: "#FF0000".to_string(),
+            icon: "folder".to_string(),
+            worktree_base_dir: ".git/worktrees".to_string(),
+            settings_json: "{}".to_string(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            updated_at: chrono::Utc::now().to_rfc3339(),
+        };
+        db.create_workspace(&workspace)
+            .await
+            .expect("Failed to create workspace");
+
+        let worktree_id = generate_uuid();
+        let worktree = Worktree {
+            id: worktree_id.clone(),
+            workspace_id: workspace_id.clone(),
+            branch_name: "main".to_string(),
+            path: "/test/path".to_string(),
+            status: "active".to_string(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            is_main: true,
+        };
+        db.create_worktree(&worktree)
+            .await
+            .expect("Failed to create worktree");
+
+        worktree_id
+    }
+
     #[tokio::test]
     async fn test_db_schema() {
         let db = create_test_db().await;
@@ -1402,6 +1743,10 @@ mod tests {
             shell: "bash".to_string(),
             created_at: chrono::Utc::now().to_rfc3339(),
             position: 0,
+            tab_id: None,
+            status: "active".to_string(),
+            ended_at: None,
+            ended_reason: None,
         };
         db.create_terminal_session(&session)
             .await
@@ -1591,5 +1936,695 @@ mod tests {
             .await
             .expect("Failed to check deletion");
         assert!(deleted.is_none(), "Panel layout should be deleted");
+    }
+
+    // --- Terminal Tab-Session Separation Tests (Phase 9) ---
+
+    #[tokio::test]
+    async fn test_create_terminal_tab() {
+        let db = create_test_db().await;
+
+        let tab_id = generate_uuid();
+        let worktree_id = generate_uuid();
+
+        let session_id = db
+            .create_terminal_tab(&tab_id, &worktree_id, Some("Test Tab"), "bash")
+            .await
+            .expect("Failed to create terminal tab");
+
+        // Verify session was created and linked to tab
+        let session = db
+            .get_terminal_session(&session_id)
+            .await
+            .expect("Failed to get session");
+        assert!(session.is_some());
+        let session = session.unwrap();
+        assert_eq!(session.tab_id, Some(tab_id.clone()));
+        assert_eq!(session.status, "active");
+        assert_eq!(session.worktree_id, worktree_id);
+    }
+
+    #[tokio::test]
+    async fn test_get_active_tab_session() {
+        let db = create_test_db().await;
+
+        let tab_id = generate_uuid();
+        let worktree_id = generate_uuid();
+
+        // Create an active session for the tab
+        let _session_id = db
+            .create_terminal_tab(&tab_id, &worktree_id, Some("Active Tab"), "bash")
+            .await
+            .expect("Failed to create terminal tab");
+
+        // Should find the active session
+        let active = db
+            .get_active_tab_session(&tab_id)
+            .await
+            .expect("Failed to get active tab session");
+        assert!(active.is_some());
+        let active = active.unwrap();
+        assert_eq!(active.tab_id, Some(tab_id.clone()));
+        assert_eq!(active.status, "active");
+
+        // Non-existent tab should return None
+        let nonexistent = db
+            .get_active_tab_session(&generate_uuid())
+            .await
+            .expect("Failed to query nonexistent tab");
+        assert!(nonexistent.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_get_ended_tab_session() {
+        let db = create_test_db().await;
+
+        let tab_id = generate_uuid();
+        let worktree_id = generate_uuid();
+
+        // Create and then end a session
+        let session_id = db
+            .create_terminal_tab(&tab_id, &worktree_id, Some("Ended Tab"), "bash")
+            .await
+            .expect("Failed to create terminal tab");
+
+        db.end_tab_session(&session_id, "unmount")
+            .await
+            .expect("Failed to end session");
+
+        // Should find the ended session
+        let ended = db
+            .get_ended_tab_session(&tab_id)
+            .await
+            .expect("Failed to get ended tab session");
+        assert!(ended.is_some());
+        let ended = ended.unwrap();
+        assert_eq!(ended.tab_id, Some(tab_id.clone()));
+        assert_eq!(ended.status, "ended");
+        assert_eq!(ended.ended_reason, Some("unmount".to_string()));
+
+        // Active session should not be returned by get_ended_tab_session
+        let tab_id2 = generate_uuid();
+        let _session_id2 = db
+            .create_terminal_tab(&tab_id2, &worktree_id, Some("Active Tab"), "bash")
+            .await
+            .expect("Failed to create terminal tab");
+
+        let active = db
+            .get_ended_tab_session(&tab_id2)
+            .await
+            .expect("Failed to query active tab");
+        assert!(active.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_link_tab_session() {
+        let db = create_test_db().await;
+
+        let tab_id = generate_uuid();
+        let worktree_id = generate_uuid();
+
+        // Create initial session
+        let session_id_1 = db
+            .create_terminal_tab(&tab_id, &worktree_id, Some("Tab"), "bash")
+            .await
+            .expect("Failed to create terminal tab");
+
+        // End the first session
+        db.end_tab_session(&session_id_1, "ttl")
+            .await
+            .expect("Failed to end session");
+
+        // Create a new session (simulating respawn)
+        let session_id_2 = generate_uuid();
+        let new_session = TerminalSession {
+            id: session_id_2.clone(),
+            worktree_id: worktree_id.clone(),
+            label: Some("Tab".to_string()),
+            shell: "bash".to_string(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            position: 0,
+            tab_id: None,
+            status: "active".to_string(),
+            ended_at: None,
+            ended_reason: None,
+        };
+        db.create_terminal_session(&new_session)
+            .await
+            .expect("Failed to create session");
+
+        // Link new session to tab
+        let linked = db
+            .link_tab_session(&tab_id, &session_id_2)
+            .await
+            .expect("Failed to link session");
+        assert!(linked);
+
+        // Verify the session is now linked and active
+        let session = db
+            .get_terminal_session(&session_id_2)
+            .await
+            .expect("Failed to get session");
+        assert!(session.is_some());
+        let session = session.unwrap();
+        assert_eq!(session.tab_id, Some(tab_id));
+        assert_eq!(session.status, "active");
+        assert!(session.ended_at.is_none());
+        assert!(session.ended_reason.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_end_tab_session() {
+        let db = create_test_db().await;
+
+        let tab_id = generate_uuid();
+        let worktree_id = generate_uuid();
+
+        let session_id = db
+            .create_terminal_tab(&tab_id, &worktree_id, Some("Tab"), "bash")
+            .await
+            .expect("Failed to create terminal tab");
+
+        // End with unmount reason
+        let ended = db
+            .end_tab_session(&session_id, "unmount")
+            .await
+            .expect("Failed to end session");
+        assert!(ended);
+
+        let session = db
+            .get_terminal_session(&session_id)
+            .await
+            .expect("Failed to get session");
+        assert!(session.is_some());
+        let session = session.unwrap();
+        assert_eq!(session.status, "ended");
+        assert_eq!(session.ended_reason, Some("unmount".to_string()));
+        assert!(session.ended_at.is_some());
+
+        // End with TTL reason
+        let session_id2 = db
+            .create_terminal_tab(&generate_uuid(), &worktree_id, Some("Tab2"), "bash")
+            .await
+            .expect("Failed to create terminal tab");
+
+        db.end_tab_session(&session_id2, "ttl")
+            .await
+            .expect("Failed to end session");
+
+        let session2 = db
+            .get_terminal_session(&session_id2)
+            .await
+            .expect("Failed to get session");
+        assert_eq!(session2.unwrap().ended_reason, Some("ttl".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_close_terminal_tab() {
+        let db = create_test_db().await;
+
+        let tab_id = generate_uuid();
+        let worktree_id = generate_uuid();
+
+        // Create tab with session
+        let _session_id = db
+            .create_terminal_tab(&tab_id, &worktree_id, Some("Tab"), "bash")
+            .await
+            .expect("Failed to create terminal tab");
+
+        // Close the tab
+        let closed = db
+            .close_terminal_tab(&tab_id)
+            .await
+            .expect("Failed to close tab");
+        assert!(closed);
+
+        // Session should be ended
+        let active = db
+            .get_active_tab_session(&tab_id)
+            .await
+            .expect("Failed to check active session");
+        assert!(active.is_none());
+
+        // Ended session should exist
+        let ended = db
+            .get_ended_tab_session(&tab_id)
+            .await
+            .expect("Failed to check ended session");
+        assert!(ended.is_some());
+        assert_eq!(ended.unwrap().ended_reason, Some("close".to_string()));
+
+        // Closing a tab with no active sessions should return false
+        let closed_again = db
+            .close_terminal_tab(&tab_id)
+            .await
+            .expect("Failed to close tab again");
+        assert!(!closed_again);
+    }
+
+    #[tokio::test]
+    async fn test_get_terminal_output_by_tab() {
+        let db = create_test_db().await;
+
+        let tab_id = generate_uuid();
+        let worktree_id = generate_uuid();
+
+        // Create first session and add output
+        let session_id_1 = db
+            .create_terminal_tab(&tab_id, &worktree_id, Some("Tab"), "bash")
+            .await
+            .expect("Failed to create terminal tab");
+
+        db.append_terminal_output(&session_id_1, "output line 1\n")
+            .await
+            .expect("Failed to append output");
+        db.append_terminal_output(&session_id_1, "output line 2\n")
+            .await
+            .expect("Failed to append output");
+
+        // End first session and create second (simulating TTL respawn)
+        db.end_tab_session(&session_id_1, "ttl")
+            .await
+            .expect("Failed to end session");
+
+        let session_id_2 = generate_uuid();
+        let session_2 = TerminalSession {
+            id: session_id_2.clone(),
+            worktree_id: worktree_id.clone(),
+            label: Some("Tab".to_string()),
+            shell: "bash".to_string(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            position: 0,
+            tab_id: Some(tab_id.clone()),
+            status: "active".to_string(),
+            ended_at: None,
+            ended_reason: None,
+        };
+        db.create_terminal_session(&session_2)
+            .await
+            .expect("Failed to create session");
+
+        db.append_terminal_output(&session_id_2, "output line 3\n")
+            .await
+            .expect("Failed to append output");
+
+        // Query output by tab — should include output from both sessions
+        let output = db
+            .get_terminal_output_by_tab(&tab_id, None)
+            .await
+            .expect("Failed to get output by tab");
+        assert_eq!(output.len(), 3);
+        assert_eq!(output[0], "output line 1\n");
+        assert_eq!(output[1], "output line 2\n");
+        assert_eq!(output[2], "output line 3\n");
+
+        // Test with limit
+        let output_limited = db
+            .get_terminal_output_by_tab(&tab_id, Some(2))
+            .await
+            .expect("Failed to get limited output");
+        assert_eq!(output_limited.len(), 2);
+
+        // Non-existent tab should return empty
+        let empty = db
+            .get_terminal_output_by_tab(&generate_uuid(), None)
+            .await
+            .expect("Failed to query nonexistent tab");
+        assert!(empty.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_list_terminal_tabs() {
+        let db = create_test_db().await;
+
+        let worktree_id = generate_uuid();
+
+        // Create multiple tabs
+        let tab_id_1 = generate_uuid();
+        let tab_id_2 = generate_uuid();
+
+        db.create_terminal_tab(&tab_id_1, &worktree_id, Some("Tab 1"), "bash")
+            .await
+            .expect("Failed to create tab 1");
+        db.create_terminal_tab(&tab_id_2, &worktree_id, Some("Tab 2"), "zsh")
+            .await
+            .expect("Failed to create tab 2");
+
+        // List tabs for worktree
+        let tabs = db
+            .list_terminal_tabs(&worktree_id)
+            .await
+            .expect("Failed to list tabs");
+        assert_eq!(tabs.len(), 2);
+
+        // Verify both tabs are present
+        let tab_ids: Vec<&String> = tabs.iter().filter_map(|t| t.tab_id.as_ref()).collect();
+        assert!(tab_ids.iter().any(|t| **t == tab_id_1));
+        assert!(tab_ids.iter().any(|t| **t == tab_id_2));
+
+        // Different worktree should have no tabs
+        let empty = db
+            .list_terminal_tabs(&generate_uuid())
+            .await
+            .expect("Failed to list tabs for empty worktree");
+        assert!(empty.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_list_terminal_sessions_for_tab() {
+        let db = create_test_db().await;
+
+        let tab_id = generate_uuid();
+        let worktree_id = generate_uuid();
+
+        // Create a session
+        let session_id_1 = db
+            .create_terminal_tab(&tab_id, &worktree_id, Some("Tab"), "bash")
+            .await
+            .expect("Failed to create tab");
+
+        // End it and create another
+        db.end_tab_session(&session_id_1, "unmount")
+            .await
+            .expect("Failed to end session");
+
+        let session_id_2 = generate_uuid();
+        let session_2 = TerminalSession {
+            id: session_id_2.clone(),
+            worktree_id: worktree_id.clone(),
+            label: Some("Tab".to_string()),
+            shell: "bash".to_string(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            position: 0,
+            tab_id: Some(tab_id.clone()),
+            status: "active".to_string(),
+            ended_at: None,
+            ended_reason: None,
+        };
+        db.create_terminal_session(&session_2)
+            .await
+            .expect("Failed to create session");
+
+        // List all sessions for tab
+        let sessions = db
+            .list_terminal_sessions_for_tab(&tab_id)
+            .await
+            .expect("Failed to list sessions for tab");
+        assert_eq!(sessions.len(), 2);
+
+        // Verify both sessions are present and ordered by creation
+        assert_eq!(sessions[0].id, session_id_1);
+        assert_eq!(sessions[1].id, session_id_2);
+
+        // Verify statuses
+        assert_eq!(sessions[0].status, "ended");
+        assert_eq!(sessions[1].status, "active");
+
+        // Non-existent tab should return empty
+        let empty = db
+            .list_terminal_sessions_for_tab(&generate_uuid())
+            .await
+            .expect("Failed to list sessions for nonexistent tab");
+        assert!(empty.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_tab_session_multiple_respawns() {
+        let db = create_test_db().await;
+
+        let tab_id = generate_uuid();
+        let worktree_id = generate_uuid();
+
+        // Simulate multiple respawns (TTL cycles)
+        for i in 0..3 {
+            let session = TerminalSession {
+                id: generate_uuid(),
+                worktree_id: worktree_id.clone(),
+                label: Some(format!("Tab respawn {}", i)),
+                shell: "bash".to_string(),
+                created_at: chrono::Utc::now().to_rfc3339(),
+                position: 0,
+                tab_id: Some(tab_id.clone()),
+                status: "active".to_string(),
+                ended_at: None,
+                ended_reason: None,
+            };
+            db.create_terminal_session(&session)
+                .await
+                .expect("Failed to create session");
+        }
+
+        // All sessions should be retrievable
+        let sessions = db
+            .list_terminal_sessions_for_tab(&tab_id)
+            .await
+            .expect("Failed to list sessions");
+        assert_eq!(sessions.len(), 3);
+
+        // Only active sessions should be returned by get_active_tab_session
+        let active = db
+            .get_active_tab_session(&tab_id)
+            .await
+            .expect("Failed to get active session");
+        assert!(active.is_some());
+        assert_eq!(active.unwrap().status, "active");
+
+        // list_terminal_tabs should return the most recent session
+        let tabs = db
+            .list_terminal_tabs(&worktree_id)
+            .await
+            .expect("Failed to list tabs");
+        assert_eq!(tabs.len(), 1);
+        assert_eq!(tabs[0].status, "active");
+    }
+
+    #[tokio::test]
+    async fn test_create_terminal_tab_creates_tab_and_session() {
+        let db = create_test_db().await;
+        let worktree_id = setup_worktree(&db).await;
+        let tab_id = generate_uuid();
+
+        // Create a terminal tab — this should create both tab record and session
+        let session_id = db
+            .create_terminal_tab(&tab_id, &worktree_id, Some("New Tab"), "bash")
+            .await
+            .expect("Failed to create terminal tab");
+
+        // Session should exist and be linked to the tab
+        let session = db
+            .get_terminal_session(&session_id)
+            .await
+            .expect("Failed to get session");
+        assert!(session.is_some());
+        let session = session.unwrap();
+        assert_eq!(session.tab_id, Some(tab_id.clone()));
+        assert_eq!(session.worktree_id, worktree_id);
+        assert_eq!(session.shell, "bash");
+        assert_eq!(session.label, Some("New Tab".to_string()));
+        assert_eq!(session.status, "active");
+    }
+
+    #[tokio::test]
+    async fn test_get_active_tab_session_returns_active() {
+        let db = create_test_db().await;
+        let worktree_id = setup_worktree(&db).await;
+        let tab_id = generate_uuid();
+
+        // Create an active session for the tab
+        let _session_id = db
+            .create_terminal_tab(&tab_id, &worktree_id, Some("Active"), "bash")
+            .await
+            .expect("Failed to create terminal tab");
+
+        // get_active_tab_session should return the active session
+        let active = db
+            .get_active_tab_session(&tab_id)
+            .await
+            .expect("Failed to get active session");
+        assert!(active.is_some());
+        let active = active.unwrap();
+        assert_eq!(active.status, "active");
+        assert_eq!(active.tab_id, Some(tab_id.clone()));
+    }
+
+    #[tokio::test]
+    async fn test_get_active_tab_session_returns_none_when_ended() {
+        let db = create_test_db().await;
+        let worktree_id = setup_worktree(&db).await;
+        let tab_id = generate_uuid();
+
+        // Create a session and then end it
+        let session_id = db
+            .create_terminal_tab(&tab_id, &worktree_id, Some("To Be Ended"), "bash")
+            .await
+            .expect("Failed to create terminal tab");
+
+        db.end_tab_session(&session_id, "user_closed")
+            .await
+            .expect("Failed to end session");
+
+        // get_active_tab_session should return None for an ended session
+        let active = db
+            .get_active_tab_session(&tab_id)
+            .await
+            .expect("Failed to query active session");
+        assert!(active.is_none(), "Should return None when session is ended");
+
+        // Non-existent tab should also return None
+        let nonexistent = db
+            .get_active_tab_session(&generate_uuid())
+            .await
+            .expect("Failed to query nonexistent tab");
+        assert!(nonexistent.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_end_tab_session_updates_status() {
+        let db = create_test_db().await;
+        let worktree_id = setup_worktree(&db).await;
+        let tab_id = generate_uuid();
+
+        // Create a session
+        let session_id = db
+            .create_terminal_tab(&tab_id, &worktree_id, Some("End Test"), "bash")
+            .await
+            .expect("Failed to create terminal tab");
+
+        // Verify initial status is active
+        let session = db
+            .get_terminal_session(&session_id)
+            .await
+            .expect("Failed to get session")
+            .unwrap();
+        assert_eq!(session.status, "active");
+        assert!(session.ended_at.is_none());
+        assert!(session.ended_reason.is_none());
+
+        // End the session
+        let result = db
+            .end_tab_session(&session_id, "ttl_expired")
+            .await
+            .expect("Failed to end session");
+        assert!(result, "end_tab_session should return true");
+
+        // Verify status and metadata are updated
+        let session = db
+            .get_terminal_session(&session_id)
+            .await
+            .expect("Failed to get session")
+            .unwrap();
+        assert_eq!(session.status, "ended");
+        assert_eq!(session.ended_reason, Some("ttl_expired".to_string()));
+        assert!(session.ended_at.is_some(), "ended_at should be set");
+    }
+
+    #[tokio::test]
+    async fn test_list_terminal_tabs_empty_and_with_data() {
+        let db = create_test_db().await;
+
+        let worktree_id = generate_uuid();
+
+        // Empty worktree should return no tabs
+        let empty = db
+            .list_terminal_tabs(&worktree_id)
+            .await
+            .expect("Failed to list tabs for empty worktree");
+        assert!(empty.is_empty(), "Expected empty list for new worktree");
+
+        // Create tabs
+        let tab_id_1 = generate_uuid();
+        let tab_id_2 = generate_uuid();
+
+        db.create_terminal_tab(&tab_id_1, &worktree_id, Some("Tab 1"), "bash")
+            .await
+            .expect("Failed to create tab 1");
+        db.create_terminal_tab(&tab_id_2, &worktree_id, Some("Tab 2"), "zsh")
+            .await
+            .expect("Failed to create tab 2");
+
+        // Should now return both tabs
+        let tabs = db
+            .list_terminal_tabs(&worktree_id)
+            .await
+            .expect("Failed to list tabs");
+        assert_eq!(tabs.len(), 2);
+
+        // Verify tab data
+        let tab_ids: Vec<_> = tabs.iter().filter_map(|t| t.tab_id.as_ref()).collect();
+        assert!(tab_ids.iter().any(|id| **id == tab_id_1));
+        assert!(tab_ids.iter().any(|id| **id == tab_id_2));
+
+        // Different worktree should still be empty
+        let other_worktree = generate_uuid();
+        let other_tabs = db
+            .list_terminal_tabs(&other_worktree)
+            .await
+            .expect("Failed to list tabs for other worktree");
+        assert!(other_tabs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_terminal_output_by_tab_multi_session() {
+        let db = create_test_db().await;
+
+        let tab_id = generate_uuid();
+        let worktree_id = generate_uuid();
+
+        // Create first session and add output
+        let session_id_1 = db
+            .create_terminal_tab(&tab_id, &worktree_id, Some("Multi Session"), "bash")
+            .await
+            .expect("Failed to create terminal tab");
+
+        db.append_terminal_output(&session_id_1, "line1\n")
+            .await
+            .expect("Failed to append output");
+        db.append_terminal_output(&session_id_1, "line2\n")
+            .await
+            .expect("Failed to append output");
+
+        // End first session (simulating TTL expiry)
+        db.end_tab_session(&session_id_1, "ttl")
+            .await
+            .expect("Failed to end session");
+
+        // Create second session for the same tab
+        let session_id_2 = generate_uuid();
+        let session_2 = TerminalSession {
+            id: session_id_2.clone(),
+            worktree_id: worktree_id.clone(),
+            label: Some("Multi Session".to_string()),
+            shell: "bash".to_string(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            position: 0,
+            tab_id: Some(tab_id.clone()),
+            status: "active".to_string(),
+            ended_at: None,
+            ended_reason: None,
+        };
+        db.create_terminal_session(&session_2)
+            .await
+            .expect("Failed to create session 2");
+
+        db.append_terminal_output(&session_id_2, "line3\n")
+            .await
+            .expect("Failed to append output");
+
+        // Query all output for the tab — should include both sessions
+        let output = db
+            .get_terminal_output_by_tab(&tab_id, None)
+            .await
+            .expect("Failed to get output by tab");
+        assert_eq!(output.len(), 3);
+        assert_eq!(output[0], "line1\n");
+        assert_eq!(output[1], "line2\n");
+        assert_eq!(output[2], "line3\n");
+
+        // Test with limit
+        let limited = db
+            .get_terminal_output_by_tab(&tab_id, Some(2))
+            .await
+            .expect("Failed to get limited output");
+        assert_eq!(limited.len(), 2);
     }
 }

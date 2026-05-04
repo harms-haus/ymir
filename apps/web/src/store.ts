@@ -1,16 +1,34 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { AppState, NotificationState, AgentTab, AlertDialogConfig, AgentSessionState, TerminalSessionState, AcpAccumulatorState, AcpAccumulatorAction, AccumulatedThread, AccumulatedMessage, AccumulatedTextContent, AccumulatedToolCard, AccumulatedContextCard, AccumulatedErrorCard, MAX_TOOL_OUTPUT_LENGTH, MAX_ACCUMULATED_MESSAGES, createInitialAccumulatorState, ThreadAccumulatedState, GitStats } from './types/state';
+import { AppState, NotificationState, AgentTab, AlertDialogConfig, AgentSessionState, TerminalTabState, GitStats, AcpAccumulatorState, AcpAccumulatorAction, AccumulatedThread, AccumulatedMessage, AccumulatedTextContent, AccumulatedToolCard, AccumulatedContextCard, AccumulatedErrorCard, MAX_TOOL_OUTPUT_LENGTH, MAX_ACCUMULATED_MESSAGES, createInitialAccumulatorState, ThreadAccumulatedState } from './types/state';
 export type { AgentTab };
-import { ServerMessage, TerminalOutput, GitStatusEntry, AcpEventEnvelope, isAcpSessionInit, isAcpConfigOptionsUpdate, isAcpSessionStatus, isAcpPromptChunk, isAcpPromptComplete, isAcpToolUse, isAcpContextUpdate, isAcpError, isAcpResumeMarker } from './types/protocol';
+import { GitStatusEntry, TerminalOutput, AcpEventEnvelope, AcpSequence, AcpToolUseStatus, AcpSessionStatus, AcpContextUpdateType, AcpErrorCode, AcpSessionConfigOption } from './types/protocol';
+import { isAcpSessionInit, isAcpConfigOptionsUpdate, isAcpSessionStatus, isAcpPromptChunk, isAcpPromptComplete, isAcpToolUse, isAcpContextUpdate, isAcpError, isAcpResumeMarker } from './types/protocol';
+import type { DecodedBridgeMessage } from './lib/bridge-transport';
+import { isWorkspaceEvent, isWorktreeEvent, isGitResponse, isFileResponse, isNotificationMessage, isErrorResponse, isAckMessage, isPingMessage, isPongMessage, isAgentEvent, isTerminalEvent, isStateSnapshotMessage, isAcpPayload } from './types/bridge-envelope';
+import { encodePong } from './lib/bridge-transport';
 import { handleError } from './lib/error-recovery';
 import { showNotification } from './lib/tauri';
 import { useUIStore } from './uiStore';
+import { acpSessionManager } from './lib/acp-session-manager';
+import type { AcpStore } from '@harms-haus/acp-chat-react';
 
 // Stable empty array reference to prevent infinite re-renders
 const EMPTY_AGENT_TABS: AgentTab[] = [];
-const EMPTY_TERMINAL_SESSIONS: TerminalSessionState[] = [];
+const EMPTY_TERMINAL_TABS: TerminalTabState[] = [];
 const EMPTY_AGENT_SESSIONS: AgentSessionState[] = [];
+
+
+// File content callback registry (for routing FileContent to editor components)
+let fileContentCallback: ((message: { worktreeId: string; path: string; content: string }) => void) | null = null;
+
+export function setFileContentCallback(callback: ((message: { worktreeId: string; path: string; content: string }) => void) | null): void {
+  fileContentCallback = callback;
+}
+
+export function getFileContentCallback(): ((message: { worktreeId: string; path: string; content: string }) => void) | null {
+  return fileContentCallback;
+}
 
 // Terminal output callback registry (for routing TerminalOutput to TerminalProvider)
 let terminalOutputCallback: ((message: TerminalOutput) => void) | null = null;
@@ -26,10 +44,6 @@ export function getTerminalOutputCallback(): ((message: TerminalOutput) => void)
 // ----------------------------------------------------------------------------
 // ACP Event Accumulator Reducer
 // ----------------------------------------------------------------------------
-//
-// Pure reducer function for ACP event accumulation.
-// Connection-scoped: state is flushed on reconnect.
-// Derived state: NOT the source of truth for worktree/session identity.
 
 function generateMessageId(sequence: number): string {
   return `msg-${sequence}`;
@@ -81,45 +95,30 @@ export function acpAccumulatorReducer(
     case 'FLUSH_THREAD': {
       const newThreads = new Map(state.threads);
       newThreads.delete(action.worktreeId);
-      return {
-        ...state,
-        threads: newThreads,
-      };
+      return { ...state, threads: newThreads };
     }
 
     case 'REBUILD_FROM_SNAPSHOT': {
       const thread = createEmptyThread(action.worktreeId, action.acpSessionId, state.connectionGeneration);
       const newThreads = new Map(state.threads);
       newThreads.set(action.worktreeId, thread);
-      return {
-        ...state,
-        threads: newThreads,
-      };
+      return { ...state, threads: newThreads };
     }
 
     case 'SET_STREAMING': {
       const thread = state.threads.get(action.worktreeId);
       if (!thread) return state;
-
       const newThreads = new Map(state.threads);
-      newThreads.set(action.worktreeId, {
-        ...thread,
-        isStreaming: action.isStreaming,
-      });
-      return {
-        ...state,
-        threads: newThreads,
-      };
+      newThreads.set(action.worktreeId, { ...thread, isStreaming: action.isStreaming });
+      return { ...state, threads: newThreads };
     }
 
     case 'USER_MESSAGE': {
       const { worktreeId, content } = action;
       let thread = state.threads.get(worktreeId);
-
       if (!thread) {
         thread = createEmptyThread(worktreeId, 'unknown', state.connectionGeneration);
       }
-
       const newMessage: AccumulatedMessage = {
         id: generateMessageId(Date.now()),
         role: 'user',
@@ -127,13 +126,8 @@ export function acpAccumulatorReducer(
         createdAt: Date.now(),
         lastSequence: Date.now(),
       };
-
       const newThreads = new Map(state.threads);
-      newThreads.set(worktreeId, {
-        ...thread,
-        messages: [...thread.messages, newMessage],
-      });
-
+      newThreads.set(worktreeId, { ...thread, messages: [...thread.messages, newMessage] });
       return { ...state, threads: newThreads };
     }
 
@@ -159,7 +153,6 @@ export function acpAccumulatorReducer(
         return { ...state, threads: newThreads };
       }
 
-      // Create thread lazily if it doesn't exist (for any event type)
       if (!thread) {
         const acpSessionId = (data as any)?.acpSessionId ?? 'unknown';
         thread = createEmptyThread(worktreeId, acpSessionId, state.connectionGeneration);
@@ -170,21 +163,15 @@ export function acpAccumulatorReducer(
       let changed = false;
 
       if (isAcpSessionStatus({ eventType, data } as any)) {
-        const statusData = data as any;
-        updatedThread.sessionStatus = statusData.status;
+        updatedThread.sessionStatus = (data as any).status;
         changed = true;
-      }
-
-      else if (isAcpConfigOptionsUpdate({ eventType, data } as any)) {
-        const configData = data as any;
-        updatedThread.configOptions = configData.configOptions ?? [];
+      } else if (isAcpConfigOptionsUpdate({ eventType, data } as any)) {
+        updatedThread.configOptions = (data as any).configOptions ?? [];
         changed = true;
-      }
-
-      else if (isAcpPromptChunk({ eventType, data } as any)) {
+      } else if (isAcpPromptChunk({ eventType, data } as any)) {
         const chunkData = data as any;
         updatedThread.isStreaming = !chunkData.isFinal;
-        
+
         let lastMessage = updatedThread.messages[updatedThread.messages.length - 1];
         if (!lastMessage || lastMessage.role !== 'assistant') {
           lastMessage = {
@@ -203,63 +190,40 @@ export function acpAccumulatorReducer(
         const contentData = content?.data ?? '';
 
         if (isText) {
-          let textPart = lastMessage.parts.find((p): p is AccumulatedTextContent => 
-            p.type === 'text'
-          ) as AccumulatedTextContent | undefined;
-
+          let textPart = lastMessage.parts.find((p): p is AccumulatedTextContent => p.type === 'text');
           if (textPart) {
-            const newParts = lastMessage.parts.map(p => 
-              p.type === 'text' 
-                ? { ...p, text: p.text + contentData, isStreaming: !chunkData.isFinal }
-                : p
+            const newParts = lastMessage.parts.map(p =>
+              p.type === 'text' ? { ...p, text: p.text + contentData, isStreaming: !chunkData.isFinal } : p
             );
             updatedThread.messages = updatedThread.messages.map((m, i) =>
-              i === updatedThread.messages.length - 1
-                ? { ...m, parts: newParts, lastSequence: sequence }
-                : m
+              i === updatedThread.messages.length - 1 ? { ...m, parts: newParts, lastSequence: sequence } : m
             );
           } else {
-            const newTextPart: AccumulatedTextContent = {
-              type: 'text',
-              text: contentData,
-              isStreaming: !chunkData.isFinal,
-            };
+            const newTextPart: AccumulatedTextContent = { type: 'text', text: contentData, isStreaming: !chunkData.isFinal };
             const newParts = [...lastMessage.parts, newTextPart];
             updatedThread.messages = updatedThread.messages.map((m, i) =>
-              i === updatedThread.messages.length - 1
-                ? { ...m, parts: newParts, lastSequence: sequence }
-                : m
+              i === updatedThread.messages.length - 1 ? { ...m, parts: newParts, lastSequence: sequence } : m
             );
           }
         } else if (isStructured) {
-          const newStructuredPart = {
-            type: 'structured' as const,
-            data: contentData,
-            isStreaming: !chunkData.isFinal,
-          };
+          const newStructuredPart = { type: 'structured' as const, data: contentData, isStreaming: !chunkData.isFinal };
           const newParts = [...lastMessage.parts, newStructuredPart];
           updatedThread.messages = updatedThread.messages.map((m, i) =>
-            i === updatedThread.messages.length - 1
-              ? { ...m, parts: newParts, lastSequence: sequence }
-              : m
+            i === updatedThread.messages.length - 1 ? { ...m, parts: newParts, lastSequence: sequence } : m
           );
         }
         changed = true;
-      }
-
-      else if (isAcpPromptComplete({ eventType, data } as any)) {
+      } else if (isAcpPromptComplete({ eventType, data } as any)) {
         const completeData = data as any;
         updatedThread.isStreaming = false;
         if (completeData.reason === 'Error') {
           updatedThread.sessionStatus = 'Complete';
         }
         changed = true;
-      }
-
-      else if (isAcpToolUse({ eventType, data } as any)) {
+      } else if (isAcpToolUse({ eventType, data } as any)) {
         const toolData = data as any;
         const toolUseId = toolData.toolUseId;
-        
+
         let toolCardFound = false;
         const newMessages = updatedThread.messages.map(msg => {
           const newParts = msg.parts.map(part => {
@@ -290,7 +254,6 @@ export function acpAccumulatorReducer(
             };
             newMessages.push(lastMessage);
           }
-
           const newToolCard: AccumulatedToolCard = {
             type: 'tool',
             toolUseId,
@@ -301,16 +264,13 @@ export function acpAccumulatorReducer(
             error: toolData.error,
             updatedAt: Date.now(),
           };
-
           lastMessage.parts = [...lastMessage.parts, newToolCard];
           lastMessage.lastSequence = sequence;
         }
 
         updatedThread.messages = newMessages;
         changed = true;
-      }
-
-      else if (isAcpContextUpdate({ eventType, data } as any)) {
+      } else if (isAcpContextUpdate({ eventType, data } as any)) {
         const contextData = data as any;
         let lastMessage = updatedThread.messages[updatedThread.messages.length - 1];
         if (!lastMessage || lastMessage.role !== 'assistant') {
@@ -323,23 +283,18 @@ export function acpAccumulatorReducer(
           };
           updatedThread.messages = [...updatedThread.messages, lastMessage];
         }
-
         const contextCard: AccumulatedContextCard = {
           type: 'context',
           updateType: contextData.updateType,
           data: contextData.data,
           sequence,
         };
-
         updatedThread.messages = updatedThread.messages.map((m, i) =>
           i === updatedThread.messages.length - 1
-            ? { ...m, parts: [...m.parts, contextCard], lastSequence: sequence }
-            : m
+            ? { ...m, parts: [...m.parts, contextCard], lastSequence: sequence } : m
         );
         changed = true;
-      }
-
-      else if (isAcpError({ eventType, data } as any)) {
+      } else if (isAcpError({ eventType, data } as any)) {
         const errorData = data as any;
         const errorCard: AccumulatedErrorCard = {
           type: 'error',
@@ -349,7 +304,6 @@ export function acpAccumulatorReducer(
           recoverable: errorData.recoverable,
           sequence,
         };
-
         let lastMessage = updatedThread.messages[updatedThread.messages.length - 1];
         if (!lastMessage) {
           lastMessage = {
@@ -363,14 +317,11 @@ export function acpAccumulatorReducer(
         } else {
           updatedThread.messages = updatedThread.messages.map((m, i) =>
             i === updatedThread.messages.length - 1
-              ? { ...m, parts: [...m.parts, errorCard], lastSequence: sequence }
-              : m
+              ? { ...m, parts: [...m.parts, errorCard], lastSequence: sequence } : m
           );
         }
         changed = true;
-      }
-
-      else if (isAcpResumeMarker({ eventType, data } as any)) {
+      } else if (isAcpResumeMarker({ eventType, data } as any)) {
         const resumeData = data as any;
         updatedThread.resumeCheckpoint = resumeData.checkpoint;
         updatedThread.lastSequence = resumeData.lastSequence;
@@ -380,11 +331,9 @@ export function acpAccumulatorReducer(
       if (changed && sequence > updatedThread.lastSequence) {
         updatedThread.lastSequence = sequence;
       }
-
       if (updatedThread.messages.length > MAX_ACCUMULATED_MESSAGES) {
         updatedThread.messages = updatedThread.messages.slice(-MAX_ACCUMULATED_MESSAGES);
       }
-
       newThreads.set(worktreeId, updatedThread);
       return { ...state, threads: newThreads };
     }
@@ -394,6 +343,15 @@ export function acpAccumulatorReducer(
   }
 }
 
+// ----------------------------------------------------------------------------
+// ACP Store helpers (access AcpStore from acpSessionManager)
+// ----------------------------------------------------------------------------
+
+/** Get the AcpStore for a worktree, or null if none exists. */
+export function getAcpStore(worktreeId: string): AcpStore | null {
+  return acpSessionManager.getAcpStore(worktreeId);
+}
+
 export const useStore = create<AppState>()(
   devtools(
     (set, get) => ({
@@ -401,13 +359,14 @@ export const useStore = create<AppState>()(
       workspaces: [],
       worktrees: [],
       agentSessions: [],
-      terminalSessions: [],
+      terminalTabs: [],
       notifications: [],
       
   // UI state
     activeWorktreeId: null,
     connectionStatus: 'closed',
     connectionError: null,
+    lastPongTimestamp: 0,
     expandedWorkspaceIds: new Set<string>(),
     isWorkspacesLoading: true,
 
@@ -466,7 +425,7 @@ export const useStore = create<AppState>()(
       
       setAgentSessions: (agentSessions) => set({ agentSessions }),
       
-      setTerminalSessions: (terminalSessions) => set({ terminalSessions }),
+      setTerminalTabs: (terminalTabs) => set({ terminalTabs }),
       
       setActiveWorktree: (activeWorktreeId) => {
         useUIStore.getState().setActiveWorktreeId(activeWorktreeId);
@@ -477,7 +436,10 @@ export const useStore = create<AppState>()(
               useUIStore.getState().toggleExpandedWorkspaceId(worktree.workspaceId);
             }
           }
-          return { activeWorktreeId };
+          // Keep file list cache on worktree switch — lazy loading makes root list small/fast
+          return {
+            activeWorktreeId,
+          };
         });
       },
       
@@ -488,6 +450,8 @@ export const useStore = create<AppState>()(
   })),
       
       setConnectionError: (connectionError) => set({ connectionError }),
+
+      setLastPongTimestamp: (lastPongTimestamp) => set({ lastPongTimestamp }),
 
       setWorkspacesLoading: (isWorkspacesLoading) => set({ isWorkspacesLoading }),
 
@@ -505,13 +469,12 @@ export const useStore = create<AppState>()(
 
       // State management from server snapshot
       stateFromSnapshot: (snapshot) => {
-        set((state) => ({
+        set((_state) => ({
           workspaces: snapshot.workspaces,
           worktrees: snapshot.worktrees,
           agentSessions: snapshot.agentSessions,
-          terminalSessions: snapshot.terminalSessions,
+          terminalTabs: (snapshot.terminalTabs as any) ?? (snapshot as any).terminalSessions ?? [],
           isWorkspacesLoading: false,
-          acpAccumulator: acpAccumulatorReducer(state.acpAccumulator, { type: 'CONNECTION_RECONNECTED' }),
         }));
       },
 
@@ -541,7 +504,7 @@ export const useStore = create<AppState>()(
             agentSessions: state.agentSessions.filter(
               (as) => !worktreesToRemove.includes(as.worktreeId)
             ),
-            terminalSessions: state.terminalSessions.filter(
+            terminalTabs: state.terminalTabs.filter(
               (ts) => !worktreesToRemove.includes(ts.worktreeId)
             ),
             activeWorktreeId:
@@ -576,7 +539,7 @@ export const useStore = create<AppState>()(
         set((state) => ({
           worktrees: state.worktrees.filter((wt) => wt.id !== worktreeId),
           agentSessions: state.agentSessions.filter((as) => as.worktreeId !== worktreeId),
-          terminalSessions: state.terminalSessions.filter((ts) => ts.worktreeId !== worktreeId),
+          terminalTabs: state.terminalTabs.filter((ts) => ts.worktreeId !== worktreeId),
           activeWorktreeId:
             state.activeWorktreeId === worktreeId ? null : state.activeWorktreeId,
         })),
@@ -599,29 +562,49 @@ export const useStore = create<AppState>()(
           agentSessions: state.agentSessions.filter((as) => as.id !== sessionId),
         })),
 
-// Terminal session CRUD
-    addTerminalSession: (session) =>
-        set((state) => ({
-            terminalSessions: [...state.terminalSessions, session],
-        })),
-
-  updateTerminalSession: (sessionId, updates) =>
-    set((state) => ({
-      terminalSessions: state.terminalSessions.map((ts) =>
-        ts.id === sessionId
-          ? {
-              ...ts,
-              ...(updates.label != null && { label: updates.label }),
-              ...(updates.position != null && { position: updates.position }),
+// Terminal tab CRUD
+    addTerminalTab: (tab) =>
+        set((state) => {
+            // Prevent duplicate tabs
+            if (state.terminalTabs.some((t) => t.id === tab.id)) {
+                return { terminalTabs: state.terminalTabs };
             }
-          : ts,
+            return { terminalTabs: [...state.terminalTabs, tab] };
+        }),
+
+  updateTerminalTab: (tabId, updates) =>
+    set((state) => ({
+      terminalTabs: state.terminalTabs.map((tt) =>
+        tt.id === tabId ? { ...tt, ...updates } : tt,
       ),
     })),
 
-    removeTerminalSession: (sessionId) =>
+    removeTerminalTab: (tabId) =>
         set((state) => ({
-            terminalSessions: state.terminalSessions.filter((ts) => ts.id !== sessionId),
+            terminalTabs: state.terminalTabs.filter((tt) => tt.id !== tabId),
         })),
+
+    setTabSession: (tabId, sessionId) => {
+        console.log('[Store] setTabSession:', tabId.slice(0, 8), '→ sessionId:', sessionId.slice(0, 8));
+        set((state) => ({
+            terminalTabs: state.terminalTabs.map((tt) =>
+                tt.id === tabId
+                    ? { ...tt, activeSessionId: sessionId, status: 'active' as const }
+                    : tt,
+            ),
+        }));
+    },
+
+    clearTabSession: (tabId) => {
+        console.log('[Store] clearTabSession:', tabId.slice(0, 8), '→ disconnected');
+        set((state) => ({
+            terminalTabs: state.terminalTabs.map((tt) =>
+                tt.id === tabId
+                    ? { ...tt, activeSessionId: null, status: 'disconnected' as const }
+                    : tt,
+            ),
+        }));
+    },
 
       // Notification management
       addNotification: (notification) => {
@@ -867,6 +850,7 @@ setActiveAgentTab: (worktreeId, tabId) => {
       alertDialog: state.alertDialog ? { ...state.alertDialog, open: false } : null,
     })),
 
+  // ACP Accumulator actions
   dispatchAccumulator: (action: AcpAccumulatorAction) =>
     set((state) => ({
       acpAccumulator: acpAccumulatorReducer(state.acpAccumulator, action),
@@ -941,15 +925,11 @@ export const selectAgentSessionsByWorktreeId = (worktreeId: string) => (state: A
   return sessions.length > 0 ? sessions : EMPTY_AGENT_SESSIONS;
 };
 
-export const selectTerminalSessionsByWorktreeId = (worktreeId: string) => (state: AppState) => {
-  const sessions = [...state.terminalSessions]
-    .filter((ts) => ts.worktreeId === worktreeId)
-    .sort((a, b) => {
-      const posA = a.position ?? 0;
-      const posB = b.position ?? 0;
-      return posA - posB;
-    });
-  return sessions.length > 0 ? sessions : EMPTY_TERMINAL_SESSIONS;
+export const selectTerminalTabsByWorktreeId = (worktreeId: string) => (state: AppState) => {
+  const tabs = [...state.terminalTabs]
+    .filter((tt) => tt.worktreeId === worktreeId)
+    .sort((a, b) => a.position - b.position);
+  return tabs.length > 0 ? tabs : EMPTY_TERMINAL_TABS;
 };
 
 export const selectActiveWorktree = (state: AppState) => {
@@ -987,20 +967,10 @@ export const selectDbResetDialogOpen = (state: AppState) => state.dbResetDialog.
 
 export const selectAlertDialog = (state: AppState) => state.alertDialog;
 
-// ACP Accumulator selectors
-export const selectAccumulatorThread = (worktreeId: string) => (state: AppState): ThreadAccumulatedState => {
-  const thread = state.acpAccumulator.threads.get(worktreeId) ?? null;
-  return {
-    thread,
-    messageCount: thread?.messages.length ?? 0,
-    isStreaming: thread?.isStreaming ?? false,
-    sessionStatus: thread?.sessionStatus ?? 'Working',
-    hasErrors: thread?.messages.some(m => m.parts.some(p => p.type === 'error')) ?? false,
-  };
+// ACP Store selectors (read from AcpStore via acpSessionManager)
+export const selectAcpStoreForWorktree = (worktreeId: string) => (): ReturnType<typeof getAcpStore> => {
+  return getAcpStore(worktreeId);
 };
-
-export const selectAccumulatorConnectionGeneration = (state: AppState) =>
-  state.acpAccumulator.connectionGeneration;
 
 // File cache selectors
 export const selectFileListCache = (worktreeId: string) => (state: AppState) =>
@@ -1009,147 +979,594 @@ export const selectFileListCache = (worktreeId: string) => (state: AppState) =>
 export const selectGitStatusCache = (worktreeId: string) => (state: AppState) =>
   state.gitStatusCache.get(worktreeId) ?? null;
 
-export function updateStateFromServerMessage(message: ServerMessage): void {
-  const { addWorkspace, updateWorkspace, removeWorkspace, addWorktree, updateWorktree, removeWorktree } = useStore.getState();
-  const { updateAgentSession, addTerminalSession, removeTerminalSession, addNotification } = useStore.getState();
+/**
+ * Primary message handler for decoded BridgeEnvelope messages.
+ * Dispatches to domain-specific handlers based on the BridgeMessage type
+ * discriminator. All store mutations for BridgeEnvelope-wrapped messages
+ * flow through this function.
+ */
+export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (envelope: unknown) => void): void {
+  const { type, message } = decoded;
 
-  switch (message.type) {
-    case 'WorkspaceCreated':
-      addWorkspace(message.workspace);
-      break;
-    
-    case 'WorkspaceUpdated':
-      updateWorkspace(message.workspace.id, message.workspace);
-      break;
-    
-    case 'WorkspaceDeleted':
-      removeWorkspace(message.workspaceId);
-      break;
-    
-    case 'WorktreeCreated':
-      addWorktree(message.worktree);
-      break;
-    
-    case 'WorktreeStatus':
-      updateWorktree(message.worktree.id, message.worktree);
-      break;
-    
-    case 'WorktreeChanged':
-      updateWorktree(message.worktree.id, message.worktree);
-      // Clear file caches when worktree changes (files modified on disk)
-      useStore.getState().clearFileListCache(message.worktree.id);
-      useStore.getState().clearGitStatusCache(message.worktree.id);
-      break;
+  switch (type) {
+    case 'workspace_event': {
+      if (!isWorkspaceEvent(message)) return;
 
-    case 'WorktreeDeleted':
-      removeWorktree(message.worktreeId);
-      // Clear caches for deleted worktree
-      useStore.getState().clearFileListCache(message.worktreeId);
-      useStore.getState().clearGitStatusCache(message.worktreeId);
-      break;
+      const payload = message.payload as Record<string, unknown> | null;
+      if (!payload) return;
 
-    case 'WorktreeDetailsResult': {
-      const { addAgentSession, addWorktree } = useStore.getState();
-      message.worktrees.forEach((worktree) => { addWorktree(worktree); });
-      message.agentSessions.forEach((session) => { addAgentSession(session as any); });
-      message.terminalSessions.forEach((session) => { addTerminalSession(session); });
-      break;
-    }
+      // Payload is the raw struct (e.g. { workspace: {...} }), NOT wrapped in { originalType, data }
+      const data = (payload.data as Record<string, unknown> | undefined) ?? payload;
 
-    case 'AgentStatusUpdate': {
-      const existingSession = useStore.getState().agentSessions.find(as => as.id === message.id);
-      if (existingSession) {
-        updateAgentSession(message.id, {
-          status: message.status,
-        } as any);
-      } else {
-        const addAgentSession = useStore.getState().addAgentSession;
-        addAgentSession({
-          id: message.id,
-          worktreeId: message.worktreeId,
-          agentType: message.agentType,
-          status: message.status,
-          acpSessionId: undefined,
-          startedAt: message.startedAt,
-        } as any);
+      if (data.workspace !== undefined) {
+        const workspace = (data as any)?.workspace;
+        if (workspace) {
+          const existing = useStore.getState().workspaces.find(w => w.id === workspace.id);
+          if (existing) {
+            useStore.getState().updateWorkspace(workspace.id, workspace);
+          } else {
+            useStore.getState().addWorkspace(workspace);
+          }
+        }
+      } else if (data.workspaceId !== undefined) {
+        const workspaceId = (data as any)?.workspaceId as string | undefined;
+        if (workspaceId) {
+          useStore.getState().removeWorkspace(workspaceId);
+        }
       }
       break;
     }
-    
-    case 'AgentOutput':
-      // Agent output is handled separately (not stored in main state)
-      break;
-    
-    case 'AgentRemoved': {
-      const removeAgentSession = useStore.getState().removeAgentSession;
-      removeAgentSession(message.id);
-      break;
-    }
-    
-    case 'TerminalCreated':
-      addTerminalSession({
-        id: message.sessionId,
-        worktreeId: message.worktreeId,
-        label: message.label ?? 'Terminal',
-        shell: message.shell,
-        createdAt: Date.now(),
-      });
-      break;
-    
-    case 'TerminalOutput':
-      // Terminal output is routed to TerminalProvider via callback
-      if (terminalOutputCallback) {
-        terminalOutputCallback(message);
-      }
-      break;
 
-case 'TerminalRemoved':
-            removeTerminalSession(message.sessionId);
-            break;
+    case 'worktree_event': {
+      if (!isWorktreeEvent(message)) return;
 
-case 'TerminalUpdated': {
-  const { updateTerminalSession } = useStore.getState();
-  updateTerminalSession(message.sessionId, {
-    ...(message.label != null && { label: message.label }),
-    ...(message.position != null && { position: message.position }),
-  });
-  break;
-}
+      const payload = message.payload as Record<string, unknown> | null;
+      if (!payload) return;
 
-        case 'AgentUpdated': {
-            const { updateAgentSession } = useStore.getState();
-            updateAgentSession(message.sessionId, {
-                ...(message.label !== undefined && { label: message.label }),
-                ...(message.position !== undefined && { position: message.position }),
+      // Payload is the raw struct (e.g. { worktrees, agentSessions, terminalTabs }),
+      // NOT wrapped in { originalType, data }
+      const data = (payload.data as Record<string, unknown> | undefined) ?? payload;
+
+      // Detect event type from payload structure
+      if (data.worktrees !== undefined) {
+        // WorktreeDetailsResult or WorktreeListResult
+        const { addAgentSession, addTerminalTab } = useStore.getState();
+        const worktrees = (data as any)?.worktrees as Array<any> | undefined;
+        const agentSessions = (data as any)?.agentSessions as Array<any> | undefined;
+        const terminalTabs = (data as any)?.terminalTabs as Array<any> | undefined
+          ?? (data as any)?.terminalSessions as Array<any> | undefined;
+
+        if (worktrees) {
+          worktrees.forEach((worktree) => {
+            useStore.getState().addWorktree(worktree);
+          });
+        }
+        if (agentSessions) {
+          agentSessions.forEach((session) => {
+            addAgentSession(session as any);
+          });
+        }
+        if (terminalTabs) {
+          terminalTabs.forEach((tab) => {
+            // Map server TabSessionData to client TerminalTabState
+            // Clear activeSessionId — PTY sessions are ephemeral and die on server restart.
+            // A TerminalMount will be sent by TerminalPane to re-spawn fresh PTY sessions.
+            addTerminalTab({
+              id: tab.id,
+              worktreeId: tab.worktreeId,
+              label: tab.label ?? 'Terminal',
+              position: (tab as any).position ?? 0,
+              activeSessionId: null,
+              status: 'disconnected',
+              createdAt: typeof tab.createdAt === 'string'
+                ? new Date(tab.createdAt).getTime()
+                : tab.createdAt ?? Date.now(),
             });
-            break;
+          });
+        }
+      } else if (data.worktree !== undefined) {
+        // WorktreeCreated, WorktreeChanged, or WorktreeStatus
+        const worktree = (data as any)?.worktree;
+        if (worktree?.id) {
+          const existing = useStore.getState().worktrees.find(wt => wt.id === worktree.id);
+          if (existing) {
+            useStore.getState().updateWorktree(worktree.id, worktree);
+          } else {
+            useStore.getState().addWorktree(worktree);
+          }
+          useStore.getState().clearFileListCache(worktree.id);
+          useStore.getState().clearGitStatusCache(worktree.id);
+        }
+      } else if (data.worktreeId !== undefined) {
+        // WorktreeDeleted
+        const worktreeId = (data as any)?.worktreeId as string | undefined;
+        if (worktreeId) {
+          useStore.getState().removeWorktree(worktreeId);
+          useStore.getState().clearFileListCache(worktreeId);
+          useStore.getState().clearGitStatusCache(worktreeId);
+        }
+      }
+      break;
+    }
+
+    case 'git_response': {
+      if (!isGitResponse(message)) return;
+
+      const payload = message.payload as Record<string, unknown> | null;
+      if (!payload) return;
+
+      // Payload is the raw struct, NOT wrapped in { originalType, data }
+      const data = (payload.data as Record<string, unknown> | undefined) ?? payload;
+
+      if (data.worktreeId !== undefined && data.entries !== undefined) {
+        // GitStatusResult
+        const worktreeId = (data as any)?.worktreeId as string | undefined;
+        const entries = (data as any)?.entries as Array<{ path: string; statusCode: string }> | undefined;
+        if (worktreeId && entries) {
+          const transformed = entries.map((entry) => {
+            const statusCode = entry.statusCode;
+            let status: GitStatusEntry['status'] = 'modified';
+            let staged = false;
+
+            if (statusCode === '??') {
+              status = 'untracked';
+              staged = false;
+            } else if (statusCode.length >= 2) {
+              const stagedChar = statusCode[0];
+              const unstagedChar = statusCode[1];
+              if (stagedChar === 'A') { status = 'added'; staged = true; }
+              else if (stagedChar === 'D') { status = 'deleted'; staged = true; }
+              else if (stagedChar === 'R') { status = 'renamed'; staged = true; }
+              else if (stagedChar === 'M') { status = 'modified'; staged = true; }
+              else if (unstagedChar === 'M') { status = 'modified'; staged = false; }
+              else if (unstagedChar === 'D') { status = 'deleted'; staged = false; }
+            }
+
+            return { path: entry.path, status, staged } as GitStatusEntry;
+          });
+          useStore.getState().setGitStatusCache(worktreeId, transformed);
+        }
+      } else if (data.worktreeId !== undefined && data.filePath !== undefined && data.diff !== undefined) {
+        // GitDiffResult — no store cache setter yet, DiffTab consumes via wsClient.onMessage
+      }
+      break;
+    }
+
+    case 'notification': {
+      if (!isNotificationMessage(message)) return;
+
+      const payload = message.payload as Record<string, unknown> | null;
+      if (!payload) return;
+
+      // Extract data from the wrapped payload { type, data }
+      const data = (payload.data as Record<string, unknown> | undefined)
+        ?? (payload.level !== undefined ? payload : undefined);
+
+      const level = (data as any)?.level as 'info' | 'warning' | 'error' | undefined;
+      const title = (data as any)?.title as string | undefined;
+      const msg = (data as any)?.message as string | undefined;
+
+      if (level && msg) {
+        const notificationLevel = level === 'warning' ? 'warning' : level === 'error' ? 'error' : 'info';
+        useStore.getState().addNotification({
+          level: notificationLevel,
+          message: title ? `${title}: ${msg}` : msg,
+          duration: 5000,
+        } as any);
+        if (title) {
+          showNotification(title, msg);
+        }
+      }
+      break;
+    }
+
+    case 'error_response': {
+      if (!isErrorResponse(message)) return;
+
+      const payload = message.payload as Record<string, unknown> | null;
+      if (!payload) return;
+
+      // Extract data from the wrapped payload { type, data }
+      const data = (payload.data as Record<string, unknown> | undefined)
+        ?? (payload.code !== undefined ? payload : undefined);
+
+      if (data) {
+        const error = data as any;
+        handleError({
+          type: 'Error',
+          code: error.code ?? 'unknown',
+          message: error.message ?? 'Unknown error',
+          details: error.details,
+          requestId: error.requestId,
+        });
+      }
+      break;
+    }
+
+    case 'file_response': {
+      if (!isFileResponse(message)) return;
+
+      const payload = message.payload as Record<string, unknown> | null;
+      if (!payload) return;
+
+      // Payload is the raw struct, NOT wrapped in { originalType, data }
+      const data = (payload.data as Record<string, unknown> | undefined) ?? payload;
+
+      if (data.worktreeId !== undefined && data.files !== undefined) {
+        // FileListResult
+        const worktreeId = (data as any)?.worktreeId as string | undefined;
+        const files = (data as any)?.files as string[] | undefined;
+        if (worktreeId && files) {
+          useStore.getState().setFileListCache(worktreeId, files);
+        }
+      } else if (data.worktreeId !== undefined && data.path !== undefined && data.content !== undefined) {
+        // FileContent
+        const worktreeId = (data as any)?.worktreeId as string | undefined;
+        const path = (data as any)?.path as string | undefined;
+        const content = (data as any)?.content as string | undefined;
+        if (worktreeId && path && content !== undefined) {
+          const cb = getFileContentCallback();
+          if (cb) {
+            cb({ worktreeId, path, content });
+          }
+        }
+      }
+      break;
+    }
+
+    case 'agent_event': {
+      if (!isAgentEvent(message)) return;
+
+      const payload = message.payload as Record<string, unknown> | null;
+      if (!payload) return;
+
+      // Payload is the raw struct, NOT wrapped in { originalType, data }
+      const data = (payload.data as Record<string, unknown> | undefined) ?? payload;
+
+      if (data.id !== undefined && data.status !== undefined) {
+        // AgentStatusUpdate
+        const id = (data as any)?.id as string | undefined;
+        if (!id) break;
+        const existingSession = useStore.getState().agentSessions.find(as => as.id === id);
+        if (existingSession) {
+          useStore.getState().updateAgentSession(id, {
+            status: (data as any)?.status,
+          } as any);
+        } else {
+          useStore.getState().addAgentSession({
+            id,
+            worktreeId: (data as any)?.worktreeId,
+            agentType: (data as any)?.agentType,
+            status: (data as any)?.status,
+            acpSessionId: undefined,
+            startedAt: (data as any)?.startedAt,
+          } as any);
+        }
+      } else if (data.id !== undefined && data.status === undefined) {
+        // AgentRemoved
+        const id = (data as any)?.id as string | undefined;
+        if (id) {
+          useStore.getState().removeAgentSession(id);
+        }
+      } else if (data.sessionId !== undefined) {
+        // AgentUpdated
+        const sessionId = (data as any)?.sessionId as string | undefined;
+        if (sessionId) {
+          useStore.getState().updateAgentSession(sessionId, {
+            ...((data as any)?.label !== undefined && { label: (data as any)?.label }),
+            ...((data as any)?.position !== undefined && { position: (data as any)?.position }),
+          });
+        }
+      }
+      break;
+    }
+
+    case 'terminal_event': {
+      if (!isTerminalEvent(message)) return;
+
+      const payload = message.payload as Record<string, unknown> | null;
+      if (!payload) return;
+
+      // Use payload.type for explicit dispatch instead of fragile field-presence heuristics
+      const innerType = payload.type as string | undefined;
+      // Payload data may be wrapped in { type, data } or be the raw struct directly
+      const data = (payload.data as Record<string, unknown> | undefined) ?? payload;
+
+      // DEBUG: Log all terminal_event payloads in store handler
+      console.log(
+        '[Store] terminal_event handler:',
+        'innerType:', innerType ?? 'MISSING',
+        'has data.payload:', !!payload.data,
+        'data keys:', Object.keys(data).slice(0, 8).join(', '),
+        'sessionId:', (data as any)?.sessionId ?? 'n/a',
+        'tabId:', (data as any)?.tabId ?? 'n/a'
+      );
+
+      if (!innerType) {
+        // Fallback: field-presence heuristic for backwards compatibility
+        // Maps old TerminalCreated/Removed/Updated to new tab actions
+        if (data.tabId !== undefined && data.worktreeId !== undefined) {
+          // New-style terminal tab event
+          const tabId = (data as any)?.tabId as string | undefined;
+          const worktreeId = (data as any)?.worktreeId as string | undefined;
+          const label = (data as any)?.label as string | undefined;
+          const position = (data as any)?.position as number | undefined;
+          const sessionId = (data as any)?.sessionId as string | null | undefined;
+          const status = (data as any)?.status as 'active' | 'disconnected' | undefined;
+          if (tabId && worktreeId) {
+            const { addTerminalTab } = useStore.getState();
+            addTerminalTab({
+              id: tabId,
+              worktreeId,
+              label: label ?? 'Terminal',
+              position: position ?? 0,
+              activeSessionId: sessionId ?? null,
+              status: status ?? 'active',
+              createdAt: Date.now(),
+            });
+          }
+        } else if (data.sessionId !== undefined && data.worktreeId !== undefined && (data as any)?.shell !== undefined) {
+          // Backward compat: old TerminalCreated shape
+          const sessionId = (data as any)?.sessionId as string | undefined;
+          const worktreeId = (data as any)?.worktreeId as string | undefined;
+          const label = (data as any)?.label as string | null | undefined;
+          if (sessionId && worktreeId) {
+            useStore.getState().addTerminalTab({
+              id: `legacy-${sessionId}`,
+              worktreeId,
+              label: (label as string) ?? 'Terminal',
+              position: 0,
+              activeSessionId: sessionId,
+              status: 'active',
+              createdAt: Date.now(),
+            });
+          }
+        } else if (typeof data.sessionId === 'string' && typeof data.data === 'string') {
+          // TerminalOutput: has sessionId (string) + data (string)
+          // No store mutation — delivered via onMessage('TerminalOutput')
+          // Already handled by yws-transport.ts dispatchOnMessageHandlers fallback
+        } else if (typeof data.tabId === 'string' && typeof data.data === 'string') {
+          // TerminalTabHistory: has tabId (string) + data (string)
+          // No store mutation — delivered via onMessage('TerminalTabHistory')
+          // Already handled by yws-transport.ts dispatchOnMessageHandlers fallback
+        } else if (data.sessionId !== undefined && data.worktreeId === undefined && (data as any)?.shell === undefined && data.data === undefined) {
+          const sessionId = (data as any)?.sessionId as string | undefined;
+          if (sessionId) {
+            if (data.label !== undefined || data.position !== undefined) {
+              // Backward compat: old TerminalUpdated — find tab by sessionId and update
+              const state = useStore.getState();
+              const tab = state.terminalTabs.find(
+                (tt) => tt.activeSessionId === sessionId || tt.id === `legacy-${sessionId}`
+              );
+              if (tab) {
+                useStore.getState().updateTerminalTab(tab.id, {
+                  ...((data as any)?.label !== undefined && { label: (data as any)?.label ?? undefined }),
+                  ...((data as any)?.position !== undefined && { position: (data as any)?.position ?? undefined }),
+                });
+              }
+            } else {
+              // Backward compat: old TerminalRemoved
+              const state = useStore.getState();
+              const tab = state.terminalTabs.find(
+                (tt) => tt.activeSessionId === sessionId || tt.id === `legacy-${sessionId}`
+              );
+              if (tab) {
+                useStore.getState().removeTerminalTab(tab.id);
+              }
+            }
+          }
+        } else {
+          console.warn('[Bridge] terminal_event: unrecognized payload shape:', JSON.stringify(data));
+        }
+        break;
+      }
+
+      switch (innerType) {
+        // --- New tab-based events ---
+        case 'TerminalMounted': {
+          const tabId = (data as any)?.tabId as string | undefined;
+          const worktreeId = (data as any)?.worktreeId as string | undefined;
+          const sessionId = (data as any)?.sessionId as string | undefined;
+          const label = (data as any)?.label as string | undefined;
+          const position = (data as any)?.position as number | undefined;
+          if (tabId && worktreeId) {
+            const { addTerminalTab, setTabSession } = useStore.getState();
+            const existing = useStore.getState().terminalTabs.find(tt => tt.id === tabId);
+            if (existing) {
+              // Tab already exists (e.g., restored by GetWorktreeDetails), just update session
+              if (sessionId) {
+                setTabSession(tabId, sessionId);
+              }
+            } else {
+              // Create tab atomically with activeSessionId set
+              addTerminalTab({
+                id: tabId,
+                worktreeId,
+                label: label ?? 'Terminal',
+                position: position ?? 0,
+                activeSessionId: sessionId ?? null,
+                status: 'active',
+                createdAt: Date.now(),
+              });
+            }
+          }
+          break;
+        }
+        case 'TerminalSessionEnded': {
+          const tabId = (data as any)?.tabId as string | undefined;
+          if (tabId) {
+            useStore.getState().clearTabSession(tabId);
+          }
+          break;
+        }
+        case 'TerminalTabClosed': {
+          const tabId = (data as any)?.tabId as string | undefined;
+          if (tabId) {
+            useStore.getState().removeTerminalTab(tabId);
+          }
+          break;
+        }
+        case 'TerminalTabList': {
+          // Bulk sync tabs for a worktreeId — replace all tabs for that worktree
+          const worktreeId = (data as any)?.worktreeId as string | undefined;
+          const tabs = (data as any)?.tabs as Array<any> | undefined;
+          if (worktreeId && tabs) {
+            const state = useStore.getState();
+            // Remove existing tabs for this worktreeId, then add new ones
+            const existingIds = new Set(
+              state.terminalTabs
+                .filter((tt) => tt.worktreeId === worktreeId)
+                .map((tt) => tt.id)
+            );
+            // Remove old tabs
+            existingIds.forEach((id) => {
+              useStore.getState().removeTerminalTab(id);
+            });
+            // Add new tabs
+            tabs.forEach((tab) => {
+              useStore.getState().addTerminalTab(tab);
+            });
+          }
+          break;
+        }
+        case 'TerminalTabHistory': {
+          // No store mutation — delivered via onMessage('TerminalTabHistory')
+          break;
+        }
+        case 'TerminalOutput': {
+          // No store mutation — delivered via onMessage('TerminalOutput')
+          break;
         }
 
-        case 'Notification':
-      addNotification({
-        level: message.level,
-        message: message.message,
-        duration: 5000,
-      } as any);
-      showNotification(message.title, message.message);
-      break;
-
-    case 'Error':
-      handleError(message);
-      break;
-
-    case 'AcpWireEvent': {
-      const { dispatchAccumulator, activeWorktreeId } = useStore.getState();
-      const { type, ...envelope } = message as unknown as Record<string, unknown>;
-      const data = envelope.data as any;
-
-      const worktreeId = data?.worktreeId ?? activeWorktreeId;
-
-      if (worktreeId) {
-        dispatchAccumulator({ type: 'EVENT_RECEIVED', envelope: envelope as unknown as AcpEventEnvelope, worktreeId });
+        // --- Backward compat: old session-based events ---
+        case 'TerminalCreated': {
+          const sessionId = (data as any)?.sessionId as string | undefined;
+          const worktreeId = (data as any)?.worktreeId as string | undefined;
+          const label = (data as any)?.label as string | null | undefined;
+          if (sessionId && worktreeId) {
+            // Guard: skip if tab already exists (TerminalMounted may have already added it)
+            const existing = useStore.getState().terminalTabs.find(
+              (tt) => tt.activeSessionId === sessionId || tt.id === `legacy-${sessionId}`
+            );
+            if (existing) break;
+            useStore.getState().addTerminalTab({
+              id: `legacy-${sessionId}`,
+              worktreeId,
+              label: (label as string) ?? 'Terminal',
+              position: 0,
+              activeSessionId: sessionId,
+              status: 'active',
+              createdAt: Date.now(),
+            });
+          }
+          break;
+        }
+        case 'TerminalRemoved': {
+          const sessionId = (data as any)?.sessionId as string | undefined;
+          if (sessionId) {
+            const state = useStore.getState();
+            const tab = state.terminalTabs.find(
+              (tt) => tt.activeSessionId === sessionId || tt.id === `legacy-${sessionId}`
+            );
+            if (tab) {
+              useStore.getState().removeTerminalTab(tab.id);
+            }
+          }
+          break;
+        }
+        case 'TerminalUpdated': {
+          const sessionId = (data as any)?.sessionId as string | undefined;
+          if (sessionId) {
+            const state = useStore.getState();
+            const tab = state.terminalTabs.find(
+              (tt) => tt.activeSessionId === sessionId || tt.id === `legacy-${sessionId}`
+            );
+            if (tab) {
+              useStore.getState().updateTerminalTab(tab.id, {
+                ...((data as any)?.label !== undefined && { label: (data as any)?.label ?? undefined }),
+                ...((data as any)?.position !== undefined && { position: (data as any)?.position ?? undefined }),
+              });
+            }
+          }
+          break;
+        }
+        default: {
+          console.warn('[Bridge] terminal_event: unrecognized innerType:', innerType);
+        }
       }
       break;
     }
+
+    // State snapshot response to GetState request. Carries the full
+    // application state snapshot as structured JSON.
+    // Payload format: { type: "StateSnapshot", data: { workspaces, worktrees, ... } }
+    case 'state_snapshot': {
+      if (!isStateSnapshotMessage(message)) return;
+
+      const payload = message.payload as Record<string, unknown> | null;
+      if (!payload) return;
+
+      // Extract data from the wrapped payload { type, data }
+      const data = (payload.data as Record<string, unknown> | undefined)
+        ?? (payload.workspaces !== undefined ? payload : undefined);
+      if (!data) {
+        return;
+      }
+
+      const { stateFromSnapshot } = useStore.getState();
+      stateFromSnapshot({
+        workspaces: (data.workspaces as unknown) as any[],
+        worktrees: (data.worktrees as unknown) as any[],
+        agentSessions: (data.agentSessions as unknown) as any[],
+        terminalTabs: (data.terminalTabs as unknown) as any[] ?? (data as any).terminalSessions ?? [],
+      });
+      break;
+    }
+
+    // Additional BridgeMessage types can be handled here as needed.
+
+    case 'ping': {
+      if (!isPingMessage(message)) return;
+      const payload = message.payload as Record<string, unknown> | null;
+      const timestamp = (payload?.timestamp as number) ?? Date.now();
+      if (sendFn) {
+        sendFn(encodePong({ timestamp }));
+      }
+      break;
+    }
+
+    case 'pong': {
+      if (!isPongMessage(message)) return;
+      useStore.getState().setLastPongTimestamp(Date.now());
+      break;
+    }
+
+    case 'ack': {
+      if (!isAckMessage(message)) return;
+      // Acknowledgment for rename/reorder ops — no state update needed,
+      // but handled here to complete the migration from legacy path.
+      break;
+    }
+
+    case 'acp_payload': {
+      if (!isAcpPayload(message)) return;
+
+      const payload = message.payload as Record<string, unknown> | null;
+      if (!payload) return;
+
+      // Route through acpSessionManager which feeds the raw ACP JSON-RPC payload
+      // to the appropriate SessionController via its transport.
+      const { activeWorktreeId } = useStore.getState();
+      const data = (payload.data as Record<string, unknown>) ?? {};
+      const worktreeId = (data as any)?.worktreeId ?? activeWorktreeId;
+      if (worktreeId) {
+        acpSessionManager.handleAcpPayload(worktreeId, payload);
+      }
+      break;
+    }
+
+    default:
+      break;
   }
 }
 

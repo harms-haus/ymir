@@ -12,10 +12,16 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+    "baseUrl": ".",
+    "paths": {
+      "@harms-haus/acp-chat-core": ["../../../acp-chat-ui-react/packages/acp-chat-core/src"],
+      "@harms-haus/acp-chat-react": ["../../../acp-chat-ui-react/packages/acp-chat-react/src"],
+      "@harms-haus/acp-ws-bridge": ["../../../acp-chat-ui-react/packages/acp-ws-bridge/src"]
+    }
   },
   "include": ["src"],
   "exclude": ["**/*.test.ts", "**/*.test.tsx", "**/__tests__/**"]

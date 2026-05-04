@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
-import { getWebSocketClient, type ConnectionStatus } from '../lib/ws';
-import type { YmirClient } from '../lib/ws';
+import { getYmirWsTransport, type ConnectionStatus } from '../lib/yws-transport';
+import type { YmirWsTransport } from '../lib/yws-transport';
 
 export interface UseWebSocketReturn {
-  client: YmirClient;
+  client: YmirWsTransport;
   status: ConnectionStatus;
   error: string | null;
 }
 
 export function useWebSocket(): UseWebSocketReturn {
-  const [client] = useState(() => getWebSocketClient());
+  const [client] = useState(() => getYmirWsTransport());
   const [status, setStatus] = useState<ConnectionStatus>(client.getStatus());
   const [error, setError] = useState<string | null>(null);
 
@@ -43,12 +43,12 @@ export function useWebSocket(): UseWebSocketReturn {
   };
 }
 
-export function useWebSocketClient(): YmirClient {
-  return getWebSocketClient();
+export function useWebSocketClient(): YmirWsTransport {
+  return getYmirWsTransport();
 }
 
 export function useWebSocketStatus(): ConnectionStatus {
-  const client = getWebSocketClient();
+  const client = getYmirWsTransport();
   const [status, setStatus] = useState<ConnectionStatus>(client.getStatus());
 
   useEffect(() => {
@@ -63,7 +63,7 @@ export function useWebSocketStatus(): ConnectionStatus {
 }
 
 export function useIsConnected(): boolean {
-  const client = getWebSocketClient();
+  const client = getYmirWsTransport();
   const [isConnected, setIsConnected] = useState<boolean>(client.isConnected());
 
   useEffect(() => {

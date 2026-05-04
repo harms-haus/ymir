@@ -1,18 +1,76 @@
 //! Message routing and dispatch for WebSocket server
 
-use crate::protocol::{
-    ClientMessage, ClientMessagePayload, Error, ServerMessage, ServerMessagePayload, FileListResult, FileContent,
-};
 use crate::agent::{
     handle_agent_cancel, handle_agent_send, handle_agent_set_config_option, handle_agent_spawn,
 };
+use crate::bridge::{decode_bridge_message, DecodedMessage};
+use crate::protocol::{
+    ClientMessage, ClientMessagePayload, Error, FileContent, FileListResult, ServerMessage,
+    ServerMessagePayload, PROTOCOL_VERSION,
+};
 use crate::pty::{
-    handle_terminal_create, handle_terminal_input, handle_terminal_kill, handle_terminal_request_history, handle_terminal_resize,
+    handle_terminal_create, handle_terminal_input, handle_terminal_kill,
+    handle_terminal_mount, handle_terminal_request_history, handle_terminal_resize,
+    handle_terminal_tab_close, handle_terminal_unmount,
 };
 use crate::state::AppState;
 use std::sync::Arc;
 use tracing::instrument;
 use uuid::Uuid;
+
+/// Route a JSON BridgeEnvelope message through the existing message router.
+///
+/// This is the JSON entry point for the router. It parses a raw JSON string
+/// as a BridgeEnvelope, extracts the BridgeMessage payload, converts it to
+/// a ClientMessagePayload, and routes it through the existing `route_message()`
+/// function.
+///
+/// Returns `Some(ServerMessage)` if a response was generated, `None` otherwise.
+/// Returns `None` if:
+/// - The JSON cannot be parsed as a BridgeEnvelope
+/// - The envelope version is unsupported
+/// - The message is not a client request (e.g., AcpPayload, StartAgent)
+/// - The client protocol version does not match
+#[instrument(skip(state, json_text), fields(client_id = %client_id))]
+pub async fn route_json_message(
+    state: Arc<AppState>,
+    client_id: Uuid,
+    json_text: &str,
+) -> Option<ServerMessage> {
+    let decoded = decode_bridge_message(json_text)?;
+
+    match decoded {
+        DecodedMessage::Client(client_msg) => {
+            if client_msg.version != PROTOCOL_VERSION {
+                tracing::warn!(
+                    %client_id,
+                    version = client_msg.version,
+                    expected = PROTOCOL_VERSION,
+                    "Client protocol version mismatch in JSON message"
+                );
+                return None;
+            }
+            route_message(state, client_id, client_msg).await
+        }
+        DecodedMessage::UnsupportedVersion(err) => {
+            tracing::warn!(
+                %client_id,
+                received = err.received,
+                supported = ?err.supported,
+                "Unsupported bridge envelope version in JSON message"
+            );
+            None
+        }
+        DecodedMessage::NonClient(msg) => {
+            tracing::debug!(
+                %client_id,
+                message_type = ?std::mem::discriminant(&msg),
+                "Received non-client BridgeMessage via JSON entry point"
+            );
+            None
+        }
+    }
+}
 
 /// Route a client message to the appropriate handler
 #[instrument(skip(state, message), fields(client_id = %client_id))]
@@ -23,6 +81,7 @@ pub async fn route_message(
 ) -> Option<ServerMessage> {
     let response = match message.payload {
         ClientMessagePayload::Ping(ping) => {
+            tracing::info!(%client_id, timestamp = ping.timestamp, "Ping received, sending Pong");
             state.update_activity(client_id).await;
             Some(ServerMessage::new(ServerMessagePayload::Pong(
                 crate::protocol::Pong {
@@ -205,6 +264,11 @@ pub async fn route_message(
         ClientMessagePayload::CreatePR(msg) => Some(handle_create_pr(state.clone(), msg).await),
 
         ClientMessagePayload::Ack(_) => Some(not_implemented(message.payload)),
+
+        // New terminal tab lifecycle messages (handlers to be implemented)
+        ClientMessagePayload::TerminalMount(msg) => Some(handle_terminal_mount(state.clone(), msg).await),
+        ClientMessagePayload::TerminalUnmount(msg) => Some(handle_terminal_unmount(state.clone(), msg).await),
+        ClientMessagePayload::TerminalTabClose(msg) => Some(handle_terminal_tab_close(state.clone(), msg).await),
     };
     response
 }
@@ -246,6 +310,9 @@ fn not_implemented(payload: ClientMessagePayload) -> ServerMessage {
         ClientMessagePayload::Ping(_) => "Ping",
         ClientMessagePayload::Pong(_) => "Pong",
         ClientMessagePayload::Ack(_) => "Ack",
+        ClientMessagePayload::TerminalMount(_) => "TerminalMount",
+        ClientMessagePayload::TerminalUnmount(_) => "TerminalUnmount",
+        ClientMessagePayload::TerminalTabClose(_) => "TerminalTabClose",
     };
 
     ServerMessage::new(ServerMessagePayload::Error(Error {
@@ -370,6 +437,7 @@ async fn handle_get_state(state: Arc<AppState>, request_id: Uuid) -> ServerMessa
             TerminalSessionData {
                 id: Uuid::parse_str(&session.id).unwrap_or_else(|_| Uuid::new_v4()),
                 worktree_id: Uuid::parse_str(&session.worktree_id).unwrap_or(worktree.id),
+                tab_id: session.tab_id.as_ref().and_then(|t| Uuid::parse_str(t).ok()).unwrap_or_else(|| Uuid::new_v4()),
                 label: session.label,
                 shell: session.shell,
                 created_at: parse_timestamp(&session.created_at),
@@ -423,10 +491,13 @@ async fn handle_get_worktree_details(
     let mut agent_sessions: Vec<AgentSessionData> = Vec::new();
     let mut terminal_sessions: Vec<TerminalSessionData> = Vec::new();
 
+    // Load terminal tabs (server-persisted, survive refreshes)
+    let mut all_terminal_tabs: Vec<crate::protocol::TabSessionData> = Vec::new();
+
     for worktree in &worktrees {
         let worktree_id = worktree.id.to_string();
 
-    // Load agent sessions - only return those that are actually spawned in memory
+        // Load agent sessions - only return those that are actually spawned in memory
     let agents_map = state.agents.read().await;
     let spawned_agent_ids: std::collections::HashSet<Uuid> = agents_map
       .values()
@@ -465,8 +536,8 @@ async fn handle_get_worktree_details(
         }),
     );
 
-        // Load terminal sessions
-        let db_terminal_sessions = match state.db.list_terminal_sessions(&worktree_id).await {
+        // Load terminal tabs (server-persisted, survive refreshes)
+        let db_terminal_tabs = match state.db.list_terminal_tabs(&worktree_id).await {
             Ok(sessions) => sessions,
             Err(e) => {
                 return ServerMessage::new(ServerMessagePayload::Error(Error {
@@ -478,15 +549,50 @@ async fn handle_get_worktree_details(
             }
         };
 
-        terminal_sessions.extend(db_terminal_sessions.into_iter().map(|session| {
-            TerminalSessionData {
-                id: Uuid::parse_str(&session.id).unwrap_or_else(|_| Uuid::new_v4()),
-                worktree_id: Uuid::parse_str(&session.worktree_id).unwrap_or(worktree.id),
-                label: session.label,
-                shell: session.shell,
-                created_at: parse_timestamp(&session.created_at),
-            }
-        }));
+        // Group sessions by tab_id, keep most recent active session per tab
+        let mut tab_map: std::collections::HashMap<String, crate::protocol::TabSessionData> =
+            std::collections::HashMap::new();
+        for session in db_terminal_tabs {
+            let tab_id = session.tab_id.clone().unwrap_or_else(|| session.id.clone());
+            let session_id = Uuid::parse_str(&session.id).unwrap_or_else(|_| Uuid::new_v4());
+            let tab_id_uuid = Uuid::parse_str(&tab_id).unwrap_or_else(|_| Uuid::new_v4());
+            let is_active = session.status == "active";
+            let created_at_dt = chrono::DateTime::parse_from_rfc3339(&session.created_at)
+                .map(|dt| dt.with_timezone(&chrono::Utc))
+                .unwrap_or_else(|_| chrono::Utc::now());
+
+            tab_map
+                .entry(tab_id.clone())
+                .and_modify(|existing| {
+                    if is_active || created_at_dt > existing.created_at {
+                        existing.id = tab_id_uuid;
+                        existing.tab_id = tab_id_uuid;
+                        existing.worktree_id =
+                            Uuid::parse_str(&session.worktree_id).unwrap_or(worktree.id);
+                        existing.label = session.label.clone();
+                        existing.shell = session.shell.clone();
+                        existing.active_session_id = if is_active {
+                            Some(session_id)
+                        } else {
+                            existing.active_session_id
+                        };
+                        existing.status = session.status.clone();
+                        existing.created_at = created_at_dt;
+                    }
+                })
+                .or_insert_with(|| crate::protocol::TabSessionData {
+                    id: tab_id_uuid,
+                    tab_id: tab_id_uuid,
+                    worktree_id: Uuid::parse_str(&session.worktree_id).unwrap_or(worktree.id),
+                    label: session.label.clone(),
+                    shell: session.shell.clone(),
+                    active_session_id: if is_active { Some(session_id) } else { None },
+                    status: session.status.clone(),
+                    created_at: created_at_dt,
+                });
+        }
+
+        all_terminal_tabs.extend(tab_map.into_values());
     }
 
     ServerMessage::new(ServerMessagePayload::WorktreeDetailsResult(
@@ -494,7 +600,8 @@ async fn handle_get_worktree_details(
             request_id: Some(request_id),
             worktrees,
             agent_sessions,
-            terminal_sessions,
+            terminal_sessions: vec![], // legacy — use terminal_tabs instead
+            terminal_tabs: all_terminal_tabs,
         }
     ))
 }
@@ -651,8 +758,8 @@ async fn handle_create_pr(state: Arc<AppState>, msg: crate::protocol::CreatePR) 
 #[instrument(skip(state))]
 async fn handle_file_list(state: Arc<AppState>, msg: crate::protocol::FileList) -> ServerMessage {
     let worktree_id = msg.worktree_id;
-    let _path = msg.path.unwrap_or_default();
-    
+    let path = msg.path;
+
     let worktrees = state.worktrees.read().await;
     let worktree = match worktrees.get(&worktree_id) {
         Some(wt) => wt,
@@ -665,36 +772,53 @@ async fn handle_file_list(state: Arc<AppState>, msg: crate::protocol::FileList) 
             }));
         }
     };
-    
+
     let base_path = std::path::PathBuf::from(worktree.path.clone());
-    let mut files = Vec::new();
-    
-    // Helper function to collect files recursively
-    fn collect_files(dir: &std::path::Path, base: &std::path::Path, files: &mut Vec<String>) {
-        if let Ok(entries) = std::fs::read_dir(dir) {
+    let target_path = match &path {
+        Some(p) if !p.is_empty() => base_path.join(p),
+        _ => base_path.clone(),
+    };
+
+    // Known large directories to skip
+    const SKIPPED_DIRS: &[&str] = &[
+        ".git", "node_modules", ".venv", "venv", "__pycache__", "target",
+        "dist", "build", ".next", "out", ".cache", "coverage", "vendor",
+        ".tox", ".mypy_cache", ".pytest_cache",
+    ];
+
+    let files = tokio::task::spawn_blocking(move || {
+        let mut result = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(&target_path) {
             for entry in entries.flatten() {
                 let entry_path = entry.path();
-                if entry_path.file_name().and_then(|n| n.to_str()) == Some(".git") {
-                    continue; // Skip .git directory
+                let name = match entry_path.file_name().and_then(|n| n.to_str()) {
+                    Some(n) => n,
+                    None => continue,
+                };
+
+                // Skip known large directories
+                if SKIPPED_DIRS.contains(&name) {
+                    continue;
                 }
+
                 if entry_path.is_dir() {
-                    collect_files(&entry_path, base, files);
-                } else if let Ok(relative_path) = entry_path.strip_prefix(base) {
-                    if let Some(path_str) = relative_path.to_str() {
-                        files.push(path_str.to_string());
-                    }
+                    // Append "/" to distinguish directories from files
+                    result.push(format!("{}/", name));
+                } else {
+                    result.push(name.to_string());
                 }
             }
         }
-    }
-    
-    // Collect files from worktree directory
-    collect_files(&base_path, &base_path, &mut files);
-    files.sort();
-    
+        result.sort();
+        result
+    })
+    .await
+    .unwrap_or_default();
+
     ServerMessage::new(ServerMessagePayload::FileListResult(FileListResult {
         worktree_id,
         files,
+        path: path.clone(),
         request_id: None,
     }))
 }
@@ -760,11 +884,11 @@ async fn handle_file_read(state: Arc<AppState>, msg: crate::protocol::FileRead) 
 
 #[instrument(skip(state))]
 async fn handle_terminal_rename(state: Arc<AppState>, msg: crate::protocol::TerminalRename) -> ServerMessage {
-    let session_id = msg.session_id;
+    let tab_id = msg.tab_id;
     let new_label = msg.new_label;
 
     // Update database
-    if let Err(e) = state.db.update_terminal_label(&session_id.to_string(), &new_label).await {
+    if let Err(e) = state.db.update_terminal_label(&tab_id.to_string(), &new_label).await {
         tracing::error!("Failed to update terminal label: {}", e);
         return ServerMessage::new(ServerMessagePayload::Error(Error {
             code: "TERMINAL_RENAME_ERROR".to_string(),
@@ -777,7 +901,7 @@ async fn handle_terminal_rename(state: Arc<AppState>, msg: crate::protocol::Term
     // Update in-memory state
     {
         let mut terminals = state.terminals.write().await;
-        if let Some(terminal) = terminals.get_mut(&session_id) {
+        if let Some(terminal) = terminals.get_mut(&tab_id) {
             terminal.label = Some(new_label.clone());
         }
     }
@@ -785,13 +909,13 @@ async fn handle_terminal_rename(state: Arc<AppState>, msg: crate::protocol::Term
     // Get worktree_id for broadcast
     let worktree_id = {
         let terminals = state.terminals.read().await;
-        terminals.get(&session_id).map(|t| t.worktree_id).unwrap_or_else(Uuid::nil)
+        terminals.get(&tab_id).map(|t| t.worktree_id).unwrap_or_else(Uuid::nil)
     };
 
     // Broadcast update to all clients
     let broadcast_msg = ServerMessage::new(ServerMessagePayload::TerminalUpdated(
         crate::protocol::TerminalUpdated {
-            session_id,
+            session_id: tab_id,
             worktree_id,
             label: Some(new_label),
             position: None,
@@ -801,7 +925,7 @@ async fn handle_terminal_rename(state: Arc<AppState>, msg: crate::protocol::Term
     state.broadcast(broadcast_msg).await;
 
     ServerMessage::new(ServerMessagePayload::Ack(crate::protocol::Ack {
-        message_id: session_id,
+        message_id: tab_id,
         status: crate::protocol::AckStatus::Success,
     }))
 }
@@ -809,11 +933,11 @@ async fn handle_terminal_rename(state: Arc<AppState>, msg: crate::protocol::Term
 #[instrument(skip(state))]
 async fn handle_terminal_reorder(state: Arc<AppState>, msg: crate::protocol::TerminalReorder) -> ServerMessage {
     let worktree_id = msg.worktree_id;
-    let session_ids = msg.session_ids;
+    let tab_ids = msg.tab_ids;
 
     // Update positions in database
-    for (position, session_id) in session_ids.iter().enumerate() {
-        if let Err(e) = state.db.update_terminal_position(&session_id.to_string(), position as i64).await {
+    for (position, tab_id) in tab_ids.iter().enumerate() {
+        if let Err(e) = state.db.update_terminal_position(&tab_id.to_string(), position as i64).await {
             tracing::error!("Failed to update terminal position: {}", e);
             return ServerMessage::new(ServerMessagePayload::Error(Error {
                 code: "TERMINAL_REORDER_ERROR".to_string(),
@@ -825,10 +949,10 @@ async fn handle_terminal_reorder(state: Arc<AppState>, msg: crate::protocol::Ter
     }
 
     // Broadcast update to all clients
-    for (position, session_id) in session_ids.iter().enumerate() {
+    for (position, tab_id) in tab_ids.iter().enumerate() {
         let broadcast_msg = ServerMessage::new(ServerMessagePayload::TerminalUpdated(
             crate::protocol::TerminalUpdated {
-                session_id: *session_id,
+                session_id: *tab_id,
                 worktree_id,
                 label: None,
                 position: Some(position as u32),

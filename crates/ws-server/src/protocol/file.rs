@@ -45,6 +45,7 @@ pub struct FileListResult {
     #[ts(type = "string")]
     pub worktree_id: Uuid,
     pub files: Vec<String>,
+    pub path: Option<String>,
     #[serde(with = "optional_uuid_serde")]
     #[ts(type = "string")]
     pub request_id: Option<Uuid>,

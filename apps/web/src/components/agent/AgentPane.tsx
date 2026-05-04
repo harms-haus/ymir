@@ -3,7 +3,7 @@ import { Tabs } from '@base-ui/react';
 import { useStore, selectActiveAgentTabId, selectAgentTabsByWorktreeId, selectIsWorkspacesLoading, AgentTab } from '../../store';
 import { useUIStore } from '../../uiStore';
 import { useWebSocketClient } from '../../hooks/useWebSocket';
-import { AgentChat } from './AgentChat';
+import { AcpChat } from './AcpChat';
 import { AgentSkeleton } from './AgentSkeleton';
 import { DiffTab } from '../editor/DiffTab';
 import { EditorTab } from '../editor/EditorTab';
@@ -71,7 +71,7 @@ export function AgentPane({ worktreeId }: AgentPaneProps) {
   );
 
   const handleSpawnAgent = useCallback(() => {
-    const agentType = 'opencode';
+    const agentType = 'hermes';
 
     const message: AgentSpawn = {
       type: 'AgentSpawn',
@@ -264,7 +264,7 @@ export function AgentPane({ worktreeId }: AgentPaneProps) {
                   className="agent-panel-content"
                 >
                   {tab.type === 'agent' && sessionForTab && (
-                    <AgentChat
+                    <AcpChat
                       sessionId={sessionForTab.id}
                       agentType={sessionForTab.agentType}
                       worktreeId={worktreeId}
@@ -357,17 +357,24 @@ function AgentTabContent({
       ) : (
         <span className="tab-label">{getTabLabel(tab)}</span>
       )}
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={(e) => {
           e.stopPropagation();
           onCloseTab(tab.id);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.stopPropagation();
+            onCloseTab(tab.id);
+          }
         }}
         className="tab-close"
         aria-label="Close tab"
       >
         ×
-      </button>
+      </div>
     </Tabs.Tab>
   );
 }

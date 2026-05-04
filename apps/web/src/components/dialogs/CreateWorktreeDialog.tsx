@@ -5,7 +5,7 @@ import { useStore } from '../../store';
 import { getWebSocketClient, generateId } from '../../lib/ws';
 import type { WorktreeCreate, WorktreeCreated, Error as ErrorMessage } from '../../types/protocol';
 
-type AgentOption = 'claude' | 'opencode' | 'pi' | 'none';
+type AgentOption = 'hermes' | 'claude' | 'opencode' | 'pi' | 'none';
 
 interface AgentConfig {
   value: AgentOption;
@@ -15,6 +15,7 @@ interface AgentConfig {
 }
 
 const AGENT_OPTIONS: AgentConfig[] = [
+  { value: 'hermes', icon: 'ri-robot-line', label: 'Hermes', description: 'Self-improving AI agent with skills & memory' },
   { value: 'claude', icon: 'ri-robot-line', label: 'Claude', description: 'Via ACP adapter' },
   { value: 'opencode', icon: 'ri-terminal-box-line', label: 'Opencode', description: 'Native ACP support' },
   { value: 'pi', icon: 'ri-code-s-slash-line', label: 'Pi', description: 'Via pi-acp adapter' },
@@ -46,7 +47,7 @@ export function CreateWorktreeDialog({ open, onOpenChange, workspaceId }: Create
     if (open) {
       setBranchName('');
       setUseExistingBranch(false);
-      setSelectedAgent(undefined);
+      setSelectedAgent('hermes');
       setIsSubmitting(false);
     }
 

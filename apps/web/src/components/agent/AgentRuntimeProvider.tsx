@@ -7,7 +7,7 @@ import {
 } from '@assistant-ui/react';
 import { useStore } from '../../store';
 import { useWebSocketClient } from '../../hooks/useWebSocket';
-import { AccumulatedMessage } from '../../types/state';
+import { AccumulatedMessage, AccumulatedContentPart } from '../../types/state';
 
 function safeStringify(value: unknown): string {
   if (value === undefined || value === null) {
@@ -27,7 +27,7 @@ function safeStringify(value: unknown): string {
 }
 
 function convertAccumulatedMessage(msg: AccumulatedMessage, index: number, messages: AccumulatedMessage[], isStreaming: boolean): ThreadMessageLike {
-  const content = msg.parts.map((part) => {
+  const content = msg.parts.map((part: AccumulatedContentPart) => {
     switch (part.type) {
       case 'text':
         return { type: 'text' as const, text: part.text };

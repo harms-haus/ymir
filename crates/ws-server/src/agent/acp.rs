@@ -123,6 +123,7 @@ impl AcpClient {
         handler: YmirClientHandler,
     ) -> Result<(ClientSideConnection, JoinHandle<()>, Child)> {
         let executable = match agent_type {
+            "hermes" => "hermes",
             "claude" => "claude-agent",
             "opencode" => "opencode",
             "pi" => "pi-acp",
@@ -130,7 +131,7 @@ impl AcpClient {
         };
 
         let mut cmd = tokio::process::Command::new(executable);
-        if agent_type == "opencode" {
+        if agent_type == "opencode" || agent_type == "hermes" {
             cmd.args(&["acp"]);
         }
         let mut child = cmd

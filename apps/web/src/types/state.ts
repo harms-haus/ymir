@@ -48,14 +48,15 @@ export interface AgentSessionState {
     position?: number;
 }
 
-// Terminal session state
-export interface TerminalSessionState {
-    id: string;
+// Terminal tab state (replaces TerminalSessionState)
+export interface TerminalTabState {
+    id: string;           // stable tab UUID
     worktreeId: string;
     label: string;
-    shell: string;
+    position: number;
+    activeSessionId: string | null;  // current PTY session
+    status: 'active' | 'disconnected';
     createdAt: number;
-    position?: number;
 }
 
 // Notification state for toast messages
@@ -140,36 +141,12 @@ export type AlertDialogVariant = 'default' | 'destructive';
 // ============================================================================
 // ACP Event Accumulator Types
 // ============================================================================
-//
-// The accumulator is DERIVED, connection-scoped state that transforms ACP events
-// into assistant-ui-compatible thread/message/card state.
-//
-// CRITICAL: The accumulator is NOT the source of truth for:
-//   - Worktree identity (use AppState.worktrees)
-//   - Session identity (use AppState.agentSessions)
-//   - Connection state (use AppState.connectionStatus)
-//
-// Rebuild Rules:
-//   - On WebSocket reconnect: accumulator is FLUSHED and rebuilt from replay
-//   - Accumulator state is tied to the current WebSocket connection lifecycle
-//   - StateSnapshot triggers a full accumulator flush
-//   - ResumeMarker events enable partial replay from checkpoint
-//
-// Retention Policy:
-//   - Accumulator retains events up to the last ResumeMarker or connection start
-//   - Tool outputs are bounded (see MAX_TOOL_OUTPUT_LENGTH)
-//   - Text chunks are accumulated in order, deduplicated by sequence number
-//
 
 /** Maximum characters to retain for tool output (prevent memory bloat) */
 export const MAX_TOOL_OUTPUT_LENGTH = 10000;
 
 /** Maximum number of accumulated messages per thread (prevent unbounded growth) */
 export const MAX_ACCUMULATED_MESSAGES = 500;
-
-// ----------------------------------------------------------------------------
-// Accumulated Content Types (for assistant-ui rendering)
-// ----------------------------------------------------------------------------
 
 /** Accumulated text content from PromptChunk events */
 export interface AccumulatedTextContent {
@@ -178,7 +155,7 @@ export interface AccumulatedTextContent {
   isStreaming: boolean;
 }
 
-/** Accumulated structured content from PromptChunk events (JSON, code blocks, etc.) */
+/** Accumulated structured content from PromptChunk events */
 export interface AccumulatedStructuredContent {
   type: 'structured';
   data: string;
@@ -194,28 +171,24 @@ export interface AccumulatedToolCard {
   input?: string;
   output?: string;
   error?: string;
-  /** Timestamp of last update */
   updatedAt: number;
 }
 
-/** Accumulated context update card (file read/written, command executed, etc.) */
+/** Accumulated context update card */
 export interface AccumulatedContextCard {
   type: 'context';
   updateType: AcpContextUpdateType;
   data: string;
-  /** Sequence number for ordering */
   sequence: AcpSequence;
 }
 
-/** Permission request card (derived from tool use awaiting approval) */
+/** Permission request card */
 export interface AccumulatedPermissionCard {
   type: 'permission';
   toolUseId: string;
   toolName: string;
   input: string;
-  /** Whether permission is still pending */
   isPending: boolean;
-  /** Sequence number for ordering */
   sequence: AcpSequence;
 }
 
@@ -226,11 +199,10 @@ export interface AccumulatedErrorCard {
   message: string;
   details?: string;
   recoverable: boolean;
-  /** Sequence number for ordering */
   sequence: AcpSequence;
 }
 
-/** Image content from image-containing events */
+/** Image content */
 export interface AccumulatedImageContent {
   type: 'image';
   image?: string;
@@ -250,52 +222,31 @@ export type AccumulatedContentPart =
 
 /** Accumulated message in a thread */
 export interface AccumulatedMessage {
-  /** Unique message ID (derived from sequence or generated) */
   id: string;
-  /** Role: 'user' | 'assistant' */
   role: 'user' | 'assistant';
-  /** Content parts in this message */
   parts: AccumulatedContentPart[];
-  /** Timestamp of message creation */
   createdAt: number;
-  /** Sequence number of last update */
   lastSequence: AcpSequence;
 }
 
 /** Accumulated thread for a worktree/session */
 export interface AccumulatedThread {
-  /** Worktree ID this thread belongs to */
   worktreeId: string;
-  /** ACP session ID */
   acpSessionId: string;
-  /** Messages in chronological order */
   messages: AccumulatedMessage[];
-  /** Current session status from AcpSessionStatus events */
   sessionStatus: AcpSessionStatus;
-  /** Last processed sequence number */
   lastSequence: AcpSequence;
-  /** Connection generation (increments on reconnect) */
   connectionGeneration: number;
-  /** Whether this thread is currently streaming */
   isStreaming: boolean;
   configOptions: AcpSessionConfigOption[];
-  /** Resume marker checkpoint if available */
   resumeCheckpoint?: string;
 }
 
-// ----------------------------------------------------------------------------
-// Accumulator State Shape
-// ----------------------------------------------------------------------------
-
 /** Per-connection accumulator state */
 export interface AcpAccumulatorState {
-  /** Connection generation counter (increments on each reconnect) */
   connectionGeneration: number;
-  /** Accumulated threads keyed by worktreeId */
   threads: Map<string, AccumulatedThread>;
-  /** Pending events awaiting correlation (keyed by correlationId) */
   pendingCorrelations: Map<string, AcpEvent[]>;
-  /** Last flush timestamp */
   lastFlushTimestamp: number | null;
 }
 
@@ -309,10 +260,6 @@ export function createInitialAccumulatorState(): AcpAccumulatorState {
   };
 }
 
-// ----------------------------------------------------------------------------
-// Accumulator Action Types (for reducer)
-// ----------------------------------------------------------------------------
-
 /** Actions that can be dispatched to the accumulator */
 export type AcpAccumulatorAction =
   | { type: 'EVENT_RECEIVED'; envelope: AcpEventEnvelope; worktreeId: string }
@@ -323,34 +270,12 @@ export type AcpAccumulatorAction =
   | { type: 'REBUILD_FROM_SNAPSHOT'; worktreeId: string; acpSessionId: string }
   | { type: 'SET_STREAMING'; worktreeId: string; isStreaming: boolean };
 
-/** Result of processing an event through the accumulator */
-export interface AccumulatorResult {
-  /** The updated thread (if any) */
-  thread?: AccumulatedThread;
-  /** Whether the accumulator state changed */
-  changed: boolean;
-  /** Action to dispatch to assistant-ui (if any) */
-  assistantUiAction?: {
-    type: 'APPEND_CONTENT' | 'UPDATE_CONTENT' | 'REMOVE_CONTENT' | 'SET_STATUS';
-    payload: unknown;
-  };
-}
-
-// ----------------------------------------------------------------------------
-// Selector Types
-// ----------------------------------------------------------------------------
-
 /** Selector result for a thread's accumulated state */
 export interface ThreadAccumulatedState {
-  /** The accumulated thread, or null if not found */
   thread: AccumulatedThread | null;
-  /** Derived message count */
   messageCount: number;
-  /** Derived is-streaming state */
   isStreaming: boolean;
-  /** Derived session status */
   sessionStatus: AcpSessionStatus;
-  /** Whether the thread has errors */
   hasErrors: boolean;
 }
 
@@ -373,13 +298,14 @@ export interface AppState {
   workspaces: WorkspaceState[];
   worktrees: WorktreeState[];
   agentSessions: AgentSessionState[];
-  terminalSessions: TerminalSessionState[];
+  terminalTabs: TerminalTabState[];
   notifications: NotificationState[];
 
   // UI state
   activeWorktreeId: string | null;
   connectionStatus: ConnectionStatus;
   connectionError: string | null;
+  lastPongTimestamp: number;
   expandedWorkspaceIds: Set<string>;
   isWorkspacesLoading: boolean;
 
@@ -388,7 +314,6 @@ export interface AppState {
   activeAgentTabId: Map<string, string>;
 
   // ACP Event Accumulator (connection-scoped, derived state)
-  // IMPORTANT: This is NOT the source of truth for worktree/session identity
   acpAccumulator: AcpAccumulatorState;
 
   // File cache (caches file listings and git status until worktree changes)
@@ -414,10 +339,11 @@ export interface AppState {
   setWorkspaces: (workspaces: WorkspaceState[]) => void;
   setWorktrees: (worktrees: WorktreeState[]) => void;
   setAgentSessions: (sessions: AgentSessionState[]) => void;
-  setTerminalSessions: (sessions: TerminalSessionState[]) => void;
+  setTerminalTabs: (tabs: TerminalTabState[]) => void;
   setActiveWorktree: (worktreeId: string | null) => void;
   setConnectionStatus: (status: ConnectionStatus) => void;
   setConnectionError: (error: string | null) => void;
+  setLastPongTimestamp: (ts: number) => void;
   setWorkspacesLoading: (loading: boolean) => void;
   toggleWorkspaceExpanded: (workspaceId: string) => void;
   
@@ -426,7 +352,7 @@ export interface AppState {
     workspaces: WorkspaceState[];
     worktrees: WorktreeState[];
     agentSessions: AgentSessionState[];
-    terminalSessions: TerminalSessionState[];
+    terminalTabs: TerminalTabState[];
   }) => void;
   
   // CRUD operations
@@ -443,9 +369,12 @@ export interface AppState {
   updateAgentSession: (sessionId: string, updates: Partial<AgentSessionState>) => void;
   removeAgentSession: (sessionId: string) => void;
   
-addTerminalSession: (session: TerminalSessionState) => void;
-    updateTerminalSession: (sessionId: string, updates: Partial<TerminalSessionState>) => void;
-    removeTerminalSession: (sessionId: string) => void;
+  // Terminal tab CRUD
+  addTerminalTab: (tab: TerminalTabState) => void;
+  updateTerminalTab: (tabId: string, updates: Partial<TerminalTabState>) => void;
+  removeTerminalTab: (tabId: string) => void;
+  setTabSession: (tabId: string, sessionId: string) => void;
+  clearTabSession: (tabId: string) => void;
   
   // Notification management
   addNotification: (notification: Omit<NotificationState, 'id' | 'timestamp'>) => void;
