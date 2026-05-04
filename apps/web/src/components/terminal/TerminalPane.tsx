@@ -7,6 +7,7 @@ import { Terminal, type TerminalRef } from './TerminalView';
 import { TerminalSkeleton } from './TerminalSkeleton';
 import type { TerminalMount, TerminalTabClose, TerminalReorder, TerminalRename } from '../../types/protocol';
 import TerminalIcon from '@mui/icons-material/Terminal';
+import CircularProgress from '@mui/material/CircularProgress';
 import { useShallow } from 'zustand/react/shallow';
 import { useContextMenu } from '../../hooks/useContextMenu';
 import { TabContextMenu } from '../ui/TabContextMenu';
@@ -39,7 +40,78 @@ interface TerminalPanelProps {
 
 function TerminalPanel({ tab }: TerminalPanelProps) {
   const terminalRef = useRef<TerminalRef>(null);
+  const client = useWebSocketClient();
+  const retryCountRef = useRef(0);
+  const isDisconnected = !tab.activeSessionId && tab.status === 'disconnected';
 
+  // DEBUG: Log which render path TerminalPanel takes
+  console.log(
+    '[TerminalPanel] render:',
+    tab.id.slice(0, 8),
+    '| status:', tab.status,
+    '| activeSessionId:', tab.activeSessionId?.slice(0, 8) ?? 'null',
+    '| isDisconnected:', isDisconnected,
+    '| label:', tab.label
+  );
+
+  // Auto-retry TerminalMount with bounded exponential backoff.
+  // Effect is always called (Rules of Hooks compliant); the disconnected
+  // check is handled inside the effect body. Uses recursive setTimeout so
+  // each retry schedules the next one with increasing delay.
+  useEffect(() => {
+    if (!isDisconnected) {
+      retryCountRef.current = 0; // Reset counter when tab reconnects
+      return;
+    }
+
+    let cancelled = false;
+
+    const scheduleRetry = (retries: number) => {
+      if (cancelled || retries >= 10) return; // Give up after 10 attempts
+
+      const delay = Math.min(1000 * Math.pow(2, retries), 30000); // Exponential backoff, max 30s
+      const timer = setTimeout(() => {
+        if (cancelled) return;
+        retryCountRef.current = retries + 1;
+        console.log('[TerminalPanel] sending TerminalMount retry:', retries, 'tabId:', tab.id.slice(0, 8), 'label:', tab.label);
+        const message: TerminalMount = {
+          type: 'TerminalMount',
+          tabId: tab.id,
+          worktreeId: tab.worktreeId,
+          label: tab.label,
+        };
+        client.send(message);
+        scheduleRetry(retries + 1); // Schedule next retry recursively
+      }, delay);
+
+      return () => clearTimeout(timer);
+    };
+
+    const cleanup = scheduleRetry(0);
+
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+  }, [isDisconnected, tab.id, tab.worktreeId, tab.label, client]);
+
+  // Tab is disconnected with no active session — show reconnecting state
+  if (isDisconnected) {
+    return (
+      <Tabs.Panel
+        value={tab.id}
+        className="terminal-tab-content"
+      >
+        <div className="terminal-empty-state">
+          <CircularProgress size={24} style={{ marginBottom: '1rem', color: 'hsl(var(--muted-foreground))' }} />
+          <p className="terminal-empty-message">Reconnecting...</p>
+          <p className="terminal-empty-hint">Waiting for terminal session</p>
+        </div>
+      </Tabs.Panel>
+    );
+  }
+
+  // Tab has no session and is not in disconnected state (e.g., brand new, still mounting)
   if (!tab.activeSessionId) {
     return (
       <Tabs.Panel
@@ -48,7 +120,7 @@ function TerminalPanel({ tab }: TerminalPanelProps) {
       >
         <div className="terminal-empty-state">
           <TerminalIcon className="terminal-empty-icon" style={{ width: '1.5rem', height: '1.5rem' }} />
-          <p className="terminal-empty-message">No session</p>
+          <p className="terminal-empty-message">Initializing...</p>
         </div>
       </Tabs.Panel>
     );
@@ -120,13 +192,55 @@ export function TerminalPane({ worktreeId }: TerminalPaneProps) {
 
   // Auto-create first tab on mount if none exist
   useEffect(() => {
-    if (terminalTabs.length === 0 && worktreeId && !creationInFlightRef.current) {
+    if (terminalTabs.length === 0 && worktreeId && !creationInFlightRef.current && !isWorkspacesLoading) {
       creationInFlightRef.current = true;
       Promise.resolve(handleCreateTab()).finally(() => {
         creationInFlightRef.current = false;
       });
     }
-  }, [worktreeId, terminalTabs.length]);
+  }, [worktreeId, terminalTabs.length, isWorkspacesLoading]);
+
+  // Track which tabs have TerminalMount requests in-flight (prevents spamming).
+  // A tabId in this Set means we've sent a mount and are waiting for TerminalMounted.
+  // When the tab becomes active (sessionId received), it is removed from the set,
+  // allowing future re-mounts if the session ends again.
+  const mountInFlightRef = useRef<Set<string>>(new Set());
+
+  // Reset local state on worktree change — prevents history bleeding across worktrees
+  const prevWorktreeRef = useRef(worktreeId);
+  useEffect(() => {
+    if (prevWorktreeRef.current !== worktreeId) {
+      setTabs([]);
+      setActiveTab(null);
+      mountInFlightRef.current.clear();
+      nextTabIndexRef.current = 1;
+      prevWorktreeRef.current = worktreeId;
+    }
+  }, [worktreeId]);
+
+  // Re-spawn PTY for disconnected tabs. Uses in-flight tracking instead of
+  // a persistent "ever mounted" Set, so tabs can be re-mounted after session ends.
+  useEffect(() => {
+    for (const tab of terminalTabs) {
+      // If tab is active (has sessionId), clear any in-flight marker
+      if (tab.activeSessionId !== null) {
+        mountInFlightRef.current.delete(tab.id);
+        continue;
+      }
+
+      // If tab is disconnected with no sessionId and not already in-flight, send mount
+      if (tab.status === 'disconnected' && !mountInFlightRef.current.has(tab.id)) {
+        mountInFlightRef.current.add(tab.id);
+        const message: TerminalMount = {
+          type: 'TerminalMount',
+          tabId: tab.id,
+          worktreeId: tab.worktreeId,
+          label: tab.label,
+        };
+        client.send(message);
+      }
+    }
+  }, [terminalTabs, worktreeId, client]);
 
   const handleTabMouseDown = (tabId: string, e: React.MouseEvent) => {
     if (e.button === 1) {
@@ -296,7 +410,7 @@ export function TerminalPane({ worktreeId }: TerminalPaneProps) {
   return (
     <div className="terminal-pane">
       <Tabs.Root
-        value={activeTab || (tabs.length === 0 ? 'empty' : undefined)}
+        value={activeTab ?? (tabs.length > 0 ? tabs[0].id : 'empty')}
         onValueChange={(value: string | null) => setActiveTab(value)}
       >
         <Tabs.List className="tabs-list" ref={tabsListRef}>

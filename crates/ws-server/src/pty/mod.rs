@@ -162,6 +162,14 @@ impl PtySession {
         let master = self.master.as_ref().ok_or_else(|| anyhow!("Session is ended"))?;
         master.try_clone_reader()
     }
+
+    /// Get the raw file descriptor of the PTY master.
+    /// Used by the output reader for direct nix/libc reads,
+    /// which properly handle non-blocking I/O on PTY fds.
+    #[cfg(unix)]
+    pub fn master_raw_fd(&self) -> Option<std::os::unix::io::RawFd> {
+        self.master.as_ref().and_then(|m| m.as_raw_fd())
+    }
 }
 
 pub struct PtyManager {

@@ -486,6 +486,26 @@ export class YmirWsTransport {
     const { type, message } = decoded;
     const payload = (message as any)?.payload as Record<string, unknown> | null;
 
+    // DEBUG: Log all terminal_event envelopes
+    if (type === "terminal_event") {
+      console.log(
+        '[YWS] terminal_event envelope received:',
+        'payload.type:', payload?.type ?? 'MISSING',
+        'payload keys:', Object.keys(payload ?? {}).join(', '),
+        'sessionId:', (payload as any)?.sessionId ?? (payload as any)?.data?.sessionId ?? 'n/a',
+        'tabId:', (payload as any)?.tabId ?? 'n/a'
+      );
+    }
+
+    // Diagnostic logging for terminal_event envelopes with missing payload.type
+    if (type === "terminal_event" && payload && !payload.type) {
+      console.warn(
+        `[YWS] dispatchOnMessageHandlers: terminal_event envelope received with missing payload.type.`,
+        `Payload keys: ${Object.keys(payload).join(", ")}.`,
+        `Full payload:`, payload
+      );
+    }
+
     // Reconstruct the PascalCase ServerMessage type and payload
     let dispatchType: string;
     let dispatchMsg: Record<string, unknown>;
@@ -501,8 +521,15 @@ export class YmirWsTransport {
       // instead of the generic envelope discriminator so that onMessage
       // subscribers receive the message they registered for.
       dispatchType = payload.type as string;
-      const innerData = payload.data as Record<string, unknown> | undefined;
-      dispatchMsg = { type: dispatchType, ...(innerData ?? {}) };
+      const innerData = payload.data as unknown;
+      if (typeof innerData === "object" && innerData !== null && !Array.isArray(innerData)) {
+        // Nested object: spread its keys (existing behavior for wrapped messages)
+        dispatchMsg = { type: dispatchType, ...(innerData as Record<string, unknown>) };
+      } else {
+        // Flat structure: preserve all top-level fields except `type`
+        const { type: _t, ...rest } = payload as Record<string, unknown>;
+        dispatchMsg = { type: dispatchType, ...rest };
+      }
     } else {
       // Fix 3: payload.type is missing — try to detect the message type by
       // inspecting the payload structure before falling back to envelope-type.
@@ -519,6 +546,28 @@ export class YmirWsTransport {
         dispatchMsg = { type: dispatchType, ...(payload as Record<string, unknown>) };
         console.warn(
           `[YWS] dispatchOnMessageHandlers: payload.type missing, detected GitStatusResult by 'entries' array field`
+        );
+      } else if (
+        payload &&
+        typeof (payload as Record<string, unknown>).sessionId === "string" &&
+        typeof (payload as Record<string, unknown>).data === "string"
+      ) {
+        // Detect TerminalOutput by presence of `sessionId` (string) + `data` (string) fields
+        dispatchType = "TerminalOutput";
+        dispatchMsg = { type: dispatchType, ...(payload as Record<string, unknown>) };
+        console.warn(
+          `[YWS] dispatchOnMessageHandlers: payload.type missing, detected TerminalOutput by 'sessionId' + 'data' string fields`
+        );
+      } else if (
+        payload &&
+        typeof (payload as Record<string, unknown>).tabId === "string" &&
+        typeof (payload as Record<string, unknown>).data === "string"
+      ) {
+        // Detect TerminalTabHistory by presence of `tabId` (string) + `data` (string) fields
+        dispatchType = "TerminalTabHistory";
+        dispatchMsg = { type: dispatchType, ...(payload as Record<string, unknown>) };
+        console.warn(
+          `[YWS] dispatchOnMessageHandlers: payload.type missing, detected TerminalTabHistory by 'tabId' + 'data' string fields`
         );
       } else {
         // Direct messages (ping, pong, ack, notification, error_response):

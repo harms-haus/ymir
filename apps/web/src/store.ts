@@ -247,9 +247,13 @@ export const useStore = create<AppState>()(
 
 // Terminal tab CRUD
     addTerminalTab: (tab) =>
-        set((state) => ({
-            terminalTabs: [...state.terminalTabs, tab],
-        })),
+        set((state) => {
+            // Prevent duplicate tabs
+            if (state.terminalTabs.some((t) => t.id === tab.id)) {
+                return { terminalTabs: state.terminalTabs };
+            }
+            return { terminalTabs: [...state.terminalTabs, tab] };
+        }),
 
   updateTerminalTab: (tabId, updates) =>
     set((state) => ({
@@ -263,23 +267,27 @@ export const useStore = create<AppState>()(
             terminalTabs: state.terminalTabs.filter((tt) => tt.id !== tabId),
         })),
 
-    setTabSession: (tabId, sessionId) =>
+    setTabSession: (tabId, sessionId) => {
+        console.log('[Store] setTabSession:', tabId.slice(0, 8), '→ sessionId:', sessionId.slice(0, 8));
         set((state) => ({
             terminalTabs: state.terminalTabs.map((tt) =>
                 tt.id === tabId
                     ? { ...tt, activeSessionId: sessionId, status: 'active' as const }
                     : tt,
             ),
-        })),
+        }));
+    },
 
-    clearTabSession: (tabId) =>
+    clearTabSession: (tabId) => {
+        console.log('[Store] clearTabSession:', tabId.slice(0, 8), '→ disconnected');
         set((state) => ({
             terminalTabs: state.terminalTabs.map((tt) =>
                 tt.id === tabId
                     ? { ...tt, activeSessionId: null, status: 'disconnected' as const }
                     : tt,
             ),
-        })),
+        }));
+    },
 
       // Notification management
       addNotification: (notification) => {
@@ -708,13 +716,15 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
         if (terminalTabs) {
           terminalTabs.forEach((tab) => {
             // Map server TabSessionData to client TerminalTabState
+            // Clear activeSessionId — PTY sessions are ephemeral and die on server restart.
+            // A TerminalMount will be sent by TerminalPane to re-spawn fresh PTY sessions.
             addTerminalTab({
               id: tab.id,
               worktreeId: tab.worktreeId,
               label: tab.label ?? 'Terminal',
               position: (tab as any).position ?? 0,
-              activeSessionId: tab.activeSessionId ?? null,
-              status: tab.status ?? 'active',
+              activeSessionId: null,
+              status: 'disconnected',
               createdAt: typeof tab.createdAt === 'string'
                 ? new Date(tab.createdAt).getTime()
                 : tab.createdAt ?? Date.now(),
@@ -929,6 +939,16 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
       // Payload data may be wrapped in { type, data } or be the raw struct directly
       const data = (payload.data as Record<string, unknown> | undefined) ?? payload;
 
+      // DEBUG: Log all terminal_event payloads in store handler
+      console.log(
+        '[Store] terminal_event handler:',
+        'innerType:', innerType ?? 'MISSING',
+        'has data.payload:', !!payload.data,
+        'data keys:', Object.keys(data).slice(0, 8).join(', '),
+        'sessionId:', (data as any)?.sessionId ?? 'n/a',
+        'tabId:', (data as any)?.tabId ?? 'n/a'
+      );
+
       if (!innerType) {
         // Fallback: field-presence heuristic for backwards compatibility
         // Maps old TerminalCreated/Removed/Updated to new tab actions
@@ -968,6 +988,14 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
               createdAt: Date.now(),
             });
           }
+        } else if (typeof data.sessionId === 'string' && typeof data.data === 'string') {
+          // TerminalOutput: has sessionId (string) + data (string)
+          // No store mutation — delivered via onMessage('TerminalOutput')
+          // Already handled by yws-transport.ts dispatchOnMessageHandlers fallback
+        } else if (typeof data.tabId === 'string' && typeof data.data === 'string') {
+          // TerminalTabHistory: has tabId (string) + data (string)
+          // No store mutation — delivered via onMessage('TerminalTabHistory')
+          // Already handled by yws-transport.ts dispatchOnMessageHandlers fallback
         } else if (data.sessionId !== undefined && data.worktreeId === undefined && (data as any)?.shell === undefined && data.data === undefined) {
           const sessionId = (data as any)?.sessionId as string | undefined;
           if (sessionId) {
@@ -1010,17 +1038,23 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
           const position = (data as any)?.position as number | undefined;
           if (tabId && worktreeId) {
             const { addTerminalTab, setTabSession } = useStore.getState();
-            addTerminalTab({
-              id: tabId,
-              worktreeId,
-              label: label ?? 'Terminal',
-              position: position ?? 0,
-              activeSessionId: null,
-              status: 'active',
-              createdAt: Date.now(),
-            });
-            if (sessionId) {
-              setTabSession(tabId, sessionId);
+            const existing = useStore.getState().terminalTabs.find(tt => tt.id === tabId);
+            if (existing) {
+              // Tab already exists (e.g., restored by GetWorktreeDetails), just update session
+              if (sessionId) {
+                setTabSession(tabId, sessionId);
+              }
+            } else {
+              // Create tab atomically with activeSessionId set
+              addTerminalTab({
+                id: tabId,
+                worktreeId,
+                label: label ?? 'Terminal',
+                position: position ?? 0,
+                activeSessionId: sessionId ?? null,
+                status: 'active',
+                createdAt: Date.now(),
+              });
             }
           }
           break;

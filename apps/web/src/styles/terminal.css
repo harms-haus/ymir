@@ -32,7 +32,7 @@
 .terminal-container {
   flex: 1;
   width: 100%;
-  min-height: 0;
+  min-height: 100px;
   overflow: hidden;
   background-color: var(--terminal-bg);
 }

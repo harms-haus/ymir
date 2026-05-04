@@ -223,6 +223,7 @@ describe('handleBridgeMessage - Terminal Events', () => {
     return {
       type: 'terminal_event',
       message: {
+        type: 'terminal_event',
         payload: {
           type: innerType,
           data,

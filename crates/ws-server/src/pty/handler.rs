@@ -81,36 +81,61 @@ pub async fn handle_terminal_create(
         }
     };
 
-    let reader = match pty_manager.get_session(session_id) {
-        Some(session) => {
-            match session.lock().unwrap().take_reader() {
-                Ok(r) => r,
-                Err(e) => {
-                    let _ = pty_manager.kill_session(session_id);
-                    return ServerMessage::new(ServerMessagePayload::Error(Error {
-                        code: "PTY_READER_ERROR".to_string(),
-                        message: format!("Failed to get PTY reader: {}", e),
-                        details: None,
+    #[cfg(unix)]
+    let output_handle = {
+        let session = match pty_manager.get_session(session_id) {
+            Some(s) => s,
+            None => {
+                return ServerMessage::new(ServerMessagePayload::Error(Error {
+                    code: "PTY_SESSION_NOT_FOUND".to_string(),
+                    message: "PTY session not found after creation".to_string(),
+                    details: None,
                     request_id: None,
-                    }));
+                }));
+            }
+        };
+        let master_fd = match session.lock().unwrap().master_raw_fd() {
+            Some(fd) => fd,
+            None => {
+                let _ = pty_manager.kill_session(session_id);
+                return ServerMessage::new(ServerMessagePayload::Error(Error {
+                    code: "PTY_READER_ERROR".to_string(),
+                    message: "Failed to get PTY master fd".to_string(),
+                    details: None,
+                    request_id: None,
+                }));
+            }
+        };
+        spawn_output_reader(session_id, master_fd, Arc::clone(&state))
+    };
+    #[cfg(not(unix))]
+    let output_handle = {
+        let reader = match pty_manager.get_session(session_id) {
+            Some(session) => {
+                match session.lock().unwrap().take_reader() {
+                    Ok(r) => r,
+                    Err(e) => {
+                        let _ = pty_manager.kill_session(session_id);
+                        return ServerMessage::new(ServerMessagePayload::Error(Error {
+                            code: "PTY_READER_ERROR".to_string(),
+                            message: format!("Failed to get PTY reader: {}", e),
+                            details: None,
+                        request_id: None,
+                        }));
+                    }
                 }
             }
-        }
-        None => {
-            return ServerMessage::new(ServerMessagePayload::Error(Error {
-                code: "PTY_SESSION_NOT_FOUND".to_string(),
-                message: "PTY session not found after creation".to_string(),
-                details: None,
-                    request_id: None,
-            }));
-        }
+            None => {
+                return ServerMessage::new(ServerMessagePayload::Error(Error {
+                    code: "PTY_SESSION_NOT_FOUND".to_string(),
+                    message: "PTY session not found after creation".to_string(),
+                    details: None,
+                        request_id: None,
+                }));
+            }
+        };
+        spawn_output_reader(session_id, reader, Arc::clone(&state))
     };
-
-    let output_handle = spawn_output_reader(
-        session_id,
-        reader,
-        Arc::clone(&state),
-    );
     pty_manager.register_output_reader(session_id, output_handle);
 
     let shell = msg.shell.clone().unwrap_or_else(|| "/bin/bash".to_string());
@@ -368,6 +393,13 @@ pub async fn handle_terminal_mount(
     // If we got a new session (rx is Some), spawn the output reader
     if let Some(_rx) = rx {
         if let Some(session) = pty_manager.get_session(session_id) {
+            #[cfg(unix)]
+            if let Some(master_fd) = session.lock().unwrap().master_raw_fd() {
+                let output_handle =
+                    spawn_output_reader(session_id, master_fd, Arc::clone(&state));
+                pty_manager.register_output_reader(session_id, output_handle);
+            }
+            #[cfg(not(unix))]
             if let Ok(pty_reader) = session.lock().unwrap().take_reader() {
                 let output_handle =
                     spawn_output_reader(session_id, pty_reader, Arc::clone(&state));

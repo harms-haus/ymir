@@ -437,7 +437,7 @@ async fn handle_get_state(state: Arc<AppState>, request_id: Uuid) -> ServerMessa
             TerminalSessionData {
                 id: Uuid::parse_str(&session.id).unwrap_or_else(|_| Uuid::new_v4()),
                 worktree_id: Uuid::parse_str(&session.worktree_id).unwrap_or(worktree.id),
-                tab_id: Uuid::parse_str(&session.id).unwrap_or_else(|_| Uuid::new_v4()), // backward compat
+                tab_id: session.tab_id.as_ref().and_then(|t| Uuid::parse_str(t).ok()).unwrap_or_else(|| Uuid::new_v4()),
                 label: session.label,
                 shell: session.shell,
                 created_at: parse_timestamp(&session.created_at),
