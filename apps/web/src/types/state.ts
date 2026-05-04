@@ -48,14 +48,15 @@ export interface AgentSessionState {
     position?: number;
 }
 
-// Terminal session state
-export interface TerminalSessionState {
-    id: string;
+// Terminal tab state (replaces TerminalSessionState)
+export interface TerminalTabState {
+    id: string;           // stable tab UUID
     worktreeId: string;
     label: string;
-    shell: string;
+    position: number;
+    activeSessionId: string | null;  // current PTY session
+    status: 'active' | 'disconnected';
     createdAt: number;
-    position?: number;
 }
 
 // Notification state for toast messages
@@ -156,7 +157,7 @@ export interface AppState {
   workspaces: WorkspaceState[];
   worktrees: WorktreeState[];
   agentSessions: AgentSessionState[];
-  terminalSessions: TerminalSessionState[];
+  terminalTabs: TerminalTabState[];
   notifications: NotificationState[];
 
   // UI state
@@ -194,7 +195,7 @@ export interface AppState {
   setWorkspaces: (workspaces: WorkspaceState[]) => void;
   setWorktrees: (worktrees: WorktreeState[]) => void;
   setAgentSessions: (sessions: AgentSessionState[]) => void;
-  setTerminalSessions: (sessions: TerminalSessionState[]) => void;
+  setTerminalTabs: (tabs: TerminalTabState[]) => void;
   setActiveWorktree: (worktreeId: string | null) => void;
   setConnectionStatus: (status: ConnectionStatus) => void;
   setConnectionError: (error: string | null) => void;
@@ -207,7 +208,7 @@ export interface AppState {
     workspaces: WorkspaceState[];
     worktrees: WorktreeState[];
     agentSessions: AgentSessionState[];
-    terminalSessions: TerminalSessionState[];
+    terminalTabs: TerminalTabState[];
   }) => void;
   
   // CRUD operations
@@ -224,9 +225,12 @@ export interface AppState {
   updateAgentSession: (sessionId: string, updates: Partial<AgentSessionState>) => void;
   removeAgentSession: (sessionId: string) => void;
   
-addTerminalSession: (session: TerminalSessionState) => void;
-    updateTerminalSession: (sessionId: string, updates: Partial<TerminalSessionState>) => void;
-    removeTerminalSession: (sessionId: string) => void;
+  // Terminal tab CRUD
+  addTerminalTab: (tab: TerminalTabState) => void;
+  updateTerminalTab: (tabId: string, updates: Partial<TerminalTabState>) => void;
+  removeTerminalTab: (tabId: string) => void;
+  setTabSession: (tabId: string, sessionId: string) => void;
+  clearTabSession: (tabId: string) => void;
   
   // Notification management
   addNotification: (notification: Omit<NotificationState, 'id' | 'timestamp'>) => void;

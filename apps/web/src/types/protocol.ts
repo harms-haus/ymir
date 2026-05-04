@@ -315,7 +315,7 @@ export interface TerminalKill {
 
 export interface TerminalRename {
     type: 'TerminalRename';
-    sessionId: string;
+    tabId: string;
     newLabel: string;
     requestId?: string;
 }
@@ -323,13 +323,14 @@ export interface TerminalRename {
 export interface TerminalReorder {
   type: 'TerminalReorder';
   worktreeId: string;
-  sessionIds: string[];
+  tabIds: string[];
   requestId?: string;
 }
 
 export interface TerminalRequestHistory {
   type: 'TerminalRequestHistory';
   sessionId: string;
+  tabId: string;
   requestId: string;
   limit?: number;
 }
@@ -526,6 +527,70 @@ export interface TerminalHistory {
   type: 'TerminalHistory';
   sessionId: string;
   data: string;
+}
+
+// Terminal tab types (tab-based terminal management)
+export interface TerminalMount {
+  type: 'TerminalMount';
+  tabId: string;
+  worktreeId: string;
+  label?: string;
+  shell?: string;
+}
+
+export interface TerminalUnmount {
+  type: 'TerminalUnmount';
+  tabId: string;
+  sessionId: string;
+}
+
+export interface TerminalTabClose {
+  type: 'TerminalTabClose';
+  tabId: string;
+}
+
+export interface TerminalMounted {
+  type: 'TerminalMounted';
+  tabId: string;
+  sessionId: string;
+  worktreeId: string;
+  label?: string;
+  shell: string;
+}
+
+export interface TerminalSessionEnded {
+  type: 'TerminalSessionEnded';
+  tabId: string;
+  sessionId: string;
+  reason: string;
+}
+
+export interface TerminalTabHistory {
+  type: 'TerminalTabHistory';
+  tabId: string;
+  data: string;
+}
+
+export interface TerminalTabList {
+  type: 'TerminalTabList';
+  worktreeId: string;
+  tabs: TabSessionData[];
+}
+
+export interface TerminalTabClosed {
+  type: 'TerminalTabClosed';
+  tabId: string;
+}
+
+export interface TabSessionData {
+  id: string;
+  tabId: string;
+  worktreeId: string;
+  label?: string;
+  shell: string;
+  activeSessionId: string | null;
+  status: string;
+  createdAt: number;
 }
 
 export interface AgentUpdated {
@@ -811,6 +876,9 @@ export type ClientMessage =
   | TerminalRename
   | TerminalReorder
   | TerminalRequestHistory
+  | TerminalMount
+  | TerminalUnmount
+  | TerminalTabClose
   | FileRead
     | FileWrite
     | FileList
@@ -844,6 +912,11 @@ export type ServerMessage =
   | TerminalRemoved
   | TerminalUpdated
   | TerminalHistory
+  | TerminalMounted
+  | TerminalSessionEnded
+  | TerminalTabHistory
+  | TerminalTabList
+  | TerminalTabClosed
   | FileContentMessage
     | FileListResult
     | GitStatusResult

@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { AppState, NotificationState, AgentTab, AlertDialogConfig, AgentSessionState, TerminalSessionState, GitStats } from './types/state';
+import { AppState, NotificationState, AgentTab, AlertDialogConfig, AgentSessionState, TerminalTabState, GitStats } from './types/state';
 export type { AgentTab };
-import { TerminalOutput, GitStatusEntry } from './types/protocol';
+import { GitStatusEntry } from './types/protocol';
 import type { DecodedBridgeMessage } from './lib/bridge-transport';
 import { isWorkspaceEvent, isWorktreeEvent, isGitResponse, isFileResponse, isNotificationMessage, isErrorResponse, isAckMessage, isPingMessage, isPongMessage, isAgentEvent, isTerminalEvent, isStateSnapshotMessage, isAcpPayload } from './types/bridge-envelope';
 import { encodePong } from './lib/bridge-transport';
@@ -14,19 +14,9 @@ import type { AcpStore } from '@harms-haus/acp-chat-react';
 
 // Stable empty array reference to prevent infinite re-renders
 const EMPTY_AGENT_TABS: AgentTab[] = [];
-const EMPTY_TERMINAL_SESSIONS: TerminalSessionState[] = [];
+const EMPTY_TERMINAL_TABS: TerminalTabState[] = [];
 const EMPTY_AGENT_SESSIONS: AgentSessionState[] = [];
 
-// Terminal output callback registry (for routing TerminalOutput to TerminalProvider)
-let terminalOutputCallback: ((message: TerminalOutput) => void) | null = null;
-
-export function setTerminalOutputCallback(callback: ((message: TerminalOutput) => void) | null): void {
-  terminalOutputCallback = callback;
-}
-
-export function getTerminalOutputCallback(): ((message: TerminalOutput) => void) | null {
-  return terminalOutputCallback;
-}
 
 // File content callback registry (for routing FileContent to editor components)
 let fileContentCallback: ((message: { worktreeId: string; path: string; content: string }) => void) | null = null;
@@ -55,7 +45,7 @@ export const useStore = create<AppState>()(
       workspaces: [],
       worktrees: [],
       agentSessions: [],
-      terminalSessions: [],
+      terminalTabs: [],
       notifications: [],
       
   // UI state
@@ -118,7 +108,7 @@ export const useStore = create<AppState>()(
       
       setAgentSessions: (agentSessions) => set({ agentSessions }),
       
-      setTerminalSessions: (terminalSessions) => set({ terminalSessions }),
+      setTerminalTabs: (terminalTabs) => set({ terminalTabs }),
       
       setActiveWorktree: (activeWorktreeId) => {
         useUIStore.getState().setActiveWorktreeId(activeWorktreeId);
@@ -166,7 +156,7 @@ export const useStore = create<AppState>()(
           workspaces: snapshot.workspaces,
           worktrees: snapshot.worktrees,
           agentSessions: snapshot.agentSessions,
-          terminalSessions: snapshot.terminalSessions,
+          terminalTabs: snapshot.terminalTabs,
           isWorkspacesLoading: false,
         }));
       },
@@ -197,7 +187,7 @@ export const useStore = create<AppState>()(
             agentSessions: state.agentSessions.filter(
               (as) => !worktreesToRemove.includes(as.worktreeId)
             ),
-            terminalSessions: state.terminalSessions.filter(
+            terminalTabs: state.terminalTabs.filter(
               (ts) => !worktreesToRemove.includes(ts.worktreeId)
             ),
             activeWorktreeId:
@@ -232,7 +222,7 @@ export const useStore = create<AppState>()(
         set((state) => ({
           worktrees: state.worktrees.filter((wt) => wt.id !== worktreeId),
           agentSessions: state.agentSessions.filter((as) => as.worktreeId !== worktreeId),
-          terminalSessions: state.terminalSessions.filter((ts) => ts.worktreeId !== worktreeId),
+          terminalTabs: state.terminalTabs.filter((ts) => ts.worktreeId !== worktreeId),
           activeWorktreeId:
             state.activeWorktreeId === worktreeId ? null : state.activeWorktreeId,
         })),
@@ -255,28 +245,40 @@ export const useStore = create<AppState>()(
           agentSessions: state.agentSessions.filter((as) => as.id !== sessionId),
         })),
 
-// Terminal session CRUD
-    addTerminalSession: (session) =>
+// Terminal tab CRUD
+    addTerminalTab: (tab) =>
         set((state) => ({
-            terminalSessions: [...state.terminalSessions, session],
+            terminalTabs: [...state.terminalTabs, tab],
         })),
 
-  updateTerminalSession: (sessionId, updates) =>
+  updateTerminalTab: (tabId, updates) =>
     set((state) => ({
-      terminalSessions: state.terminalSessions.map((ts) =>
-        ts.id === sessionId
-          ? {
-              ...ts,
-              ...(updates.label != null && { label: updates.label }),
-              ...(updates.position != null && { position: updates.position }),
-            }
-          : ts,
+      terminalTabs: state.terminalTabs.map((tt) =>
+        tt.id === tabId ? { ...tt, ...updates } : tt,
       ),
     })),
 
-    removeTerminalSession: (sessionId) =>
+    removeTerminalTab: (tabId) =>
         set((state) => ({
-            terminalSessions: state.terminalSessions.filter((ts) => ts.id !== sessionId),
+            terminalTabs: state.terminalTabs.filter((tt) => tt.id !== tabId),
+        })),
+
+    setTabSession: (tabId, sessionId) =>
+        set((state) => ({
+            terminalTabs: state.terminalTabs.map((tt) =>
+                tt.id === tabId
+                    ? { ...tt, activeSessionId: sessionId, status: 'active' as const }
+                    : tt,
+            ),
+        })),
+
+    clearTabSession: (tabId) =>
+        set((state) => ({
+            terminalTabs: state.terminalTabs.map((tt) =>
+                tt.id === tabId
+                    ? { ...tt, activeSessionId: null, status: 'disconnected' as const }
+                    : tt,
+            ),
         })),
 
       // Notification management
@@ -582,15 +584,11 @@ export const selectAgentSessionsByWorktreeId = (worktreeId: string) => (state: A
   return sessions.length > 0 ? sessions : EMPTY_AGENT_SESSIONS;
 };
 
-export const selectTerminalSessionsByWorktreeId = (worktreeId: string) => (state: AppState) => {
-  const sessions = [...state.terminalSessions]
-    .filter((ts) => ts.worktreeId === worktreeId)
-    .sort((a, b) => {
-      const posA = a.position ?? 0;
-      const posB = b.position ?? 0;
-      return posA - posB;
-    });
-  return sessions.length > 0 ? sessions : EMPTY_TERMINAL_SESSIONS;
+export const selectTerminalTabsByWorktreeId = (worktreeId: string) => (state: AppState) => {
+  const tabs = [...state.terminalTabs]
+    .filter((tt) => tt.worktreeId === worktreeId)
+    .sort((a, b) => a.position - b.position);
+  return tabs.length > 0 ? tabs : EMPTY_TERMINAL_TABS;
 };
 
 export const selectActiveWorktree = (state: AppState) => {
@@ -684,17 +682,17 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
       const payload = message.payload as Record<string, unknown> | null;
       if (!payload) return;
 
-      // Payload is the raw struct (e.g. { worktrees, agentSessions, terminalSessions }),
+      // Payload is the raw struct (e.g. { worktrees, agentSessions, terminalTabs }),
       // NOT wrapped in { originalType, data }
       const data = (payload.data as Record<string, unknown> | undefined) ?? payload;
 
       // Detect event type from payload structure
       if (data.worktrees !== undefined) {
         // WorktreeDetailsResult or WorktreeListResult
-        const { addAgentSession, addTerminalSession } = useStore.getState();
+        const { addAgentSession, addTerminalTab } = useStore.getState();
         const worktrees = (data as any)?.worktrees as Array<any> | undefined;
         const agentSessions = (data as any)?.agentSessions as Array<any> | undefined;
-        const terminalSessions = (data as any)?.terminalSessions as Array<any> | undefined;
+        const terminalTabs = (data as any)?.terminalTabs as Array<any> | undefined;
 
         if (worktrees) {
           worktrees.forEach((worktree) => {
@@ -706,9 +704,9 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
             addAgentSession(session as any);
           });
         }
-        if (terminalSessions) {
-          terminalSessions.forEach((session) => {
-            addTerminalSession(session);
+        if (terminalTabs) {
+          terminalTabs.forEach((tab) => {
+            addTerminalTab(tab);
           });
         }
       } else if (data.worktree !== undefined) {
@@ -914,47 +912,202 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
       const payload = message.payload as Record<string, unknown> | null;
       if (!payload) return;
 
-      // Payload is the raw struct, NOT wrapped in { originalType, data }
+      // Use payload.type for explicit dispatch instead of fragile field-presence heuristics
+      const innerType = payload.type as string | undefined;
+      // Payload data may be wrapped in { type, data } or be the raw struct directly
       const data = (payload.data as Record<string, unknown> | undefined) ?? payload;
 
-      if (data.sessionId !== undefined && data.worktreeId !== undefined && data.shell !== undefined) {
-        // TerminalCreated
-        const sessionId = (data as any)?.sessionId as string | undefined;
-        const worktreeId = (data as any)?.worktreeId as string | undefined;
-        const label = (data as any)?.label as string | null | undefined;
-        const shell = (data as any)?.shell as string | undefined;
-        if (sessionId && worktreeId && shell) {
-          useStore.getState().addTerminalSession({
-            id: sessionId,
-            worktreeId,
-            label: label ?? 'Terminal',
-            shell,
-            createdAt: Date.now(),
-          });
-        }
-      } else if (data.sessionId !== undefined && data.data !== undefined && data.worktreeId === undefined && data.shell === undefined && data.label === undefined && data.position === undefined) {
-        // TerminalOutput or TerminalHistory (has sessionId + data field for output/history)
-        const sessionId = (data as any)?.sessionId as string | undefined;
-        const outputData = (data as any)?.data as string | undefined;
-        if (sessionId && outputData !== undefined) {
-          if (terminalOutputCallback) {
-            terminalOutputCallback({ type: 'TerminalOutput', sessionId, data: outputData });
-          }
-        }
-      } else if (data.sessionId !== undefined && data.worktreeId === undefined && data.shell === undefined && data.data === undefined) {
-        // TerminalRemoved or TerminalUpdated
-        const sessionId = (data as any)?.sessionId as string | undefined;
-        if (sessionId) {
-          if (data.label !== undefined || data.position !== undefined) {
-            // TerminalUpdated
-            useStore.getState().updateTerminalSession(sessionId, {
-              ...((data as any)?.label !== undefined && { label: (data as any)?.label ?? undefined }),
-              ...((data as any)?.position !== undefined && { position: (data as any)?.position ?? undefined }),
+      if (!innerType) {
+        // Fallback: field-presence heuristic for backwards compatibility
+        // Maps old TerminalCreated/Removed/Updated to new tab actions
+        if (data.tabId !== undefined && data.worktreeId !== undefined) {
+          // New-style terminal tab event
+          const tabId = (data as any)?.tabId as string | undefined;
+          const worktreeId = (data as any)?.worktreeId as string | undefined;
+          const label = (data as any)?.label as string | undefined;
+          const position = (data as any)?.position as number | undefined;
+          const sessionId = (data as any)?.sessionId as string | null | undefined;
+          const status = (data as any)?.status as 'active' | 'disconnected' | undefined;
+          if (tabId && worktreeId) {
+            const { addTerminalTab } = useStore.getState();
+            addTerminalTab({
+              id: tabId,
+              worktreeId,
+              label: label ?? 'Terminal',
+              position: position ?? 0,
+              activeSessionId: sessionId ?? null,
+              status: status ?? 'active',
+              createdAt: Date.now(),
             });
-          } else {
-            // TerminalRemoved
-            useStore.getState().removeTerminalSession(sessionId);
           }
+        } else if (data.sessionId !== undefined && data.worktreeId !== undefined && (data as any)?.shell !== undefined) {
+          // Backward compat: old TerminalCreated shape
+          const sessionId = (data as any)?.sessionId as string | undefined;
+          const worktreeId = (data as any)?.worktreeId as string | undefined;
+          const label = (data as any)?.label as string | null | undefined;
+          if (sessionId && worktreeId) {
+            useStore.getState().addTerminalTab({
+              id: `legacy-${sessionId}`,
+              worktreeId,
+              label: (label as string) ?? 'Terminal',
+              position: 0,
+              activeSessionId: sessionId,
+              status: 'active',
+              createdAt: Date.now(),
+            });
+          }
+        } else if (data.sessionId !== undefined && data.worktreeId === undefined && (data as any)?.shell === undefined && data.data === undefined) {
+          const sessionId = (data as any)?.sessionId as string | undefined;
+          if (sessionId) {
+            if (data.label !== undefined || data.position !== undefined) {
+              // Backward compat: old TerminalUpdated — find tab by sessionId and update
+              const state = useStore.getState();
+              const tab = state.terminalTabs.find(
+                (tt) => tt.activeSessionId === sessionId || tt.id === `legacy-${sessionId}`
+              );
+              if (tab) {
+                useStore.getState().updateTerminalTab(tab.id, {
+                  ...((data as any)?.label !== undefined && { label: (data as any)?.label ?? undefined }),
+                  ...((data as any)?.position !== undefined && { position: (data as any)?.position ?? undefined }),
+                });
+              }
+            } else {
+              // Backward compat: old TerminalRemoved
+              const state = useStore.getState();
+              const tab = state.terminalTabs.find(
+                (tt) => tt.activeSessionId === sessionId || tt.id === `legacy-${sessionId}`
+              );
+              if (tab) {
+                useStore.getState().removeTerminalTab(tab.id);
+              }
+            }
+          }
+        } else {
+          console.warn('[Bridge] terminal_event: unrecognized payload shape:', JSON.stringify(data));
+        }
+        break;
+      }
+
+      switch (innerType) {
+        // --- New tab-based events ---
+        case 'TerminalMounted': {
+          const tabId = (data as any)?.tabId as string | undefined;
+          const worktreeId = (data as any)?.worktreeId as string | undefined;
+          const sessionId = (data as any)?.sessionId as string | undefined;
+          const label = (data as any)?.label as string | undefined;
+          const position = (data as any)?.position as number | undefined;
+          if (tabId && worktreeId) {
+            const { addTerminalTab, setTabSession } = useStore.getState();
+            addTerminalTab({
+              id: tabId,
+              worktreeId,
+              label: label ?? 'Terminal',
+              position: position ?? 0,
+              activeSessionId: null,
+              status: 'active',
+              createdAt: Date.now(),
+            });
+            if (sessionId) {
+              setTabSession(tabId, sessionId);
+            }
+          }
+          break;
+        }
+        case 'TerminalSessionEnded': {
+          const tabId = (data as any)?.tabId as string | undefined;
+          if (tabId) {
+            useStore.getState().clearTabSession(tabId);
+          }
+          break;
+        }
+        case 'TerminalTabClosed': {
+          const tabId = (data as any)?.tabId as string | undefined;
+          if (tabId) {
+            useStore.getState().removeTerminalTab(tabId);
+          }
+          break;
+        }
+        case 'TerminalTabList': {
+          // Bulk sync tabs for a worktreeId — replace all tabs for that worktree
+          const worktreeId = (data as any)?.worktreeId as string | undefined;
+          const tabs = (data as any)?.tabs as Array<any> | undefined;
+          if (worktreeId && tabs) {
+            const state = useStore.getState();
+            // Remove existing tabs for this worktreeId, then add new ones
+            const existingIds = new Set(
+              state.terminalTabs
+                .filter((tt) => tt.worktreeId === worktreeId)
+                .map((tt) => tt.id)
+            );
+            // Remove old tabs
+            existingIds.forEach((id) => {
+              useStore.getState().removeTerminalTab(id);
+            });
+            // Add new tabs
+            tabs.forEach((tab) => {
+              useStore.getState().addTerminalTab(tab);
+            });
+          }
+          break;
+        }
+        case 'TerminalTabHistory': {
+          // No store mutation — delivered via onMessage('TerminalTabHistory')
+          break;
+        }
+        case 'TerminalOutput': {
+          // No store mutation — delivered via onMessage('TerminalOutput')
+          break;
+        }
+
+        // --- Backward compat: old session-based events ---
+        case 'TerminalCreated': {
+          const sessionId = (data as any)?.sessionId as string | undefined;
+          const worktreeId = (data as any)?.worktreeId as string | undefined;
+          const label = (data as any)?.label as string | null | undefined;
+          if (sessionId && worktreeId) {
+            useStore.getState().addTerminalTab({
+              id: `legacy-${sessionId}`,
+              worktreeId,
+              label: (label as string) ?? 'Terminal',
+              position: 0,
+              activeSessionId: sessionId,
+              status: 'active',
+              createdAt: Date.now(),
+            });
+          }
+          break;
+        }
+        case 'TerminalRemoved': {
+          const sessionId = (data as any)?.sessionId as string | undefined;
+          if (sessionId) {
+            const state = useStore.getState();
+            const tab = state.terminalTabs.find(
+              (tt) => tt.activeSessionId === sessionId || tt.id === `legacy-${sessionId}`
+            );
+            if (tab) {
+              useStore.getState().removeTerminalTab(tab.id);
+            }
+          }
+          break;
+        }
+        case 'TerminalUpdated': {
+          const sessionId = (data as any)?.sessionId as string | undefined;
+          if (sessionId) {
+            const state = useStore.getState();
+            const tab = state.terminalTabs.find(
+              (tt) => tt.activeSessionId === sessionId || tt.id === `legacy-${sessionId}`
+            );
+            if (tab) {
+              useStore.getState().updateTerminalTab(tab.id, {
+                ...((data as any)?.label !== undefined && { label: (data as any)?.label ?? undefined }),
+                ...((data as any)?.position !== undefined && { position: (data as any)?.position ?? undefined }),
+              });
+            }
+          }
+          break;
+        }
+        default: {
+          console.warn('[Bridge] terminal_event: unrecognized innerType:', innerType);
         }
       }
       break;
@@ -981,7 +1134,7 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
         workspaces: (data.workspaces as unknown) as any[],
         worktrees: (data.worktrees as unknown) as any[],
         agentSessions: (data.agentSessions as unknown) as any[],
-        terminalSessions: (data.terminalSessions as unknown) as any[],
+        terminalTabs: (data.terminalTabs as unknown) as any[],
       });
       break;
     }

@@ -60,7 +60,7 @@ pub fn spawn_output_reader(
                 ));
 
                 state.broadcast(output_msg).await;
-                debug!(bytes = data.len(), "Broadcast terminal output");
+                info!(bytes = data.len(), "Broadcast terminal output");
 
                 let db = state.db.clone();
                 let session_id_str = session_id.to_string();

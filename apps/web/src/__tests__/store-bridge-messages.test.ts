@@ -1,8 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import type { DecodedBridgeMessage } from '../lib/bridge-transport';
 import type { BridgeMessage } from '../types/bridge-envelope';
-import { setTerminalOutputCallback } from '../store';
-
 // --- Mock external dependencies before importing store ---
 
 vi.mock('../lib/error-recovery', () => ({
@@ -54,7 +52,6 @@ vi.mock('../lib/acp-session-manager', () => ({
 import {
   handleBridgeMessage,
   useStore,
-  setTerminalOutputCallback,
   setFileContentCallback,
 } from '../store';
 import { handleError } from '../lib/error-recovery';
@@ -660,29 +657,44 @@ describe('handleBridgeMessage', () => {
       expect(useStore.getState().terminalSessions[0].position).toBe(3);
     });
 
-    it('TerminalOutput: calls terminalOutputCallback', () => {
-      const callback = vi.fn();
-      setTerminalOutputCallback(callback);
+    it('TerminalOutput: no store mutation (routed via onMessage)', () => {
+      // Pre-populate store to verify it's not modified
+      useStore.setState({
+        terminalSessions: [{ id: 'ts-1', worktreeId: 'wt-1', label: 'Term' }],
+      });
 
       const decoded = makeDecodedMessage('terminal_event', {
         payload: {
-          originalType: 'TerminalOutput',
-          data: {
-            sessionId: 'ts-1',
-            data: 'hello world\n',
-          },
+          type: 'TerminalOutput',
+          data: { sessionId: 'ts-1', data: 'some output\n' },
         },
       });
 
+      // Should not throw or warn
       handleBridgeMessage(decoded);
 
-      expect(callback).toHaveBeenCalledWith({
-        type: 'TerminalOutput',
-        sessionId: 'ts-1',
-        data: 'hello world\n',
+      // Store state unchanged
+      expect(useStore.getState().terminalSessions).toHaveLength(1);
+    });
+
+    it('TerminalHistory: no store mutation (routed via onMessage)', () => {
+      // Pre-populate store to verify it's not modified
+      useStore.setState({
+        terminalSessions: [{ id: 'ts-1', worktreeId: 'wt-1', label: 'Term' }],
       });
 
-      setTerminalOutputCallback(null);
+      const decoded = makeDecodedMessage('terminal_event', {
+        payload: {
+          type: 'TerminalHistory',
+          data: { sessionId: 'ts-1', data: 'history output\n' },
+        },
+      });
+
+      // Should not throw or warn
+      handleBridgeMessage(decoded);
+
+      // Store state unchanged
+      expect(useStore.getState().terminalSessions).toHaveLength(1);
     });
   });
 

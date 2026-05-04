@@ -521,12 +521,11 @@ export class YmirWsTransport {
           `[YWS] dispatchOnMessageHandlers: payload.type missing, detected GitStatusResult by 'entries' array field`
         );
       } else {
-        // Direct messages: convert snake_case envelope type to PascalCase
+        // Direct messages (ping, pong, ack, notification, error_response):
+        // These don't have a nested {type, data} payload - the envelope type
+        // IS the message type. Convert snake_case to PascalCase.
         dispatchType = type.replace(/(^|_)([a-z])/g, (_, __, c) => c.toUpperCase());
         dispatchMsg = { type: dispatchType, ...(payload ?? {}) };
-        console.warn(
-          `[YWS] dispatchOnMessageHandlers: payload.type missing, falling back to envelope-type dispatch (${dispatchType})`
-        );
       }
     }
 

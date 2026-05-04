@@ -10,7 +10,8 @@ use crate::protocol::{
 };
 use crate::pty::{
     handle_terminal_create, handle_terminal_input, handle_terminal_kill,
-    handle_terminal_request_history, handle_terminal_resize,
+    handle_terminal_mount, handle_terminal_request_history, handle_terminal_resize,
+    handle_terminal_tab_close, handle_terminal_unmount,
 };
 use crate::state::AppState;
 use std::sync::Arc;
@@ -263,6 +264,11 @@ pub async fn route_message(
         ClientMessagePayload::CreatePR(msg) => Some(handle_create_pr(state.clone(), msg).await),
 
         ClientMessagePayload::Ack(_) => Some(not_implemented(message.payload)),
+
+        // New terminal tab lifecycle messages (handlers to be implemented)
+        ClientMessagePayload::TerminalMount(msg) => Some(handle_terminal_mount(state.clone(), msg).await),
+        ClientMessagePayload::TerminalUnmount(msg) => Some(handle_terminal_unmount(state.clone(), msg).await),
+        ClientMessagePayload::TerminalTabClose(msg) => Some(handle_terminal_tab_close(state.clone(), msg).await),
     };
     response
 }
@@ -304,6 +310,9 @@ fn not_implemented(payload: ClientMessagePayload) -> ServerMessage {
         ClientMessagePayload::Ping(_) => "Ping",
         ClientMessagePayload::Pong(_) => "Pong",
         ClientMessagePayload::Ack(_) => "Ack",
+        ClientMessagePayload::TerminalMount(_) => "TerminalMount",
+        ClientMessagePayload::TerminalUnmount(_) => "TerminalUnmount",
+        ClientMessagePayload::TerminalTabClose(_) => "TerminalTabClose",
     };
 
     ServerMessage::new(ServerMessagePayload::Error(Error {
@@ -428,6 +437,7 @@ async fn handle_get_state(state: Arc<AppState>, request_id: Uuid) -> ServerMessa
             TerminalSessionData {
                 id: Uuid::parse_str(&session.id).unwrap_or_else(|_| Uuid::new_v4()),
                 worktree_id: Uuid::parse_str(&session.worktree_id).unwrap_or(worktree.id),
+                tab_id: Uuid::parse_str(&session.id).unwrap_or_else(|_| Uuid::new_v4()), // backward compat
                 label: session.label,
                 shell: session.shell,
                 created_at: parse_timestamp(&session.created_at),
@@ -540,6 +550,7 @@ async fn handle_get_worktree_details(
             TerminalSessionData {
                 id: Uuid::parse_str(&session.id).unwrap_or_else(|_| Uuid::new_v4()),
                 worktree_id: Uuid::parse_str(&session.worktree_id).unwrap_or(worktree.id),
+                tab_id: Uuid::parse_str(&session.id).unwrap_or_else(|_| Uuid::new_v4()), // backward compat
                 label: session.label,
                 shell: session.shell,
                 created_at: parse_timestamp(&session.created_at),
@@ -835,11 +846,11 @@ async fn handle_file_read(state: Arc<AppState>, msg: crate::protocol::FileRead) 
 
 #[instrument(skip(state))]
 async fn handle_terminal_rename(state: Arc<AppState>, msg: crate::protocol::TerminalRename) -> ServerMessage {
-    let session_id = msg.session_id;
+    let tab_id = msg.tab_id;
     let new_label = msg.new_label;
 
     // Update database
-    if let Err(e) = state.db.update_terminal_label(&session_id.to_string(), &new_label).await {
+    if let Err(e) = state.db.update_terminal_label(&tab_id.to_string(), &new_label).await {
         tracing::error!("Failed to update terminal label: {}", e);
         return ServerMessage::new(ServerMessagePayload::Error(Error {
             code: "TERMINAL_RENAME_ERROR".to_string(),
@@ -852,7 +863,7 @@ async fn handle_terminal_rename(state: Arc<AppState>, msg: crate::protocol::Term
     // Update in-memory state
     {
         let mut terminals = state.terminals.write().await;
-        if let Some(terminal) = terminals.get_mut(&session_id) {
+        if let Some(terminal) = terminals.get_mut(&tab_id) {
             terminal.label = Some(new_label.clone());
         }
     }
@@ -860,13 +871,13 @@ async fn handle_terminal_rename(state: Arc<AppState>, msg: crate::protocol::Term
     // Get worktree_id for broadcast
     let worktree_id = {
         let terminals = state.terminals.read().await;
-        terminals.get(&session_id).map(|t| t.worktree_id).unwrap_or_else(Uuid::nil)
+        terminals.get(&tab_id).map(|t| t.worktree_id).unwrap_or_else(Uuid::nil)
     };
 
     // Broadcast update to all clients
     let broadcast_msg = ServerMessage::new(ServerMessagePayload::TerminalUpdated(
         crate::protocol::TerminalUpdated {
-            session_id,
+            session_id: tab_id,
             worktree_id,
             label: Some(new_label),
             position: None,
@@ -876,7 +887,7 @@ async fn handle_terminal_rename(state: Arc<AppState>, msg: crate::protocol::Term
     state.broadcast(broadcast_msg).await;
 
     ServerMessage::new(ServerMessagePayload::Ack(crate::protocol::Ack {
-        message_id: session_id,
+        message_id: tab_id,
         status: crate::protocol::AckStatus::Success,
     }))
 }
@@ -884,11 +895,11 @@ async fn handle_terminal_rename(state: Arc<AppState>, msg: crate::protocol::Term
 #[instrument(skip(state))]
 async fn handle_terminal_reorder(state: Arc<AppState>, msg: crate::protocol::TerminalReorder) -> ServerMessage {
     let worktree_id = msg.worktree_id;
-    let session_ids = msg.session_ids;
+    let tab_ids = msg.tab_ids;
 
     // Update positions in database
-    for (position, session_id) in session_ids.iter().enumerate() {
-        if let Err(e) = state.db.update_terminal_position(&session_id.to_string(), position as i64).await {
+    for (position, tab_id) in tab_ids.iter().enumerate() {
+        if let Err(e) = state.db.update_terminal_position(&tab_id.to_string(), position as i64).await {
             tracing::error!("Failed to update terminal position: {}", e);
             return ServerMessage::new(ServerMessagePayload::Error(Error {
                 code: "TERMINAL_REORDER_ERROR".to_string(),
@@ -900,10 +911,10 @@ async fn handle_terminal_reorder(state: Arc<AppState>, msg: crate::protocol::Ter
     }
 
     // Broadcast update to all clients
-    for (position, session_id) in session_ids.iter().enumerate() {
+    for (position, tab_id) in tab_ids.iter().enumerate() {
         let broadcast_msg = ServerMessage::new(ServerMessagePayload::TerminalUpdated(
             crate::protocol::TerminalUpdated {
-                session_id: *session_id,
+                session_id: *tab_id,
                 worktree_id,
                 label: None,
                 position: Some(position as u32),

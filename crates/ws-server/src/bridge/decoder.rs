@@ -406,4 +406,78 @@ mod tests {
         let extracted: Option<serde_json::Value> = extract_payload(&message, "ReplayMetadata");
         assert!(extracted.is_none());
     }
+
+    // ========================================================================
+    // Tests for TerminalEvent decoding
+    // ========================================================================
+
+    #[test]
+    fn test_decode_terminal_event_with_terminal_input() {
+        let session_id = Uuid::new_v4();
+        let payload = json!({
+            "type": "TerminalInput",
+            "data": {
+                "sessionId": session_id.to_string(),
+                "data": "ls -la\n"
+            }
+        });
+        let envelope = BridgeEnvelope::new(
+            BridgeMessage::TerminalEvent { payload },
+            1234567890,
+        );
+        let json = serde_json::to_string(&envelope).unwrap();
+
+        let result = decode_bridge_message(&json);
+        assert!(result.is_some());
+
+        match result.unwrap() {
+            DecodedMessage::Client(msg) => {
+                assert_eq!(msg.version, 1);
+                match msg.payload {
+                    ClientMessagePayload::TerminalInput(input) => {
+                        assert_eq!(input.session_id, session_id);
+                        assert_eq!(input.data, "ls -la\n");
+                    }
+                    _ => panic!("Expected TerminalInput payload"),
+                }
+            }
+            other => panic!("Expected DecodedMessage::Client, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_decode_terminal_event_with_terminal_resize() {
+        let session_id = Uuid::new_v4();
+        let payload = json!({
+            "type": "TerminalResize",
+            "data": {
+                "sessionId": session_id.to_string(),
+                "cols": 120,
+                "rows": 40
+            }
+        });
+        let envelope = BridgeEnvelope::new(
+            BridgeMessage::TerminalEvent { payload },
+            1234567890,
+        );
+        let json = serde_json::to_string(&envelope).unwrap();
+
+        let result = decode_bridge_message(&json);
+        assert!(result.is_some());
+
+        match result.unwrap() {
+            DecodedMessage::Client(msg) => {
+                assert_eq!(msg.version, 1);
+                match msg.payload {
+                    ClientMessagePayload::TerminalResize(resize) => {
+                        assert_eq!(resize.session_id, session_id);
+                        assert_eq!(resize.cols, 120);
+                        assert_eq!(resize.rows, 40);
+                    }
+                    _ => panic!("Expected TerminalResize payload"),
+                }
+            }
+            other => panic!("Expected DecodedMessage::Client, got {:?}", other),
+        }
+    }
 }

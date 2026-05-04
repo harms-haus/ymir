@@ -735,6 +735,7 @@ mod tests {
             terminal_sessions: vec![TerminalSessionData {
                 id: terminal_session_id,
                 worktree_id,
+                tab_id: terminal_session_id,
                 label: Some("bash".to_string()),
                 shell: "/bin/bash".to_string(),
                 created_at: 1234567890,

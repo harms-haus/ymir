@@ -163,6 +163,21 @@ fn payload_to_bridge_message(payload: &ServerMessagePayload) -> BridgeMessage {
         ServerMessagePayload::TerminalHistory(_) => BridgeMessage::TerminalEvent {
             payload: serde_json::to_value(payload).unwrap_or_default(),
         },
+        ServerMessagePayload::TerminalMounted(_) => BridgeMessage::TerminalEvent {
+            payload: serde_json::to_value(payload).unwrap_or_default(),
+        },
+        ServerMessagePayload::TerminalSessionEnded(_) => BridgeMessage::TerminalEvent {
+            payload: serde_json::to_value(payload).unwrap_or_default(),
+        },
+        ServerMessagePayload::TerminalTabHistory(_) => BridgeMessage::TerminalEvent {
+            payload: serde_json::to_value(payload).unwrap_or_default(),
+        },
+        ServerMessagePayload::TerminalTabList(_) => BridgeMessage::TerminalEvent {
+            payload: serde_json::to_value(payload).unwrap_or_default(),
+        },
+        ServerMessagePayload::TerminalTabClosed(_) => BridgeMessage::TerminalEvent {
+            payload: serde_json::to_value(payload).unwrap_or_default(),
+        },
 
         // State snapshot
         ServerMessagePayload::StateSnapshot(data) => BridgeMessage::StateSnapshot {
