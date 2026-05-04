@@ -71,7 +71,7 @@ export function AgentPane({ worktreeId }: AgentPaneProps) {
   );
 
   const handleSpawnAgent = useCallback(() => {
-    const agentType = 'opencode';
+    const agentType = 'hermes';
 
     const message: AgentSpawn = {
       type: 'AgentSpawn',
