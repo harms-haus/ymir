@@ -69,6 +69,7 @@ export function AllFilesTab() {
   const [gitStatusEntries, setGitStatusEntries] = useState<GitStatusEntry[]>(gitStatusCache?.entries ?? []);
   const [loadedChildren, setLoadedChildren] = useState<Map<string, string[]>>(new Map());
   const [loadingDirs, setLoadingDirs] = useState<Set<string>>(new Set());
+  const [error, setError] = useState<string | null>(null);
   const setFileListCache = useStore((state) => state.setFileListCache);
   const setGitStatusCache = useStore((state) => state.setGitStatusCache);
   const addAgentTab = useStore((state) => state.addAgentTab);
@@ -123,8 +124,22 @@ export function AllFilesTab() {
     client.send(fileListMsg);
   }, [activeWorktree, loadedChildren, loadingDirs]);
 
+  const handleRetry = useCallback(() => {
+    if (!activeWorktree) return;
+    setError(null);
+    setIsLoading(true);
+    pendingFileListWorktreeId.current = activeWorktree.id;
+    const client = getWebSocketClient();
+    const fileListMsg: FileList = {
+      type: 'FileList',
+      worktreeId: activeWorktree.id,
+    };
+    client.send(fileListMsg);
+  }, [activeWorktree]);
+
   useEffect(() => {
     if (!activeWorktree) {
+      setError(null);
       setFiles([]);
       return;
     }
@@ -132,8 +147,10 @@ export function AllFilesTab() {
     const client = getWebSocketClient();
 
     // Fix 4: Subscribe to Error messages to recover from server errors
-    const unsubscribeError = client.onMessage('ErrorResponse', (_message) => {
+    const unsubscribeError = client.onMessage('ErrorResponse', (message) => {
       console.warn('[AllFilesTab] Received Error message, clearing loading state');
+      const errorMessage = message.message || message.code || 'Unknown error';
+      setError(errorMessage);
       setIsLoading(false);
       setLoadingDirs(new Set());
       pendingDirRequests.current.clear();
@@ -160,6 +177,7 @@ export function AllFilesTab() {
 
       // Root-level response
       if (message.worktreeId === activeWorktree.id) {
+        setError(null);
         setFiles(message.files);
         setFileListCache(activeWorktree.id, message.files);
         setIsLoading(false);
@@ -168,6 +186,7 @@ export function AllFilesTab() {
         console.warn(
           `[AllFilesTab] FileListResult for worktree ${message.worktreeId} arrived after switching to ${activeWorktree.id}. Applying anyway to prevent stuck state.`
         );
+        setError(null);
         setFiles(message.files);
         setFileListCache(message.worktreeId, message.files);
       }
@@ -193,6 +212,7 @@ export function AllFilesTab() {
         console.warn(
           `[AllFilesTab] FileListResult timeout after 15s for worktree ${activeWorktree.id}. Clearing cache and recovering.`
         );
+        setError(null);
         setFileListCache(activeWorktree.id, []);
         setIsLoading(false);
         pendingFileListWorktreeId.current = null;
@@ -277,6 +297,22 @@ export function AllFilesTab() {
 
   if (isLoading) {
     return <ProjectSkeleton />;
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center p-4 text-center">
+        <i className="ri-error-warning-line text-2xl text-red-400 mb-2" />
+        <p className="text-sm text-gray-400 mb-2">Failed to load files</p>
+        <p className="text-xs text-gray-500 mb-3 max-w-xs break-words">{error}</p>
+        <button
+          className="px-3 py-1 text-xs bg-red-500/20 text-red-400 rounded hover:bg-red-500/30"
+          onClick={handleRetry}
+        >
+          Retry
+        </button>
+      </div>
+    );
   }
 
   if (files.length === 0) {

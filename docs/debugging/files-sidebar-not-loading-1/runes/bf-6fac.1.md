@@ -1,0 +1,25 @@
+# bf-6fac.1 — Add error handling in handle_file_list
+
+## Status: claimed
+
+## Description
+Modify `handle_file_list` in `crates/ws-server/src/router.rs` to return a proper `FILE_LIST_ERROR` response when `std::fs::read_dir` fails, instead of silently returning an empty vec. Add logging for diagnostics.
+
+## Files
+- `crates/ws-server/src/router.rs` (lines 789-816)
+
+## Changes
+1. Replace the `if let Ok(entries) = std::fs::read_dir(&target_path)` pattern at line 791 with explicit error handling
+2. On `read_dir` failure:
+   - `tracing::warn!("Failed to list directory: path={}, error={}", target_path.display(), e)`
+   - Return `ServerMessagePayload::Error` with `code: "FILE_LIST_ERROR"` and a message like `"Failed to list directory: {error} (path={path})"`
+3. Replace `.await.unwrap_or_default()` at line 816:
+   - Use `.await` with explicit match
+   - On JoinError: log `tracing::error!("File list task panicked: {}", e)` and return `FILE_LIST_ERROR`
+4. Ensure the existing success path (lines 792-810) remains unchanged
+
+## Success criteria
+- When worktree path doesn't exist, server returns `ErrorResponse { code: "FILE_LIST_ERROR", ... }`
+- Server logs include the failing path and OS error
+- When worktree path exists, behavior is unchanged (returns sorted file list)
+- `cargo check -p ymir-ws-server` passes

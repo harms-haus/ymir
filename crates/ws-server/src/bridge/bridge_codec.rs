@@ -672,6 +672,7 @@ mod tests {
                 worktrees: vec![wt],
                 agent_sessions: vec![],
                 terminal_sessions: vec![],
+                terminal_tabs: vec![],
             }),
         ];
         for p in worktree_payloads {

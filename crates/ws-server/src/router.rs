@@ -786,41 +786,63 @@ async fn handle_file_list(state: Arc<AppState>, msg: crate::protocol::FileList) 
         ".tox", ".mypy_cache", ".pytest_cache",
     ];
 
-    let files = tokio::task::spawn_blocking(move || {
+    let path_display = target_path.display().to_string();
+    let files_result = tokio::task::spawn_blocking(move || {
         let mut result = Vec::new();
-        if let Ok(entries) = std::fs::read_dir(&target_path) {
-            for entry in entries.flatten() {
-                let entry_path = entry.path();
-                let name = match entry_path.file_name().and_then(|n| n.to_str()) {
-                    Some(n) => n,
-                    None => continue,
-                };
+        let entries = match std::fs::read_dir(&target_path) {
+            Ok(entries) => entries,
+            Err(e) => return Err(e.to_string()),
+        };
+        for entry in entries.flatten() {
+            let entry_path = entry.path();
+            let name = match entry_path.file_name().and_then(|n| n.to_str()) {
+                Some(n) => n,
+                None => continue,
+            };
 
-                // Skip known large directories
-                if SKIPPED_DIRS.contains(&name) {
-                    continue;
-                }
+            // Skip known large directories
+            if SKIPPED_DIRS.contains(&name) {
+                continue;
+            }
 
-                if entry_path.is_dir() {
-                    // Append "/" to distinguish directories from files
-                    result.push(format!("{}/", name));
-                } else {
-                    result.push(name.to_string());
-                }
+            if entry_path.is_dir() {
+                // Append "/" to distinguish directories from files
+                result.push(format!("{}/", name));
+            } else {
+                result.push(name.to_string());
             }
         }
         result.sort();
-        result
+        Ok(result)
     })
-    .await
-    .unwrap_or_default();
+    .await;
 
-    ServerMessage::new(ServerMessagePayload::FileListResult(FileListResult {
-        worktree_id,
-        files,
-        path: path.clone(),
-        request_id: None,
-    }))
+    match files_result {
+        Ok(Ok(files)) => ServerMessage::new(ServerMessagePayload::FileListResult(FileListResult {
+            worktree_id,
+            files,
+            path: path.clone(),
+            request_id: None,
+        })),
+        Ok(Err(e)) => {
+            tracing::warn!("Failed to list directory: path={}, error={}", path_display, e);
+            ServerMessage::new(ServerMessagePayload::Error(Error {
+                code: "FILE_LIST_ERROR".to_string(),
+                message: format!("Failed to list directory: {} (path={})", e, path_display),
+                details: None,
+                request_id: None,
+            }))
+        }
+        Err(e) => {
+            tracing::error!("File list task panicked: {}", e);
+            ServerMessage::new(ServerMessagePayload::Error(Error {
+                code: "FILE_LIST_ERROR".to_string(),
+                message: "Failed to list directory".to_string(),
+                details: None,
+                request_id: None,
+            }))
+        }
+    }
 }
 
 #[instrument(skip(state))]

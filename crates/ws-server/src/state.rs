@@ -186,6 +186,9 @@ impl AppState {
                 let mut workspaces = self.workspaces.write().await;
                 for ws in db_workspaces {
                     if let Ok(id) = uuid::Uuid::parse_str(&ws.id) {
+                        if !std::path::Path::new(&ws.root_path).exists() {
+                            tracing::warn!(workspace_id = %id, path = %ws.root_path, "Workspace root path does not exist on this machine — path may be from a different machine");
+                        }
                         workspaces.insert(
                             id,
                             WorkspaceState {
@@ -212,6 +215,9 @@ impl AppState {
                         uuid::Uuid::parse_str(&wt.id),
                         uuid::Uuid::parse_str(&wt.workspace_id)
                     ) {
+                        if !std::path::Path::new(&wt.path).exists() {
+                            tracing::warn!(worktree_id = %id, branch = %wt.branch_name, path = %wt.path, "Worktree path does not exist on this machine — path may be from a different machine");
+                        }
                         worktrees.insert(
                             id,
                             WorktreeState {

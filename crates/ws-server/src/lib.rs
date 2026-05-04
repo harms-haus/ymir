@@ -18,5 +18,8 @@ pub mod worktree;
 #[cfg(test)]
 pub mod test_fixtures;
 
+#[cfg(test)]
+mod router_file_list_tests;
+
 pub const DEFAULT_PORT: u16 = 7319;
 pub const VITE_PROXY_PORT: u16 = 5173;
