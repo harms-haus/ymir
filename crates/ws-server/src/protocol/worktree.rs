@@ -152,4 +152,5 @@ pub struct WorktreeDetailsResult {
     pub worktrees: Vec<crate::protocol::WorktreeData>,
     pub agent_sessions: Vec<crate::protocol::AgentSessionData>,
     pub terminal_sessions: Vec<crate::protocol::TerminalSessionData>,
+    pub terminal_tabs: Vec<crate::protocol::TabSessionData>,
 }

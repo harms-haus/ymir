@@ -707,7 +707,18 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
         }
         if (terminalTabs) {
           terminalTabs.forEach((tab) => {
-            addTerminalTab(tab);
+            // Map server TabSessionData to client TerminalTabState
+            addTerminalTab({
+              id: tab.id,
+              worktreeId: tab.worktreeId,
+              label: tab.label ?? 'Terminal',
+              position: (tab as any).position ?? 0,
+              activeSessionId: tab.activeSessionId ?? null,
+              status: tab.status ?? 'active',
+              createdAt: typeof tab.createdAt === 'string'
+                ? new Date(tab.createdAt).getTime()
+                : tab.createdAt ?? Date.now(),
+            });
           });
         }
       } else if (data.worktree !== undefined) {

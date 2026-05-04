@@ -491,10 +491,13 @@ async fn handle_get_worktree_details(
     let mut agent_sessions: Vec<AgentSessionData> = Vec::new();
     let mut terminal_sessions: Vec<TerminalSessionData> = Vec::new();
 
+    // Load terminal tabs (server-persisted, survive refreshes)
+    let mut all_terminal_tabs: Vec<crate::protocol::TabSessionData> = Vec::new();
+
     for worktree in &worktrees {
         let worktree_id = worktree.id.to_string();
 
-    // Load agent sessions - only return those that are actually spawned in memory
+        // Load agent sessions - only return those that are actually spawned in memory
     let agents_map = state.agents.read().await;
     let spawned_agent_ids: std::collections::HashSet<Uuid> = agents_map
       .values()
@@ -533,8 +536,8 @@ async fn handle_get_worktree_details(
         }),
     );
 
-        // Load terminal sessions
-        let db_terminal_sessions = match state.db.list_terminal_sessions(&worktree_id).await {
+        // Load terminal tabs (server-persisted, survive refreshes)
+        let db_terminal_tabs = match state.db.list_terminal_tabs(&worktree_id).await {
             Ok(sessions) => sessions,
             Err(e) => {
                 return ServerMessage::new(ServerMessagePayload::Error(Error {
@@ -546,16 +549,50 @@ async fn handle_get_worktree_details(
             }
         };
 
-        terminal_sessions.extend(db_terminal_sessions.into_iter().map(|session| {
-            TerminalSessionData {
-                id: Uuid::parse_str(&session.id).unwrap_or_else(|_| Uuid::new_v4()),
-                worktree_id: Uuid::parse_str(&session.worktree_id).unwrap_or(worktree.id),
-                tab_id: Uuid::parse_str(&session.id).unwrap_or_else(|_| Uuid::new_v4()), // backward compat
-                label: session.label,
-                shell: session.shell,
-                created_at: parse_timestamp(&session.created_at),
-            }
-        }));
+        // Group sessions by tab_id, keep most recent active session per tab
+        let mut tab_map: std::collections::HashMap<String, crate::protocol::TabSessionData> =
+            std::collections::HashMap::new();
+        for session in db_terminal_tabs {
+            let tab_id = session.tab_id.clone().unwrap_or_else(|| session.id.clone());
+            let session_id = Uuid::parse_str(&session.id).unwrap_or_else(|_| Uuid::new_v4());
+            let tab_id_uuid = Uuid::parse_str(&tab_id).unwrap_or_else(|_| Uuid::new_v4());
+            let is_active = session.status == "active";
+            let created_at_dt = chrono::DateTime::parse_from_rfc3339(&session.created_at)
+                .map(|dt| dt.with_timezone(&chrono::Utc))
+                .unwrap_or_else(|_| chrono::Utc::now());
+
+            tab_map
+                .entry(tab_id.clone())
+                .and_modify(|existing| {
+                    if is_active || created_at_dt > existing.created_at {
+                        existing.id = tab_id_uuid;
+                        existing.tab_id = tab_id_uuid;
+                        existing.worktree_id =
+                            Uuid::parse_str(&session.worktree_id).unwrap_or(worktree.id);
+                        existing.label = session.label.clone();
+                        existing.shell = session.shell.clone();
+                        existing.active_session_id = if is_active {
+                            Some(session_id)
+                        } else {
+                            existing.active_session_id
+                        };
+                        existing.status = session.status.clone();
+                        existing.created_at = created_at_dt;
+                    }
+                })
+                .or_insert_with(|| crate::protocol::TabSessionData {
+                    id: tab_id_uuid,
+                    tab_id: tab_id_uuid,
+                    worktree_id: Uuid::parse_str(&session.worktree_id).unwrap_or(worktree.id),
+                    label: session.label.clone(),
+                    shell: session.shell.clone(),
+                    active_session_id: if is_active { Some(session_id) } else { None },
+                    status: session.status.clone(),
+                    created_at: created_at_dt,
+                });
+        }
+
+        all_terminal_tabs.extend(tab_map.into_values());
     }
 
     ServerMessage::new(ServerMessagePayload::WorktreeDetailsResult(
@@ -563,7 +600,8 @@ async fn handle_get_worktree_details(
             request_id: Some(request_id),
             worktrees,
             agent_sessions,
-            terminal_sessions,
+            terminal_sessions: vec![], // legacy — use terminal_tabs instead
+            terminal_tabs: all_terminal_tabs,
         }
     ))
 }
