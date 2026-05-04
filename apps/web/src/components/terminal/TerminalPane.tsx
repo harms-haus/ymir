@@ -13,6 +13,18 @@ import { TabContextMenu } from '../ui/TabContextMenu';
 import '../../styles/tabs.css';
 import '../../styles/terminal.css';
 
+// crypto.randomUUID may not be available in non-secure contexts (HTTP)
+function generateId(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback: simple UUID v4-ish
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
 interface TerminalTabUI {
   id: string;
   label: string;
@@ -162,13 +174,13 @@ export function TerminalPane({ worktreeId }: TerminalPaneProps) {
       type: 'TerminalRename',
       tabId,
       newLabel,
-      requestId: crypto.randomUUID(),
+      requestId: generateId(),
     };
     client.send(message);
   }, [client]);
 
   const handleCreateTab = useCallback(() => {
-    const tabId = crypto.randomUUID();
+    const tabId = generateId();
     const label = `Terminal ${nextTabIndexRef.current++}`;
 
     const message: TerminalMount = {
@@ -249,7 +261,7 @@ export function TerminalPane({ worktreeId }: TerminalPaneProps) {
         type: 'TerminalReorder',
         worktreeId,
         tabIds,
-        requestId: crypto.randomUUID(),
+        requestId: generateId(),
       };
       client.send(message);
 
