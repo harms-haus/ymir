@@ -417,11 +417,14 @@ pub async fn handle_terminal_mount(
         shell,
     };
 
-    // Broadcast the mount event
-    let broadcast_msg = ServerMessage::new(ServerMessagePayload::TerminalMounted(mounted.clone()));
+    // Broadcast the mount event to all clients (including the requester)
+    let broadcast_msg = ServerMessage::new(ServerMessagePayload::TerminalMounted(mounted));
     state.broadcast(broadcast_msg).await;
 
-    ServerMessage::new(ServerMessagePayload::TerminalMounted(mounted))
+    ServerMessage::new(ServerMessagePayload::Ack(crate::protocol::Ack {
+        message_id: session_id,
+        status: crate::protocol::AckStatus::Success,
+    }))
 }
 
 #[instrument(skip(state, msg), fields(tab_id = %msg.tab_id, session_id = %msg.session_id))]

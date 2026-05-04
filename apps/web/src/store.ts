@@ -998,29 +998,18 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
           const label = (data as any)?.label as string | undefined;
           const position = (data as any)?.position as number | undefined;
           if (tabId && worktreeId) {
-            // Guard: skip if tab already exists (server may broadcast + respond)
-            const existing = useStore.getState().terminalTabs.find(
-              (tt) => tt.id === tabId
-            );
-            if (!existing) {
-              const { addTerminalTab, setTabSession } = useStore.getState();
-              addTerminalTab({
-                id: tabId,
-                worktreeId,
-                label: label ?? 'Terminal',
-                position: position ?? 0,
-                activeSessionId: null,
-                status: 'active',
-                createdAt: Date.now(),
-              });
-              if (sessionId) {
-                setTabSession(tabId, sessionId);
-              }
-            } else {
-              // Tab exists, just update the session link
-              if (sessionId) {
-                useStore.getState().setTabSession(tabId, sessionId);
-              }
+            const { addTerminalTab, setTabSession } = useStore.getState();
+            addTerminalTab({
+              id: tabId,
+              worktreeId,
+              label: label ?? 'Terminal',
+              position: position ?? 0,
+              activeSessionId: null,
+              status: 'active',
+              createdAt: Date.now(),
+            });
+            if (sessionId) {
+              setTabSession(tabId, sessionId);
             }
           }
           break;
