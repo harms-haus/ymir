@@ -407,16 +407,13 @@ impl PtyManager {
             .cloned()
             .ok_or_else(|| anyhow!("Session {} not found", session_id))?;
 
-        // Update last_activity to now so TTL doesn't interfere
+        // Mark session as ended (disconnected) but DO NOT kill the PTY.
+        // The session will resume on remount. PTY is only killed on
+        // explicit TerminalTabClose or TTL expiry.
         {
             let mut s = session.lock().unwrap();
-            *s.last_activity.lock().unwrap() = Instant::now();
             s.is_ended = true;
             s.ended_reason = Some(reason.to_string());
-            // Kill the PTY process
-            if let Err(e) = s.kill() {
-                tracing::warn!("Error killing PTY process during end_session: {}", e);
-            }
         }
 
         tracing::info!(

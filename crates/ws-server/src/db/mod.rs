@@ -1031,17 +1031,18 @@ pub async fn list_terminal_sessions(&self, worktree_id: &str) -> Result<Vec<Term
   /// This effectively removes the tab's identity from the active set.
   pub async fn close_terminal_tab(&self, tab_id: &str) -> Result<bool> {
     let conn = self.conn()?;
-    let rows_affected = conn
-      .execute(
-        "UPDATE terminal_sessions SET status = 'ended', ended_at = datetime('now'), ended_reason = 'close', updated_at = datetime('now') WHERE tab_id = ?1 AND status = 'active'",
-        libsql::params![tab_id],
-      )
-      .await?;
-    debug!(
-      "Closed tab {} (rows affected: {})",
-      tab_id, rows_affected
-    );
-    Ok(rows_affected > 0)
+    // Delete all output for sessions belonging to this tab
+    conn.execute(
+      "DELETE FROM terminal_output WHERE session_id IN (SELECT id FROM terminal_sessions WHERE tab_id = ?1)",
+      libsql::params![tab_id],
+    ).await?;
+    // Delete all sessions for this tab
+    conn.execute(
+      "DELETE FROM terminal_sessions WHERE tab_id = ?1",
+      libsql::params![tab_id],
+    ).await?;
+    debug!("Deleted tab {} and all its sessions", tab_id);
+    Ok(true)
   }
 
   /// Get terminal output for a tab by JOINing terminal_output with terminal_sessions

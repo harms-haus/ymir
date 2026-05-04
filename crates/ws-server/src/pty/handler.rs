@@ -432,48 +432,13 @@ pub async fn handle_terminal_unmount(
     state: Arc<AppState>,
     msg: crate::protocol::TerminalUnmount,
 ) -> ServerMessage {
-    let pty_manager = match state.pty_manager.clone() {
-        Some(manager) => manager,
-        None => {
-            return ServerMessage::new(ServerMessagePayload::Error(Error {
-                code: "PTY_MANAGER_NOT_INITIALIZED".to_string(),
-                message: "PTY manager is not initialized".to_string(),
-                details: None,
-                request_id: None,
-            }));
-        }
-    };
-
-    if let Err(e) = pty_manager.end_session(msg.session_id, "unmount") {
-        if !e.to_string().contains("not found") {
-            return ServerMessage::new(ServerMessagePayload::Error(Error {
-                code: "PTY_END_ERROR".to_string(),
-                message: e.to_string(),
-                details: None,
-                request_id: None,
-            }));
-        }
-        tracing::warn!(
-            "PTY session not found for unmount (may be stale): {}",
-            msg.session_id
-        );
-    }
-
-    // Update DB session status
+    // Do NOT kill the PTY on unmount. The session should remain alive
+    // for remount (StrictMode double-invoke, tab navigation, etc.).
+    // The PTY will be killed only on explicit TerminalTabClose or TTL expiry.
+    // Just update the DB session status for bookkeeping.
     if let Err(e) = state.db.end_tab_session(&msg.session_id.to_string(), "unmount").await {
         tracing::warn!("Failed to update DB session status for unmount: {}", e);
     }
-
-    let ended = crate::protocol::TerminalSessionEnded {
-        tab_id: msg.tab_id,
-        session_id: msg.session_id,
-        reason: "unmount".to_string(),
-    };
-
-    // Broadcast the session ended event
-    let broadcast_msg =
-        ServerMessage::new(ServerMessagePayload::TerminalSessionEnded(ended.clone()));
-    state.broadcast(broadcast_msg).await;
 
     ServerMessage::new(ServerMessagePayload::Ack(crate::protocol::Ack {
         message_id: msg.tab_id,
