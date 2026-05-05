@@ -6,7 +6,8 @@
 use crate::db::{ActivityLogEntry, Workspace as DbWorkspace};
 use crate::protocol::{
   ServerMessage, ServerMessagePayload, WorktreeCreated, WorkspaceCreate, WorkspaceCreated,
-  WorkspaceData, WorkspaceDelete, WorkspaceDeleted,
+  WorkspaceData, WorkspaceDelete, WorkspaceDeleted, WorkspaceRemove, WorkspaceRemoved,
+  WorkspaceUpdated,
 };
 use crate::state::AppState;
 use anyhow::{Context, Result};
@@ -282,6 +283,56 @@ pub async fn delete(state: Arc<AppState>, msg: WorkspaceDelete) -> Result<Worksp
     })
 }
 
+/// Remove a workspace from the database WITHOUT deleting worktrees from disk.
+/// This is a softer removal path used by the "Remove workspace" context menu action.
+#[instrument(skip(state), fields(workspace_id = %msg.workspace_id))]
+pub async fn remove(state: Arc<AppState>, msg: WorkspaceRemove) -> Result<WorkspaceRemoved> {
+    // Get workspace from database
+    let workspace = state
+        .db
+        .get_workspace(&msg.workspace_id.to_string())
+        .await
+        .context("Failed to fetch workspace from database")?
+        .ok_or_else(|| anyhow::anyhow!("Workspace not found: {}", msg.workspace_id))?;
+
+    // Delete workspace from database (NOT worktrees - leave them on disk)
+    let deleted = state
+        .db
+        .delete_workspace(&msg.workspace_id.to_string())
+        .await
+        .context("Failed to remove workspace from database")?;
+
+    if !deleted {
+        anyhow::bail!(
+            "Workspace not found or already removed: {}",
+            msg.workspace_id
+        );
+    }
+
+    // Remove from in-memory state
+    state.workspaces.write().await.remove(&msg.workspace_id);
+
+    // Log activity
+    let activity = ActivityLogEntry {
+        id: None,
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        level: "info".to_string(),
+        source: Some("workspace".to_string()),
+        message: format!("Removed workspace: {}", workspace.name),
+        metadata_json: serde_json::json!({
+            "workspace_id": msg.workspace_id.to_string(),
+            "root_path": workspace.root_path,
+            "action": "remove (worktrees preserved on disk)"
+        })
+        .to_string(),
+    };
+    state.db.log_activity(&activity).await?;
+
+    Ok(WorkspaceRemoved {
+        workspace_id: msg.workspace_id,
+    })
+}
+
 /// List all workspaces
 #[instrument(skip(state))]
 pub async fn list(state: Arc<AppState>) -> Result<Vec<WorkspaceData>> {
@@ -309,6 +360,49 @@ pub async fn get(state: Arc<AppState>, workspace_id: Uuid) -> Result<Option<Work
         .context("Failed to fetch workspace from database")?;
 
     workspace.map(workspace_data_from_db).transpose()
+}
+
+/// Rename a workspace
+#[instrument(skip(state), fields(workspace_id = %msg.workspace_id, new_name = %msg.new_name))]
+pub async fn rename(state: Arc<AppState>, msg: crate::protocol::WorkspaceRename) -> Result<WorkspaceUpdated> {
+    // Get workspace from database
+    let workspace = state
+        .db
+        .get_workspace(&msg.workspace_id.to_string())
+        .await
+        .context("Failed to fetch workspace from database")?
+        .ok_or_else(|| anyhow::anyhow!("Workspace not found: {}", msg.workspace_id))?;
+
+    // Update name in database
+    let updated = state
+        .db
+        .update_workspace(&msg.workspace_id.to_string(), Some(&msg.new_name), None)
+        .await
+        .context("Failed to rename workspace in database")?;
+
+    if !updated {
+        anyhow::bail!("Workspace not found: {}", msg.workspace_id);
+    }
+
+    // Update in-memory state
+    let mut workspaces = state.workspaces.write().await;
+    if let Some(ws_state) = workspaces.get_mut(&msg.workspace_id) {
+        ws_state.name = msg.new_name.clone();
+    }
+
+    // Fetch the updated workspace to get fresh timestamps
+    let updated_ws = state
+        .db
+        .get_workspace(&msg.workspace_id.to_string())
+        .await
+        .context("Failed to fetch updated workspace")?
+        .ok_or_else(|| anyhow::anyhow!("Workspace disappeared after rename"))?;
+
+    let workspace_data = workspace_data_from_db(updated_ws)?;
+
+    Ok(WorkspaceUpdated {
+        workspace: workspace_data,
+    })
 }
 
 #[cfg(test)]

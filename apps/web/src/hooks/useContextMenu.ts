@@ -7,6 +7,7 @@ export interface ContextMenuState {
   targetId: string | null
   targetType: 'workspace' | 'worktree' | 'agent-tab' | 'terminal-tab' | null
   targetPath: string | null
+  isMain: boolean
 }
 
 export type ContextMenuAction =
@@ -19,6 +20,8 @@ export type ContextMenuAction =
   | 'open-in-file-manager'
   | 'copy-path'
   | 'rename'
+  | 'rename-workspace'
+  | 'remove-workspace'
   | 'close'
   | 'close-right'
   | 'close-left'
@@ -31,6 +34,8 @@ export interface ContextMenuCallbacks {
   onMerge?: (worktreeId: string) => void
   onViewDiff?: (worktreeId: string) => void
   onSettings?: (workspaceId: string) => void
+  onRenameWorkspace?: (workspaceId: string) => void
+  onRemoveWorkspace?: (workspaceId: string) => void
   onOpenInFileManager?: (path: string) => void
   onCopyPath?: (path: string) => void
   onRename?: (tabId: string) => void
@@ -48,9 +53,10 @@ export function useContextMenu(callbacks: ContextMenuCallbacks = {}) {
     targetId: null,
     targetType: null,
     targetPath: null,
+    isMain: false,
   })
 
-  const openMenu = useCallback((e: React.MouseEvent, id: string, type: 'workspace' | 'worktree' | 'agent-tab' | 'terminal-tab', path?: string) => {
+  const openMenu = useCallback((e: React.MouseEvent, id: string, type: 'workspace' | 'worktree' | 'agent-tab' | 'terminal-tab', path?: string, isMain = false) => {
     e.preventDefault()
     e.stopPropagation()
 
@@ -61,6 +67,7 @@ export function useContextMenu(callbacks: ContextMenuCallbacks = {}) {
       targetId: id,
       targetType: type,
       targetPath: path ?? null,
+      isMain,
     })
   }, [])
 
@@ -71,6 +78,7 @@ export function useContextMenu(callbacks: ContextMenuCallbacks = {}) {
       targetId: null,
       targetType: null,
       targetPath: null,
+      isMain: false,
     }))
   }, [])
 
@@ -108,6 +116,16 @@ export function useContextMenu(callbacks: ContextMenuCallbacks = {}) {
       case 'settings':
         if (targetType === 'workspace') {
           callbacks.onSettings?.(targetId)
+        }
+        break
+      case 'rename-workspace':
+        if (targetType === 'workspace') {
+          callbacks.onRenameWorkspace?.(targetId)
+        }
+        break
+      case 'remove-workspace':
+        if (targetType === 'workspace') {
+          callbacks.onRemoveWorkspace?.(targetId)
         }
         break
       case 'open-in-file-manager':

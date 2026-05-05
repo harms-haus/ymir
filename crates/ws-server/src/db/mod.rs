@@ -398,22 +398,23 @@ impl Db {
         settings_json: Option<&str>,
     ) -> Result<bool> {
         let conn = self.conn()?;
+        let now_rfc3339 = chrono::Utc::now().to_rfc3339();
 
         let rows_affected = if let (Some(n), Some(s)) = (name, settings_json) {
             conn.execute(
-                "UPDATE workspaces SET name = ?1, settings_json = ?2, updated_at = datetime('now') WHERE id = ?3",
-                libsql::params![n, s, id]
+                "UPDATE workspaces SET name = ?1, settings_json = ?2, updated_at = ?3 WHERE id = ?4",
+                libsql::params![n, s, now_rfc3339, id]
             ).await?
         } else if let Some(n) = name {
             conn.execute(
-                "UPDATE workspaces SET name = ?1, updated_at = datetime('now') WHERE id = ?2",
-                libsql::params![n, id],
+                "UPDATE workspaces SET name = ?1, updated_at = ?2 WHERE id = ?3",
+                libsql::params![n, now_rfc3339, id],
             )
             .await?
         } else if let Some(s) = settings_json {
             conn.execute(
-                "UPDATE workspaces SET settings_json = ?1, updated_at = datetime('now') WHERE id = ?2",
-                libsql::params![s, id]
+                "UPDATE workspaces SET settings_json = ?1, updated_at = ?2 WHERE id = ?3",
+                libsql::params![s, now_rfc3339, id]
             ).await?
         } else {
             return Ok(false);

@@ -3,7 +3,11 @@ import { NodeApi } from 'react-arborist';
 import { useStore } from '../../store';
 import { useUIStore } from '../../uiStore';
 import { FileTree, FileTreeNode } from '../ui/FileTree';
+import { ContextMenu } from '../ui/ContextMenu';
+import type { ContextMenuItem } from '../ui/ContextMenu';
+import { useContextMenu } from '../../hooks/useContextMenu';
 import { loadWorktreeDetails, getWebSocketClient } from '../../lib/ws';
+import { createWorktree, deleteWorktree, deleteWorkspace, removeWorkspace, renameWorkspace } from '../../lib/api';
 
 function getFolderName(path: string): string {
   if (!path) return '';
@@ -111,6 +115,59 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
     [expandedIds, toggleWorkspaceExpanded]
   );
 
+  // Context menu hook
+  const { state: contextMenuState, openMenu, closeMenu, handleAction } = useContextMenu({
+    onCreateWorktree: (workspaceId: string) => {
+      const branchName = prompt('Enter branch name for new worktree:');
+      if (branchName && branchName.trim()) {
+        createWorktree(workspaceId, branchName.trim());
+      }
+    },
+    onDeleteWorktree: (worktreeId: string) => {
+      if (window.confirm('Are you sure you want to delete this worktree?')) {
+        deleteWorktree(worktreeId);
+      }
+    },
+    onChangeBranch: (worktreeId: string) => {
+      console.log('Change branch for worktree:', worktreeId);
+      // TODO: Implement branch change dialog
+    },
+    onSettings: (workspaceId: string) => {
+      console.log('Open settings for workspace:', workspaceId);
+      // TODO: Open workspace settings dialog
+    },
+    onRenameWorkspace: (workspaceId: string) => {
+      const newName = prompt('Enter new workspace name:');
+      if (newName && newName.trim()) {
+        renameWorkspace(workspaceId, newName.trim());
+      }
+    },
+    onRemoveWorkspace: (workspaceId: string) => {
+      if (window.confirm('Are you sure you want to remove this workspace?')) {
+        useStore.getState().removeWorkspace(workspaceId);
+        removeWorkspace(workspaceId);
+      }
+    },
+  });
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, node: NodeApi<FileTreeNode>) => {
+      const type = node.data.type === 'directory' ? 'workspace' : 'worktree';
+      const isMain = (node.data.data?.isMain as boolean) ?? false;
+      openMenu(e, node.data.id, type, node.data.data?.path as string, isMain);
+    },
+    [openMenu]
+  );
+
+  const menuItems: ContextMenuItem[] = [
+    { id: 'settings', label: 'Edit workspace settings', icon: 'ri-settings-3-line' },
+    { id: 'rename-workspace', label: 'Rename workspace', icon: 'ri-edit-line' },
+    { id: 'create-worktree', label: 'Add worktree', icon: 'ri-folder-add-line' },
+    { id: 'remove-workspace', label: 'Remove workspace', icon: 'ri-folder-remove-line', destructive: true },
+    { id: 'change-branch', label: 'Change branch', icon: 'ri-git-branch-line' },
+    { id: 'delete-worktree', label: 'Delete worktree', icon: 'ri-delete-bin-line', destructive: true },
+  ];
+
   useEffect(() => {
     const client = getWebSocketClient();
     let unsubscribe: (() => void) | null = null;
@@ -192,7 +249,9 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
         selection={activeWorktreeId || undefined}
         openByDefault={false}
         initialOpenState={initialOpenState}
+        onContextMenu={handleContextMenu}
       />
+      <ContextMenu state={contextMenuState} items={menuItems} onAction={handleAction} closeMenu={closeMenu} />
     </div>
   );
 }

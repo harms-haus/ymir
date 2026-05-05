@@ -86,6 +86,24 @@ pub struct WorkspaceDeleted {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct WorkspaceRemove {
+    #[serde(with = "uuid_serde")]
+    #[ts(as = "String")]
+    pub workspace_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct WorkspaceRemoved {
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub workspace_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[ts(export)]
 pub struct WorkspaceUpdated {
     pub workspace: WorkspaceData,

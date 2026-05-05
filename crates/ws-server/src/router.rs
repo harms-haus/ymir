@@ -125,6 +125,34 @@ pub async fn route_message(
             }
         }
 
+        ClientMessagePayload::WorkspaceRename(msg) => {
+            match crate::workspace::rename(state.clone(), msg).await {
+                Ok(result) => Some(ServerMessage::new(ServerMessagePayload::WorkspaceUpdated(
+                    result,
+                ))),
+                Err(e) => Some(ServerMessage::new(ServerMessagePayload::Error(Error {
+                    code: "WORKSPACE_RENAME_ERROR".to_string(),
+                    message: e.to_string(),
+                    details: None,
+                    request_id: None,
+                }))),
+            }
+        }
+
+        ClientMessagePayload::WorkspaceRemove(msg) => {
+            match crate::workspace::remove(state.clone(), msg).await {
+                Ok(result) => Some(ServerMessage::new(ServerMessagePayload::WorkspaceRemoved(
+                    result,
+                ))),
+                Err(e) => Some(ServerMessage::new(ServerMessagePayload::Error(Error {
+                    code: "WORKSPACE_REMOVE_ERROR".to_string(),
+                    message: e.to_string(),
+                    details: None,
+                    request_id: None,
+                }))),
+            }
+        }
+
         ClientMessagePayload::WorktreeCreate(msg) => {
             match crate::worktree::create(state.clone(), msg).await {
                 Ok(result) => Some(ServerMessage::new(ServerMessagePayload::WorktreeCreated(
@@ -249,8 +277,7 @@ pub async fn route_message(
         Some(handle_get_worktree_details(state.clone(), msg).await)
     }
 
-    ClientMessagePayload::WorkspaceRename(_)
-    | ClientMessagePayload::WorkspaceUpdate(_)
+    ClientMessagePayload::WorkspaceUpdate(_)
     | ClientMessagePayload::WorktreeMerge(_)
     | ClientMessagePayload::FileWrite(_)
     | ClientMessagePayload::UpdateSettings(_) => Some(not_implemented(message.payload)),
@@ -277,6 +304,7 @@ fn not_implemented(payload: ClientMessagePayload) -> ServerMessage {
     let msg_type = match payload {
         ClientMessagePayload::WorkspaceCreate(_) => "WorkspaceCreate",
         ClientMessagePayload::WorkspaceDelete(_) => "WorkspaceDelete",
+        ClientMessagePayload::WorkspaceRemove(_) => "WorkspaceRemove",
         ClientMessagePayload::WorkspaceRename(_) => "WorkspaceRename",
         ClientMessagePayload::WorkspaceUpdate(_) => "WorkspaceUpdate",
         ClientMessagePayload::WorktreeCreate(_) => "WorktreeCreate",

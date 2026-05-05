@@ -60,6 +60,7 @@ import type {
   // Client message types
   WorkspaceCreate,
   WorkspaceDelete,
+  WorkspaceRemove,
   WorkspaceRename,
   WorkspaceUpdate,
   WorktreeCreate,
@@ -165,6 +166,18 @@ export function encodeWorkspaceDelete(
   return makeEnvelope('workspace_event', {
     payload: {
       type: 'WorkspaceDelete',
+      data,
+    } as BridgePayload,
+  });
+}
+
+/** Encode WorkspaceRemove into a BridgeEnvelope. */
+export function encodeWorkspaceRemove(
+  data: Omit<WorkspaceRemove, 'type'>
+): FullBridgeEnvelope {
+  return makeEnvelope('workspace_event', {
+    payload: {
+      type: 'WorkspaceRemove',
       data,
     } as BridgePayload,
   });
@@ -639,6 +652,7 @@ export function encodeClientMessage(
   message: Omit<
     | WorkspaceCreate
     | WorkspaceDelete
+    | WorkspaceRemove
     | WorkspaceRename
     | WorkspaceUpdate
     | WorktreeCreate
@@ -684,6 +698,8 @@ export function encodeClientMessage(
       return encodeWorkspaceCreate(payload as unknown as Omit<WorkspaceCreate, 'type'>);
     case 'WorkspaceDelete':
       return encodeWorkspaceDelete(payload as unknown as Omit<WorkspaceDelete, 'type'>);
+    case 'WorkspaceRemove':
+      return encodeWorkspaceRemove(payload as unknown as Omit<WorkspaceRemove, 'type'>);
     case 'WorkspaceRename':
       return encodeWorkspaceRename(payload as unknown as Omit<WorkspaceRename, 'type'>);
     case 'WorkspaceUpdate':

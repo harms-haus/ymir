@@ -90,6 +90,9 @@ fn payload_to_bridge_message(payload: &ServerMessagePayload) -> BridgeMessage {
         ServerMessagePayload::WorkspaceDeleted(_) => BridgeMessage::WorkspaceEvent {
             payload: serde_json::to_value(payload).unwrap_or_default(),
         },
+        ServerMessagePayload::WorkspaceRemoved(_) => BridgeMessage::WorkspaceEvent {
+            payload: serde_json::to_value(payload).unwrap_or_default(),
+        },
         ServerMessagePayload::WorkspaceUpdated(_) => BridgeMessage::WorkspaceEvent {
             payload: serde_json::to_value(payload).unwrap_or_default(),
         },

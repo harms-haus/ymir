@@ -443,6 +443,16 @@ export interface WorkspaceDeleted {
   workspaceId: string;
 }
 
+export interface WorkspaceRemove {
+  type: 'WorkspaceRemove';
+  workspaceId: string;
+}
+
+export interface WorkspaceRemoved {
+  type: 'WorkspaceRemoved';
+  workspaceId: string;
+}
+
 export interface WorkspaceUpdated {
   type: 'WorkspaceUpdated';
   workspace: Workspace;
@@ -855,6 +865,7 @@ export function isAcpResumeMarker(event: AcpEvent): event is { eventType: 'Resum
 export type ClientMessage =
     | WorkspaceCreate
     | WorkspaceDelete
+    | WorkspaceRemove
     | WorkspaceRename
     | WorkspaceUpdate
     | WorktreeCreate
@@ -896,6 +907,7 @@ export type ServerMessage =
     | StateSnapshot
     | WorkspaceCreated
     | WorkspaceDeleted
+    | WorkspaceRemoved
     | WorkspaceUpdated
   | WorktreeCreated
   | WorktreeDeleted

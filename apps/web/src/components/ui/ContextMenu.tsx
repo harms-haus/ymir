@@ -17,7 +17,7 @@ export interface ContextMenuProps {
 }
 
 export function ContextMenu({ state, items, onAction, closeMenu }: ContextMenuProps) {
-  const { isOpen, x, y, targetType } = state
+  const { isOpen, x, y, targetType, isMain } = state
   const popupRef = useRef<HTMLDivElement>(null)
 
   if (!isOpen) {
@@ -26,10 +26,14 @@ export function ContextMenu({ state, items, onAction, closeMenu }: ContextMenuPr
 
   const visibleItems = items.filter((item) => {
     if (targetType === 'workspace') {
-      return item.id === 'create-worktree' || item.id === 'settings'
+      return ['create-worktree', 'settings', 'rename-workspace', 'remove-workspace'].includes(item.id)
     }
     if (targetType === 'worktree') {
-      if (item.id === 'create-worktree' || item.id === 'settings') {
+      if (item.id === 'create-worktree' || item.id === 'settings' || item.id === 'rename-workspace' || item.id === 'remove-workspace') {
+        return false
+      }
+      // Main worktree (CWD) only gets 'change-branch', not 'delete-worktree'
+      if (isMain && item.id === 'delete-worktree') {
         return false
       }
       if (item.id === 'open-in-file-manager' || item.id === 'copy-path') {

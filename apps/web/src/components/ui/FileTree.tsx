@@ -41,8 +41,10 @@ function FileTreeNodeRenderer({
   const isSelected = node.isSelected;
 
   const handleContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault();
-    onContextMenu?.(e, node);
+    if (onContextMenu) {
+      e.preventDefault();
+      onContextMenu(e, node);
+    }
   };
 
   const { paddingLeft = 0 } = style as { paddingLeft?: number };

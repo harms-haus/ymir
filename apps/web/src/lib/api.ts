@@ -2,6 +2,7 @@ import { getWebSocketClient, generateId } from './ws';
 import {
 WorkspaceCreate,
 WorkspaceDelete,
+WorkspaceRemove,
 WorkspaceRename,
 WorkspaceUpdate,
 WorktreeCreate,
@@ -40,6 +41,15 @@ export function deleteWorkspace(workspaceId: string): void {
   const client = getWebSocketClient();
   const message: WorkspaceDelete = {
     type: 'WorkspaceDelete',
+    workspaceId,
+  };
+  client.send(message);
+}
+
+export function removeWorkspace(workspaceId: string): void {
+  const client = getWebSocketClient();
+  const message: WorkspaceRemove = {
+    type: 'WorkspaceRemove',
     workspaceId,
   };
   client.send(message);

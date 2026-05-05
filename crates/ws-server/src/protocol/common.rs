@@ -23,8 +23,8 @@ use super::{
     },
     uuid_serde,
     workspace::{
-        WorkspaceCreated, WorkspaceData, WorkspaceDelete, WorkspaceDeleted, WorkspaceRename,
-        WorkspaceUpdate, WorkspaceUpdated,
+        WorkspaceCreated, WorkspaceData, WorkspaceDelete, WorkspaceDeleted, WorkspaceRemove,
+        WorkspaceRemoved, WorkspaceRename, WorkspaceUpdate, WorkspaceUpdated,
     },
     worktree::{
         GetWorktreeDetails, WorktreeChangeBranch, WorktreeChanged, WorktreeCreate, WorktreeCreated,
@@ -54,6 +54,7 @@ pub struct ServerMessage {
 pub enum ClientMessagePayload {
     WorkspaceCreate(super::WorkspaceCreate),
     WorkspaceDelete(WorkspaceDelete),
+    WorkspaceRemove(WorkspaceRemove),
     WorkspaceRename(WorkspaceRename),
     WorkspaceUpdate(WorkspaceUpdate),
     WorktreeCreate(WorktreeCreate),
@@ -98,6 +99,7 @@ pub enum ServerMessagePayload {
     StateSnapshot(StateSnapshot),
     WorkspaceCreated(WorkspaceCreated),
     WorkspaceDeleted(WorkspaceDeleted),
+    WorkspaceRemoved(WorkspaceRemoved),
     WorkspaceUpdated(WorkspaceUpdated),
     WorktreeCreated(WorktreeCreated),
     WorktreeDeleted(WorktreeDeleted),
