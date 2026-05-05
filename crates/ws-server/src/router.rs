@@ -290,6 +290,8 @@ pub async fn route_message(
 
         ClientMessagePayload::CreatePR(msg) => Some(handle_create_pr(state.clone(), msg).await),
 
+        ClientMessagePayload::GitListBranches(msg) => Some(handle_git_list_branches(state.clone(), msg).await),
+
         ClientMessagePayload::Ack(_) => Some(not_implemented(message.payload)),
 
         // New terminal tab lifecycle messages (handlers to be implemented)
@@ -333,6 +335,7 @@ fn not_implemented(payload: ClientMessagePayload) -> ServerMessage {
         ClientMessagePayload::GitDiff(_) => "GitDiff",
         ClientMessagePayload::GitCommit(_) => "GitCommit",
         ClientMessagePayload::CreatePR(_) => "CreatePR",
+        ClientMessagePayload::GitListBranches(_) => "GitListBranches",
         ClientMessagePayload::GetState(_) => "GetState",
         ClientMessagePayload::UpdateSettings(_) => "UpdateSettings",
         ClientMessagePayload::Ping(_) => "Ping",
@@ -776,6 +779,48 @@ async fn handle_create_pr(state: Arc<AppState>, msg: crate::protocol::CreatePR) 
         )),
         Err(e) => ServerMessage::new(ServerMessagePayload::Error(Error {
             code: "CREATE_PR_ERROR".to_string(),
+            message: e.to_string(),
+            details: None,
+                    request_id: None,
+        })),
+    }
+}
+
+#[instrument(skip(state))]
+async fn handle_git_list_branches(
+    state: Arc<AppState>,
+    msg: crate::protocol::GitListBranches,
+) -> ServerMessage {
+    let worktree_id = msg.worktree_id;
+
+    let repo_path = {
+        let worktrees = state.worktrees.read().await;
+        match worktrees.get(&worktree_id) {
+            Some(worktree) => std::path::PathBuf::from(worktree.path.clone()),
+            None => {
+                return ServerMessage::new(ServerMessagePayload::Error(Error {
+                    code: "WORKTREE_NOT_FOUND".to_string(),
+                    message: format!("Worktree {} not found", worktree_id),
+                    details: None,
+                    request_id: None,
+                }));
+            }
+        }
+    };
+
+    match state
+        .git_ops
+        .list_branches(worktree_id, repo_path.as_path())
+        .await
+    {
+        Ok(branches) => ServerMessage::new(ServerMessagePayload::GitListBranchesResult(
+            crate::protocol::GitListBranchesResult {
+                worktree_id,
+                branches,
+            },
+        )),
+        Err(e) => ServerMessage::new(ServerMessagePayload::Error(Error {
+            code: "GIT_LIST_BRANCHES_ERROR".to_string(),
             message: e.to_string(),
             details: None,
                     request_id: None,

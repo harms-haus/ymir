@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { AppState, NotificationState, AgentTab, AlertDialogConfig, AgentSessionState, TerminalTabState, GitStats, AcpAccumulatorState, AcpAccumulatorAction, AccumulatedThread, AccumulatedMessage, AccumulatedTextContent, AccumulatedToolCard, AccumulatedContextCard, AccumulatedErrorCard, MAX_TOOL_OUTPUT_LENGTH, MAX_ACCUMULATED_MESSAGES, createInitialAccumulatorState, ThreadAccumulatedState } from './types/state';
+import { AppState, NotificationState, AgentTab, AlertDialogConfig, ConfirmDialogConfig, AgentSessionState, TerminalTabState, GitStats, AcpAccumulatorState, AcpAccumulatorAction, AccumulatedThread, AccumulatedMessage, AccumulatedTextContent, AccumulatedToolCard, AccumulatedContextCard, AccumulatedErrorCard, MAX_TOOL_OUTPUT_LENGTH, MAX_ACCUMULATED_MESSAGES, createInitialAccumulatorState, ThreadAccumulatedState } from './types/state';
 export type { AgentTab };
 import { GitStatusEntry, TerminalOutput, AcpEventEnvelope, AcpSequence, AcpToolUseStatus, AcpSessionStatus, AcpContextUpdateType, AcpErrorCode, AcpSessionConfigOption } from './types/protocol';
 import { isAcpSessionInit, isAcpConfigOptionsUpdate, isAcpSessionStatus, isAcpPromptChunk, isAcpPromptComplete, isAcpToolUse, isAcpContextUpdate, isAcpError, isAcpResumeMarker } from './types/protocol';
@@ -418,6 +418,8 @@ export const useStore = create<AppState>()(
   },
 
   alertDialog: null,
+
+  confirmDialog: null,
 
   setWorkspaces: (workspaces) => set({ workspaces }),
       
@@ -849,6 +851,14 @@ setActiveAgentTab: (worktreeId, tabId) => {
     set((state) => ({
       alertDialog: state.alertDialog ? { ...state.alertDialog, open: false } : null,
     })),
+
+  setConfirmDialog: (config: ConfirmDialogConfig) =>
+    set({
+      confirmDialog: { ...config, open: true, destructive: config.destructive ?? false },
+    }),
+
+  hideConfirmDialog: () =>
+    set({ confirmDialog: null }),
 
   // ACP Accumulator actions
   dispatchAccumulator: (action: AcpAccumulatorAction) =>

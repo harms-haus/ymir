@@ -124,6 +124,9 @@ fn payload_to_bridge_message(payload: &ServerMessagePayload) -> BridgeMessage {
         ServerMessagePayload::GitDiffResult(_) => BridgeMessage::GitResponse {
             payload: serde_json::to_value(payload).unwrap_or_default(),
         },
+        ServerMessagePayload::GitListBranchesResult(_) => BridgeMessage::GitResponse {
+            payload: serde_json::to_value(payload).unwrap_or_default(),
+        },
 
         // File operation responses
         ServerMessagePayload::FileContent(_) => BridgeMessage::FileResponse {

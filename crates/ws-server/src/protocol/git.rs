@@ -80,3 +80,36 @@ pub struct GitDiffResult {
     pub file_path: Option<String>,
     pub diff: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct GitListBranches {
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub workspace_id: Uuid,
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct BranchInfo {
+    pub name: String,
+    pub is_local: bool,
+    pub is_remote: bool,
+    pub is_current: bool,
+    pub tracking: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct GitListBranchesResult {
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    pub branches: Vec<BranchInfo>,
+}

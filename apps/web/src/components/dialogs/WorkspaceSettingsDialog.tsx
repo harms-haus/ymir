@@ -676,7 +676,7 @@ export function WorkspaceSettingsDialog({
                       color: 'hsl(var(--foreground))',
                     }}
                   >
-                    Delete workspace "{workspace.name}"? This cannot be undone.
+                    Delete workspace "{workspace.name}"? This will permanently delete all workspace files from disk and cannot be undone.
                   </p>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button

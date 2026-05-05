@@ -11,7 +11,10 @@ use super::{
         AgentSessionData, AgentSetConfigOption, AgentSpawn, AgentStatusUpdate, AgentUpdated,
     },
     file::{FileContent, FileList, FileListResult, FileRead, FileWrite},
-    git::{CreatePR, GitCommit, GitDiff, GitDiffResult, GitStatus, GitStatusResult},
+    git::{
+        CreatePR, GitCommit, GitDiff, GitDiffResult, GitListBranches, GitListBranchesResult,
+        GitStatus, GitStatusResult,
+    },
     optional_uuid_serde,
     settings::{GetState, SettingData, UpdateSettings},
     terminal::{
@@ -86,6 +89,7 @@ pub enum ClientMessagePayload {
     GitDiff(GitDiff),
     GitCommit(GitCommit),
     CreatePR(CreatePR),
+    GitListBranches(GitListBranches),
     GetState(GetState),
     UpdateSettings(UpdateSettings),
     Ping(Ping),
@@ -126,6 +130,7 @@ pub enum ServerMessagePayload {
     FileListResult(FileListResult),
     GitStatusResult(GitStatusResult),
     GitDiffResult(GitDiffResult),
+    GitListBranchesResult(GitListBranchesResult),
     Error(Error),
     Ping(Ping),
     Pong(Pong),

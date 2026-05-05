@@ -339,39 +339,100 @@ impl GitOps {
         repo_path: &Path,
         new_branch_name: &str,
     ) -> Result<String, GitError> {
-        let new_branch = {
-            let repo = open_repo(repo_path)?;
-
-            let branch = repo
-                .find_branch(new_branch_name, BranchType::Local)
-                .map_err(|e| GitError::BranchNotFound(new_branch_name.to_string(), e.to_string()))?;
-
-            let branch_ref = branch.get().name().ok_or_else(|| {
-                GitError::InvalidReference(format!(
-                    "branch '{}' has no reference name",
-                    new_branch_name
-                ))
-            })?;
-
-            repo.set_head(branch_ref)?;
-            repo.checkout_head(Some(CheckoutBuilder::new().force()))?;
-
-            new_branch_name.to_string()
-        };
+        let result = do_change_branch(repo_path, new_branch_name)?;
 
         self.log_info(
             "change_branch",
-            format!("Changed to branch '{}' in {}", new_branch, repo_path.display()),
             format!(
-                r#"{{"worktree_id":"{}","repo_path":"{}","new_branch":"{}"}}"#,
+                "Changed to branch '{}' in {} (via {} branch)",
+                result.0,
+                repo_path.display(),
+                result.1
+            ),
+            format!(
+                r#"{{"worktree_id":"{}","repo_path":"{}","new_branch":"{}","path":"{}"}}"#,
                 worktree_id,
                 repo_path.display(),
-                json_escape(&new_branch)
+                json_escape(&result.0),
+                result.1
             ),
         )
         .await?;
 
-        Ok(new_branch)
+        Ok(result.0)
+    }
+
+    pub async fn list_branches(
+        &self,
+        worktree_id: Uuid,
+        repo_path: &Path,
+    ) -> Result<Vec<crate::protocol::BranchInfo>, GitError> {
+        use crate::protocol::BranchInfo;
+
+        let repo = open_repo(repo_path)?;
+
+        // Determine current branch name
+        let current_branch = repo
+            .head()
+            .ok()
+            .and_then(|h| h.shorthand().map(|s| s.to_string()));
+
+        let mut branches: Vec<BranchInfo> = Vec::new();
+
+        // Collect local branches
+        for branch_result in repo.branches(Some(BranchType::Local))? {
+            let (branch, _) = branch_result?;
+            let name = branch
+                .name()?
+                .unwrap_or("<unknown>")
+                .to_string();
+
+            let tracking = branch
+                .upstream()
+                .ok()
+                .and_then(|up| up.get().shorthand().map(|s| s.to_string()));
+
+            let is_current = current_branch.as_ref().map(|s| s.as_str()) == Some(&name);
+
+            branches.push(BranchInfo {
+                name,
+                is_local: true,
+                is_remote: false,
+                is_current,
+                tracking,
+            });
+        }
+
+        // Collect remote branches
+        for branch_result in repo.branches(Some(BranchType::Remote))? {
+            let (branch, _) = branch_result?;
+            let name = branch
+                .name()?
+                .unwrap_or("<unknown>")
+                .to_string();
+
+            branches.push(BranchInfo {
+                name,
+                is_local: false,
+                is_remote: true,
+                is_current: false,
+                tracking: None,
+            });
+        }
+
+        self.log_info(
+            "list_branches",
+            format!("Listed branches for {}", repo_path.display()),
+            format!(
+                r#"{{"worktree_id":"{}","repo_path":"{}","count":{}}}"#,
+                worktree_id,
+                repo_path.display(),
+                branches.len()
+            ),
+        )
+        .await?;
+
+        Ok(branches)
     }
 
     async fn log_info(
@@ -447,6 +508,105 @@ fn find_base_branch<'a>(
                 .map(|branch| ("refs/heads/master", branch))
         })
         .map_err(|e| GitError::BranchNotFound("main/master".to_string(), e.to_string()))
+}
+
+/// Search for a remote branch matching the given name across all remotes.
+/// Tries `origin/{name}` first (most common), then falls back to scanning
+/// all remote branches for one whose short name matches.
+fn find_remote_branch<'a>(
+    repo: &'a Repository,
+    branch_name: &str,
+) -> Result<git2::Branch<'a>, GitError> {
+    // Fast path: try origin/{branch_name} first
+    let remote_ref = format!("origin/{}", branch_name);
+    if let Ok(branch) = repo.find_branch(&remote_ref, BranchType::Remote) {
+        return Ok(branch);
+    }
+
+    // Fallback: scan all remote branches for a matching short name
+    for branch_result in repo.branches(Some(BranchType::Remote))? {
+        let (branch, _) = branch_result?;
+        if let Some(name) = branch.name()? {
+            // Remote branch names look like "origin/foo" or "upstream/foo"
+            if let Some(short_name) = name.split('/').last() {
+                if short_name == branch_name {
+                    return Ok(branch);
+                }
+            }
+        }
+    }
+
+    Err(GitError::BranchNotFound(
+        branch_name.to_string(),
+        "not found in any remote".to_string(),
+    ))
+}
+
+/// Core branch-changing logic with three-path fallback:
+/// 1. Existing local branch — checkout directly
+/// 2. Remote branch — create local tracking branch and checkout
+/// 3. Non-existent — create new branch from HEAD and checkout
+fn do_change_branch(
+    repo_path: &Path,
+    new_branch_name: &str,
+) -> Result<(String, &'static str), GitError> {
+    let repo = open_repo(repo_path)?;
+
+    // Path 1: Try existing local branch (current behavior)
+    if let Ok(branch) = repo.find_branch(new_branch_name, BranchType::Local) {
+        let branch_ref = branch.get().name().ok_or_else(|| {
+            GitError::InvalidReference(format!(
+                "branch '{}' has no reference name",
+                new_branch_name
+            ))
+        })?;
+        repo.set_head(branch_ref)?;
+        repo.checkout_head(Some(CheckoutBuilder::new().force()))?;
+        return Ok((new_branch_name.to_string(), "local"));
+    }
+
+    // Path 2: Try remote branch — create local tracking branch
+    if let Ok(remote_branch) = find_remote_branch(&repo, new_branch_name) {
+        let remote_commit = remote_branch.get().peel_to_commit()?;
+        let mut local_branch = repo.branch(new_branch_name, &remote_commit, false)?;
+
+        // Set upstream tracking to the remote branch
+        let remote_ref_name = remote_branch.get().name().ok_or_else(|| {
+            GitError::InvalidReference(format!(
+                "remote branch for '{}' has no reference name",
+                new_branch_name
+            ))
+        })?;
+        local_branch.set_upstream(Some(remote_ref_name))?;
+
+        let branch_ref = local_branch.get().name().ok_or_else(|| {
+            GitError::InvalidReference(format!(
+                "newly created branch '{}' has no reference name",
+                new_branch_name
+            ))
+        })?;
+        repo.set_head(branch_ref)?;
+        repo.checkout_head(Some(CheckoutBuilder::new().force()))?;
+        return Ok((new_branch_name.to_string(), "remote"));
+    }
+
+    // Path 3: Branch does not exist anywhere — create new from HEAD
+    let head = repo
+        .head()
+        .map_err(|e| GitError::InvalidReference(format!("cannot resolve HEAD: {}", e)))?;
+    let head_commit = head
+        .peel_to_commit()
+        .map_err(|e| GitError::InvalidReference(format!("HEAD is not a commit: {}", e)))?;
+    let new_branch = repo.branch(new_branch_name, &head_commit, false)?;
+    let branch_ref = new_branch.get().name().ok_or_else(|| {
+        GitError::InvalidReference(format!(
+            "newly created branch '{}' has no reference name",
+            new_branch_name
+        ))
+    })?;
+    repo.set_head(branch_ref)?;
+    repo.checkout_head(Some(CheckoutBuilder::new().force()))?;
+    Ok((new_branch_name.to_string(), "new"))
 }
 
 fn collect_conflicts(index: &mut git2::Index) -> Result<Vec<String>, GitError> {

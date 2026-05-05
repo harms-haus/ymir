@@ -25,6 +25,9 @@ interface FileTreeProps {
   indent?: number;
   className?: string;
   renderRightContent?: (node: FileTreeNode) => React.ReactNode;
+  renamingId?: string | null;
+  onRenameCommit?: (id: string, newName: string) => void;
+  onRenameCancel?: () => void;
 }
 
 function FileTreeNodeRenderer({
@@ -33,9 +36,15 @@ function FileTreeNodeRenderer({
   dragHandle,
   onContextMenu,
   renderRightContent,
+  renamingId,
+  onRenameCommit,
+  onRenameCancel,
 }: NodeRendererProps<FileTreeNode> & {
   onContextMenu?: (e: React.MouseEvent, node: NodeApi<FileTreeNode>) => void;
   renderRightContent?: (node: FileTreeNode) => React.ReactNode;
+  renamingId?: string | null;
+  onRenameCommit?: (id: string, newName: string) => void;
+  onRenameCancel?: () => void;
 }) {
   const isFile = node.data.type === 'file';
   const isSelected = node.isSelected;
@@ -48,6 +57,40 @@ function FileTreeNodeRenderer({
   };
 
   const { paddingLeft = 0 } = style as { paddingLeft?: number };
+  const isRenaming = node.id === renamingId;
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [inputValue, setInputValue] = useState(node.data.name);
+
+  useEffect(() => {
+    if (isRenaming && inputRef.current) {
+      setInputValue(node.data.name);
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isRenaming, node.data.name]);
+
+  const handleRenameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') {
+      const trimmed = inputValue.trim();
+      if (trimmed) {
+        onRenameCommit?.(node.id, trimmed);
+      } else {
+        onRenameCancel?.();
+      }
+    } else if (e.key === 'Escape') {
+      onRenameCancel?.();
+    }
+  };
+
+  const handleRenameBlur = () => {
+    const trimmed = inputValue.trim();
+    if (trimmed) {
+      onRenameCommit?.(node.id, trimmed);
+    } else {
+      onRenameCancel?.();
+    }
+  };
 
   return (
     <div
@@ -103,19 +146,46 @@ function FileTreeNodeRenderer({
       <div style={{ marginRight: '6px', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
         <FileIcon name={node.data.name} />
       </div>
-      <span
-        style={{
-          fontSize: '13px',
-          color: isSelected ? 'hsl(var(--accent-foreground))' : 'hsl(var(--foreground))',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          flex: 1,
-          minWidth: 0,
-        }}
-      >
-        {node.data.name}
-      </span>
+      {isRenaming ? (
+        <input
+          ref={inputRef}
+          type="text"
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={handleRenameKeyDown}
+          onBlur={handleRenameBlur}
+          style={{
+            fontSize: '13px',
+            color: isSelected ? 'hsl(var(--accent-foreground))' : 'hsl(var(--foreground))',
+            backgroundColor: 'transparent',
+            border: 'none',
+            outline: 'none',
+            padding: 0,
+            margin: 0,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            flex: 1,
+            minWidth: 0,
+            width: '100%',
+            fontFamily: 'inherit',
+          }}
+        />
+      ) : (
+        <span
+          style={{
+            fontSize: '13px',
+            color: isSelected ? 'hsl(var(--accent-foreground))' : 'hsl(var(--foreground))',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          {node.data.name}
+        </span>
+      )}
       {renderRightContent && (
         <div style={{ marginLeft: 'auto', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
           {renderRightContent(node.data)}
@@ -138,6 +208,9 @@ export function FileTree({
   indent = 10,
   className,
   renderRightContent,
+  renamingId,
+  onRenameCommit,
+  onRenameCancel,
 }: FileTreeProps) {
   const treeRef = useRef<TreeApi<FileTreeNode>>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -195,7 +268,7 @@ export function FileTree({
           className={className}
         >
       {(props: NodeRendererProps<FileTreeNode>) => (
-        <FileTreeNodeRenderer {...props} onContextMenu={onContextMenu} renderRightContent={renderRightContent} />
+        <FileTreeNodeRenderer {...props} onContextMenu={onContextMenu} renderRightContent={renderRightContent} renamingId={renamingId} onRenameCommit={onRenameCommit} onRenameCancel={onRenameCancel} />
       )}
         </Tree>
       )}

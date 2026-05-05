@@ -5,6 +5,7 @@ import { ProjectPanel } from '../project/ProjectPanel'
 import { StatusBar } from './StatusBar'
 import { WorkspaceSettingsDialog } from '../dialogs/WorkspaceSettingsDialog'
 import { ChangeBranchDialog } from '../dialogs/ChangeBranchDialog'
+import { ConfirmDialog } from '../dialogs/ConfirmDialog'
 import { useUIStore } from '../../uiStore'
 import { useStore, selectWorkspaceSettingsDialog } from '../../store'
 import '../../styles/panels.css'
@@ -18,6 +19,8 @@ export function AppShell() {
   const setSettingsDialogOpen = useStore((s) => s.setWorkspaceSettingsDialogOpen)
   const changeBranchDialog = useStore((s) => s.changeBranchDialog)
   const setChangeBranchDialogOpen = useStore((s) => s.setChangeBranchDialogOpen)
+  const confirmDialog = useStore((s) => s.confirmDialog)
+  const hideConfirmDialog = useStore((s) => s.hideConfirmDialog)
 
   const handleLayout = (layout: { [id: string]: number }) => {
     const sidebar = layout['sidebar']
@@ -78,6 +81,18 @@ export function AppShell() {
         worktreeId={changeBranchDialog.worktreeId}
         currentBranch={changeBranchDialog.currentBranch}
       />
+      {confirmDialog && (
+        <ConfirmDialog
+          open={confirmDialog.open}
+          title={confirmDialog.title}
+          description={confirmDialog.description}
+          confirmLabel={confirmDialog.confirmLabel}
+          cancelLabel={confirmDialog.cancelLabel}
+          destructive={confirmDialog.destructive}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => hideConfirmDialog()}
+        />
+      )}
     </div>
   )
 }

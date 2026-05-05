@@ -397,6 +397,12 @@ export interface GitCommit {
   files?: string[];
 }
 
+export interface GitListBranches {
+  type: 'GitListBranches';
+  workspaceId: string;
+  worktreeId: string;
+}
+
 // PR messages
 export interface CreatePR {
   type: 'CreatePR';
@@ -632,6 +638,20 @@ export interface GitDiffResult {
   worktreeId: string;
   filePath?: string;
   diff: string;
+}
+
+export interface BranchInfo {
+  name: string;
+  isLocal: boolean;
+  isRemote: boolean;
+  isCurrent: boolean;
+  tracking?: string;
+}
+
+export interface GitListBranchesResult {
+  type: 'GitListBranchesResult';
+  worktreeId: string;
+  branches: BranchInfo[];
 }
 
 // ============================================================================
@@ -896,6 +916,7 @@ export type ClientMessage =
     | GitStatus
     | GitDiff
     | GitCommit
+    | GitListBranches
     | CreatePR
     | GetState
     | UpdateSettings
@@ -933,6 +954,7 @@ export type ServerMessage =
     | FileListResult
     | GitStatusResult
     | GitDiffResult
+    | GitListBranchesResult
     | Error
     | ErrorResponse
     | Ping

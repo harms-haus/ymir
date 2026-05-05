@@ -19,6 +19,9 @@ FileWrite,
 GitStatus,
 GitDiff,
 GitCommit,
+GitListBranches,
+BranchInfo,
+GitListBranchesResult,
 CreatePR,
 UpdateSettings,
 GetState
@@ -226,6 +229,38 @@ export function commitChanges(worktreeId: string, message: string, files?: strin
     files,
   };
   client.send(msg);
+}
+
+export function listBranches(worktreeId: string, workspaceId: string): Promise<BranchInfo[]> {
+  const client = getWebSocketClient();
+
+  return new Promise<BranchInfo[]>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      unsubResult();
+      unsubError();
+      reject(new Error('listBranches timed out after 30s'));
+    }, 30000);
+
+    const unsubResult = client.onMessage('GitListBranchesResult', (msg: GitListBranchesResult) => {
+      if (msg.worktreeId !== worktreeId) return;
+      clearTimeout(timeout);
+      unsubError();
+      resolve(msg.branches);
+    });
+
+    const unsubError = client.onMessage('Error', () => {
+      clearTimeout(timeout);
+      unsubResult();
+      reject(new Error('Failed to list branches'));
+    });
+
+    const message: GitListBranches = {
+      type: 'GitListBranches',
+      workspaceId,
+      worktreeId,
+    };
+    client.send(message);
+  });
 }
 
 // PR API

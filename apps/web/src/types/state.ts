@@ -293,6 +293,20 @@ export interface AlertDialogState extends AlertDialogConfig {
   open: boolean;
 }
 
+export interface ConfirmDialogConfig {
+  title: string;
+  description: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  destructive?: boolean;
+  onConfirm: () => void;
+  onCancel?: () => void;
+}
+
+export interface ConfirmDialogState extends ConfirmDialogConfig {
+  open: boolean;
+}
+
 export interface AppState {
   // Data slices
   workspaces: WorkspaceState[];
@@ -335,6 +349,8 @@ export interface AppState {
   changeBranchDialog: ChangeBranchDialogState;
 
   alertDialog: AlertDialogState | null;
+
+  confirmDialog: ConfirmDialogState | null;
 
   setWorkspaces: (workspaces: WorkspaceState[]) => void;
   setWorktrees: (worktrees: WorktreeState[]) => void;
@@ -416,6 +432,9 @@ export interface AppState {
 
   showAlertDialog: (config: AlertDialogConfig) => void;
   hideAlertDialog: () => void;
+
+  setConfirmDialog: (config: ConfirmDialogConfig) => void;
+  hideConfirmDialog: () => void;
 
   // ACP Accumulator actions
   dispatchAccumulator: (action: AcpAccumulatorAction) => void;
