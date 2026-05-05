@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useEffect } from 'react';
+import { useCallback, useMemo, useEffect, useState } from 'react';
 import { NodeApi } from 'react-arborist';
 import { useStore } from '../../store';
 import { useUIStore } from '../../uiStore';
@@ -30,6 +30,7 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
   const worktrees = useStore((state) => state.worktrees);
   const setWorkspaceSettingsDialogOpen = useStore((state) => state.setWorkspaceSettingsDialogOpen);
   const persistedExpandedIds = useUIStore((state) => state.expandedWorkspaceIds);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
 
   const initialOpenState = useMemo(() => {
     const openState: { [id: string]: boolean } = {};
@@ -145,10 +146,7 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
       setWorkspaceSettingsDialogOpen(true, workspaceId);
     },
     onRenameWorkspace: (workspaceId: string) => {
-      const newName = prompt('Enter new workspace name:');
-      if (newName && newName.trim()) {
-        renameWorkspace(workspaceId, newName.trim());
-      }
+      setRenamingId(workspaceId);
     },
     onRemoveWorkspace: (workspaceId: string) => {
       const workspace = useStore.getState().workspaces.find((w) => w.id === workspaceId);
@@ -266,6 +264,12 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
         openByDefault={false}
         initialOpenState={initialOpenState}
         onContextMenu={handleContextMenu}
+        renamingId={renamingId}
+        onRenameCommit={(id, newName) => {
+          renameWorkspace(id, newName);
+          setRenamingId(null);
+        }}
+        onRenameCancel={() => setRenamingId(null)}
       />
       <ContextMenu state={contextMenuState} items={menuItems} onAction={handleAction} closeMenu={closeMenu} />
     </div>
