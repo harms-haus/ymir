@@ -4,6 +4,7 @@ import { MainPanel } from '../main/MainPanel'
 import { ProjectPanel } from '../project/ProjectPanel'
 import { StatusBar } from './StatusBar'
 import { WorkspaceSettingsDialog } from '../dialogs/WorkspaceSettingsDialog'
+import { ChangeBranchDialog } from '../dialogs/ChangeBranchDialog'
 import { useUIStore } from '../../uiStore'
 import { useStore, selectWorkspaceSettingsDialog } from '../../store'
 import '../../styles/panels.css'
@@ -15,6 +16,8 @@ export function AppShell() {
   const setPanelSizes = useUIStore((state) => state.setPanelSizes)
   const settingsDialog = useStore(selectWorkspaceSettingsDialog)
   const setSettingsDialogOpen = useStore((s) => s.setWorkspaceSettingsDialogOpen)
+  const changeBranchDialog = useStore((s) => s.changeBranchDialog)
+  const setChangeBranchDialogOpen = useStore((s) => s.setChangeBranchDialogOpen)
 
   const handleLayout = (layout: { [id: string]: number }) => {
     const sidebar = layout['sidebar']
@@ -68,6 +71,12 @@ export function AppShell() {
         open={settingsDialog.isOpen}
         onOpenChange={(open) => setSettingsDialogOpen(open)}
         workspaceId={settingsDialog.workspaceId}
+      />
+      <ChangeBranchDialog
+        open={changeBranchDialog.isOpen}
+        onOpenChange={(open) => setChangeBranchDialogOpen(open)}
+        worktreeId={changeBranchDialog.worktreeId}
+        currentBranch={changeBranchDialog.currentBranch}
       />
     </div>
   )
