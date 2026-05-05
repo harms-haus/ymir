@@ -3,7 +3,9 @@ import { SidebarPanel } from '../sidebar/SidebarPanel'
 import { MainPanel } from '../main/MainPanel'
 import { ProjectPanel } from '../project/ProjectPanel'
 import { StatusBar } from './StatusBar'
+import { WorkspaceSettingsDialog } from '../dialogs/WorkspaceSettingsDialog'
 import { useUIStore } from '../../uiStore'
+import { useStore, selectWorkspaceSettingsDialog } from '../../store'
 import '../../styles/panels.css'
 
 export function AppShell() {
@@ -11,6 +13,8 @@ export function AppShell() {
   const mainPanelSize = useUIStore((state) => state.mainPanelSize)
   const projectPanelSize = useUIStore((state) => state.projectPanelSize)
   const setPanelSizes = useUIStore((state) => state.setPanelSizes)
+  const settingsDialog = useStore(selectWorkspaceSettingsDialog)
+  const setSettingsDialogOpen = useStore((s) => s.setWorkspaceSettingsDialogOpen)
 
   const handleLayout = (layout: { [id: string]: number }) => {
     const sidebar = layout['sidebar']
@@ -60,6 +64,11 @@ export function AppShell() {
         </Panel>
       </Group>
       <StatusBar />
+      <WorkspaceSettingsDialog
+        open={settingsDialog.isOpen}
+        onOpenChange={(open) => setSettingsDialogOpen(open)}
+        workspaceId={settingsDialog.workspaceId}
+      />
     </div>
   )
 }
