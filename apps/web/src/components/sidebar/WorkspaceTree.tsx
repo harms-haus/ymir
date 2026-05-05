@@ -29,6 +29,7 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
   const setActiveWorktree = useStore((state) => state.setActiveWorktree);
   const worktrees = useStore((state) => state.worktrees);
   const setWorkspaceSettingsDialogOpen = useStore((state) => state.setWorkspaceSettingsDialogOpen);
+  const setChangeBranchDialogOpen = useStore((state) => state.setChangeBranchDialogOpen);
   const persistedExpandedIds = useUIStore((state) => state.expandedWorkspaceIds);
   const [renamingId, setRenamingId] = useState<string | null>(null);
 
@@ -139,8 +140,8 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
       });
     },
     onChangeBranch: (worktreeId: string) => {
-      console.log('Change branch for worktree:', worktreeId);
-      // TODO: Implement branch change dialog
+      const worktree = worktrees.find((wt) => wt.id === worktreeId);
+      setChangeBranchDialogOpen(true, worktreeId, worktree?.branchName || '');
     },
     onSettings: (workspaceId: string) => {
       setWorkspaceSettingsDialogOpen(true, workspaceId);
