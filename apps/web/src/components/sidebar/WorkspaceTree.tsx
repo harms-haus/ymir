@@ -28,6 +28,7 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
   const toggleWorkspaceExpanded = useStore((state) => state.toggleWorkspaceExpanded);
   const setActiveWorktree = useStore((state) => state.setActiveWorktree);
   const worktrees = useStore((state) => state.worktrees);
+  const setWorkspaceSettingsDialogOpen = useStore((state) => state.setWorkspaceSettingsDialogOpen);
   const persistedExpandedIds = useUIStore((state) => state.expandedWorkspaceIds);
 
   const initialOpenState = useMemo(() => {
@@ -124,17 +125,24 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
       }
     },
     onDeleteWorktree: (worktreeId: string) => {
-      if (window.confirm('Are you sure you want to delete this worktree?')) {
-        deleteWorktree(worktreeId);
-      }
+      const worktree = useStore.getState().worktrees.find((wt) => wt.id === worktreeId);
+      const worktreeName = worktree?.branchName ?? 'this worktree';
+      useStore.getState().setConfirmDialog({
+        title: 'Delete Worktree',
+        description: `Are you sure you want to delete "${worktreeName}"? This action cannot be undone and will permanently remove the worktree and its files from disk.`,
+        confirmLabel: 'Delete',
+        destructive: true,
+        onConfirm: () => {
+          deleteWorktree(worktreeId);
+        },
+      });
     },
     onChangeBranch: (worktreeId: string) => {
       console.log('Change branch for worktree:', worktreeId);
       // TODO: Implement branch change dialog
     },
     onSettings: (workspaceId: string) => {
-      console.log('Open settings for workspace:', workspaceId);
-      // TODO: Open workspace settings dialog
+      setWorkspaceSettingsDialogOpen(true, workspaceId);
     },
     onRenameWorkspace: (workspaceId: string) => {
       const newName = prompt('Enter new workspace name:');
@@ -143,10 +151,18 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
       }
     },
     onRemoveWorkspace: (workspaceId: string) => {
-      if (window.confirm('Are you sure you want to remove this workspace?')) {
-        useStore.getState().removeWorkspace(workspaceId);
-        removeWorkspace(workspaceId);
-      }
+      const workspace = useStore.getState().workspaces.find((w) => w.id === workspaceId);
+      const workspaceName = workspace?.name ?? 'this workspace';
+      useStore.getState().setConfirmDialog({
+        title: 'Remove Workspace',
+        description: `Are you sure you want to remove "${workspaceName}"? This will remove it from the sidebar but will not delete files from disk.`,
+        confirmLabel: 'Remove',
+        destructive: true,
+        onConfirm: () => {
+          useStore.getState().removeWorkspace(workspaceId);
+          removeWorkspace(workspaceId);
+        },
+      });
     },
   });
 
