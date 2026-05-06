@@ -13,6 +13,7 @@ export interface WorkspaceState {
   color?: string;
   icon?: string;
   worktreeBaseDir?: string;
+  agent?: string;
   settings?: Record<string, unknown>;
   createdAt: number;
   updatedAt: number;
@@ -34,6 +35,9 @@ export interface WorktreeState {
   isMain: boolean;
   gitStats?: GitStats;
   createdAt: number;
+  color?: string;
+  icon?: string;
+  agentType?: string;
 }
 
 // Agent session state
@@ -116,6 +120,11 @@ export interface ChangeBranchDialogState {
   isOpen: boolean;
   worktreeId: string | null;
   currentBranch: string;
+}
+
+export interface WorktreeSettingsDialogState {
+  isOpen: boolean;
+  worktreeId: string | null;
 }
 
 // ============================================================================
@@ -348,6 +357,8 @@ export interface AppState {
 
   changeBranchDialog: ChangeBranchDialogState;
 
+  worktreeSettingsDialog: WorktreeSettingsDialogState;
+
   alertDialog: AlertDialogState | null;
 
   confirmDialog: ConfirmDialogState | null;
@@ -429,6 +440,9 @@ export interface AppState {
 
   setChangeBranchDialogOpen: (isOpen: boolean, worktreeId?: string, currentBranch?: string) => void;
   resetChangeBranchDialog: () => void;
+
+  setWorktreeSettingsDialogOpen: (isOpen: boolean, worktreeId?: string) => void;
+  resetWorktreeSettingsDialog: () => void;
 
   showAlertDialog: (config: AlertDialogConfig) => void;
   hideAlertDialog: () => void;

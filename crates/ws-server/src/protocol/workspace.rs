@@ -15,6 +15,7 @@ pub struct WorkspaceCreate {
     pub color: Option<String>,
     pub icon: Option<String>,
     pub worktree_base_dir: Option<String>,
+    pub agent: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
@@ -46,6 +47,7 @@ pub struct WorkspaceUpdate {
     pub color: Option<String>,
     pub icon: Option<String>,
     pub worktree_base_dir: Option<String>,
+    pub agent: Option<String>,
     pub settings: Option<String>,
     #[serde(with = "optional_uuid_serde")]
     #[ts(type = "string")]
@@ -64,6 +66,7 @@ pub struct WorkspaceData {
     pub color: Option<String>,
     pub icon: Option<String>,
     pub worktree_base_dir: Option<String>,
+    pub agent: Option<String>,
     pub settings: Option<String>,
     pub created_at: u64,
     pub updated_at: u64,

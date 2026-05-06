@@ -26,6 +26,7 @@ export type ContextMenuAction =
   | 'close-right'
   | 'close-left'
   | 'close-others'
+  | 'edit-worktree-settings'
 
 export interface ContextMenuCallbacks {
   onCreateWorktree?: (workspaceId: string) => void
@@ -33,6 +34,7 @@ export interface ContextMenuCallbacks {
   onChangeBranch?: (worktreeId: string) => void
   onMerge?: (worktreeId: string) => void
   onViewDiff?: (worktreeId: string) => void
+  onEditWorktreeSettings?: (worktreeId: string) => void
   onSettings?: (workspaceId: string) => void
   onRenameWorkspace?: (workspaceId: string) => void
   onRemoveWorkspace?: (workspaceId: string) => void
@@ -111,6 +113,11 @@ export function useContextMenu(callbacks: ContextMenuCallbacks = {}) {
       case 'view-diff':
         if (targetType === 'worktree') {
           callbacks.onViewDiff?.(targetId)
+        }
+        break
+      case 'edit-worktree-settings':
+        if (targetType === 'worktree') {
+          callbacks.onEditWorktreeSettings?.(targetId)
         }
         break
       case 'settings':

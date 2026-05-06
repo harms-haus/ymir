@@ -418,6 +418,9 @@ mod tests {
                 path: expected_path.clone(),
                 status: "active".to_string(),
                 is_main: false,
+                color: None,
+                icon: None,
+                agent_type: None,
             },
         );
 
@@ -619,6 +622,7 @@ mod tests {
             color: String::new(),
             icon: String::new(),
             worktree_base_dir: String::new(),
+            agent: "hermes".to_string(),
             settings_json: String::new(),
             created_at: now.clone(),
             updated_at: now,
@@ -633,6 +637,9 @@ mod tests {
             status: "active".to_string(),
             created_at: chrono::Utc::now().to_rfc3339(),
             is_main: false,
+            color: None,
+            icon: None,
+            agent_type: None,
         };
         state.db.create_worktree(&db_worktree).await.expect("Failed to create worktree");
 
@@ -645,6 +652,9 @@ mod tests {
                 path: "/tmp/test-worktree".to_string(),
                 status: "active".to_string(),
                 is_main: false,
+                color: None,
+                icon: None,
+                agent_type: None,
             },
         );
 

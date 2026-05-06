@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Dialog } from '@base-ui/react/dialog';
+import { RadioGroup } from '@base-ui/react/radio-group';
 import { useStore, selectWorkspaceById } from '../../store';
 import { getWebSocketClient } from '../../lib/ws';
 import type { WorkspaceUpdate, WorkspaceUpdated, WorkspaceDeleted, Error as ErrorMessage } from '../../types/protocol';
@@ -28,6 +29,23 @@ const PRESET_ICONS = [
   'ri-stack-line',
 ];
 
+type AgentOption = 'hermes' | 'claude' | 'opencode' | 'pi' | 'none';
+
+interface AgentConfig {
+  value: AgentOption;
+  icon: string;
+  label: string;
+  description: string;
+}
+
+const AGENT_OPTIONS: AgentConfig[] = [
+  { value: 'hermes', icon: 'ri-robot-line', label: 'Hermes', description: 'Self-improving AI agent with skills & memory' },
+  { value: 'claude', icon: 'ri-robot-line', label: 'Claude', description: 'Via ACP adapter' },
+  { value: 'opencode', icon: 'ri-terminal-box-line', label: 'Opencode', description: 'Native ACP support' },
+  { value: 'pi', icon: 'ri-code-s-slash-line', label: 'Pi', description: 'Via pi-acp adapter' },
+  { value: 'none', icon: 'ri-forbid-line', label: 'No agent', description: 'Start with terminal only' },
+];
+
 interface WorkspaceSettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -50,6 +68,7 @@ export function WorkspaceSettingsDialog({
   const [color, setColor] = useState('');
   const [icon, setIcon] = useState('');
   const [worktreeBaseDir, setWorktreeBaseDir] = useState('.worktrees/');
+  const [agent, setAgent] = useState<AgentOption>('hermes');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -67,6 +86,7 @@ export function WorkspaceSettingsDialog({
       setColor(workspace.color || PRESET_COLORS[4].value);
       setIcon(workspace.icon || PRESET_ICONS[0]);
       setWorktreeBaseDir(workspace.worktreeBaseDir || '.worktrees/');
+      setAgent((workspace.agent as AgentOption) || 'hermes');
       setIsSubmitting(false);
       setShowDeleteConfirm(false);
     }
@@ -125,6 +145,7 @@ export function WorkspaceSettingsDialog({
         color,
         icon,
         worktreeBaseDir,
+        agent: agent === 'none' ? undefined : agent,
         requestId,
       };
 
@@ -203,7 +224,7 @@ export function WorkspaceSettingsDialog({
         message: error instanceof Error ? error.message : 'Failed to save settings',
       });
     }
-  }, [workspace, workspaceId, color, icon, worktreeBaseDir, onOpenChange, addNotification]);
+  }, [workspace, workspaceId, color, icon, worktreeBaseDir, agent, onOpenChange, addNotification]);
 
   const handleDeleteClick = useCallback(() => {
     if (workspaceWorktrees.length > 0) {
@@ -627,6 +648,109 @@ export function WorkspaceSettingsDialog({
               >
                 Relative to root path
               </span>
+            </div>
+
+            {/* Agent selector */}
+            <div style={{ marginBottom: '24px' }}>
+              <div
+                id="ws-agent-label"
+                style={{
+                  marginBottom: '8px',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  color: 'hsl(var(--foreground))',
+                }}
+              >
+                Default Agent
+              </div>
+              <RadioGroup
+                onValueChange={(value) => setAgent(value as AgentOption)}
+                aria-labelledby="ws-agent-label"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                }}
+              >
+                {AGENT_OPTIONS.map((option) => {
+                  const isSelected = agent === option.value;
+                  return (
+                    <label
+                      key={option.value}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '12px',
+                        borderRadius: '6px',
+                        border: `1px solid ${isSelected ? 'hsl(var(--primary))' : 'hsl(var(--border))'}`,
+                        backgroundColor: isSelected ? 'hsl(var(--primary) / 0.1)' : 'transparent',
+                        cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '12px',
+                          flex: 1,
+                        }}
+                      >
+                        <i
+                          className={option.icon}
+                          style={{
+                            fontSize: '20px',
+                            color: isSelected
+                              ? 'hsl(var(--primary))'
+                              : 'hsl(var(--muted-foreground))',
+                          }}
+                        />
+                        <div>
+                          <div
+                            style={{
+                              fontSize: '14px',
+                              fontWeight: 500,
+                              color: 'hsl(var(--foreground))',
+                            }}
+                          >
+                            {option.label}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: '12px',
+                              color: 'hsl(var(--muted-foreground))',
+                            }}
+                          >
+                            {option.description}
+                          </div>
+                        </div>
+                      </div>
+                      <div
+                        style={{
+                          width: '18px',
+                          height: '18px',
+                          borderRadius: '50%',
+                          border: `2px solid ${isSelected ? 'hsl(var(--primary))' : 'hsl(var(--border))'}`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        {isSelected && (
+                          <div
+                            style={{
+                              width: '10px',
+                              height: '10px',
+                              borderRadius: '50%',
+                              backgroundColor: 'hsl(var(--primary))',
+                            }}
+                          />
+                        )}
+                      </div>
+                    </label>
+                  );
+                })}
+              </RadioGroup>
             </div>
 
             <div

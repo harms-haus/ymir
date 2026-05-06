@@ -107,6 +107,9 @@ fn payload_to_bridge_message(payload: &ServerMessagePayload) -> BridgeMessage {
         ServerMessagePayload::WorktreeChanged(_) => BridgeMessage::WorktreeEvent {
             payload: serde_json::to_value(payload).unwrap_or_default(),
         },
+        ServerMessagePayload::WorktreeUpdated(_) => BridgeMessage::WorktreeEvent {
+            payload: serde_json::to_value(payload).unwrap_or_default(),
+        },
         ServerMessagePayload::WorktreeListResult(_) => BridgeMessage::WorktreeEvent {
             payload: serde_json::to_value(payload).unwrap_or_default(),
         },
@@ -114,6 +117,9 @@ fn payload_to_bridge_message(payload: &ServerMessagePayload) -> BridgeMessage {
             payload: serde_json::to_value(payload).unwrap_or_default(),
         },
         ServerMessagePayload::WorktreeDetailsResult(_) => BridgeMessage::WorktreeEvent {
+            payload: serde_json::to_value(payload).unwrap_or_default(),
+        },
+        ServerMessagePayload::WorktreeUpdated(_) => BridgeMessage::WorktreeEvent {
             payload: serde_json::to_value(payload).unwrap_or_default(),
         },
 
@@ -378,6 +384,7 @@ mod tests {
             color: None,
             icon: None,
             worktree_base_dir: None,
+            agent: None,
             settings: None,
             created_at: 0,
             updated_at: 0,
@@ -622,6 +629,7 @@ mod tests {
             color: None,
             icon: None,
             worktree_base_dir: None,
+            agent: None,
             settings: None,
             created_at: 0,
             updated_at: 0,
@@ -654,6 +662,9 @@ mod tests {
             created_at: 0,
             is_main: true,
             git_stats: None,
+            color: None,
+            icon: None,
+            agent_type: None,
         };
         let worktree_payloads = vec![
             ServerMessagePayload::WorktreeCreated(WorktreeCreated {

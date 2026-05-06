@@ -20,23 +20,27 @@ pub const CLIENT_INACTIVITY_TIMEOUT_SECS: u64 = 30;
 /// In-memory state for a workspace
 #[derive(Debug, Clone)]
 pub struct WorkspaceState {
-    pub id: Uuid,
-    pub name: String,
-    pub root_path: String,
-    pub color: Option<String>,
-    pub icon: Option<String>,
-    pub worktree_base_dir: Option<String>,
+ pub id: Uuid,
+ pub name: String,
+ pub root_path: String,
+ pub color: Option<String>,
+ pub icon: Option<String>,
+ pub worktree_base_dir: Option<String>,
+ pub agent: Option<String>,
 }
 
 /// In-memory state for a worktree
 #[derive(Debug, Clone)]
 pub struct WorktreeState {
-    pub id: Uuid,
-    pub workspace_id: Uuid,
-    pub branch_name: String,
-    pub path: String,
-    pub status: String,
-    pub is_main: bool,
+ pub id: Uuid,
+ pub workspace_id: Uuid,
+ pub branch_name: String,
+ pub path: String,
+ pub status: String,
+ pub is_main: bool,
+ pub color: Option<String>,
+ pub icon: Option<String>,
+ pub agent_type: Option<String>,
 }
 
 /// In-memory state for an agent session
@@ -189,17 +193,18 @@ impl AppState {
                         if !std::path::Path::new(&ws.root_path).exists() {
                             tracing::warn!(workspace_id = %id, path = %ws.root_path, "Workspace root path does not exist on this machine — path may be from a different machine");
                         }
-                        workspaces.insert(
-                            id,
-                            WorkspaceState {
-                                id,
-                                name: ws.name,
-                                root_path: ws.root_path,
-                                color: if ws.color.is_empty() { None } else { Some(ws.color) },
-                                icon: if ws.icon.is_empty() { None } else { Some(ws.icon) },
-                                worktree_base_dir: if ws.worktree_base_dir.is_empty() { None } else { Some(ws.worktree_base_dir) },
-                            },
-                        );
+workspaces.insert(
+id,
+WorkspaceState {
+id,
+name: ws.name,
+root_path: ws.root_path,
+color: if ws.color.is_empty() { None } else { Some(ws.color) },
+icon: if ws.icon.is_empty() { None } else { Some(ws.icon) },
+worktree_base_dir: if ws.worktree_base_dir.is_empty() { None } else { Some(ws.worktree_base_dir) },
+agent: if ws.agent.is_empty() { None } else { Some(ws.agent) },
+},
+);
                     }
                 }
             }
@@ -218,17 +223,20 @@ impl AppState {
                         if !std::path::Path::new(&wt.path).exists() {
                             tracing::warn!(worktree_id = %id, branch = %wt.branch_name, path = %wt.path, "Worktree path does not exist on this machine — path may be from a different machine");
                         }
-                        worktrees.insert(
-                            id,
-                            WorktreeState {
-                                id,
-                                workspace_id,
-                                branch_name: wt.branch_name,
-                                path: wt.path,
-                                status: wt.status,
-                                is_main: wt.is_main,
-                            },
-                        );
+worktrees.insert(
+id,
+WorktreeState {
+id,
+workspace_id,
+branch_name: wt.branch_name,
+path: wt.path,
+status: wt.status,
+is_main: wt.is_main,
+color: wt.color,
+icon: wt.icon,
+agent_type: wt.agent_type,
+},
+);
                     }
                 }
             }

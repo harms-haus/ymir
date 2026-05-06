@@ -32,7 +32,7 @@ use super::{
     worktree::{
         GetWorktreeDetails, WorktreeChangeBranch, WorktreeChanged, WorktreeCreate, WorktreeCreated,
         WorktreeData, WorktreeDelete, WorktreeDeleted, WorktreeDetailsResult, WorktreeList,
-        WorktreeListResult, WorktreeMerge, WorktreeStatus,
+        WorktreeListResult, WorktreeMerge, WorktreeStatus, WorktreeUpdate, WorktreeUpdated,
     },
 };
 
@@ -65,6 +65,7 @@ pub enum ClientMessagePayload {
     WorktreeMerge(WorktreeMerge),
     WorktreeList(WorktreeList),
     WorktreeChangeBranch(WorktreeChangeBranch),
+    WorktreeUpdate(WorktreeUpdate),
     GetWorktreeDetails(GetWorktreeDetails),
     AgentSpawn(AgentSpawn),
     AgentSend(AgentSend),
@@ -108,6 +109,7 @@ pub enum ServerMessagePayload {
     WorktreeCreated(WorktreeCreated),
     WorktreeDeleted(WorktreeDeleted),
     WorktreeChanged(WorktreeChanged),
+    WorktreeUpdated(WorktreeUpdated),
     WorktreeListResult(WorktreeListResult),
     WorktreeStatus(WorktreeStatus),
     WorktreeDetailsResult(WorktreeDetailsResult),

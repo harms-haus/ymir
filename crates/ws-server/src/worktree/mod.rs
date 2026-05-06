@@ -5,8 +5,9 @@
 
 use crate::db::{ActivityLogEntry, Worktree as DbWorktree};
 use crate::protocol::{
-  ServerMessage, ServerMessagePayload, WorktreeChangeBranch, WorktreeChanged, WorktreeCreate,
-  WorktreeCreated, WorktreeData, WorktreeDelete, WorktreeDeleted, WorktreeList, WorktreeStatus,
+ ServerMessage, ServerMessagePayload, WorktreeChangeBranch, WorktreeChanged, WorktreeCreate,
+ WorktreeCreated, WorktreeData, WorktreeDelete, WorktreeDeleted, WorktreeList, WorktreeStatus,
+ WorktreeUpdate, WorktreeUpdated,
 };
 use crate::state::AppState;
 use anyhow::{bail, Context, Result};
@@ -137,6 +138,9 @@ pub async fn create(state: Arc<AppState>, msg: WorktreeCreate) -> Result<Worktre
         status: "active".to_string(),
         created_at: chrono::Utc::now().to_rfc3339(),
         is_main: false,
+        color: msg.color.clone(),
+        icon: msg.icon.clone(),
+        agent_type: msg.agent_type.clone(),
     };
 
     state
@@ -145,18 +149,21 @@ pub async fn create(state: Arc<AppState>, msg: WorktreeCreate) -> Result<Worktre
         .await
         .context("Failed to create worktree in database")?;
 
-    // Add to in-memory state
-    state.worktrees.write().await.insert(
-        worktree_id,
-        crate::state::WorktreeState {
-            id: worktree_id,
-            workspace_id: msg.workspace_id,
-            branch_name: worktree.branch_name.clone(),
-            path: worktree.path.clone(),
-            status: worktree.status.clone(),
-            is_main: false,
-        },
-    );
+ // Add to in-memory state
+ state.worktrees.write().await.insert(
+ worktree_id,
+ crate::state::WorktreeState {
+ id: worktree_id,
+ workspace_id: msg.workspace_id,
+ branch_name: worktree.branch_name.clone(),
+ path: worktree.path.clone(),
+ status: worktree.status.clone(),
+ is_main: false,
+ color: msg.color.clone(),
+ icon: msg.icon.clone(),
+ agent_type: msg.agent_type.clone(),
+ },
+ );
 
     // Log activity
     let activity = ActivityLogEntry {
@@ -181,18 +188,21 @@ pub async fn create(state: Arc<AppState>, msg: WorktreeCreate) -> Result<Worktre
     let created_at = parse_worktree_created_at(&worktree.created_at)
         .context("Failed to parse stored worktree created_at")?;
 
-    Ok(WorktreeCreated {
-        worktree: WorktreeData {
-            id: worktree_id,
-            workspace_id: msg.workspace_id,
-            branch_name: worktree.branch_name,
-            path: worktree.path,
-            status: worktree.status,
-            created_at,
-            is_main: false,
-            git_stats: None,
-        },
-    })
+ Ok(WorktreeCreated {
+ worktree: WorktreeData {
+ id: worktree_id,
+ workspace_id: msg.workspace_id,
+ branch_name: worktree.branch_name,
+ path: worktree.path,
+ status: worktree.status,
+ created_at,
+ is_main: false,
+ git_stats: None,
+ color: msg.color,
+ icon: msg.icon,
+ agent_type: msg.agent_type,
+ },
+ })
 }
 
 /// Delete a git worktree
@@ -359,23 +369,26 @@ pub async fn list(state: Arc<AppState>, msg: WorktreeList) -> Result<Vec<Worktre
     .await
     .context("Failed to list worktrees from database")?;
 
-  let mut result: Vec<WorktreeData> = worktrees
-    .into_iter()
-    .map(|wt| {
-      Ok(WorktreeData {
-        id: Uuid::parse_str(&wt.id)
-          .with_context(|| format!("Invalid worktree id in database: {}", wt.id))?,
-        workspace_id: Uuid::parse_str(&wt.workspace_id).with_context(|| {
-          format!("Invalid workspace id in worktree data: {}", wt.workspace_id)
-        })?,
-        branch_name: wt.branch_name,
-        path: wt.path,
-        status: wt.status,
-        created_at: parse_worktree_created_at(&wt.created_at)?,
-        is_main: wt.is_main,
-        git_stats: None,
-      })
-    })
+ let mut result: Vec<WorktreeData> = worktrees
+ .into_iter()
+ .map(|wt| {
+ Ok(WorktreeData {
+ id: Uuid::parse_str(&wt.id)
+ .with_context(|| format!("Invalid worktree id in database: {}", wt.id))?,
+ workspace_id: Uuid::parse_str(&wt.workspace_id).with_context(|| {
+ format!("Invalid workspace id in worktree data: {}", wt.workspace_id)
+ })?,
+ branch_name: wt.branch_name,
+ path: wt.path,
+ status: wt.status,
+ created_at: parse_worktree_created_at(&wt.created_at)?,
+ is_main: wt.is_main,
+ git_stats: None,
+ color: wt.color,
+ icon: wt.icon,
+ agent_type: wt.agent_type,
+ })
+ })
     .collect::<Result<Vec<_>>>()?;
 
   result.sort_by(|a, b| {
@@ -447,19 +460,101 @@ pub async fn change_branch(
 
     let created_at = parse_worktree_created_at(&worktree.created_at)?;
 
-    Ok(WorktreeChanged {
-        worktree: WorktreeData {
-            id: msg.worktree_id,
-            workspace_id: Uuid::parse_str(&worktree.workspace_id)
-                .context("Invalid workspace id")?,
-            branch_name: msg.new_branch_name,
-            path: worktree.path,
-            status: worktree.status,
-            created_at,
-            is_main: worktree.is_main,
-            git_stats: None,
-        },
-    })
+ Ok(WorktreeChanged {
+ worktree: WorktreeData {
+ id: msg.worktree_id,
+ workspace_id: Uuid::parse_str(&worktree.workspace_id)
+ .context("Invalid workspace id")?,
+ branch_name: msg.new_branch_name,
+ path: worktree.path,
+ status: worktree.status,
+ created_at,
+ is_main: worktree.is_main,
+ git_stats: None,
+ color: worktree.color,
+ icon: worktree.icon,
+ agent_type: worktree.agent_type,
+ },
+ })
+}
+
+/// Update worktree settings (color, icon, agent_type)
+#[instrument(skip(state), fields(worktree_id = %msg.worktree_id))]
+pub async fn update_settings(
+ state: Arc<AppState>,
+ msg: WorktreeUpdate,
+) -> Result<WorktreeUpdated> {
+ debug!("Updating settings for worktree: {}", msg.worktree_id);
+
+ // Get worktree from database to verify it exists
+ let worktree = state
+ .db
+ .get_worktree(&msg.worktree_id.to_string())
+ .await
+ .context("Failed to fetch worktree from database")?
+ .ok_or_else(|| anyhow::anyhow!("Worktree not found: {}", msg.worktree_id))?;
+
+ // Update settings in database
+ let updated = state
+ .db
+ .update_worktree_settings(
+ &msg.worktree_id.to_string(),
+ msg.color.as_deref(),
+ msg.icon.as_deref(),
+ msg.agent_type.as_deref(),
+ )
+ .await
+ .context("Failed to update worktree settings in database")?;
+
+ if !updated {
+ anyhow::bail!("Worktree not found: {}", msg.worktree_id);
+ }
+
+ // Update in-memory state for all fields that were Some in the message
+ state.worktrees.write().await.entry(msg.worktree_id).and_modify(|wt| {
+ if let Some(color) = &msg.color {
+ wt.color = Some(color.clone());
+ }
+ if let Some(icon) = &msg.icon {
+ wt.icon = Some(icon.clone());
+ }
+ if let Some(agent_type) = &msg.agent_type {
+ wt.agent_type = Some(agent_type.clone());
+ }
+ });
+
+ // Fetch the updated worktree to get fresh data
+ let updated_worktree = state
+ .db
+ .get_worktree(&msg.worktree_id.to_string())
+ .await
+ .context("Failed to fetch updated worktree")?
+ .ok_or_else(|| anyhow::anyhow!("Worktree disappeared after update"))?;
+
+ let created_at = parse_worktree_created_at(&updated_worktree.created_at)?;
+
+ let result = WorktreeUpdated {
+ worktree: WorktreeData {
+ id: msg.worktree_id,
+ workspace_id: Uuid::parse_str(&updated_worktree.workspace_id)
+ .context("Invalid workspace id")?,
+ branch_name: updated_worktree.branch_name,
+ path: updated_worktree.path,
+ status: updated_worktree.status,
+ created_at,
+ is_main: updated_worktree.is_main,
+ git_stats: None,
+ color: updated_worktree.color,
+ icon: updated_worktree.icon,
+ agent_type: updated_worktree.agent_type,
+ },
+ };
+
+ // Broadcast the update to all clients
+ let broadcast_msg = ServerMessage::new(ServerMessagePayload::WorktreeUpdated(result.clone()));
+ state.broadcast(broadcast_msg).await;
+
+ Ok(result)
 }
 
 /// Create a main worktree entry for a workspace (represents the main repository, not a separate worktree)
@@ -487,6 +582,9 @@ pub async fn create_main(
     status: "active".to_string(),
     created_at: chrono::Utc::now().to_rfc3339(),
     is_main: true,
+    color: None,
+    icon: None,
+    agent_type: None,
   };
 
   state
@@ -495,17 +593,20 @@ pub async fn create_main(
     .await
     .context("Failed to create main worktree in database")?;
 
-  state.worktrees.write().await.insert(
-    worktree_id,
-    crate::state::WorktreeState {
-      id: worktree_id,
-      workspace_id,
-      branch_name: worktree.branch_name.clone(),
-      path: worktree.path.clone(),
-      status: worktree.status.clone(),
-      is_main: true,
-    },
-  );
+ state.worktrees.write().await.insert(
+ worktree_id,
+ crate::state::WorktreeState {
+ id: worktree_id,
+ workspace_id,
+ branch_name: worktree.branch_name.clone(),
+ path: worktree.path.clone(),
+ status: worktree.status.clone(),
+ is_main: true,
+ color: None,
+ icon: None,
+ agent_type: None,
+ },
+ );
 
   info!("Created main worktree entry for workspace: {} at {}", workspace_id, workspace.root_path);
 
@@ -528,16 +629,19 @@ pub async fn create_main(
 
     let created_at = parse_worktree_created_at(&worktree.created_at)?;
 
-    Ok(WorktreeData {
-        id: worktree_id,
-        workspace_id,
-        branch_name: worktree.branch_name,
-        path: worktree.path,
-        status: worktree.status,
-        created_at,
-        is_main: true,
-        git_stats: None,
-    })
+ Ok(WorktreeData {
+ id: worktree_id,
+ workspace_id,
+ branch_name: worktree.branch_name,
+ path: worktree.path,
+ status: worktree.status,
+ created_at,
+ is_main: true,
+ git_stats: None,
+ color: worktree.color,
+ icon: worktree.icon,
+ agent_type: worktree.agent_type,
+ })
 }
 
 #[cfg(test)]
@@ -582,6 +686,7 @@ mod tests {
             color: "#3B82F6".to_string(),
             icon: "folder".to_string(),
             worktree_base_dir: ".git/worktrees".to_string(),
+            agent: "hermes".to_string(),
             settings_json: "{}".to_string(),
             created_at: chrono::Utc::now().to_rfc3339(),
             updated_at: chrono::Utc::now().to_rfc3339(),
@@ -601,6 +706,7 @@ mod tests {
                 color: Some(workspace.color.clone()),
                 icon: Some(workspace.icon.clone()),
                 worktree_base_dir: Some(workspace.worktree_base_dir.clone()),
+                agent: Some(workspace.agent.clone()),
             },
         );
 
@@ -624,6 +730,8 @@ mod tests {
             workspace_id,
             branch_name: branch_name.clone(),
             agent_type: Some("coder".to_string()),
+            color: None,
+            icon: None,
             request_id: None,
             use_existing_branch: None,
         };
@@ -662,6 +770,8 @@ mod tests {
             workspace_id,
             branch_name: branch_name.clone(),
             agent_type: None,
+            color: None,
+            icon: None,
             request_id: None,
             use_existing_branch: None,
         };
@@ -718,6 +828,8 @@ mod tests {
             workspace_id,
             branch_name,
             agent_type: None,
+            color: None,
+            icon: None,
             request_id: None,
             use_existing_branch: None,
         };
@@ -746,6 +858,8 @@ mod tests {
             workspace_id,
             branch_name: branch_name.clone(),
             agent_type: None,
+            color: None,
+            icon: None,
             request_id: None,
             use_existing_branch: None,
         };
@@ -800,6 +914,9 @@ mod tests {
                 status: "active".to_string(),
                 created_at: chrono::Utc::now().to_rfc3339(),
                 is_main: false,
+                color: None,
+                icon: None,
+                agent_type: None,
             })
             .await
             .expect("Failed to create invalid worktree record");
@@ -819,6 +936,8 @@ mod tests {
                 workspace_id,
                 branch_name: format!("feature/test-{}", i),
                 agent_type: None,
+                color: None,
+                icon: None,
                 request_id: None,
                 use_existing_branch: None,
             };
@@ -851,6 +970,8 @@ mod tests {
             workspace_id,
             branch_name: branch_name.clone(),
             agent_type: None,
+            color: None,
+            icon: None,
             request_id: None,
             use_existing_branch: None,
         };
@@ -866,5 +987,120 @@ mod tests {
         let status = status_result.unwrap();
         assert_eq!(status.worktree_id, worktree_id);
         assert_eq!(status.status, "active");
+    }
+
+    #[tokio::test]
+    async fn test_update_settings() {
+        let (state, temp_dir) = create_test_state().await;
+        let (workspace_id, _) = create_test_workspace(&state, &temp_dir).await;
+
+        let unique_id = Uuid::new_v4()
+            .to_string()
+            .split('-')
+            .next()
+            .unwrap()
+            .to_string();
+        let branch_name = format!("feature/settings-test-{}", unique_id);
+
+        let create_msg = WorktreeCreate {
+            workspace_id,
+            branch_name,
+            agent_type: None,
+            color: None,
+            icon: None,
+            request_id: None,
+            use_existing_branch: None,
+        };
+
+        let created = create(state.clone(), create_msg)
+            .await
+            .expect("Failed to create worktree");
+        let worktree_id = created.worktree.id;
+
+        // Update settings
+        let update_msg = WorktreeUpdate {
+            worktree_id,
+            color: Some("#FF5733".to_string()),
+            icon: Some("star".to_string()),
+            agent_type: Some("claude".to_string()),
+            request_id: None,
+        };
+
+        let result = update_settings(state.clone(), update_msg).await;
+        assert!(result.is_ok(), "Failed to update settings: {:?}", result.err());
+
+        let updated = result.unwrap();
+        assert_eq!(updated.worktree.color, Some("#FF5733".to_string()));
+        assert_eq!(updated.worktree.icon, Some("star".to_string()));
+        assert_eq!(updated.worktree.agent_type, Some("claude".to_string()));
+
+        // Verify in-memory state was updated
+        let worktrees = state.worktrees.read().await;
+        let wt_state = worktrees.get(&worktree_id).expect("Worktree should be in memory");
+        assert_eq!(wt_state.color, Some("#FF5733".to_string()));
+        assert_eq!(wt_state.icon, Some("star".to_string()));
+        assert_eq!(wt_state.agent_type, Some("claude".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_update_settings_partial() {
+        let (state, temp_dir) = create_test_state().await;
+        let (workspace_id, _) = create_test_workspace(&state, &temp_dir).await;
+
+        let unique_id = Uuid::new_v4()
+            .to_string()
+            .split('-')
+            .next()
+            .unwrap()
+            .to_string();
+        let branch_name = format!("feature/partial-settings-{}", unique_id);
+
+        let create_msg = WorktreeCreate {
+            workspace_id,
+            branch_name,
+            agent_type: None,
+            color: None,
+            icon: None,
+            request_id: None,
+            use_existing_branch: None,
+        };
+
+        let created = create(state.clone(), create_msg)
+            .await
+            .expect("Failed to create worktree");
+        let worktree_id = created.worktree.id;
+
+        // Update only color, leave other fields None
+        let update_msg = WorktreeUpdate {
+            worktree_id,
+            color: Some("#00FF00".to_string()),
+            icon: None,
+            agent_type: None,
+            request_id: None,
+        };
+
+        let result = update_settings(state.clone(), update_msg).await;
+        assert!(result.is_ok());
+
+        let updated = result.unwrap();
+        assert_eq!(updated.worktree.color, Some("#00FF00".to_string()));
+        assert_eq!(updated.worktree.icon, None);
+        assert_eq!(updated.worktree.agent_type, None);
+    }
+
+    #[tokio::test]
+    async fn test_update_settings_nonexistent_worktree() {
+        let (state, _temp_dir) = create_test_state().await;
+
+        let update_msg = WorktreeUpdate {
+            worktree_id: Uuid::new_v4(),
+            color: Some("#FF0000".to_string()),
+            icon: None,
+            agent_type: None,
+            request_id: None,
+        };
+
+        let result = update_settings(state.clone(), update_msg).await;
+        assert!(result.is_err(), "Should fail for nonexistent worktree");
     }
 }

@@ -56,6 +56,7 @@ fn test_workspace_create_roundtrip() {
         color: Some("#ff0000".to_string()),
         icon: Some("folder".to_string()),
         worktree_base_dir: Some(".worktrees".to_string()),
+        agent: Some("hermes".to_string()),
     }));
     test_json_roundtrip(msg);
 }
@@ -79,11 +80,12 @@ fn test_workspace_rename_roundtrip() {
 
 #[test]
 fn test_workspace_update_roundtrip() {
-    let msg = ClientMessage::new(ClientMessagePayload::WorkspaceUpdate(WorkspaceUpdate {
+        let msg = ClientMessage::new(ClientMessagePayload::WorkspaceUpdate(WorkspaceUpdate {
         workspace_id: Uuid::new_v4(),
         color: Some("#00ff00".to_string()),
         icon: Some("code".to_string()),
         worktree_base_dir: Some("custom-worktrees".to_string()),
+        agent: None,
         settings: Some("{\"theme\":\"dark\"}".to_string()),
         request_id: Some(Uuid::new_v4()),
     }));
@@ -96,6 +98,8 @@ fn test_worktree_create_roundtrip() {
         workspace_id: Uuid::new_v4(),
         branch_name: "feature-branch".to_string(),
         agent_type: Some("coder".to_string()),
+        color: Some("#FF5733".to_string()),
+        icon: Some("git-branch".to_string()),
         request_id: None,
         use_existing_branch: None,
     }));
@@ -291,6 +295,7 @@ fn test_client_message_sizes_are_reasonable() {
                 color: None,
                 icon: None,
                 worktree_base_dir: None,
+                agent: None,
             })),
         ),
         (
@@ -373,6 +378,7 @@ fn test_workspace_updated_roundtrip() {
             color: None,
             icon: None,
             worktree_base_dir: None,
+            agent: None,
             settings: None,
             created_at: 0,
             updated_at: 0,
@@ -393,6 +399,9 @@ fn test_worktree_created_roundtrip() {
             created_at: 0,
             is_main: false,
             git_stats: None,
+            color: None,
+            icon: None,
+            agent_type: None,
         },
     }));
     test_json_roundtrip(msg);

@@ -7,7 +7,7 @@ import { ContextMenu } from '../ui/ContextMenu';
 import type { ContextMenuItem } from '../ui/ContextMenu';
 import { useContextMenu } from '../../hooks/useContextMenu';
 import { loadWorktreeDetails, getWebSocketClient } from '../../lib/ws';
-import { createWorktree, deleteWorktree, deleteWorkspace, removeWorkspace, renameWorkspace } from '../../lib/api';
+import { deleteWorktree, removeWorkspace, renameWorkspace } from '../../lib/api';
 
 function getFolderName(path: string): string {
   if (!path) return '';
@@ -30,6 +30,8 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
   const worktrees = useStore((state) => state.worktrees);
   const setWorkspaceSettingsDialogOpen = useStore((state) => state.setWorkspaceSettingsDialogOpen);
   const setChangeBranchDialogOpen = useStore((state) => state.setChangeBranchDialogOpen);
+  const setCreateWorktreeDialogOpen = useStore((state) => state.setCreateWorktreeDialogOpen);
+  const setWorktreeSettingsDialogOpen = useStore((state) => state.setWorktreeSettingsDialogOpen);
   const persistedExpandedIds = useUIStore((state) => state.expandedWorkspaceIds);
   const [renamingId, setRenamingId] = useState<string | null>(null);
 
@@ -121,10 +123,7 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
   // Context menu hook
   const { state: contextMenuState, openMenu, closeMenu, handleAction } = useContextMenu({
     onCreateWorktree: (workspaceId: string) => {
-      const branchName = prompt('Enter branch name for new worktree:');
-      if (branchName && branchName.trim()) {
-        createWorktree(workspaceId, branchName.trim());
-      }
+      setCreateWorktreeDialogOpen(true, workspaceId);
     },
     onDeleteWorktree: (worktreeId: string) => {
       const worktree = useStore.getState().worktrees.find((wt) => wt.id === worktreeId);
@@ -142,6 +141,9 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
     onChangeBranch: (worktreeId: string) => {
       const worktree = worktrees.find((wt) => wt.id === worktreeId);
       setChangeBranchDialogOpen(true, worktreeId, worktree?.branchName || '');
+    },
+    onEditWorktreeSettings: (worktreeId: string) => {
+      setWorktreeSettingsDialogOpen(true, worktreeId);
     },
     onSettings: (workspaceId: string) => {
       setWorkspaceSettingsDialogOpen(true, workspaceId);
@@ -180,6 +182,7 @@ export function WorkspaceTree({ height = 400 }: WorkspaceTreeProps) {
     { id: 'create-worktree', label: 'Add worktree', icon: 'ri-folder-add-line' },
     { id: 'remove-workspace', label: 'Remove workspace', icon: 'ri-folder-remove-line', destructive: true },
     { id: 'change-branch', label: 'Change branch', icon: 'ri-git-branch-line' },
+    { id: 'edit-worktree-settings', label: 'Edit Settings', icon: 'ri-settings-3-line' },
     { id: 'delete-worktree', label: 'Delete worktree', icon: 'ri-delete-bin-line', destructive: true },
   ];
 

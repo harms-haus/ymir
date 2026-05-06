@@ -53,3 +53,12 @@ Forged: 2026-05-05
 - Phase 1: Research complete (4 artifacts)
 - Phase 2: Outline approved, proceeding to Bifrost planning
 - Phase 3: Saga bf-cdd0 forged with 15 runes, all dependencies set, all descriptions updated
+- Phase 4: Implementation complete. All 15 runes fulfilled.
+  - Batch 1: ConfirmDialog (verified), FileTree rename state (fixed inputValue bug), list_branches backend (verified)
+  - Batch 2: Mount SettingsDialog, enhance change_branch (3-path fallback), list_branches frontend API
+  - Batch 3: Wire Remove Workspace (ConfirmDialog), Mount ChangeBranchDialog, Combobox UI
+  - Sequential: Wire Delete Worktree, Wire Settings, Wire Rename, Wire Change Branch
+  - Cleanup: Remove legacy calls (audit), Verify delete vs remove semantics (fixed WorkspaceSettingsDialog messaging)
+- Phase 5: Code review clean (cra review: 0 findings, LOW risk). Pushed to origin.
+- Branch: feat/workspace-sidebar-context-menu (commit db59c64)
+- PR URL: https://github.com/harms-haus/ymir/pull/new/feat/workspace-sidebar-context-menu

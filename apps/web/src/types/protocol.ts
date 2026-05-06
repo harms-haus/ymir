@@ -112,6 +112,9 @@ export interface Worktree {
   isMain: boolean;
   gitStats?: GitStats;
   createdAt: number;
+  color?: string;
+  icon?: string;
+  agentType?: string;
 }
 
 // Agent types
@@ -204,6 +207,7 @@ export interface WorkspaceUpdate {
   color?: string;
   icon?: string;
   worktreeBaseDir?: string;
+  agent?: string;
   settings?: string;
   requestId?: string;
 }
@@ -214,6 +218,8 @@ export interface WorktreeCreate {
   workspaceId: string;
   branchName: string;
   agentType?: string;
+  color?: string;
+  icon?: string;
   requestId?: string;
   useExistingBranch?: boolean;
 }
@@ -239,6 +245,15 @@ export interface WorktreeChangeBranch {
   type: 'WorktreeChangeBranch';
   worktreeId: string;
   newBranchName: string;
+  requestId?: string;
+}
+
+export interface WorktreeUpdate {
+  type: 'WorktreeUpdate';
+  worktreeId: string;
+  color?: string;
+  icon?: string;
+  agentType?: string;
   requestId?: string;
 }
 
@@ -480,6 +495,11 @@ export interface WorktreeStatus {
   worktreeId: string;
   status: string;
   worktree?: Worktree;
+}
+
+export interface WorktreeUpdated {
+  type: 'WorktreeUpdated';
+  worktree: Worktree;
 }
 
 // Agent events
@@ -893,6 +913,7 @@ export type ClientMessage =
     | WorktreeMerge
   | WorktreeList
   | WorktreeChangeBranch
+  | WorktreeUpdate
   | GetWorktreeDetails
   | AgentSpawn
     | AgentSend
@@ -934,6 +955,7 @@ export type ServerMessage =
   | WorktreeDeleted
   | WorktreeChanged
   | WorktreeStatus
+  | WorktreeUpdated
   | WorktreeDetailsResult
   | AgentStatusUpdate
     | AgentOutput
@@ -1053,6 +1075,10 @@ export function isWorktreeChangeBranch(message: AnyMessage | UnknownMessage): me
   return message.type === 'WorktreeChangeBranch';
 }
 
+export function isWorktreeUpdate(message: AnyMessage | UnknownMessage): message is WorktreeUpdate {
+  return message.type === 'WorktreeUpdate';
+}
+
 export function isAgentSpawn(message: AnyMessage | UnknownMessage): message is AgentSpawn {
   return message.type === 'AgentSpawn';
 }
@@ -1152,6 +1178,10 @@ export function isWorktreeDeleted(message: AnyMessage | UnknownMessage): message
 
 export function isWorktreeChanged(message: AnyMessage | UnknownMessage): message is WorktreeChanged {
   return message.type === 'WorktreeChanged';
+}
+
+export function isWorktreeUpdated(message: AnyMessage | UnknownMessage): message is WorktreeUpdated {
+  return message.type === 'WorktreeUpdated';
 }
 
 export function isWorktreeStatus(message: AnyMessage | UnknownMessage): message is WorktreeStatus {

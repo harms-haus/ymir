@@ -213,6 +213,20 @@ pub async fn route_message(
             }
         }
 
+        ClientMessagePayload::WorktreeUpdate(msg) => {
+            match crate::worktree::update_settings(state.clone(), msg).await {
+                Ok(result) => Some(ServerMessage::new(ServerMessagePayload::WorktreeUpdated(
+                    result,
+                ))),
+                Err(e) => Some(ServerMessage::new(ServerMessagePayload::Error(Error {
+                    code: "WORKTREE_UPDATE_ERROR".to_string(),
+                    message: e.to_string(),
+                    details: None,
+                    request_id: None,
+                }))),
+            }
+        }
+
         ClientMessagePayload::TerminalCreate(msg) => {
             Some(handle_terminal_create(state.clone(), msg).await)
         }
@@ -277,10 +291,19 @@ pub async fn route_message(
         Some(handle_get_worktree_details(state.clone(), msg).await)
     }
 
-    ClientMessagePayload::WorkspaceUpdate(_)
-    | ClientMessagePayload::WorktreeMerge(_)
-    | ClientMessagePayload::FileWrite(_)
-    | ClientMessagePayload::UpdateSettings(_) => Some(not_implemented(message.payload)),
+ClientMessagePayload::WorkspaceUpdate(msg) => {
+		match crate::workspace::update(state.clone(), msg).await {
+			Ok(result) => Some(ServerMessage::new(ServerMessagePayload::WorkspaceUpdated(
+				result,
+			))),
+			Err(e) => Some(ServerMessage::new(ServerMessagePayload::Error(Error {
+				code: "WORKSPACE_UPDATE_ERROR".to_string(),
+				message: e.to_string(),
+				details: None,
+				request_id: None,
+			}))),
+		}
+	}
 
         ClientMessagePayload::GitStatus(msg) => Some(handle_git_status(state.clone(), msg).await),
 
@@ -298,6 +321,11 @@ pub async fn route_message(
         ClientMessagePayload::TerminalMount(msg) => Some(handle_terminal_mount(state.clone(), msg).await),
         ClientMessagePayload::TerminalUnmount(msg) => Some(handle_terminal_unmount(state.clone(), msg).await),
         ClientMessagePayload::TerminalTabClose(msg) => Some(handle_terminal_tab_close(state.clone(), msg).await),
+
+        // Not yet implemented handlers
+        ClientMessagePayload::WorktreeMerge(_) => Some(not_implemented(message.payload)),
+        ClientMessagePayload::FileWrite(_) => Some(not_implemented(message.payload)),
+        ClientMessagePayload::UpdateSettings(_) => Some(not_implemented(message.payload)),
     };
     response
 }
@@ -314,6 +342,7 @@ fn not_implemented(payload: ClientMessagePayload) -> ServerMessage {
         ClientMessagePayload::WorktreeMerge(_) => "WorktreeMerge",
         ClientMessagePayload::WorktreeList(_) => "WorktreeList",
         ClientMessagePayload::WorktreeChangeBranch(_) => "WorktreeChangeBranch",
+        ClientMessagePayload::WorktreeUpdate(_) => "WorktreeUpdate",
         ClientMessagePayload::GetWorktreeDetails(_) => "GetWorktreeDetails",
         ClientMessagePayload::AgentSpawn(_) => "AgentSpawn",
         ClientMessagePayload::AgentSend(_) => "AgentSend",
@@ -1209,6 +1238,7 @@ mod tests {
                 color: None,
                 icon: None,
                 worktree_base_dir: None,
+                agent: None,
             },
         ));
         let response = route_message(state, client_id, msg).await;

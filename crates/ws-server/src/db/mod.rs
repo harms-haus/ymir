@@ -126,6 +126,16 @@ const SCHEMA_MIGRATIONS: &[&str] = &[
     CREATE INDEX IF NOT EXISTS idx_terminal_sessions_tab ON terminal_sessions(tab_id);
     UPDATE terminal_sessions SET tab_id = id WHERE tab_id IS NULL;
     "#,
+    // bf-50cb.1.1: Add agent column to workspaces table
+    r#"
+    ALTER TABLE workspaces ADD COLUMN agent TEXT DEFAULT 'hermes';
+    "#,
+    // bf-50cb.1.2: Add color, icon, agent_type to worktrees table
+    r#"
+    ALTER TABLE worktrees ADD COLUMN color TEXT;
+    ALTER TABLE worktrees ADD COLUMN icon TEXT;
+    ALTER TABLE worktrees ADD COLUMN agent_type TEXT;
+    "#,
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -137,6 +147,7 @@ pub struct Workspace {
     pub icon: String,
     pub worktree_base_dir: String,
     pub settings_json: String,
+    pub agent: String,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -150,6 +161,9 @@ pub struct Worktree {
     pub status: String,
     pub created_at: String,
     pub is_main: bool,
+    pub color: Option<String>,
+    pub icon: Option<String>,
+    pub agent_type: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -324,8 +338,8 @@ impl Db {
         let conn = self.conn()?;
         let mut stmt = conn.prepare(
             r#"
-            INSERT INTO workspaces (id, name, root_path, color, icon, worktree_base_dir, settings_json, created_at, updated_at)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+            INSERT INTO workspaces (id, name, root_path, color, icon, worktree_base_dir, settings_json, agent, created_at, updated_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
             "#,
         ).await?;
 
@@ -337,6 +351,7 @@ impl Db {
             workspace.icon.as_str(),
             workspace.worktree_base_dir.as_str(),
             workspace.settings_json.as_str(),
+            workspace.agent.as_str(),
             workspace.created_at.as_str(),
             workspace.updated_at.as_str(),
         ])
@@ -348,7 +363,7 @@ impl Db {
 
     pub async fn get_workspace(&self, id: &str) -> Result<Option<Workspace>> {
         let conn = self.conn()?;
-        let mut stmt = conn.prepare("SELECT id, name, root_path, color, icon, worktree_base_dir, settings_json, created_at, updated_at FROM workspaces WHERE id = ?1").await?;
+        let mut stmt = conn.prepare("SELECT id, name, root_path, color, icon, worktree_base_dir, settings_json, agent, created_at, updated_at FROM workspaces WHERE id = ?1").await?;
         let mut rows = stmt.query([id]).await?;
 
         if let Some(row) = rows.next().await? {
@@ -360,8 +375,9 @@ impl Db {
                 icon: row.get(4)?,
                 worktree_base_dir: row.get(5)?,
                 settings_json: row.get(6)?,
-                created_at: row.get(7)?,
-                updated_at: row.get(8)?,
+                agent: row.get(7)?,
+                created_at: row.get(8)?,
+                updated_at: row.get(9)?,
             }))
         } else {
             Ok(None)
@@ -370,7 +386,7 @@ impl Db {
 
     pub async fn list_workspaces(&self) -> Result<Vec<Workspace>> {
         let conn = self.conn()?;
-        let mut stmt = conn.prepare("SELECT id, name, root_path, color, icon, worktree_base_dir, settings_json, created_at, updated_at FROM workspaces ORDER BY created_at DESC").await?;
+        let mut stmt = conn.prepare("SELECT id, name, root_path, color, icon, worktree_base_dir, settings_json, agent, created_at, updated_at FROM workspaces ORDER BY created_at DESC").await?;
         let mut rows = stmt.query(()).await?;
         let mut workspaces = Vec::new();
 
@@ -383,8 +399,9 @@ impl Db {
                 icon: row.get(4)?,
                 worktree_base_dir: row.get(5)?,
                 settings_json: row.get(6)?,
-                created_at: row.get(7)?,
-                updated_at: row.get(8)?,
+                agent: row.get(7)?,
+                created_at: row.get(8)?,
+                updated_at: row.get(9)?,
             });
         }
 
@@ -427,6 +444,83 @@ impl Db {
         Ok(rows_affected > 0)
     }
 
+    /// Partial update of workspace fields. Only non-None fields are modified.
+    /// Always updates the updated_at timestamp. Returns Ok(false) if all params
+    /// are None or if the workspace ID does not exist.
+    pub async fn update_workspace_settings(
+        &self,
+        id: &str,
+        name: Option<&str>,
+        color: Option<&str>,
+        icon: Option<&str>,
+        worktree_base_dir: Option<&str>,
+        agent: Option<&str>,
+        settings_json: Option<&str>,
+    ) -> Result<bool> {
+        // Collect fields to update
+        let mut set_clauses: Vec<&str> = Vec::new();
+        let mut values: Vec<&str> = Vec::new();
+
+        if let Some(v) = name {
+            set_clauses.push("name = ?");
+            values.push(v);
+        }
+        if let Some(v) = color {
+            set_clauses.push("color = ?");
+            values.push(v);
+        }
+        if let Some(v) = icon {
+            set_clauses.push("icon = ?");
+            values.push(v);
+        }
+        if let Some(v) = worktree_base_dir {
+            set_clauses.push("worktree_base_dir = ?");
+            values.push(v);
+        }
+        if let Some(v) = agent {
+            set_clauses.push("agent = ?");
+            values.push(v);
+        }
+        if let Some(v) = settings_json {
+            set_clauses.push("settings_json = ?");
+            values.push(v);
+        }
+
+        // If no fields to update, return early
+        if set_clauses.is_empty() {
+            return Ok(false);
+        }
+
+        let conn = self.conn()?;
+        let now_rfc3339 = chrono::Utc::now().to_rfc3339();
+
+        // Build dynamic query: always update updated_at
+        let param_count = set_clauses.len() + 1; // +1 for updated_at
+        let mut params: Vec<libsql::Value> = Vec::with_capacity(param_count + 1); // +1 for id
+
+        for v in &values {
+            params.push(libsql::Value::Text(v.to_string()));
+        }
+        params.push(libsql::Value::Text(now_rfc3339));
+        params.push(libsql::Value::Text(id.to_string()));
+
+        let set_clause = set_clauses.join(", ");
+        let query = format!(
+            "UPDATE workspaces SET {}, updated_at = ? WHERE id = ?",
+            set_clause
+        );
+
+        let rows_affected = conn
+            .execute(&query, libsql::params_from_iter(params))
+            .await?;
+
+        debug!(
+            "Updated workspace settings {} (rows affected: {})",
+            id, rows_affected
+        );
+        Ok(rows_affected > 0)
+    }
+
     pub async fn delete_workspace(&self, id: &str) -> Result<bool> {
         let conn = self.conn()?;
         let rows_affected = conn
@@ -446,8 +540,8 @@ impl Db {
         let mut stmt = conn
             .prepare(
                 r#"
-            INSERT INTO worktrees (id, workspace_id, branch_name, path, status, created_at, is_main)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            INSERT INTO worktrees (id, workspace_id, branch_name, path, status, created_at, is_main, color, icon, agent_type)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
             "#,
             )
             .await?;
@@ -460,6 +554,9 @@ impl Db {
             worktree.status.as_str(),
             worktree.created_at.as_str(),
             worktree.is_main as i32,
+            worktree.color.as_deref(),
+            worktree.icon.as_deref(),
+            worktree.agent_type.as_deref(),
         ))
         .await?;
 
@@ -469,7 +566,7 @@ impl Db {
 
     pub async fn get_worktree(&self, id: &str) -> Result<Option<Worktree>> {
         let conn = self.conn()?;
-        let mut stmt = conn.prepare("SELECT id, workspace_id, branch_name, path, status, created_at, COALESCE(is_main, 0) FROM worktrees WHERE id = ?1").await?;
+        let mut stmt = conn.prepare("SELECT id, workspace_id, branch_name, path, status, created_at, COALESCE(is_main, 0), color, icon, agent_type FROM worktrees WHERE id = ?1").await?;
         let mut rows = stmt.query([id]).await?;
 
         if let Some(row) = rows.next().await? {
@@ -481,6 +578,9 @@ impl Db {
                 status: row.get(4)?,
                 created_at: row.get(5)?,
                 is_main: row.get::<i32>(6)? != 0,
+                color: row.get(7)?,
+                icon: row.get(8)?,
+                agent_type: row.get(9)?,
             }))
         } else {
             Ok(None)
@@ -490,7 +590,7 @@ impl Db {
     pub async fn list_worktrees(&self, workspace_id: &str) -> Result<Vec<Worktree>> {
         let conn = self.conn()?;
         let mut stmt = conn.prepare(
-            "SELECT id, workspace_id, branch_name, path, status, created_at, COALESCE(is_main, 0) FROM worktrees WHERE workspace_id = ?1 ORDER BY created_at DESC"
+            "SELECT id, workspace_id, branch_name, path, status, created_at, COALESCE(is_main, 0), color, icon, agent_type FROM worktrees WHERE workspace_id = ?1 ORDER BY created_at DESC"
         ).await?;
         let mut rows = stmt.query([workspace_id]).await?;
         let mut worktrees = Vec::new();
@@ -504,6 +604,9 @@ impl Db {
                 status: row.get(4)?,
                 created_at: row.get(5)?,
                 is_main: row.get::<i32>(6)? != 0,
+                color: row.get(7)?,
+                icon: row.get(8)?,
+                agent_type: row.get(9)?,
             });
         }
 
@@ -513,7 +616,7 @@ impl Db {
     pub async fn list_all_worktrees(&self) -> Result<Vec<Worktree>> {
         let conn = self.conn()?;
         let mut stmt = conn.prepare(
-            "SELECT id, workspace_id, branch_name, path, status, created_at, COALESCE(is_main, 0) FROM worktrees ORDER BY created_at DESC"
+            "SELECT id, workspace_id, branch_name, path, status, created_at, COALESCE(is_main, 0), color, icon, agent_type FROM worktrees ORDER BY created_at DESC"
         ).await?;
         let mut rows = stmt.query(()).await?;
         let mut worktrees = Vec::new();
@@ -527,6 +630,9 @@ impl Db {
                 status: row.get(4)?,
                 created_at: row.get(5)?,
                 is_main: row.get::<i32>(6)? != 0,
+                color: row.get(7)?,
+                icon: row.get(8)?,
+                agent_type: row.get(9)?,
             });
         }
 
@@ -561,6 +667,57 @@ impl Db {
         debug!(
             "Updated worktree {} branch to {} (rows affected: {})",
             id, branch_name, rows_affected
+        );
+        Ok(rows_affected > 0)
+    }
+
+    pub async fn update_worktree_settings(
+        &self,
+        id: &str,
+        color: Option<&str>,
+        icon: Option<&str>,
+        agent_type: Option<&str>,
+    ) -> Result<bool> {
+        let conn = self.conn()?;
+
+        if color.is_none() && icon.is_none() && agent_type.is_none() {
+            return Ok(false);
+        }
+
+        let now_rfc3339 = chrono::Utc::now().to_rfc3339();
+
+        let mut set_parts: Vec<String> = Vec::new();
+        let mut params: Vec<String> = Vec::new();
+        let mut param_idx = 1usize;
+
+        if let Some(c) = color {
+            set_parts.push(format!("color = ?{}", param_idx));
+            params.push(c.to_string());
+            param_idx += 1;
+        }
+        if let Some(i) = icon {
+            set_parts.push(format!("icon = ?{}", param_idx));
+            params.push(i.to_string());
+            param_idx += 1;
+        }
+        if let Some(a) = agent_type {
+            set_parts.push(format!("agent_type = ?{}", param_idx));
+            params.push(a.to_string());
+            param_idx += 1;
+        }
+
+        set_parts.push(format!("updated_at = ?{}", param_idx));
+        params.push(now_rfc3339);
+
+        let set_clause = set_parts.join(", ");
+        let sql = format!("UPDATE worktrees SET {} WHERE id = ?{}", set_clause, param_idx + 1);
+        params.push(id.to_string());
+
+        let rows_affected = conn.execute(&sql, params).await?;
+
+        debug!(
+            "Updated worktree {} settings (rows affected: {})",
+            id, rows_affected
         );
         Ok(rows_affected > 0)
     }
@@ -1464,6 +1621,7 @@ mod tests {
             icon: "folder".to_string(),
             worktree_base_dir: ".git/worktrees".to_string(),
             settings_json: "{}".to_string(),
+            agent: "hermes".to_string(),
             created_at: chrono::Utc::now().to_rfc3339(),
             updated_at: chrono::Utc::now().to_rfc3339(),
         };
@@ -1480,6 +1638,9 @@ mod tests {
             status: "active".to_string(),
             created_at: chrono::Utc::now().to_rfc3339(),
             is_main: true,
+            color: None,
+            icon: None,
+            agent_type: None,
         };
         db.create_worktree(&worktree)
             .await
@@ -1511,6 +1672,7 @@ mod tests {
             color: "#FF0000".to_string(),
             icon: "folder-open".to_string(),
             worktree_base_dir: ".git/worktrees".to_string(),
+            agent: "hermes".to_string(),
             settings_json: r#"{"theme": "dark"}"#.to_string(),
             created_at: chrono::Utc::now().to_rfc3339(),
             updated_at: chrono::Utc::now().to_rfc3339(),
@@ -1567,6 +1729,7 @@ mod tests {
             icon: "folder".to_string(),
             worktree_base_dir: ".git/worktrees".to_string(),
             settings_json: "{}".to_string(),
+            agent: "hermes".to_string(),
             created_at: chrono::Utc::now().to_rfc3339(),
             updated_at: chrono::Utc::now().to_rfc3339(),
         };
@@ -1582,6 +1745,9 @@ mod tests {
             status: "active".to_string(),
             created_at: chrono::Utc::now().to_rfc3339(),
             is_main: false,
+            color: None,
+            icon: None,
+            agent_type: None,
         };
         db.create_worktree(&worktree)
             .await
@@ -1636,6 +1802,7 @@ mod tests {
             icon: "folder".to_string(),
             worktree_base_dir: ".git/worktrees".to_string(),
             settings_json: "{}".to_string(),
+            agent: "hermes".to_string(),
             created_at: chrono::Utc::now().to_rfc3339(),
             updated_at: chrono::Utc::now().to_rfc3339(),
         };
@@ -1651,6 +1818,9 @@ mod tests {
             status: "active".to_string(),
             created_at: chrono::Utc::now().to_rfc3339(),
             is_main: true,
+            color: None,
+            icon: None,
+            agent_type: None,
         };
         db.create_worktree(&worktree)
             .await
@@ -1717,6 +1887,7 @@ mod tests {
             icon: "folder".to_string(),
             worktree_base_dir: ".git/worktrees".to_string(),
             settings_json: "{}".to_string(),
+            agent: "hermes".to_string(),
             created_at: chrono::Utc::now().to_rfc3339(),
             updated_at: chrono::Utc::now().to_rfc3339(),
         };
@@ -1732,6 +1903,9 @@ mod tests {
             status: "active".to_string(),
             created_at: chrono::Utc::now().to_rfc3339(),
             is_main: false,
+            color: None,
+            icon: None,
+            agent_type: None,
         };
         db.create_worktree(&worktree)
             .await
@@ -1885,6 +2059,7 @@ mod tests {
             icon: "folder".to_string(),
             worktree_base_dir: ".git/worktrees".to_string(),
             settings_json: "{}".to_string(),
+            agent: "hermes".to_string(),
             created_at: chrono::Utc::now().to_rfc3339(),
             updated_at: chrono::Utc::now().to_rfc3339(),
         };

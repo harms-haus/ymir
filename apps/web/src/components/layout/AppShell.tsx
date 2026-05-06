@@ -4,10 +4,12 @@ import { MainPanel } from '../main/MainPanel'
 import { ProjectPanel } from '../project/ProjectPanel'
 import { StatusBar } from './StatusBar'
 import { WorkspaceSettingsDialog } from '../dialogs/WorkspaceSettingsDialog'
+import { WorktreeSettingsDialog } from '../dialogs/WorktreeSettingsDialog'
+import { CreateWorktreeDialog } from '../dialogs/CreateWorktreeDialog'
 import { ChangeBranchDialog } from '../dialogs/ChangeBranchDialog'
 import { ConfirmDialog } from '../dialogs/ConfirmDialog'
 import { useUIStore } from '../../uiStore'
-import { useStore, selectWorkspaceSettingsDialog } from '../../store'
+import { useStore, selectWorkspaceSettingsDialog, selectCreateWorktreeDialog, selectWorktreeSettingsDialog } from '../../store'
 import '../../styles/panels.css'
 
 export function AppShell() {
@@ -17,10 +19,14 @@ export function AppShell() {
   const setPanelSizes = useUIStore((state) => state.setPanelSizes)
   const settingsDialog = useStore(selectWorkspaceSettingsDialog)
   const setSettingsDialogOpen = useStore((s) => s.setWorkspaceSettingsDialogOpen)
+  const createWorktreeDialog = useStore(selectCreateWorktreeDialog)
+  const setCreateWorktreeDialogOpen = useStore((s) => s.setCreateWorktreeDialogOpen)
   const changeBranchDialog = useStore((s) => s.changeBranchDialog)
   const setChangeBranchDialogOpen = useStore((s) => s.setChangeBranchDialogOpen)
   const confirmDialog = useStore((s) => s.confirmDialog)
   const hideConfirmDialog = useStore((s) => s.hideConfirmDialog)
+  const worktreeSettingsDialog = useStore(selectWorktreeSettingsDialog)
+  const setWorktreeSettingsDialogOpen = useStore((s) => s.setWorktreeSettingsDialogOpen)
 
   const handleLayout = (layout: { [id: string]: number }) => {
     const sidebar = layout['sidebar']
@@ -75,6 +81,11 @@ export function AppShell() {
         onOpenChange={(open) => setSettingsDialogOpen(open)}
         workspaceId={settingsDialog.workspaceId}
       />
+      <CreateWorktreeDialog
+        open={createWorktreeDialog.isOpen}
+        onOpenChange={(open) => setCreateWorktreeDialogOpen(open)}
+        workspaceId={createWorktreeDialog.workspaceId}
+      />
       <ChangeBranchDialog
         open={changeBranchDialog.isOpen}
         onOpenChange={(open) => setChangeBranchDialogOpen(open)}
@@ -93,6 +104,11 @@ export function AppShell() {
           onCancel={() => hideConfirmDialog()}
         />
       )}
+      <WorktreeSettingsDialog
+        open={worktreeSettingsDialog.isOpen}
+        onOpenChange={(open) => setWorktreeSettingsDialogOpen(open)}
+        worktreeId={worktreeSettingsDialog.worktreeId}
+      />
     </div>
   )
 }

@@ -57,19 +57,20 @@ import {
 } from '../types/bridge-envelope';
 
 import type {
-  // Client message types
-  WorkspaceCreate,
-  WorkspaceDelete,
-  WorkspaceRemove,
-  WorkspaceRename,
-  WorkspaceUpdate,
-  WorktreeCreate,
-  WorktreeDelete,
-  WorktreeMerge,
-  WorktreeList,
-  WorktreeChangeBranch,
-  GetWorktreeDetails,
-  AgentSpawn,
+// Client message types
+WorkspaceCreate,
+WorkspaceDelete,
+WorkspaceRemove,
+WorkspaceRename,
+WorkspaceUpdate,
+WorktreeCreate,
+WorktreeDelete,
+WorktreeMerge,
+WorktreeList,
+WorktreeChangeBranch,
+GetWorktreeDetails,
+WorktreeUpdate,
+AgentSpawn,
   AgentSend,
   AgentCancel,
   AgentSetConfigOption,
@@ -276,6 +277,18 @@ export function encodeGetWorktreeDetails(
   return makeEnvelope('worktree_event', {
     payload: {
       type: 'GetWorktreeDetails',
+      data,
+    } as BridgePayload,
+  });
+}
+
+/** Encode WorktreeUpdate into a BridgeEnvelope. */
+export function encodeWorktreeUpdate(
+  data: Omit<WorktreeUpdate, 'type'>
+): FullBridgeEnvelope {
+  return makeEnvelope('worktree_event', {
+    payload: {
+      type: 'WorktreeUpdate',
       data,
     } as BridgePayload,
   });
@@ -716,10 +729,12 @@ export function encodeClientMessage(
       return encodeWorktreeList(payload as unknown as Omit<WorktreeList, 'type'>);
     case 'WorktreeChangeBranch':
       return encodeWorktreeChangeBranch(payload as unknown as Omit<WorktreeChangeBranch, 'type'>);
-    case 'GetWorktreeDetails':
-      return encodeGetWorktreeDetails(payload as unknown as Omit<GetWorktreeDetails, 'type'>);
+ case 'GetWorktreeDetails':
+  return encodeGetWorktreeDetails(payload as unknown as Omit<GetWorktreeDetails, 'type'>);
+case 'WorktreeUpdate':
+  return encodeWorktreeUpdate(payload as unknown as Omit<WorktreeUpdate, 'type'>);
 
-    // Agent
+// Agent
     case 'AgentSpawn':
       return encodeAgentSpawn(payload as unknown as Omit<AgentSpawn, 'type'>);
     case 'AgentSend':

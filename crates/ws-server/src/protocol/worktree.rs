@@ -25,6 +25,8 @@ pub struct WorktreeCreate {
     pub workspace_id: Uuid,
     pub branch_name: String,
     pub agent_type: Option<String>,
+    pub color: Option<String>,
+    pub icon: Option<String>,
     #[serde(with = "optional_uuid_serde")]
     #[ts(as = "Option<String>")]
     pub request_id: Option<Uuid>,
@@ -77,18 +79,21 @@ pub struct WorktreeList {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct WorktreeData {
-    #[serde(with = "uuid_serde")]
-    #[ts(type = "string")]
-    pub id: Uuid,
-    #[serde(with = "uuid_serde")]
-    #[ts(type = "string")]
-    pub workspace_id: Uuid,
-    pub branch_name: String,
-    pub path: String,
-    pub status: String,
-    pub created_at: u64,
-    pub is_main: bool,
-    pub git_stats: Option<GitStats>,
+ #[serde(with = "uuid_serde")]
+ #[ts(type = "string")]
+ pub id: Uuid,
+ #[serde(with = "uuid_serde")]
+ #[ts(type = "string")]
+ pub workspace_id: Uuid,
+ pub branch_name: String,
+ pub path: String,
+ pub status: String,
+ pub created_at: u64,
+ pub is_main: bool,
+ pub git_stats: Option<GitStats>,
+ pub color: Option<String>,
+ pub icon: Option<String>,
+ pub agent_type: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
@@ -112,6 +117,28 @@ pub struct WorktreeDeleted {
     #[serde(with = "uuid_serde")]
     #[ts(type = "string")]
     pub worktree_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct WorktreeUpdate {
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    pub color: Option<String>,
+    pub icon: Option<String>,
+    pub agent_type: Option<String>,
+    #[serde(with = "optional_uuid_serde")]
+    #[ts(type = "string")]
+    pub request_id: Option<Uuid>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct WorktreeUpdated {
+    pub worktree: WorktreeData,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

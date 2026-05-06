@@ -37,6 +37,9 @@ async fn register_worktree(
             path: path.to_string(),
             status: "active".to_string(),
             is_main,
+            color: None,
+            icon: None,
+            agent_type: None,
         },
     );
 }

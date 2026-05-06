@@ -5,9 +5,9 @@
 
 use crate::db::{ActivityLogEntry, Workspace as DbWorkspace};
 use crate::protocol::{
-  ServerMessage, ServerMessagePayload, WorktreeCreated, WorkspaceCreate, WorkspaceCreated,
-  WorkspaceData, WorkspaceDelete, WorkspaceDeleted, WorkspaceRemove, WorkspaceRemoved,
-  WorkspaceUpdated,
+	ServerMessage, ServerMessagePayload, WorktreeCreated, WorkspaceCreate, WorkspaceCreated,
+	WorkspaceData, WorkspaceDelete, WorkspaceDeleted, WorkspaceRemove, WorkspaceRemoved,
+	WorkspaceUpdate, WorkspaceUpdated,
 };
 use crate::state::AppState;
 use anyhow::{Context, Result};
@@ -36,6 +36,7 @@ fn workspace_data_from_db(ws: DbWorkspace) -> Result<WorkspaceData> {
         color: Some(ws.color),
         icon: Some(ws.icon),
         worktree_base_dir: Some(ws.worktree_base_dir),
+        agent: Some(ws.agent),
         settings: Some(ws.settings_json),
         created_at: parse_workspace_timestamp("created_at", &ws.created_at)?,
         updated_at: parse_workspace_timestamp("updated_at", &ws.updated_at)?,
@@ -124,6 +125,7 @@ pub async fn create(state: Arc<AppState>, msg: WorkspaceCreate) -> Result<Worksp
         worktree_base_dir: msg
             .worktree_base_dir
             .unwrap_or_else(|| ".git/worktrees".to_string()),
+        agent: msg.agent.clone().unwrap_or_else(|| "hermes".to_string()),
         settings_json: "{}".to_string(),
         created_at: now_rfc3339.clone(),
         updated_at: now_rfc3339,
@@ -135,18 +137,19 @@ pub async fn create(state: Arc<AppState>, msg: WorkspaceCreate) -> Result<Worksp
         .await
         .context("Failed to create workspace in database")?;
 
-    // Add to in-memory state
-    state.workspaces.write().await.insert(
-        workspace_id,
-        crate::state::WorkspaceState {
-            id: workspace_id,
-            name: workspace.name.clone(),
-            root_path: workspace.root_path.clone(),
-            color: Some(workspace.color.clone()),
-            icon: Some(workspace.icon.clone()),
-            worktree_base_dir: Some(workspace.worktree_base_dir.clone()),
-        },
-    );
+ // Add to in-memory state
+ state.workspaces.write().await.insert(
+ workspace_id,
+ crate::state::WorkspaceState {
+ id: workspace_id,
+ name: workspace.name.clone(),
+ root_path: workspace.root_path.clone(),
+ color: Some(workspace.color.clone()),
+ icon: Some(workspace.icon.clone()),
+ worktree_base_dir: Some(workspace.worktree_base_dir.clone()),
+ agent: Some(workspace.agent.clone()),
+ },
+ );
 
   // Find the main branch and create the main worktree
   let main_branch = find_main_branch(&expanded_root_path)?;
@@ -187,6 +190,7 @@ pub async fn create(state: Arc<AppState>, msg: WorkspaceCreate) -> Result<Worksp
             color: Some(workspace.color),
             icon: Some(workspace.icon),
             worktree_base_dir: Some(workspace.worktree_base_dir),
+            agent: Some(workspace.agent),
             settings: Some(workspace.settings_json),
             created_at: now_timestamp,
             updated_at: now_timestamp,
@@ -365,44 +369,106 @@ pub async fn get(state: Arc<AppState>, workspace_id: Uuid) -> Result<Option<Work
 /// Rename a workspace
 #[instrument(skip(state), fields(workspace_id = %msg.workspace_id, new_name = %msg.new_name))]
 pub async fn rename(state: Arc<AppState>, msg: crate::protocol::WorkspaceRename) -> Result<WorkspaceUpdated> {
-    // Get workspace from database
-    let workspace = state
-        .db
-        .get_workspace(&msg.workspace_id.to_string())
-        .await
-        .context("Failed to fetch workspace from database")?
-        .ok_or_else(|| anyhow::anyhow!("Workspace not found: {}", msg.workspace_id))?;
+	// Get workspace from database
+	let workspace = state
+		.db
+		.get_workspace(&msg.workspace_id.to_string())
+		.await
+		.context("Failed to fetch workspace from database")?
+		.ok_or_else(|| anyhow::anyhow!("Workspace not found: {}", msg.workspace_id))?;
 
-    // Update name in database
-    let updated = state
-        .db
-        .update_workspace(&msg.workspace_id.to_string(), Some(&msg.new_name), None)
-        .await
-        .context("Failed to rename workspace in database")?;
+	// Update name in database
+	let updated = state
+		.db
+		.update_workspace(&msg.workspace_id.to_string(), Some(&msg.new_name), None)
+		.await
+		.context("Failed to rename workspace in database")?;
 
-    if !updated {
-        anyhow::bail!("Workspace not found: {}", msg.workspace_id);
-    }
+	if !updated {
+		anyhow::bail!("Workspace not found: {}", msg.workspace_id);
+	}
 
-    // Update in-memory state
-    let mut workspaces = state.workspaces.write().await;
-    if let Some(ws_state) = workspaces.get_mut(&msg.workspace_id) {
-        ws_state.name = msg.new_name.clone();
-    }
+	// Update in-memory state
+	let mut workspaces = state.workspaces.write().await;
+	if let Some(ws_state) = workspaces.get_mut(&msg.workspace_id) {
+		ws_state.name = msg.new_name.clone();
+	}
 
-    // Fetch the updated workspace to get fresh timestamps
-    let updated_ws = state
-        .db
-        .get_workspace(&msg.workspace_id.to_string())
-        .await
-        .context("Failed to fetch updated workspace")?
-        .ok_or_else(|| anyhow::anyhow!("Workspace disappeared after rename"))?;
+	// Fetch the updated workspace to get fresh timestamps
+	let updated_ws = state
+		.db
+		.get_workspace(&msg.workspace_id.to_string())
+		.await
+		.context("Failed to fetch updated workspace")?
+		.ok_or_else(|| anyhow::anyhow!("Workspace disappeared after rename"))?;
 
-    let workspace_data = workspace_data_from_db(updated_ws)?;
+	let workspace_data = workspace_data_from_db(updated_ws)?;
 
-    Ok(WorkspaceUpdated {
-        workspace: workspace_data,
-    })
+	Ok(WorkspaceUpdated {
+		workspace: workspace_data,
+	})
+}
+
+/// Update workspace settings (color, icon, worktree_base_dir, agent, settings)
+#[instrument(skip(state), fields(workspace_id = %msg.workspace_id))]
+pub async fn update(state: Arc<AppState>, msg: WorkspaceUpdate) -> Result<WorkspaceUpdated> {
+	// Get workspace from database to verify it exists
+	let workspace = state
+		.db
+		.get_workspace(&msg.workspace_id.to_string())
+		.await
+		.context("Failed to fetch workspace from database")?
+		.ok_or_else(|| anyhow::anyhow!("Workspace not found: {}", msg.workspace_id))?;
+
+	// Update settings in database
+	let updated = state
+		.db
+		.update_workspace_settings(
+			&msg.workspace_id.to_string(),
+			None, // name - not updated here
+			msg.color.as_deref(),
+			msg.icon.as_deref(),
+			msg.worktree_base_dir.as_deref(),
+			msg.agent.as_deref(),
+			msg.settings.as_deref(),
+		)
+		.await
+		.context("Failed to update workspace settings in database")?;
+
+	if !updated {
+		anyhow::bail!("Workspace not found: {}", msg.workspace_id);
+	}
+
+	// Update in-memory state for all fields that were Some in the message
+	let mut workspaces = state.workspaces.write().await;
+	if let Some(ws_state) = workspaces.get_mut(&msg.workspace_id) {
+		if let Some(color) = &msg.color {
+			ws_state.color = Some(color.clone());
+		}
+		if let Some(icon) = &msg.icon {
+			ws_state.icon = Some(icon.clone());
+		}
+		if let Some(worktree_base_dir) = &msg.worktree_base_dir {
+			ws_state.worktree_base_dir = Some(worktree_base_dir.clone());
+		}
+		if let Some(agent) = &msg.agent {
+			ws_state.agent = Some(agent.clone());
+		}
+	}
+
+	// Fetch the updated workspace to get fresh timestamps
+	let updated_ws = state
+		.db
+		.get_workspace(&msg.workspace_id.to_string())
+		.await
+		.context("Failed to fetch updated workspace")?
+		.ok_or_else(|| anyhow::anyhow!("Workspace disappeared after update"))?;
+
+	let workspace_data = workspace_data_from_db(updated_ws)?;
+
+	Ok(WorkspaceUpdated {
+		workspace: workspace_data,
+	})
 }
 
 #[cfg(test)]
@@ -431,6 +497,7 @@ mod tests {
             color: Some("#FF0000".to_string()),
             icon: Some("folder-open".to_string()),
             worktree_base_dir: Some(".git/worktrees".to_string()),
+            agent: None,
         };
 
         let result = create(state.clone(), msg).await;
@@ -462,6 +529,7 @@ mod tests {
             color: None,
             icon: None,
             worktree_base_dir: None,
+            agent: None,
         };
 
         let created = create(state.clone(), create_msg)
@@ -497,6 +565,7 @@ mod tests {
                 color: None,
                 icon: None,
                 worktree_base_dir: None,
+                agent: None,
             };
 
             // Create directory for each workspace

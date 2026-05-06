@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { AppState, NotificationState, AgentTab, AlertDialogConfig, ConfirmDialogConfig, AgentSessionState, TerminalTabState, GitStats, AcpAccumulatorState, AcpAccumulatorAction, AccumulatedThread, AccumulatedMessage, AccumulatedTextContent, AccumulatedToolCard, AccumulatedContextCard, AccumulatedErrorCard, MAX_TOOL_OUTPUT_LENGTH, MAX_ACCUMULATED_MESSAGES, createInitialAccumulatorState, ThreadAccumulatedState } from './types/state';
+import { AppState, NotificationState, AgentTab, AlertDialogConfig, ConfirmDialogConfig, AgentSessionState, TerminalTabState, GitStats, AcpAccumulatorState, AcpAccumulatorAction, AccumulatedThread, AccumulatedMessage, AccumulatedTextContent, AccumulatedToolCard, AccumulatedContextCard, AccumulatedErrorCard, MAX_TOOL_OUTPUT_LENGTH, MAX_ACCUMULATED_MESSAGES, createInitialAccumulatorState, ThreadAccumulatedState, WorktreeSettingsDialogState } from './types/state';
 export type { AgentTab };
 import { GitStatusEntry, TerminalOutput, AcpEventEnvelope, AcpSequence, AcpToolUseStatus, AcpSessionStatus, AcpContextUpdateType, AcpErrorCode, AcpSessionConfigOption } from './types/protocol';
 import { isAcpSessionInit, isAcpConfigOptionsUpdate, isAcpSessionStatus, isAcpPromptChunk, isAcpPromptComplete, isAcpToolUse, isAcpContextUpdate, isAcpError, isAcpResumeMarker } from './types/protocol';
@@ -415,6 +415,11 @@ export const useStore = create<AppState>()(
     isOpen: false,
     worktreeId: null,
     currentBranch: '',
+  },
+
+  worktreeSettingsDialog: {
+    isOpen: false,
+    worktreeId: null,
   },
 
   alertDialog: null,
@@ -842,6 +847,20 @@ setActiveAgentTab: (worktreeId, tabId) => {
       changeBranchDialog: { isOpen: false, worktreeId: null, currentBranch: '' },
     }),
 
+  setWorktreeSettingsDialogOpen: (isOpen, worktreeId) =>
+    set((state) => ({
+      worktreeSettingsDialog: {
+        ...state.worktreeSettingsDialog,
+        isOpen,
+        worktreeId: worktreeId ?? state.worktreeSettingsDialog.worktreeId,
+      },
+    })),
+
+  resetWorktreeSettingsDialog: () =>
+    set({
+      worktreeSettingsDialog: { isOpen: false, worktreeId: null },
+    }),
+
   showAlertDialog: (config: AlertDialogConfig) =>
     set({
       alertDialog: { ...config, open: true, variant: config.variant ?? 'default' },
@@ -970,6 +989,10 @@ export const selectCreateWorktreeDialogOpen = (state: AppState) => state.createW
 export const selectWorkspaceSettingsDialog = (state: AppState) => state.workspaceSettingsDialog;
 
 export const selectWorkspaceSettingsDialogOpen = (state: AppState) => state.workspaceSettingsDialog.isOpen;
+
+export const selectWorktreeSettingsDialog = (state: AppState) => state.worktreeSettingsDialog;
+
+export const selectWorktreeSettingsDialogOpen = (state: AppState) => state.worktreeSettingsDialog.isOpen;
 
 export const selectDbResetDialog = (state: AppState) => state.dbResetDialog;
 

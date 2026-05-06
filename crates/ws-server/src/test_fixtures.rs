@@ -103,6 +103,7 @@ mod tests {
             color: Some("#ff0000".to_string()),
             icon: Some("folder".to_string()),
             worktree_base_dir: Some(".worktrees".to_string()),
+            agent: Some("hermes".to_string()),
         }));
 
         let path = write_fixture("WorkspaceCreate", &msg)?;
@@ -147,6 +148,7 @@ mod tests {
             color: Some("#00ff00".to_string()),
             icon: Some("code".to_string()),
             worktree_base_dir: Some("custom-worktrees".to_string()),
+            agent: Some("hermes".to_string()),
             settings: Some("{\"theme\":\"dark\"}".to_string()),
             request_id: Some(Uuid::new_v4()),
         }));
@@ -710,6 +712,7 @@ mod tests {
                 color: Some("#ff0000".to_string()),
                 icon: Some("folder".to_string()),
                 worktree_base_dir: Some(".worktrees".to_string()),
+                agent: Some("hermes".to_string()),
                 settings: Some("{\"theme\":\"dark\"}".to_string()),
                 created_at: 1234567890,
                 updated_at: 1234567900,
@@ -723,6 +726,9 @@ mod tests {
                 created_at: 1234567890,
                 is_main: true,
                 git_stats: None,
+                color: None,
+                icon: None,
+                agent_type: None,
             }],
             agent_sessions: vec![AgentSessionData {
                 id: agent_session_id,
@@ -911,6 +917,7 @@ mod tests {
                 color: Some("#ff0000".to_string()),
                 icon: Some("folder".to_string()),
                 worktree_base_dir: Some(".worktrees".to_string()),
+                agent: Some("hermes".to_string()),
                 settings: Some(r#"{"theme":"dark"}"#.to_string()),
                 created_at: 1234567890,
                 updated_at: 1234567900,
@@ -963,6 +970,7 @@ mod tests {
                 color: Some("#00ff00".to_string()),
                 icon: Some("briefcase".to_string()),
                 worktree_base_dir: Some(".worktrees".to_string()),
+                agent: Some("hermes".to_string()),
                 settings: Some(r#"{"theme":"light"}"#.to_string()),
                 created_at: 1234567890,
                 updated_at: 1234567999,
@@ -1018,6 +1026,9 @@ mod tests {
                 created_at: 1234567890,
                 is_main: true,
                 git_stats: None,
+                color: None,
+                icon: None,
+                agent_type: None,
             },
         }));
 
