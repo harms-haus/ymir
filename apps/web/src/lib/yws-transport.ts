@@ -20,6 +20,7 @@ import type { BridgeMessage, BridgePayload } from "../types/bridge-envelope";
 import {
   ClientMessage,
   ServerMessage,
+  type AcpEventEnvelope,
 } from "../types/protocol";
 import { handleBridgeMessage, useStore, useToastStore } from "../store";
 import { acpSessionManager, type CoreConnectionStatus } from "./acp-session-manager";
@@ -394,6 +395,32 @@ export class YmirWsTransport {
     const worktreeId = (data as any)?.worktreeId ?? activeWorktreeId;
 
     if (worktreeId) {
+      // Dispatch to Zustand accumulator (Accumulator-First approach)
+      // The server serializes AcpEventEnvelope as the payload, which is
+      // the exact format acpAccumulatorReducer expects.
+      if (payload.eventType && typeof payload.sequence === 'number') {
+        useStore.getState().dispatchAccumulator({
+          type: 'EVENT_RECEIVED',
+          envelope: payload as unknown as AcpEventEnvelope,
+          worktreeId,
+        });
+      }
+
+      // Phase 4: On SessionInit, populate acpSessionId on the matching AgentSessionState.
+      // AgentStatusUpdate creates the session with acpSessionId: undefined;
+      // the ACP SessionInit event carries the actual acpSessionId in its data.
+      if (payload.eventType === 'SessionInit') {
+        const acpSessionId = (data as any)?.acpSessionId;
+        if (acpSessionId) {
+          const sessions = useStore.getState().agentSessions;
+          const session = sessions.find(s => s.worktreeId === worktreeId);
+          if (session && !session.acpSessionId) {
+            useStore.getState().updateAgentSession(session.id, { acpSessionId });
+          }
+        }
+      }
+
+      // Keep existing routing for backward compatibility
       acpSessionManager.handleAcpPayload(worktreeId, payload);
     }
   }

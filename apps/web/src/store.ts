@@ -1587,12 +1587,19 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
       const payload = message.payload as Record<string, unknown> | null;
       if (!payload) return;
 
-      // Route through acpSessionManager which feeds the raw ACP JSON-RPC payload
-      // to the appropriate SessionController via its transport.
       const { activeWorktreeId } = useStore.getState();
       const data = (payload.data as Record<string, unknown>) ?? {};
       const worktreeId = (data as any)?.worktreeId ?? activeWorktreeId;
       if (worktreeId) {
+        // Dispatch to accumulator if this looks like an AcpEventEnvelope
+        if (payload.eventType && typeof payload.sequence === 'number') {
+          useStore.getState().dispatchAccumulator({
+            type: 'EVENT_RECEIVED',
+            envelope: payload as unknown as AcpEventEnvelope,
+            worktreeId,
+          });
+        }
+        // Also route through acpSessionManager for backward compat
         acpSessionManager.handleAcpPayload(worktreeId, payload);
       }
       break;
