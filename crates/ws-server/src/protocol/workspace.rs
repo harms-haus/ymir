@@ -49,9 +49,7 @@ pub struct WorkspaceUpdate {
     pub worktree_base_dir: Option<String>,
     pub agent: Option<String>,
     pub settings: Option<String>,
-    #[serde(with = "optional_uuid_serde")]
-    #[ts(type = "string")]
-    pub request_id: Option<Uuid>,
+    pub request_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]

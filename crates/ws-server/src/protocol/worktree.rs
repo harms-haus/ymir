@@ -129,9 +129,7 @@ pub struct WorktreeUpdate {
     pub color: Option<String>,
     pub icon: Option<String>,
     pub agent_type: Option<String>,
-    #[serde(with = "optional_uuid_serde")]
-    #[ts(type = "string")]
-    pub request_id: Option<Uuid>,
+    pub request_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]

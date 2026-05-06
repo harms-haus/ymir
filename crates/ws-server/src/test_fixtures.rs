@@ -150,7 +150,7 @@ mod tests {
             worktree_base_dir: Some("custom-worktrees".to_string()),
             agent: Some("hermes".to_string()),
             settings: Some("{\"theme\":\"dark\"}".to_string()),
-            request_id: Some(Uuid::new_v4()),
+            request_id: Some("workspace-update-test-123".to_string()),
         }));
 
         let path = write_fixture("WorkspaceUpdate", &msg)?;

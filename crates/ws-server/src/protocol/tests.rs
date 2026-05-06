@@ -87,7 +87,7 @@ fn test_workspace_update_roundtrip() {
         worktree_base_dir: Some("custom-worktrees".to_string()),
         agent: None,
         settings: Some("{\"theme\":\"dark\"}".to_string()),
-        request_id: Some(Uuid::new_v4()),
+        request_id: Some("workspace-update-1234567890-abc123".to_string()),
     }));
     test_json_roundtrip(msg);
 }

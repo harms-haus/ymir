@@ -6,7 +6,7 @@ use libsql::{Builder, Connection, Database};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::RwLock;
-use tracing::{debug, info, Level};
+use tracing::{debug, error, info, Level};
 #[cfg(test)]
 use uuid::Uuid;
 
@@ -135,6 +135,7 @@ const SCHEMA_MIGRATIONS: &[&str] = &[
     ALTER TABLE worktrees ADD COLUMN color TEXT;
     ALTER TABLE worktrees ADD COLUMN icon TEXT;
     ALTER TABLE worktrees ADD COLUMN agent_type TEXT;
+    ALTER TABLE worktrees ADD COLUMN updated_at TEXT DEFAULT (datetime('now'));
     "#,
 ];
 
@@ -687,39 +688,47 @@ impl Db {
         let now_rfc3339 = chrono::Utc::now().to_rfc3339();
 
         let mut set_parts: Vec<String> = Vec::new();
-        let mut params: Vec<String> = Vec::new();
+        let mut params: Vec<libsql::Value> = Vec::new();
         let mut param_idx = 1usize;
 
         if let Some(c) = color {
             set_parts.push(format!("color = ?{}", param_idx));
-            params.push(c.to_string());
+            params.push(libsql::Value::Text(c.to_string()));
             param_idx += 1;
         }
         if let Some(i) = icon {
             set_parts.push(format!("icon = ?{}", param_idx));
-            params.push(i.to_string());
+            params.push(libsql::Value::Text(i.to_string()));
             param_idx += 1;
         }
         if let Some(a) = agent_type {
             set_parts.push(format!("agent_type = ?{}", param_idx));
-            params.push(a.to_string());
+            params.push(libsql::Value::Text(a.to_string()));
             param_idx += 1;
         }
 
         set_parts.push(format!("updated_at = ?{}", param_idx));
-        params.push(now_rfc3339);
+        params.push(libsql::Value::Text(now_rfc3339));
 
         let set_clause = set_parts.join(", ");
         let sql = format!("UPDATE worktrees SET {} WHERE id = ?{}", set_clause, param_idx + 1);
-        params.push(id.to_string());
+        params.push(libsql::Value::Text(id.to_string()));
 
-        let rows_affected = conn.execute(&sql, params).await?;
-
-        debug!(
-            "Updated worktree {} settings (rows affected: {})",
-            id, rows_affected
-        );
-        Ok(rows_affected > 0)
+        info!("Executing worktree update: sql={} params={:?}", sql, params);
+        let result = conn.execute(&sql, params).await;
+        match result {
+            Ok(rows_affected) => {
+                info!(
+                    "Updated worktree {} settings (rows affected: {})",
+                    id, rows_affected
+                );
+                Ok(rows_affected > 0)
+            }
+            Err(e) => {
+                error!("Failed to update worktree {}: {}", id, e);
+                Err(e.into())
+            }
+        }
     }
 
     pub async fn delete_worktree(&self, id: &str) -> Result<bool> {

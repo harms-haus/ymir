@@ -150,7 +150,7 @@ async fn process_ws_message(
                 info!(%client_id, "Sending response for text message, payload_type: {:?}, json_size: {}", response.payload, response_json.len());
                 state.send_to(client_id, response).await;
             } else {
-                warn!(%client_id, "Failed to decode text message as BridgeEnvelope");
+                warn!(%client_id, "Failed to decode text message as BridgeEnvelope, preview: {}", &text[..text.len().min(300)]);
             }
         }
         Message::Close(_) => {

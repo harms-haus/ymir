@@ -39,7 +39,10 @@ pub struct UnsupportedVersionError {
 pub fn decode_bridge_message(text: &str) -> Option<DecodedMessage> {
     let envelope: BridgeEnvelope = match serde_json::from_str(text) {
         Ok(env) => env,
-        Err(_) => return None,
+        Err(e) => {
+            tracing::error!("Failed to parse BridgeEnvelope: {}\n  Input: {}", e, &text[..text.len().min(500)]);
+            return None;
+        }
     };
 
     // Version check
@@ -480,4 +483,45 @@ mod tests {
             other => panic!("Expected DecodedMessage::Client, got {:?}", other),
         }
     }
+
+
+    #[test]
+    fn test_decode_worktree_update_envelope() {
+        let payload = serde_json::json!({
+            "type": "WorktreeUpdate",
+            "data": {
+                "worktreeId": "f2936c59-60f0-4bb5-b579-a2fa7ffcd650",
+                "color": "#a855f7",
+                "icon": "ri-git-branch-line",
+                "agentType": "hermes",
+                "requestId": "01969c9d-8c5e-73b5-b5a3-c47c3a6d6580"
+            }
+        });
+        let envelope = BridgeEnvelope::new(
+            BridgeMessage::WorktreeEvent { payload },
+            1778032413930,
+        );
+        let envelope_json = serde_json::to_string(&envelope).unwrap();
+        println!("Input: {}", &envelope_json[..envelope_json.len().min(200)]);
+
+        let result = decode_bridge_message(&envelope_json);
+        match result {
+            Some(DecodedMessage::Client(msg)) => {
+                println!("Decoded as Client message");
+                match msg.payload {
+                    ClientMessagePayload::WorktreeUpdate(update) => {
+                        println!("WorktreeUpdate decoded successfully!");
+                        println!("  worktree_id: {}", update.worktree_id);
+                        println!("  color: {:?}", update.color);
+                        println!("  icon: {:?}", update.icon);
+                        println!("  agent_type: {:?}", update.agent_type);
+                        println!("  request_id: {:?}", update.request_id);
+                    }
+                    other => panic!("Expected WorktreeUpdate, got {:?}", other),
+                }
+            }
+            other => panic!("Expected DecodedMessage::Client, got {:?}", other),
+        }
+    }
+
 }
