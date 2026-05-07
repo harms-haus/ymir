@@ -434,7 +434,11 @@ export class YmirWsTransport {
       // DEPRECATED: acpSessionManager.handleAcpPayload routes by worktreeId as fallback.
       // New multi-session flow should use handleAcpPayloadByAgentTabId(agentTabId, payload)
       // instead. This backward-compat path is retained for legacy single-session flows.
-      acpSessionManager.handleAcpPayload(worktreeId, payload);
+      if (envelopeAgentTabId) {
+        acpSessionManager.handleAcpPayloadByAgentTabId(envelopeAgentTabId, payload);
+      } else {
+        acpSessionManager.handleAcpPayload(worktreeId, payload);
+      }
     }
   }
 

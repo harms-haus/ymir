@@ -1,121 +1,46 @@
-import { useStore } from '../../store';
-import { AgentRuntimeProvider } from './AgentRuntimeProvider';
-import {
-  ThreadPrimitive,
-  ComposerPrimitive,
-  MessagePrimitive,
-  MessagePartPrimitive,
-} from '@assistant-ui/react';
+import { useRef } from 'react';
+import { Thread, Composer } from '@harms-haus/acp-chat-react';
+import type { AcpStore } from '@harms-haus/acp-chat-react';
+import type { SessionController } from '@harms-haus/acp-chat-core';
+import { useScrollbarFade } from '../../hooks/useScrollbarFade';
+import { YmirSettingsRow } from './YmirSettingsRow';
 import './acp-chat.css';
 
 interface AcpChatProps {
-  sessionId: string;
+  agentTabId: string;
   agentType: string;
-  /** Worktree ID for context/labeling only. Not used for routing — use threadId instead. */
-  worktreeId: string;
-  threadId: string;
-  onSendMessage: (message: string) => void;
-}
-
-function AcpUserMessage() {
-  return (
-    <MessagePrimitive.Root className="acp-message-row user">
-      <div className="acp-message user">
-        <MessagePrimitive.Parts
-          components={{
-            Text: () => (
-              <p className="acp-message-text user">
-                <MessagePartPrimitive.Text />
-              </p>
-            ),
-          }}
-        />
-      </div>
-    </MessagePrimitive.Root>
-  );
-}
-
-function AcpAgentMessage() {
-  return (
-    <MessagePrimitive.Root className="acp-message-row assistant">
-      <div className="acp-message assistant">
-        <MessagePrimitive.Parts
-          components={{
-            Text: () => (
-              <div className="acp-message-text assistant">
-                <MessagePartPrimitive.Text />
-              </div>
-            ),
-          }}
-        />
-      </div>
-    </MessagePrimitive.Root>
-  );
+  store: AcpStore;
+  controller: SessionController;
 }
 
 export function AcpChat({
-  sessionId,
+  agentTabId,
   agentType,
-  worktreeId,
-  threadId,
-  onSendMessage,
+  store,
+  controller,
 }: AcpChatProps) {
-  // Read accumulator state for this thread
-  const thread = useStore((state) => state.acpAccumulator.threads.get(threadId));
+  const threadContainerRef = useRef<HTMLDivElement>(null);
 
-  // Show empty state while waiting for session init
-  if (!thread) {
-    return (
-      <div className="acp-chat-container">
-        <div className="acp-chat-empty">
-          <p>Waiting for agent session...</p>
-        </div>
-      </div>
-    );
-  }
+  useScrollbarFade(threadContainerRef);
 
   return (
-    <AgentRuntimeProvider
-      worktreeId={worktreeId}
-      threadId={threadId}
-      sessionId={sessionId}
-      onSendMessage={onSendMessage}
-    >
-      <div className="acp-chat-container">
-        <ThreadPrimitive.Root className="acp-chat-thread-root">
-          <ThreadPrimitive.Viewport className="acp-chat-thread-viewport">
-            <ThreadPrimitive.Messages>
-              {({ message }) =>
-                message.role === 'user' ? (
-                  <AcpUserMessage key={message.id} />
-                ) : (
-                  <AcpAgentMessage key={message.id} />
-                )
-              }
-            </ThreadPrimitive.Messages>
-            <ThreadPrimitive.ViewportFooter>
-              <ComposerPrimitive.Root className="acp-composer-root">
-                <ComposerPrimitive.Input
-                  className="acp-composer-input"
-                  placeholder={`Ask ${agentType}...`}
-                />
-                <div className="acp-composer-actions">
-                  <ComposerPrimitive.Send asChild>
-                    <button type="button" className="acp-composer-btn send" aria-label="Send message">
-                      Send
-                    </button>
-                  </ComposerPrimitive.Send>
-                  <ComposerPrimitive.Cancel asChild>
-                    <button type="button" className="acp-composer-btn stop" aria-label="Stop generation">
-                      Stop
-                    </button>
-                  </ComposerPrimitive.Cancel>
-                </div>
-              </ComposerPrimitive.Root>
-            </ThreadPrimitive.ViewportFooter>
-          </ThreadPrimitive.Viewport>
-        </ThreadPrimitive.Root>
-      </div>
-    </AgentRuntimeProvider>
+    <div className="acp-chat-container" ref={threadContainerRef}>
+      <Thread
+        store={store}
+        controller={controller}
+        layout="expanded"
+        followScroll={true}
+        follow={true}
+        className="ymir-agent-thread"
+      />
+      <Composer
+        store={store}
+        controller={controller}
+        minRows={2}
+        placeholder={`Ask ${agentType}...`}
+        renderSettingsRow={YmirSettingsRow}
+        className="ymir-agent-composer"
+      />
+    </div>
   );
 }

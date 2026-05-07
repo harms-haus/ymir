@@ -7,11 +7,12 @@ import { AcpChat } from './AcpChat';
 import { AgentSkeleton } from './AgentSkeleton';
 import { DiffTab } from '../editor/DiffTab';
 import { EditorTab } from '../editor/EditorTab';
-import { AgentCancel, AgentSend, AgentSpawn } from '../../types/protocol';
+import { AgentCancel, AgentSpawn } from '../../types/protocol';
 import { useContextMenu } from '../../hooks/useContextMenu';
 import { TabContextMenu } from '../ui/TabContextMenu';
 import { useSortableTabs, SortableTab } from '../ui/SortableTabs';
 import RobotIcon from '@mui/icons-material/SmartToy';
+import { acpSessionManager } from '../../lib/acp-session-manager';
 import '../../styles/tabs.css';
 import '../../styles/agent.css';
 
@@ -94,6 +95,12 @@ export function AgentPane({ worktreeId }: AgentPaneProps) {
         };
         addedTabsRef.current.add(session.id);
         addAgentTab(worktreeId, agentTab);
+
+        // Ensure acpSessionManager has a controller for this session
+        const agentTabId = session.agentTabId ?? session.id;
+        if (!acpSessionManager.hasController(agentTabId)) {
+          acpSessionManager.getOrCreateController(agentTabId, worktreeId);
+        }
       }
     });
   }, [worktreeId, tabSessionIds, agentSessions, addAgentTab]);
@@ -132,20 +139,12 @@ export function AgentPane({ worktreeId }: AgentPaneProps) {
           agentTabId: session.agentTabId ?? session.id,
  };
  client.send(cancelMessage);
+ // Clean up the SessionController
+ acpSessionManager.removeController(session.agentTabId ?? session.id);
  }
  }
  removeAgentTab(worktreeId, tabId);
  }, [worktreeId, tabs, agentSessions, removeAgentTab, client]);
-
-  const handleSendMessage = useCallback((agentTabId: string) => (message: string) => {
-    const sendMessage: AgentSend = {
-      type: 'AgentSend',
-      worktreeId,
-      message,
-      agentTabId,
-    };
-    client.send(sendMessage);
-  }, [worktreeId, client]);
 
   const { state: contextMenuState, openMenu, closeMenu, handleAction } = useContextMenu({
     onClose: (tabId: string) => handleCloseTab(tabId),
@@ -260,7 +259,6 @@ export function AgentPane({ worktreeId }: AgentPaneProps) {
           ) : (
             tabs.map((tab) => {
               const sessionForTab = agentSessions.find((as) => as.id === tab.sessionId);
-              const threadId = sessionForTab?.acpSessionId ?? sessionForTab?.id ?? '';
               return (
                 <Tabs.Panel
                   key={tab.id}
@@ -269,11 +267,13 @@ export function AgentPane({ worktreeId }: AgentPaneProps) {
                 >
                   {tab.type === 'agent' && sessionForTab && (
                     <AcpChat
-                      sessionId={sessionForTab.id}
+                      agentTabId={sessionForTab.agentTabId ?? sessionForTab.id}
                       agentType={sessionForTab.agentType}
-                      worktreeId={worktreeId}
-                      threadId={threadId}
-                      onSendMessage={handleSendMessage(sessionForTab.id)}
+                      store={acpSessionManager.getAcpStore(sessionForTab.agentTabId ?? sessionForTab.id)!}
+                      controller={acpSessionManager.getOrCreateController(
+                        sessionForTab.agentTabId ?? sessionForTab.id,
+                        worktreeId
+                      )}
                     />
                   )}
                   {tab.type === 'agent' && !sessionForTab && (

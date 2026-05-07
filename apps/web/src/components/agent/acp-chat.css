@@ -136,3 +136,465 @@
   padding: 2rem;
   text-align: center;
 }
+
+/* === Ymir Agent Chat Styles (R5: Message and Tool Stack CSS Styling) === */
+
+/* === Thread Layout === */
+.ymir-agent-thread {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.ymir-agent-thread[data-acp-thread] {
+  flex: 1;
+  overflow: hidden;
+}
+
+.ymir-agent-thread [data-acp-thread-scroll-viewport] {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.ymir-agent-thread [data-acp-thread-scroll-content] {
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem 0;
+}
+
+/* === User Messages (right-aligned bubble) === */
+.ymir-agent-thread [data-acp-message-role="user"] {
+  margin-left: auto;
+  margin-right: 0.75rem;
+  max-width: 80%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.ymir-agent-thread [data-acp-message-role="user"].acp-message {
+  background: hsl(var(--primary) / 0.42);
+  padding: 0.5rem 0.75rem;
+  border-radius: 1rem 1rem 0.25rem 1rem;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.ymir-agent-thread [data-acp-message-role="user"] .acp-message__content {
+  color: hsl(var(--primary-foreground));
+}
+
+.ymir-agent-thread [data-acp-message-role="user"] .acp-message__header {
+  display: none;
+}
+
+/* === Agent Messages (left-aligned, on-surface, no bubble) === */
+.ymir-agent-thread [data-acp-message-role="agent"] {
+  margin-left: 1rem;
+  margin-right: auto;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.ymir-agent-thread [data-acp-message-role="agent"].acp-message {
+  background: transparent;
+  padding: 0.25rem 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.ymir-agent-thread [data-acp-message-role="agent"] .acp-message__content {
+  color: hsl(var(--foreground));
+}
+
+.ymir-agent-thread [data-acp-message-role="agent"] .acp-message__header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.ymir-agent-thread [data-acp-message-role="agent"] .acp-message__role-label {
+  font-weight: 500;
+}
+
+/* === Thought/Tool Stacks (left-aligned, smaller padding) === */
+.ymir-agent-thread [data-acp-thought-root] {
+  margin-left: 1rem;
+  margin-right: 0.75rem;
+  padding: 0.25rem 0;
+}
+
+.ymir-agent-thread [data-acp-thought-trigger] {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  border-radius: 0.25rem;
+  transition: background 0.15s ease;
+}
+
+.ymir-agent-thread [data-acp-thought-trigger]:hover {
+  background: hsl(var(--muted) / 0.3);
+}
+
+.ymir-agent-thread [data-acp-thought-trigger-indicator] {
+  transition: transform 0.2s ease;
+  color: hsl(var(--muted-foreground));
+}
+
+.ymir-agent-thread [data-acp-thought-open="true"] [data-acp-thought-trigger-indicator] {
+  transform: rotate(90deg);
+}
+
+.ymir-agent-thread [data-acp-thought-trigger-label] {
+  user-select: none;
+}
+
+.ymir-agent-thread [data-acp-thought-items] {
+  margin-top: 0.25rem;
+  padding-left: 0.5rem;
+}
+
+.ymir-agent-thread [data-acp-thought-item] {
+  margin-bottom: 0.25rem;
+}
+
+/* === Tool Calls (bubble with corner radius, expandable) === */
+.ymir-agent-thread [data-acp-tool-call-root] {
+  border-radius: 0.375rem;
+  background: hsl(var(--card) / 0.5);
+  padding: 0.375rem 0.5rem;
+  margin: 0.25rem 0;
+  backdrop-filter: blur(8px);
+  border: 1px solid hsl(var(--border) / 0.5);
+}
+
+.ymir-agent-thread [data-acp-tool-call-header] {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0.125rem 0;
+  user-select: none;
+}
+
+.ymir-agent-thread [data-acp-tool-call-status-icon] {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ymir-agent-thread [data-acp-tool-call-status="pending"] [data-acp-tool-call-status-icon] {
+  background: hsl(var(--muted-foreground));
+  animation: pulse-status 1.5s ease-in-out infinite;
+}
+
+.ymir-agent-thread [data-acp-tool-call-status="running"] [data-acp-tool-call-status-icon] {
+  background: hsl(210, 100%, 50%);
+  animation: pulse-status 1s ease-in-out infinite;
+}
+
+.ymir-agent-thread [data-acp-tool-call-status="completed"] [data-acp-tool-call-status-icon] {
+  background: hsl(142, 76%, 36%);
+}
+
+.ymir-agent-thread [data-acp-tool-call-status="failed"] [data-acp-tool-call-status-icon] {
+  background: hsl(var(--destructive));
+}
+
+@keyframes pulse-status {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.ymir-agent-thread [data-acp-tool-call-kind] {
+  font-weight: 500;
+  color: hsl(var(--foreground));
+}
+
+.ymir-agent-thread [data-acp-tool-call-title] {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.6875rem;
+}
+
+.ymir-agent-thread [data-acp-tool-call-expand-indicator] {
+  margin-left: auto;
+  transition: transform 0.2s ease;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.625rem;
+}
+
+.ymir-agent-thread [data-acp-tool-call-expanded="true"] [data-acp-tool-call-expand-indicator] {
+  transform: rotate(180deg);
+}
+
+.ymir-agent-thread [data-acp-tool-call-details] {
+  margin-top: 0.25rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid hsl(var(--border) / 0.5);
+  font-size: 0.6875rem;
+}
+
+.ymir-agent-thread [data-acp-tool-call-input] {
+  margin-bottom: 0.25rem;
+}
+
+.ymir-agent-thread [data-acp-tool-call-output] {
+  color: hsl(var(--muted-foreground));
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ymir-agent-thread [data-acp-tool-call-metadata] {
+  font-size: 0.625rem;
+  color: hsl(var(--muted-foreground) / 0.7);
+}
+
+/* === Composer === */
+.ymir-agent-composer {
+  flex-shrink: 0;
+  border-top: 1px solid hsl(var(--border));
+  padding: 0.5rem;
+  background: hsl(var(--background));
+}
+
+.ymir-agent-composer[data-acp-composer] {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ymir-agent-composer [data-acp-composer-input-container] {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.ymir-agent-composer [data-acp-composer-input] {
+  flex: 1;
+  min-height: 3rem;
+  resize: none;
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+  color: hsl(var(--foreground));
+  font-size: 0.875rem;
+  line-height: 1.5;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.ymir-agent-composer [data-acp-composer-input]:focus {
+  border-color: hsl(var(--primary) / 0.5);
+}
+
+.ymir-agent-composer [data-acp-composer-input]::placeholder {
+  color: hsl(var(--muted-foreground));
+}
+
+.ymir-agent-composer [data-acp-composer-controls] {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.375rem;
+}
+
+/* === Jump to Latest Button === */
+.ymir-agent-thread [data-acp-thread-scroll-indicator] {
+  position: absolute;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.15s ease;
+  z-index: 10;
+}
+
+.ymir-agent-thread [data-acp-thread-scroll-indicator]:hover {
+  background: hsl(var(--muted) / 0.5);
+  border-color: hsl(var(--primary) / 0.5);
+}
+
+/* Scrollbar fade behavior */
+.ymir-agent-thread [data-acp-thread-scroll-viewport] {
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.3s ease;
+}
+
+.ymir-agent-thread [data-acp-thread-scroll-viewport].scrollbar-visible {
+  scrollbar-color: hsl(var(--muted-foreground) / 0.28) transparent;
+}
+
+.ymir-agent-thread [data-acp-thread-scroll-viewport]::-webkit-scrollbar-thumb {
+  background: transparent;
+  transition: background 0.3s ease;
+}
+
+.ymir-agent-thread [data-acp-thread-scroll-viewport].scrollbar-visible::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.28);
+}
+
+/* YmirSettingsRow - Custom settings row for Composer */
+.ymir-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  background: hsl(var(--muted) / 0.2);
+  border-top: 1px solid hsl(var(--border));
+}
+
+.ymir-settings-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ymir-settings-session {
+  display: flex;
+  align-items: center;
+}
+
+.ymir-selector-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.375rem;
+  background: hsl(var(--muted) / 0.3);
+  border: 1px solid hsl(var(--border) / 0.5);
+  border-radius: 0.25rem;
+  font-size: 0.6875rem;
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+  white-space: nowrap;
+}
+
+.ymir-selector-trigger:hover {
+  background: hsl(var(--muted) / 0.5);
+  border-color: hsl(var(--border));
+}
+
+.ymir-selector-trigger:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+.ymir-selector-icon {
+  font-size: 0.5rem;
+  opacity: 0.7;
+  margin-left: 0.125rem;
+}
+
+.ymir-selector-positioner {
+  z-index: 100;
+}
+
+.ymir-selector-popup {
+  background: hsl(var(--popover));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.375rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 0.25rem;
+  min-width: 120px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.ymir-selector-item {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  color: hsl(var(--popover-foreground));
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.ymir-selector-item:hover {
+  background: hsl(var(--muted) / 0.5);
+}
+
+.ymir-selector-item[data-selected="true"] {
+  background: hsl(var(--primary) / 0.1);
+}
+
+.ymir-selector-indicator {
+  margin-left: auto;
+  font-size: 0.625rem;
+  color: hsl(var(--primary));
+}
+
+.ymir-mode-selector {
+  min-width: 68px;
+}
+
+.ymir-model-selector {
+  min-width: 88px;
+}
+
+.ymir-session-selector {
+  min-width: 100px;
+}
+
+.ymir-status-dot {
+  display: inline-flex;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.ymir-status-dot.working {
+  background: hsl(var(--status-working));
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+.ymir-status-dot.idle {
+  background: hsl(var(--status-idle));
+}
+
+.ymir-status-dot.waiting {
+  background: hsl(var(--status-waiting));
+}
+
+.ymir-status-dot.error {
+  background: hsl(var(--destructive));
+}
+
+@keyframes pulse-dot {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
