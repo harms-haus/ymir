@@ -170,15 +170,17 @@ pub trait AcpEventSender: Send + Sync {
 #[derive(Clone)]
 pub struct YmirClientHandler {
     worktree_id: Uuid,
+    agent_tab_id: Uuid,
     event_sender: Arc<dyn AcpEventSender>,
     sequence: Arc<SequenceCounter>,
     config_options: Arc<Mutex<Vec<AcpSessionConfigOption>>>,
 }
 
 impl YmirClientHandler {
-    pub fn new(worktree_id: Uuid, event_sender: Arc<dyn AcpEventSender>, sequence: Arc<SequenceCounter>) -> Self {
+    pub fn new(worktree_id: Uuid, agent_tab_id: Uuid, event_sender: Arc<dyn AcpEventSender>, sequence: Arc<SequenceCounter>) -> Self {
         Self {
             worktree_id,
+            agent_tab_id,
             event_sender,
             sequence,
             config_options: Arc::new(Mutex::new(Vec::new())),
@@ -237,6 +239,8 @@ impl YmirClientHandler {
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0),
       event: event.clone(),
+      agent_tab_id: Some(self.agent_tab_id.to_string()),
+      worktree_id: Some(self.worktree_id.to_string()),
     };
     tracing::info!("Broadcasting ACP event: {:?} for worktree {}", event, self.worktree_id);
     self.event_sender.send_event(envelope);

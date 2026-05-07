@@ -40,6 +40,14 @@ pub struct AcpEventEnvelope {
     /// The actual event payload
     #[serde(flatten)]
     pub event: AcpEvent,
+    /// Routing: agent tab ID for multi-session correlation
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(type = "string | null")]
+    pub agent_tab_id: Option<String>,
+    /// Routing: worktree ID for session lookup
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(type = "string | null")]
+    pub worktree_id: Option<String>,
 }
 
 /// WS-ACP event types - stateless vocabulary for ACP bridge communication.

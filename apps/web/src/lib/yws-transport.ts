@@ -389,10 +389,13 @@ export class YmirWsTransport {
     const payload = (message as any).payload as Record<string, unknown> | null;
     if (!payload) return;
 
-    // Extract worktreeId from payload data for routing
+    // Extract routing metadata from the AcpEventEnvelope top level.
+    // agentTabId and worktreeId are routing fields added by the server adapter.
     const { activeWorktreeId } = useStore.getState();
+    const envelopeAgentTabId = (payload as any)?.agentTabId as string | undefined;
+    const envelopeWorktreeId = (payload as any)?.worktreeId as string | undefined;
     const data = (payload.data as Record<string, unknown>) ?? {};
-    const worktreeId = (data as any)?.worktreeId ?? activeWorktreeId;
+    const worktreeId = envelopeWorktreeId ?? (data as any)?.worktreeId ?? activeWorktreeId;
 
     if (worktreeId) {
       // Dispatch to Zustand accumulator (Accumulator-First approach)
@@ -401,7 +404,7 @@ export class YmirWsTransport {
       if (payload.eventType && typeof payload.sequence === 'number') {
         // threadId is derived from agentTabId (multi-session routing).
         // Falls back to worktreeId only if agentTabId is absent.
-        const threadId = (data as any)?.agentTabId ?? worktreeId;
+        const threadId = envelopeAgentTabId ?? (data as any)?.agentTabId ?? worktreeId;
         useStore.getState().dispatchAccumulator({
           type: 'EVENT_RECEIVED',
           envelope: payload as unknown as AcpEventEnvelope,
@@ -414,7 +417,7 @@ export class YmirWsTransport {
       // the ACP SessionInit event carries the actual acpSessionId in its data.
       if (payload.eventType === 'SessionInit') {
         const acpSessionId = (data as any)?.acpSessionId;
-        const agentTabId = (data as any)?.agentTabId;
+        const agentTabId = envelopeAgentTabId ?? (data as any)?.agentTabId;
         if (acpSessionId) {
           const sessions = useStore.getState().agentSessions;
           // Look up by agentTabId if available, otherwise fall back to worktreeId

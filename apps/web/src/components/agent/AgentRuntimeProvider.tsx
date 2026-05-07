@@ -98,7 +98,9 @@ export function AgentRuntimeProvider({ children, worktreeId, threadId, sessionId
  }, [onSendMessage, dispatchAccumulator, threadId]);
 
  const onCancel = useCallback(async () => {
- client.send({ type: 'AgentCancel', worktreeId, sessionId });
+ const session = useStore.getState().agentSessions.find(s => s.id === sessionId);
+    const agentTabId = session?.agentTabId ?? sessionId;
+    client.send({ type: 'AgentCancel', worktreeId, sessionId, agentTabId });
  dispatchAccumulator({ type: 'SET_STREAMING', threadId, isStreaming: false });
  }, [client, worktreeId, sessionId, dispatchAccumulator, threadId]);
 

@@ -450,6 +450,8 @@ mod tests {
                     acp_session_id: "session-123".to_string(),
                     reason: crate::protocol::AcpPromptCompleteReason::Normal,
                 }),
+                agent_tab_id: None,
+                worktree_id: None,
             });
         let bridge = server_message_to_bridge(payload, test_timestamp());
 

@@ -345,6 +345,8 @@ mod tests {
                 acp_session_id: "session-123".to_string(),
                 reason: AcpPromptCompleteReason::Normal,
             }),
+            agent_tab_id: None,
+            worktree_id: None,
         };
         let payload = ServerMessagePayload::AcpWireEvent(envelope);
         let bridge = payload_to_bridge_message(payload);

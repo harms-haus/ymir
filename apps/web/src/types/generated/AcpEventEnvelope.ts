@@ -25,4 +25,12 @@ correlationId: AcpCorrelationId | null,
 /**
  * Unix timestamp in milliseconds
  */
-timestamp: bigint, } & ({ "eventType": "SessionInit", "data": AcpSessionInit } | { "eventType": "ConfigOptionsUpdate", "data": AcpConfigOptionsUpdate } | { "eventType": "SessionStatus", "data": AcpSessionStatusEvent } | { "eventType": "PromptChunk", "data": AcpPromptChunk } | { "eventType": "PromptComplete", "data": AcpPromptComplete } | { "eventType": "ToolUse", "data": AcpToolUseEvent } | { "eventType": "ContextUpdate", "data": AcpContextUpdate } | { "eventType": "Error", "data": AcpError } | { "eventType": "ResumeMarker", "data": AcpResumeMarker });
+timestamp: bigint, 
+/**
+ * Routing: agent tab ID for multi-session correlation
+ */
+agentTabId: string | null, 
+/**
+ * Routing: worktree ID for session lookup
+ */
+worktreeId: string | null, } & ({ "eventType": "SessionInit", "data": AcpSessionInit } | { "eventType": "ConfigOptionsUpdate", "data": AcpConfigOptionsUpdate } | { "eventType": "SessionStatus", "data": AcpSessionStatusEvent } | { "eventType": "PromptChunk", "data": AcpPromptChunk } | { "eventType": "PromptComplete", "data": AcpPromptComplete } | { "eventType": "ToolUse", "data": AcpToolUseEvent } | { "eventType": "ContextUpdate", "data": AcpContextUpdate } | { "eventType": "Error", "data": AcpError } | { "eventType": "ResumeMarker", "data": AcpResumeMarker });

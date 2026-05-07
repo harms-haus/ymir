@@ -294,6 +294,7 @@ export interface AgentCancel {
   type: 'AgentCancel';
   worktreeId: string;
   sessionId: string;
+  agentTabId: string;
 }
 
 export interface AgentSetConfigOption {
@@ -511,6 +512,7 @@ export interface AgentStatusUpdate {
   agentType: string;
   status: AgentStatus;
   startedAt: number;
+  agentTabId: string;
 }
 
 export interface AgentOutput {

@@ -46,6 +46,7 @@ export interface AgentSessionState {
     worktreeId: string;
     agentType: string;
     acpSessionId?: string;
+    agentTabId?: string;
     status: AgentStatus;
     startedAt: number;
     label?: string;

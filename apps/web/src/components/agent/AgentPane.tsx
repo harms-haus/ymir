@@ -129,6 +129,7 @@ export function AgentPane({ worktreeId }: AgentPaneProps) {
  type: 'AgentCancel',
  worktreeId: session.worktreeId,
  sessionId: session.id,
+          agentTabId: session.agentTabId ?? session.id,
  };
  client.send(cancelMessage);
  }

@@ -576,6 +576,8 @@ fn test_acp_event_envelope_roundtrip() {
             },
             config_options: Vec::new(),
         }),
+        agent_tab_id: None,
+        worktree_id: None,
     };
     test_json_roundtrip(envelope);
 }

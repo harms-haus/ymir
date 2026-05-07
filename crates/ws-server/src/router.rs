@@ -456,23 +456,32 @@ async fn handle_get_state(state: Arc<AppState>, request_id: Uuid) -> ServerMessa
             }
         };
 
-        // Populate in-memory agents map from database
+        // Only restore sessions that completed ACP handshake (have acp_session_id).
+        // Sessions without acp_session_id are stale/failed spawns — skip and clean up.
         for session in &db_agent_sessions {
             let session_id = Uuid::parse_str(&session.id).unwrap_or_else(|_| Uuid::new_v4());
             let worktree_id = Uuid::parse_str(&session.worktree_id).unwrap_or(worktree.id);
-            let mut agents = state.agents.write().await;
-            agents.insert(session_id, crate::state::AgentState {
-                id: session_id,
-                worktree_id,
-                agent_type: session.agent_type.clone(),
-                agent_tab_id: Uuid::new_v4(), // placeholder - set on client spawn
-                status: session.status.clone(),
-            });
+
+            if session.acp_session_id.is_some() {
+                let mut agents = state.agents.write().await;
+                agents.insert(session_id, crate::state::AgentState {
+                    id: session_id,
+                    worktree_id,
+                    agent_type: session.agent_type.clone(),
+                    agent_tab_id: Uuid::new_v4(), // placeholder until re-connected
+                    status: session.status.clone(),
+                });
+            } else {
+                // Clean up stale session from DB
+                tracing::info!(session_id = %session_id, "Cleaning up stale agent session (no acp_session_id)");
+                let _ = state.db.delete_agent_session(&session.id).await;
+            }
         }
 
         agent_sessions.extend(
             db_agent_sessions
                 .into_iter()
+                .filter(|session| session.acp_session_id.is_some())
                 .map(|session| AgentSessionData {
                     id: Uuid::parse_str(&session.id).unwrap_or_else(|_| Uuid::new_v4()),
                     worktree_id: Uuid::parse_str(&session.worktree_id).unwrap_or(worktree.id),

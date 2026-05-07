@@ -95,12 +95,13 @@ impl AcpClient {
         agent_type: &str,
         worktree_path: &str,
         worktree_id: Uuid,
+        agent_tab_id: Uuid,
         broadcast_tx: broadcast::Sender<ServerMessage>,
     ) -> Result<Self> {
         let status = Arc::new(RwLock::new(AgentStatus::Idle));
         let event_sender = Arc::new(BroadcastingEventSender::new(broadcast_tx));
         let sequence = Arc::new(SequenceCounter::new());
-        let handler = YmirClientHandler::new(worktree_id, event_sender, sequence);
+        let handler = YmirClientHandler::new(worktree_id, agent_tab_id, event_sender, sequence);
 
         let (connection, _io_task, child) = Self::spawn_stdio(agent_type, worktree_path, handler.clone()).await?;
 
@@ -381,6 +382,7 @@ pub fn start_acp_runtime(broadcast_tx: broadcast::Sender<ServerMessage>) -> (Acp
                             &agent_type,
                             &worktree_path,
                             worktree_id,
+                            agent_tab_id,
                             broadcast_tx.clone(),
                         ).await;
                         let _ = respond.send(result.map(|client| {
@@ -495,6 +497,8 @@ mod tests {
                     status: crate::protocol::AcpSessionStatus::Working,
                 }
             ),
+            agent_tab_id: None,
+            worktree_id: None,
         };
 
         sender.send_event(envelope);

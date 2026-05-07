@@ -1356,6 +1356,7 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
             agentType: (data as any)?.agentType,
             status: (data as any)?.status,
             acpSessionId: incomingAcpSessionId,
+            agentTabId: (data as any)?.agentTabId,
             startedAt: (data as any)?.startedAt,
           } as any);
         }
