@@ -49,10 +49,11 @@ function generateMessageId(sequence: number): string {
   return `msg-${sequence}`;
 }
 
-function createEmptyThread(worktreeId: string, acpSessionId: string, connectionGeneration: number): AccumulatedThread {
+function createEmptyThread(threadId: string, acpSessionId: string, agentTabId: string, worktreeId: string, connectionGeneration: number): AccumulatedThread {
   return {
-    worktreeId,
     acpSessionId,
+    agentTabId,
+    worktreeId,
     messages: [],
     sessionStatus: 'Complete',
     lastSequence: 0,
@@ -94,30 +95,32 @@ export function acpAccumulatorReducer(
 
     case 'FLUSH_THREAD': {
       const newThreads = new Map(state.threads);
-      newThreads.delete(action.worktreeId);
+      newThreads.delete(action.threadId);
       return { ...state, threads: newThreads };
     }
 
     case 'REBUILD_FROM_SNAPSHOT': {
-      const thread = createEmptyThread(action.worktreeId, action.acpSessionId, state.connectionGeneration);
+      const thread = createEmptyThread(action.threadId, action.acpSessionId, action.threadId, action.worktreeId, state.connectionGeneration);
       const newThreads = new Map(state.threads);
-      newThreads.set(action.worktreeId, thread);
+      newThreads.set(action.threadId, thread);
       return { ...state, threads: newThreads };
     }
 
     case 'SET_STREAMING': {
-      const thread = state.threads.get(action.worktreeId);
+      const thread = state.threads.get(action.threadId);
       if (!thread) return state;
       const newThreads = new Map(state.threads);
-      newThreads.set(action.worktreeId, { ...thread, isStreaming: action.isStreaming });
+      newThreads.set(action.threadId, { ...thread, isStreaming: action.isStreaming });
       return { ...state, threads: newThreads };
     }
 
     case 'USER_MESSAGE': {
-      const { worktreeId, content } = action;
-      let thread = state.threads.get(worktreeId);
+      const { threadId, content } = action;
+      let thread = state.threads.get(threadId);
       if (!thread) {
-        thread = createEmptyThread(worktreeId, 'unknown', state.connectionGeneration);
+        // Fallback: use worktreeId from any existing thread, or 'unknown'
+        const fallbackWorktreeId = state.threads.values().next().value?.worktreeId ?? 'unknown';
+        thread = createEmptyThread(threadId, 'unknown', threadId, fallbackWorktreeId, state.connectionGeneration);
       }
       const newMessage: AccumulatedMessage = {
         id: generateMessageId(Date.now()),
@@ -127,35 +130,89 @@ export function acpAccumulatorReducer(
         lastSequence: Date.now(),
       };
       const newThreads = new Map(state.threads);
-      newThreads.set(worktreeId, { ...thread, messages: [...thread.messages, newMessage] });
+      newThreads.set(threadId, { ...thread, messages: [...thread.messages, newMessage] });
       return { ...state, threads: newThreads };
     }
 
     case 'EVENT_RECEIVED': {
-      const { envelope, worktreeId } = action;
+      const { envelope, threadId } = action;
       const eventType = envelope.eventType;
       const data = envelope.data;
       const sequence = envelope.sequence;
+      const worktreeId = (data as any)?.worktreeId ?? 'unknown';
 
-      let thread = state.threads.get(worktreeId);
-
+      // SessionInit: re-key from temp key (agentTabId) to acpSessionId
       if (isAcpSessionInit({ eventType, data } as any)) {
         const sessionData = data as any;
-        if (!thread) {
-          thread = createEmptyThread(worktreeId, sessionData.acpSessionId, state.connectionGeneration);
-        }
+        const acpSessionId = sessionData.acpSessionId;
         const newThreads = new Map(state.threads);
-        newThreads.set(worktreeId, {
-          ...thread,
-          acpSessionId: sessionData.acpSessionId,
-          configOptions: sessionData.configOptions ?? [],
-        });
+
+        // Idempotency guard: if a thread already exists at the acpSessionId key,
+        // just update config in place. Don't re-key or create duplicates.
+        const existingAtTarget = newThreads.get(acpSessionId);
+        if (existingAtTarget) {
+          console.debug(
+            `[acpAccumulator] SessionInit idempotent: thread already exists at acpSessionId=${acpSessionId}, updating config in place`
+          );
+          newThreads.set(acpSessionId, {
+            ...existingAtTarget,
+            acpSessionId,
+            configOptions: sessionData.configOptions ?? [],
+          });
+          return { ...state, threads: newThreads };
+        }
+
+        // Check if a thread exists at the incoming threadId (agentTabId temp key)
+        const existingThread = newThreads.get(threadId);
+        if (existingThread && threadId !== acpSessionId) {
+          // Re-key: copy thread from agentTabId to acpSessionId, delete old entry
+          console.debug(
+            `[acpAccumulator] SessionInit re-keying: migrating thread from agentTabId=${threadId} to acpSessionId=${acpSessionId}`
+          );
+          newThreads.delete(threadId);
+          newThreads.set(acpSessionId, {
+            ...existingThread,
+            acpSessionId,
+            agentTabId: threadId, // preserve the original agentTabId
+            worktreeId,
+            configOptions: sessionData.configOptions ?? [],
+          });
+
+          // Migrate pending correlations from old key to new key
+          const pendingAtOldKey = state.pendingCorrelations.get(threadId);
+          const newPendingCorrelations = new Map(state.pendingCorrelations);
+          if (pendingAtOldKey && pendingAtOldKey.length > 0) {
+            console.debug(
+              `[acpAccumulator] SessionInit re-keying: migrating ${pendingAtOldKey.length} pending correlation(s) from ${threadId} to ${acpSessionId}`
+            );
+            newPendingCorrelations.delete(threadId);
+            newPendingCorrelations.set(acpSessionId, pendingAtOldKey);
+          } else {
+            // No pending correlations at old key — still ensure old key is cleaned up
+            // in case there's an empty array leftover
+            newPendingCorrelations.delete(threadId);
+          }
+          return { ...state, threads: newThreads, pendingCorrelations: newPendingCorrelations };
+        } else {
+          // No existing thread — create new one keyed by acpSessionId
+          console.debug(
+            `[acpAccumulator] SessionInit: no existing thread at ${threadId}, creating new thread at acpSessionId=${acpSessionId}`
+          );
+          newThreads.set(acpSessionId, createEmptyThread(acpSessionId, acpSessionId, threadId, worktreeId, state.connectionGeneration));
+          const freshThread = newThreads.get(acpSessionId)!;
+          newThreads.set(acpSessionId, {
+            ...freshThread,
+            configOptions: sessionData.configOptions ?? [],
+          });
+        }
         return { ...state, threads: newThreads };
       }
 
+      let thread = state.threads.get(threadId);
+
       if (!thread) {
         const acpSessionId = (data as any)?.acpSessionId ?? 'unknown';
-        thread = createEmptyThread(worktreeId, acpSessionId, state.connectionGeneration);
+        thread = createEmptyThread(threadId, acpSessionId, threadId, worktreeId, state.connectionGeneration);
       }
 
       const newThreads = new Map(state.threads);
@@ -334,7 +391,7 @@ export function acpAccumulatorReducer(
       if (updatedThread.messages.length > MAX_ACCUMULATED_MESSAGES) {
         updatedThread.messages = updatedThread.messages.slice(-MAX_ACCUMULATED_MESSAGES);
       }
-      newThreads.set(worktreeId, updatedThread);
+      newThreads.set(threadId, updatedThread);
       return { ...state, threads: newThreads };
     }
 
@@ -890,9 +947,9 @@ setActiveAgentTab: (worktreeId, tabId) => {
       acpAccumulator: acpAccumulatorReducer(state.acpAccumulator, { type: 'FLUSH_ALL' }),
     })),
 
-  flushAccumulatorThread: (worktreeId: string) =>
+  flushAccumulatorThread: (threadId: string) =>
     set((state) => ({
-      acpAccumulator: acpAccumulatorReducer(state.acpAccumulator, { type: 'FLUSH_THREAD', worktreeId }),
+      acpAccumulator: acpAccumulatorReducer(state.acpAccumulator, { type: 'FLUSH_THREAD', threadId }),
     })),
 
   // File cache actions
@@ -948,6 +1005,17 @@ export const selectWorktreesByWorkspaceId = (workspaceId: string) => (state: App
 
 export const selectAgentSessionById = (sessionId: string) => (state: AppState) =>
   state.agentSessions.find((as) => as.id === sessionId);
+
+/** Look up an AgentSessionState by its ACP session ID.
+ * Useful when multiple UI contexts (tabs) share the same underlying
+ * acpSessionId and need to find the canonical session entry. */
+export function getSessionByAcpSessionId(
+  acpSessionId: string
+): AgentSessionState | undefined {
+  return useStore.getState().agentSessions.find(
+    (as) => as.acpSessionId === acpSessionId
+  );
+}
 
 export const selectAgentSessionsByWorktreeId = (worktreeId: string) => (state: AppState) => {
   const sessions = state.agentSessions.filter((as) => as.worktreeId === worktreeId);
@@ -1260,6 +1328,22 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
         // AgentStatusUpdate
         const id = (data as any)?.id as string | undefined;
         if (!id) break;
+
+        // Check if payload carries acpSessionId — if so, link to existing session
+        // to avoid creating duplicates when multiple tabs point to the same thread.
+        const incomingAcpSessionId = (data as any)?.acpSessionId as string | undefined;
+        if (incomingAcpSessionId) {
+          const existingByAcp = useStore.getState().agentSessions.find(
+            (as) => as.acpSessionId === incomingAcpSessionId
+          );
+          if (existingByAcp) {
+            useStore.getState().updateAgentSession(existingByAcp.id, {
+              status: (data as any)?.status,
+            } as any);
+            break;
+          }
+        }
+
         const existingSession = useStore.getState().agentSessions.find(as => as.id === id);
         if (existingSession) {
           useStore.getState().updateAgentSession(id, {
@@ -1271,7 +1355,7 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
             worktreeId: (data as any)?.worktreeId,
             agentType: (data as any)?.agentType,
             status: (data as any)?.status,
-            acpSessionId: undefined,
+            acpSessionId: incomingAcpSessionId,
             startedAt: (data as any)?.startedAt,
           } as any);
         }
@@ -1593,10 +1677,12 @@ export function handleBridgeMessage(decoded: DecodedBridgeMessage, sendFn?: (env
       if (worktreeId) {
         // Dispatch to accumulator if this looks like an AcpEventEnvelope
         if (payload.eventType && typeof payload.sequence === 'number') {
+          // threadId: currently worktreeId as fallback; will be updated to agentTabId/acpSessionId in Task 5
+          const threadId = (data as any)?.agentTabId ?? worktreeId;
           useStore.getState().dispatchAccumulator({
             type: 'EVENT_RECEIVED',
             envelope: payload as unknown as AcpEventEnvelope,
-            worktreeId,
+            threadId,
           });
         }
         // Also route through acpSessionManager for backward compat

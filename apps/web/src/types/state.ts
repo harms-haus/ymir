@@ -238,10 +238,11 @@ export interface AccumulatedMessage {
   lastSequence: AcpSequence;
 }
 
-/** Accumulated thread for a worktree/session */
+/** Accumulated thread for a session (keyed by acpSessionId) */
 export interface AccumulatedThread {
-  worktreeId: string;
   acpSessionId: string;
+  agentTabId: string;
+  worktreeId: string;
   messages: AccumulatedMessage[];
   sessionStatus: AcpSessionStatus;
   lastSequence: AcpSequence;
@@ -271,13 +272,13 @@ export function createInitialAccumulatorState(): AcpAccumulatorState {
 
 /** Actions that can be dispatched to the accumulator */
 export type AcpAccumulatorAction =
-  | { type: 'EVENT_RECEIVED'; envelope: AcpEventEnvelope; worktreeId: string }
-  | { type: 'USER_MESSAGE'; worktreeId: string; content: string }
+  | { type: 'EVENT_RECEIVED'; envelope: AcpEventEnvelope; threadId: string }
+  | { type: 'USER_MESSAGE'; threadId: string; content: string }
   | { type: 'CONNECTION_RECONNECTED' }
-  | { type: 'FLUSH_THREAD'; worktreeId: string }
+  | { type: 'FLUSH_THREAD'; threadId: string }
   | { type: 'FLUSH_ALL' }
-  | { type: 'REBUILD_FROM_SNAPSHOT'; worktreeId: string; acpSessionId: string }
-  | { type: 'SET_STREAMING'; worktreeId: string; isStreaming: boolean };
+  | { type: 'REBUILD_FROM_SNAPSHOT'; threadId: string; acpSessionId: string; worktreeId: string }
+  | { type: 'SET_STREAMING'; threadId: string; isStreaming: boolean };
 
 /** Selector result for a thread's accumulated state */
 export interface ThreadAccumulatedState {
@@ -453,7 +454,7 @@ export interface AppState {
   // ACP Accumulator actions
   dispatchAccumulator: (action: AcpAccumulatorAction) => void;
   flushAccumulator: () => void;
-  flushAccumulatorThread: (worktreeId: string) => void;
+  flushAccumulatorThread: (threadId: string) => void;
 
   // File cache actions
   setFileListCache: (worktreeId: string, files: string[]) => void;

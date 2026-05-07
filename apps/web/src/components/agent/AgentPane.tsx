@@ -16,6 +16,7 @@ import '../../styles/tabs.css';
 import '../../styles/agent.css';
 
 interface AgentPaneProps {
+  /** Worktree ID — used for filtering sessions and tabs, not for routing messages. */
   worktreeId: string;
 }
 
@@ -135,11 +136,12 @@ export function AgentPane({ worktreeId }: AgentPaneProps) {
  removeAgentTab(worktreeId, tabId);
  }, [worktreeId, tabs, agentSessions, removeAgentTab, client]);
 
-  const handleSendMessage = useCallback((message: string) => {
+  const handleSendMessage = useCallback((agentTabId: string) => (message: string) => {
     const sendMessage: AgentSend = {
       type: 'AgentSend',
       worktreeId,
       message,
+      agentTabId,
     };
     client.send(sendMessage);
   }, [worktreeId, client]);
@@ -257,6 +259,7 @@ export function AgentPane({ worktreeId }: AgentPaneProps) {
           ) : (
             tabs.map((tab) => {
               const sessionForTab = agentSessions.find((as) => as.id === tab.sessionId);
+              const threadId = sessionForTab?.acpSessionId ?? sessionForTab?.id ?? '';
               return (
                 <Tabs.Panel
                   key={tab.id}
@@ -268,7 +271,8 @@ export function AgentPane({ worktreeId }: AgentPaneProps) {
                       sessionId={sessionForTab.id}
                       agentType={sessionForTab.agentType}
                       worktreeId={worktreeId}
-                      onSendMessage={handleSendMessage}
+                      threadId={threadId}
+                      onSendMessage={handleSendMessage(sessionForTab.id)}
                     />
                   )}
                   {tab.type === 'agent' && !sessionForTab && (

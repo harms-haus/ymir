@@ -30,32 +30,33 @@ pub enum AgentStatus {
 
 enum AcpCommand {
     Spawn {
+        agent_tab_id: Uuid,
         worktree_id: Uuid,
         agent_type: String,
         worktree_path: String,
         respond: oneshot::Sender<Result<()>>,
     },
     SendPrompt {
-        worktree_id: Uuid,
+        agent_tab_id: Uuid,
         content: String,
         respond: oneshot::Sender<Result<()>>,
     },
     Cancel {
-        worktree_id: Uuid,
+        agent_tab_id: Uuid,
         respond: oneshot::Sender<Result<()>>,
     },
     Kill {
-        worktree_id: Uuid,
+        agent_tab_id: Uuid,
         respond: oneshot::Sender<Result<()>>,
     },
     SetSessionConfigOption {
-        worktree_id: Uuid,
+        agent_tab_id: Uuid,
         config_id: String,
         value: String,
         respond: oneshot::Sender<Result<()>>,
     },
     Status {
-        worktree_id: Uuid,
+        agent_tab_id: Uuid,
         respond: oneshot::Sender<AgentStatus>,
     },
 }
@@ -85,6 +86,7 @@ struct AcpClient {
     _io_task: JoinHandle<()>,
     session_id: Option<SessionId>,
     status: Arc<RwLock<AgentStatus>>,
+    worktree_id: Uuid,
     handler: YmirClientHandler,
 }
 
@@ -108,6 +110,7 @@ impl AcpClient {
             _io_task,
             session_id: None,
             status,
+            worktree_id,
             handler,
         };
 
@@ -295,9 +298,10 @@ impl AcpHandle {
         Self { tx }
     }
 
-    pub async fn spawn_agent(&self, worktree_id: Uuid, agent_type: &str, worktree_path: &str) -> Result<()> {
+    pub async fn spawn_agent(&self, agent_tab_id: Uuid, worktree_id: Uuid, agent_type: &str, worktree_path: &str) -> Result<()> {
         let (respond_tx, respond_rx) = oneshot::channel();
         self.tx.send(AcpCommand::Spawn {
+            agent_tab_id,
             worktree_id,
             agent_type: agent_type.to_string(),
             worktree_path: worktree_path.to_string(),
@@ -306,38 +310,38 @@ impl AcpHandle {
         respond_rx.await.map_err(|e| anyhow!("Failed to receive response: {}", e))?
     }
 
-    pub async fn send_prompt(&self, worktree_id: Uuid, content: &str) -> Result<()> {
+    pub async fn send_prompt(&self, agent_tab_id: Uuid, content: &str) -> Result<()> {
         let (respond_tx, respond_rx) = oneshot::channel();
         self.tx.send(AcpCommand::SendPrompt {
-            worktree_id,
+            agent_tab_id,
             content: content.to_string(),
             respond: respond_tx,
         }).map_err(|e| anyhow!("Failed to send command: {}", e))?;
         respond_rx.await.map_err(|e| anyhow!("Failed to receive response: {}", e))?
     }
 
-    pub async fn cancel(&self, worktree_id: Uuid) -> Result<()> {
+    pub async fn cancel(&self, agent_tab_id: Uuid) -> Result<()> {
         let (respond_tx, respond_rx) = oneshot::channel();
         self.tx.send(AcpCommand::Cancel {
-            worktree_id,
+            agent_tab_id,
             respond: respond_tx,
         }).map_err(|e| anyhow!("Failed to send command: {}", e))?;
         respond_rx.await.map_err(|e| anyhow!("Failed to receive response: {}", e))?
     }
 
-    pub async fn kill(&self, worktree_id: Uuid) -> Result<()> {
+    pub async fn kill(&self, agent_tab_id: Uuid) -> Result<()> {
         let (respond_tx, respond_rx) = oneshot::channel();
         self.tx.send(AcpCommand::Kill {
-            worktree_id,
+            agent_tab_id,
             respond: respond_tx,
         }).map_err(|e| anyhow!("Failed to send command: {}", e))?;
         respond_rx.await.map_err(|e| anyhow!("Failed to receive response: {}", e))?
     }
 
-    pub async fn set_session_config_option(&self, worktree_id: Uuid, config_id: &str, value: &str) -> Result<()> {
+    pub async fn set_session_config_option(&self, agent_tab_id: Uuid, config_id: &str, value: &str) -> Result<()> {
         let (respond_tx, respond_rx) = oneshot::channel();
         self.tx.send(AcpCommand::SetSessionConfigOption {
-            worktree_id,
+            agent_tab_id,
             config_id: config_id.to_string(),
             value: value.to_string(),
             respond: respond_tx,
@@ -345,10 +349,10 @@ impl AcpHandle {
         respond_rx.await.map_err(|e| anyhow!("Failed to receive response: {}", e))?
     }
 
-    pub async fn status(&self, worktree_id: Uuid) -> AgentStatus {
+    pub async fn status(&self, agent_tab_id: Uuid) -> AgentStatus {
         let (respond_tx, respond_rx) = oneshot::channel();
         let _ = self.tx.send(AcpCommand::Status {
-            worktree_id,
+            agent_tab_id,
             respond: respond_tx,
         });
         respond_rx.await.unwrap_or(AgentStatus::Idle)
@@ -372,7 +376,7 @@ pub fn start_acp_runtime(broadcast_tx: broadcast::Sender<ServerMessage>) -> (Acp
 
             while let Some(cmd) = rx.recv().await {
                 match cmd {
-                    AcpCommand::Spawn { worktree_id, agent_type, worktree_path, respond } => {
+                    AcpCommand::Spawn { agent_tab_id, worktree_id, agent_type, worktree_path, respond } => {
                         let result = AcpClient::spawn(
                             &agent_type,
                             &worktree_path,
@@ -380,43 +384,43 @@ pub fn start_acp_runtime(broadcast_tx: broadcast::Sender<ServerMessage>) -> (Acp
                             broadcast_tx.clone(),
                         ).await;
                         let _ = respond.send(result.map(|client| {
-                            clients.insert(worktree_id, client);
+                            clients.insert(agent_tab_id, client);
                         }));
                     }
-                    AcpCommand::SendPrompt { worktree_id, content, respond } => {
-                        let result = if let Some(client) = clients.get_mut(&worktree_id) {
+                    AcpCommand::SendPrompt { agent_tab_id, content, respond } => {
+                        let result = if let Some(client) = clients.get_mut(&agent_tab_id) {
                             client.send_prompt(&content).await
                         } else {
-                            Err(anyhow!("No client for worktree {}", worktree_id))
+                            Err(anyhow!("No client for agent tab {}", agent_tab_id))
                         };
                         let _ = respond.send(result);
                     }
-                    AcpCommand::Cancel { worktree_id, respond } => {
-                        let result = if let Some(client) = clients.get_mut(&worktree_id) {
+                    AcpCommand::Cancel { agent_tab_id, respond } => {
+                        let result = if let Some(client) = clients.get_mut(&agent_tab_id) {
                             client.cancel().await
                         } else {
-                            Err(anyhow!("No client for worktree {}", worktree_id))
+                            Err(anyhow!("No client for agent tab {}", agent_tab_id))
                         };
                         let _ = respond.send(result);
                     }
-                    AcpCommand::Kill { worktree_id, respond } => {
-                        let result = if let Some(mut client) = clients.remove(&worktree_id) {
+                    AcpCommand::Kill { agent_tab_id, respond } => {
+                        let result = if let Some(mut client) = clients.remove(&agent_tab_id) {
                             client.kill().await
                         } else {
                             Ok(())
                         };
                         let _ = respond.send(result);
                     }
-                    AcpCommand::SetSessionConfigOption { worktree_id, config_id, value, respond } => {
-                        let result = if let Some(client) = clients.get_mut(&worktree_id) {
+                    AcpCommand::SetSessionConfigOption { agent_tab_id, config_id, value, respond } => {
+                        let result = if let Some(client) = clients.get_mut(&agent_tab_id) {
                             client.set_config_option(&config_id, &value).await
                         } else {
-                            Err(anyhow!("No client for worktree {}", worktree_id))
+                            Err(anyhow!("No client for agent tab {}", agent_tab_id))
                         };
                         let _ = respond.send(result);
                     }
-                    AcpCommand::Status { worktree_id, respond } => {
-                        let status = if let Some(client) = clients.get(&worktree_id) {
+                    AcpCommand::Status { agent_tab_id, respond } => {
+                        let status = if let Some(client) = clients.get(&agent_tab_id) {
                             client.status().await
                         } else {
                             AgentStatus::Idle

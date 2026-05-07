@@ -287,6 +287,7 @@ export interface AgentSend {
   type: 'AgentSend';
   worktreeId: string;
   message: string;
+  agentTabId: string;
 }
 
 export interface AgentCancel {

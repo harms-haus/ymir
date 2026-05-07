@@ -465,6 +465,7 @@ async fn handle_get_state(state: Arc<AppState>, request_id: Uuid) -> ServerMessa
                 id: session_id,
                 worktree_id,
                 agent_type: session.agent_type.clone(),
+                agent_tab_id: Uuid::new_v4(), // placeholder - set on client spawn
                 status: session.status.clone(),
             });
         }

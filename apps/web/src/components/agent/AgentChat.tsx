@@ -26,6 +26,7 @@ interface AgentChatProps {
   sessionId: string;
   agentType: string;
   worktreeId: string;
+  threadId: string;
   onSendMessage: (message: string) => void;
 }
 
@@ -356,10 +357,11 @@ export function AgentChat({
  sessionId,
  agentType,
  worktreeId,
+ threadId,
  onSendMessage,
 }: AgentChatProps) {
  return (
- <AgentRuntimeProvider worktreeId={worktreeId} sessionId={sessionId} onSendMessage={onSendMessage}>
+ <AgentRuntimeProvider worktreeId={worktreeId} threadId={threadId} sessionId={sessionId} onSendMessage={onSendMessage}>
  <AgentChatContent agentType={agentType} worktreeId={worktreeId} />
  </AgentRuntimeProvider>
  );

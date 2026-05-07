@@ -82,6 +82,7 @@ describe('AgentChat', () => {
       sessionId: 'session-1',
       agentType: 'claude',
       worktreeId: 'worktree-1',
+      threadId: 'thread-1',
       onSendMessage: mockOnSendMessage,
     };
     return render(<AgentChat {...defaultProps} {...props} />);

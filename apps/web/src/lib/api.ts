@@ -135,14 +135,15 @@ export function spawnAgent(worktreeId: string, agentType: string): void {
   client.send(message);
 }
 
-export function sendToAgent(worktreeId: string, message: string): void {
+export function sendToAgent(worktreeId: string, agentTabId: string, message: string): void {
   const client = getWebSocketClient();
   const msg: AgentSend = {
     type: 'AgentSend',
-worktreeId,
- message,
- };
- client.send(msg);
+    worktreeId,
+    message,
+    agentTabId,
+  };
+  client.send(msg);
 }
 
 // Terminal API

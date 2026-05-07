@@ -71,15 +71,16 @@ function convertAccumulatedMessage(msg: AccumulatedMessage, index: number, messa
 interface AgentRuntimeProviderProps {
  children: ReactNode;
  worktreeId: string;
+ threadId: string;
  sessionId: string;
  onSendMessage: (message: string) => void;
 }
 
-export function AgentRuntimeProvider({ children, worktreeId, sessionId, onSendMessage }: AgentRuntimeProviderProps) {
+export function AgentRuntimeProvider({ children, worktreeId, threadId, sessionId, onSendMessage }: AgentRuntimeProviderProps) {
  const client = useWebSocketClient();
  const dispatchAccumulator = useStore((s) => s.dispatchAccumulator);
 
- const thread = useStore((state) => state.acpAccumulator.threads.get(worktreeId));
+ const thread = useStore((state) => state.acpAccumulator.threads.get(threadId));
  const messages = thread?.messages ?? [];
  const isStreaming = thread?.isStreaming ?? false;
  const sessionStatus = thread?.sessionStatus ?? 'Complete';
@@ -91,15 +92,15 @@ export function AgentRuntimeProvider({ children, worktreeId, sessionId, onSendMe
  .map((part) => part.text)
  .join('\n');
  if (textContent.trim()) {
- dispatchAccumulator({ type: 'USER_MESSAGE', worktreeId, content: textContent });
+ dispatchAccumulator({ type: 'USER_MESSAGE', threadId, content: textContent });
  onSendMessage(textContent);
  }
- }, [onSendMessage, dispatchAccumulator, worktreeId]);
+ }, [onSendMessage, dispatchAccumulator, threadId]);
 
  const onCancel = useCallback(async () => {
  client.send({ type: 'AgentCancel', worktreeId, sessionId });
- dispatchAccumulator({ type: 'SET_STREAMING', worktreeId, isStreaming: false });
- }, [client, worktreeId, sessionId, dispatchAccumulator]);
+ dispatchAccumulator({ type: 'SET_STREAMING', threadId, isStreaming: false });
+ }, [client, worktreeId, sessionId, dispatchAccumulator, threadId]);
 
   const runtime = useExternalStoreRuntime({
     messages,

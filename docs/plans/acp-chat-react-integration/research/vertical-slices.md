@@ -468,7 +468,7 @@ The target `acp-ws-bridge` package (`~/acp-chat-ui-react/packages/acp-ws-bridge/
 | Wire format | MessagePack binary | JSON text |
 | Envelope | `{ version, type, data }` with ServerMessage union | `BridgeEnvelope { version, seq, timestamp_ms, type, payload }` |
 | Event types | Custom AcpEvent enum | Raw ACP JSON-RPC in `acp_payload` |
-| Session management | Worktree-scoped, one agent per worktree | ACP session-scoped |
+| Session management | Worktree-scoped, multiple agents per worktree (multi-session) | ACP session-scoped |
 | Transport | Custom YmirClient with heartbeat, reconnect | TransportClient + WsTransport |
 | Request/response | Via message type discrimination | JSON-RPC id matching |
 | Sequence numbers | Per-session monotonic | Replay-only (zero in live mode) |

@@ -11,7 +11,9 @@ import './acp-chat.css';
 interface AcpChatProps {
   sessionId: string;
   agentType: string;
+  /** Worktree ID for context/labeling only. Not used for routing — use threadId instead. */
   worktreeId: string;
+  threadId: string;
   onSendMessage: (message: string) => void;
 }
 
@@ -55,10 +57,11 @@ export function AcpChat({
   sessionId,
   agentType,
   worktreeId,
+  threadId,
   onSendMessage,
 }: AcpChatProps) {
-  // Read accumulator state for this worktree
-  const thread = useStore((state) => state.acpAccumulator.threads.get(worktreeId));
+  // Read accumulator state for this thread
+  const thread = useStore((state) => state.acpAccumulator.threads.get(threadId));
 
   // Show empty state while waiting for session init
   if (!thread) {
@@ -74,6 +77,7 @@ export function AcpChat({
   return (
     <AgentRuntimeProvider
       worktreeId={worktreeId}
+      threadId={threadId}
       sessionId={sessionId}
       onSendMessage={onSendMessage}
     >

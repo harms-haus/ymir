@@ -48,6 +48,7 @@ pub struct WorktreeState {
 pub struct AgentState {
     pub id: Uuid,
     pub worktree_id: Uuid,
+    pub agent_tab_id: Uuid,
     pub agent_type: String,
     pub status: String,
 }
@@ -255,14 +256,23 @@ agent_type: wt.agent_type,
         Self::with_acp(Arc::new(db), shutdown_rx)
     }
 
-    /// Find agent session ID for a worktree.
-    /// Returns None if no agent session exists for the worktree.
-    pub async fn find_agent_session_for_worktree(&self, worktree_id: Uuid) -> Option<Uuid> {
+    /// Find all agent session IDs for a worktree.
+    /// Returns an empty Vec if no agent sessions exist for the worktree.
+    /// Supports multiple concurrent sessions per worktree (multi-session model).
+    pub async fn find_agent_sessions_for_worktree(&self, worktree_id: Uuid) -> Vec<Uuid> {
         let agents = self.agents.read().await;
         agents
             .iter()
-            .find(|(_, agent)| agent.worktree_id == worktree_id)
+            .filter(|(_, agent)| agent.worktree_id == worktree_id)
             .map(|(id, _)| *id)
+            .collect()
+    }
+
+    /// DEPRECATED: Returns the first agent session ID found for a worktree.
+    /// Use `find_agent_sessions_for_worktree` instead, which returns all sessions.
+    /// Kept for backward compatibility during the transition to multi-session.
+    pub async fn find_agent_session_for_worktree(&self, worktree_id: Uuid) -> Option<Uuid> {
+        self.find_agent_sessions_for_worktree(worktree_id).await.into_iter().next()
     }
 }
 

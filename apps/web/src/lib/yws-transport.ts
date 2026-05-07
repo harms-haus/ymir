@@ -399,10 +399,13 @@ export class YmirWsTransport {
       // The server serializes AcpEventEnvelope as the payload, which is
       // the exact format acpAccumulatorReducer expects.
       if (payload.eventType && typeof payload.sequence === 'number') {
+        // threadId is derived from agentTabId (multi-session routing).
+        // Falls back to worktreeId only if agentTabId is absent.
+        const threadId = (data as any)?.agentTabId ?? worktreeId;
         useStore.getState().dispatchAccumulator({
           type: 'EVENT_RECEIVED',
           envelope: payload as unknown as AcpEventEnvelope,
-          worktreeId,
+          threadId,
         });
       }
 
@@ -411,9 +414,13 @@ export class YmirWsTransport {
       // the ACP SessionInit event carries the actual acpSessionId in its data.
       if (payload.eventType === 'SessionInit') {
         const acpSessionId = (data as any)?.acpSessionId;
+        const agentTabId = (data as any)?.agentTabId;
         if (acpSessionId) {
           const sessions = useStore.getState().agentSessions;
-          const session = sessions.find(s => s.worktreeId === worktreeId);
+          // Look up by agentTabId if available, otherwise fall back to worktreeId
+          const session = agentTabId
+            ? sessions.find(s => (s as any).agentTabId === agentTabId || (!s.acpSessionId && s.worktreeId === worktreeId))
+            : sessions.find(s => s.worktreeId === worktreeId && !s.acpSessionId);
           if (session && !session.acpSessionId) {
             useStore.getState().updateAgentSession(session.id, { acpSessionId });
           }
@@ -421,6 +428,9 @@ export class YmirWsTransport {
       }
 
       // Keep existing routing for backward compatibility
+      // DEPRECATED: acpSessionManager.handleAcpPayload routes by worktreeId as fallback.
+      // New multi-session flow should use handleAcpPayloadByAgentTabId(agentTabId, payload)
+      // instead. This backward-compat path is retained for legacy single-session flows.
       acpSessionManager.handleAcpPayload(worktreeId, payload);
     }
   }

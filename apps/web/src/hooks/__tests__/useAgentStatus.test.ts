@@ -487,7 +487,7 @@ describe('ACP Event Accumulator Reducer', () => {
         },
       };
 
-      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, threadId: 'worktree-1' });
 
       expect(newState.threads.has('worktree-1')).toBe(true);
       const thread = newState.threads.get('worktree-1')!;
@@ -578,7 +578,7 @@ describe('ACP Event Accumulator Reducer', () => {
         },
       };
 
-      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, threadId: 'worktree-1' });
       const thread = newState.threads.get('worktree-1')!;
 
       expect(thread.isStreaming).toBe(false);
@@ -619,7 +619,7 @@ describe('ACP Event Accumulator Reducer', () => {
         },
       };
 
-      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, threadId: 'worktree-1' });
       const thread = newState.threads.get('worktree-1')!;
 
       expect(thread.messages[0].parts).toHaveLength(1);
@@ -682,7 +682,7 @@ describe('ACP Event Accumulator Reducer', () => {
         },
       };
 
-      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, threadId: 'worktree-1' });
       const thread = newState.threads.get('worktree-1')!;
       const toolCard = thread.messages[0].parts[0];
 
@@ -724,7 +724,7 @@ describe('ACP Event Accumulator Reducer', () => {
         },
       };
 
-      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, threadId: 'worktree-1' });
       const thread = newState.threads.get('worktree-1')!;
 
       expect(thread.messages[0].parts).toHaveLength(1);
@@ -761,7 +761,7 @@ describe('ACP Event Accumulator Reducer', () => {
         },
       };
 
-      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, threadId: 'worktree-1' });
       const thread = newState.threads.get('worktree-1')!;
 
       expect(thread.resumeCheckpoint).toBe('checkpoint-data');
@@ -794,7 +794,7 @@ describe('ACP Event Accumulator Reducer', () => {
         },
       };
 
-      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, threadId: 'worktree-1' });
       const thread = newState.threads.get('worktree-1')!;
 
       expect(thread.sessionStatus).toBe('Waiting');
@@ -838,7 +838,7 @@ describe('ACP Event Accumulator Reducer', () => {
         },
       };
 
-      const finalState = acpAccumulatorReducer(reconnectState, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const finalState = acpAccumulatorReducer(reconnectState, { type: 'EVENT_RECEIVED', envelope, threadId: 'worktree-1' });
       const thread = finalState.threads.get('worktree-1')!;
 
       expect(thread.connectionGeneration).toBe(2);
@@ -877,7 +877,7 @@ describe('ACP Event Accumulator Reducer', () => {
         },
       };
 
-      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, threadId: 'worktree-1' });
       const thread = newState.threads.get('worktree-1')!;
 
       expect(thread.messages.length).toBeLessThanOrEqual(500);
@@ -916,7 +916,7 @@ describe('ACP Event Accumulator Reducer', () => {
         },
       };
 
-      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, threadId: 'worktree-1' });
       const thread = newState.threads.get('worktree-1')!;
 
       expect(thread.messages[0].parts).toHaveLength(1);
@@ -939,7 +939,7 @@ describe('ACP Event Accumulator Reducer', () => {
         },
       };
 
-      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, threadId: 'worktree-1' });
       const thread = newState.threads.get('worktree-1')!;
 
       const contextCard = thread.messages[0].parts[0];
@@ -959,7 +959,7 @@ describe('ACP Event Accumulator Reducer', () => {
         },
       };
 
-      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, threadId: 'worktree-1' });
       const thread = newState.threads.get('worktree-1')!;
 
       const contextCard = thread.messages[0].parts[0];
@@ -979,7 +979,7 @@ describe('ACP Event Accumulator Reducer', () => {
         },
       };
 
-      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, threadId: 'worktree-1' });
       const thread = newState.threads.get('worktree-1')!;
 
       const contextCard = thread.messages[0].parts[0];
@@ -999,7 +999,7 @@ describe('ACP Event Accumulator Reducer', () => {
         },
       };
 
-      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, threadId: 'worktree-1' });
       const thread = newState.threads.get('worktree-1')!;
 
       const contextCard = thread.messages[0].parts[0];
@@ -1032,7 +1032,7 @@ describe('ACP Event Accumulator Reducer', () => {
         },
       };
 
-      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, threadId: 'worktree-1' });
       const thread = newState.threads.get('worktree-1')!;
 
       expect(thread.isStreaming).toBe(false);
@@ -1051,7 +1051,7 @@ describe('ACP Event Accumulator Reducer', () => {
         },
       };
 
-      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, threadId: 'worktree-1' });
       const thread = newState.threads.get('worktree-1')!;
 
       expect(thread.isStreaming).toBe(false);
@@ -1069,7 +1069,7 @@ describe('ACP Event Accumulator Reducer', () => {
         },
       };
 
-      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, threadId: 'worktree-1' });
       const thread = newState.threads.get('worktree-1')!;
 
       expect(thread.isStreaming).toBe(false);
@@ -1214,7 +1214,7 @@ describe('ACP Event Accumulator Reducer', () => {
           },
         };
 
-        const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+        const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, threadId: 'worktree-1' });
         const thread = newState.threads.get('worktree-1')!;
 
         const errorCard = thread.messages[0].parts[0];
@@ -1251,7 +1251,7 @@ describe('ACP Event Accumulator Reducer', () => {
         },
       };
 
-      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, threadId: 'worktree-1' });
       const thread = newState.threads.get('worktree-1')!;
 
       expect(thread.messages).toHaveLength(1);
@@ -1274,7 +1274,7 @@ describe('ACP Event Accumulator Reducer', () => {
         },
       };
 
-      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, threadId: 'worktree-1' });
       const thread = newState.threads.get('worktree-1')!;
 
       expect((thread.messages[0].parts[0] as any).isStreaming).toBe(false);
@@ -1309,7 +1309,7 @@ describe('ACP Event Accumulator Reducer', () => {
           },
         };
 
-        const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+        const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, threadId: 'worktree-1' });
         const thread = newState.threads.get('worktree-1')!;
 
         expect(thread.sessionStatus).toBe(status);
@@ -1451,7 +1451,7 @@ describe('ACP Event Accumulator Reducer', () => {
           },
         };
 
-        const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+        const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, threadId: 'worktree-1' });
         const thread = newState.threads.get('worktree-1')!;
 
         const errorCard = thread.messages[0].parts[0];
@@ -1602,7 +1602,7 @@ describe('ACP Event Accumulator Reducer', () => {
         },
       };
 
-      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, threadId: 'worktree-1' });
       const thread = newState.threads.get('worktree-1')!;
 
       expect(thread.isStreaming).toBe(false);
@@ -1620,7 +1620,7 @@ describe('ACP Event Accumulator Reducer', () => {
         },
       };
 
-      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, worktreeId: 'worktree-1' });
+      const newState = acpAccumulatorReducer(state, { type: 'EVENT_RECEIVED', envelope, threadId: 'worktree-1' });
       const thread = newState.threads.get('worktree-1')!;
 
       expect(thread.sessionStatus).toBe('Cancelled');

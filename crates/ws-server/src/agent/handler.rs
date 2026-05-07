@@ -23,10 +23,11 @@
 //! 5. On success: spawn returns immediately, ACP runtime manages agent in background
 //! 6. Broadcast `AgentStatusUpdate` to all clients
 //!
-//! **Enforcement:** One agent per worktree (ACP runtime tracks agents by worktree_id)
+//! **Note:** Multiple agents can be spawned per worktree (multi-session model).
+//! Each agent gets its own session ID and agent tab ID.
 //!
 //! ### Cancel
-//! 1. Find session by `worktree_id` in `state.agents`
+//! 1. Find session by `agent_tab_id` in `state.agents`
 //! 2. Kill agent process via `AcpClient::kill()`
 //! 3. Request kill via `AcpHandle` (message-passing to ACP runtime)
 //! 4. Remove from `state.agents`
@@ -83,6 +84,7 @@ pub async fn handle_agent_spawn(
 
     let acp_session_id = None;
     let session_id = Uuid::new_v4();
+    let agent_tab_id = Uuid::new_v4();
     let now = chrono::Utc::now().to_rfc3339();
     let started_at = parse_timestamp(&now);
 
@@ -125,6 +127,7 @@ pub async fn handle_agent_spawn(
     agents.insert(session_id, crate::state::AgentState {
       id: session_id,
       worktree_id: msg.worktree_id,
+      agent_tab_id,
       agent_type: msg.agent_type.clone(),
       status: "spawning".to_string(),
     });
@@ -135,6 +138,7 @@ pub async fn handle_agent_spawn(
     AgentStatusUpdate {
       id: session_id,
       worktree_id: msg.worktree_id,
+      agent_tab_id,
       agent_type: msg.agent_type.clone(),
       status: AgentStatus::Working,
       started_at,
@@ -144,13 +148,14 @@ pub async fn handle_agent_spawn(
 
   // Spawn in background so response returns immediately
   let session_id_ref = session_id;
+  let agent_tab_id_ref = agent_tab_id;
   let worktree_id_ref = msg.worktree_id;
   let state_ref = state.clone();
   let agent_type_ref = msg.agent_type.clone();
   let started_at_ref = started_at;
 
   tokio::spawn(async move {
-    match acp_handle.spawn_agent(worktree_id_ref, &agent_type_ref, &worktree_path).await {
+    match acp_handle.spawn_agent(agent_tab_id_ref, worktree_id_ref, &agent_type_ref, &worktree_path).await {
       Ok(()) => {
         tracing::info!("Agent spawned successfully for worktree {}", worktree_id_ref);
 
@@ -167,6 +172,7 @@ pub async fn handle_agent_spawn(
           AgentStatusUpdate {
             id: session_id_ref,
             worktree_id: worktree_id_ref,
+            agent_tab_id: agent_tab_id_ref,
             agent_type: agent_type_ref,
             status: AgentStatus::Idle,
             started_at: started_at_ref,
@@ -220,8 +226,10 @@ pub async fn get_worktree_path(state: &AppState, worktree_id: Uuid) -> Option<St
     worktrees.get(&worktree_id).map(|w| w.path.clone())
 }
 
+/// Kill all agent sessions associated with a worktree and remove them from state.
+/// Handles multiple concurrent agent sessions per worktree (multi-session model).
 pub async fn cleanup_agents_for_worktree(state: &AppState, worktree_id: Uuid) {
-    let session_ids: Vec<Uuid> = {
+    let agent_tab_ids: Vec<Uuid> = {
         let agents = state.agents.read().await;
         agents
             .iter()
@@ -231,17 +239,20 @@ pub async fn cleanup_agents_for_worktree(state: &AppState, worktree_id: Uuid) {
     };
 
     if let Some(handle) = &state.acp_handle {
-        let _ = handle.kill(worktree_id).await;
+        for agent_tab_id in &agent_tab_ids {
+            let _ = handle.kill(*agent_tab_id).await;
+        }
     }
 
     {
         let mut agents = state.agents.write().await;
-        for session_id in &session_ids {
-            agents.remove(session_id);
+        for agent_tab_id in &agent_tab_ids {
+            agents.remove(agent_tab_id);
         }
     }
 
-    for session_id in session_ids {
+    for agent_tab_id in agent_tab_ids {
+        let session_id = agent_tab_id; // agent_tab_id serves as the session identifier
         let broadcast_msg = ServerMessage::new(ServerMessagePayload::AgentRemoved(
             crate::protocol::AgentRemoved {
                 id: session_id,
@@ -252,7 +263,7 @@ pub async fn cleanup_agents_for_worktree(state: &AppState, worktree_id: Uuid) {
     }
 }
 
-#[instrument(skip(state, msg), fields(worktree_id = %msg.worktree_id))]
+#[instrument(skip(state, msg), fields(agent_tab_id = %msg.agent_tab_id))]
 pub async fn handle_agent_send(
   state: Arc<AppState>,
   msg: crate::protocol::AgentSend,
@@ -260,15 +271,13 @@ pub async fn handle_agent_send(
   // Verify agent session exists and is ready (not spawning)
   let agent_ready = {
     let agents = state.agents.read().await;
-    agents.values().any(|agent| {
-      agent.worktree_id == msg.worktree_id && agent.status == "idle"
-    })
+    agents.get(&msg.agent_tab_id).map_or(false, |agent| agent.status == "idle")
   };
 
   if !agent_ready {
     return ServerMessage::new(ServerMessagePayload::Error(Error {
       code: "AGENT_NOT_READY".to_string(),
-      message: format!("Agent for worktree {} is not ready (still spawning or not found)", msg.worktree_id),
+      message: format!("Agent {} is not ready (still spawning or not found)", msg.agent_tab_id),
       details: None,
       request_id: None,
     }));
@@ -286,7 +295,7 @@ pub async fn handle_agent_send(
     }
   };
 
-  if let Err(e) = handle.send_prompt(msg.worktree_id, &msg.message).await {
+  if let Err(e) = handle.send_prompt(msg.agent_tab_id, &msg.message).await {
         return ServerMessage::new(ServerMessagePayload::Error(Error {
             code: "AGENT_SEND_ERROR".to_string(),
             message: format!("Failed to send message to agent: {}", e),
@@ -296,12 +305,12 @@ pub async fn handle_agent_send(
     }
 
     ServerMessage::new(ServerMessagePayload::Ack(crate::protocol::Ack {
-        message_id: msg.worktree_id,
+        message_id: msg.agent_tab_id,
         status: AckStatus::Success,
     }))
 }
 
-#[instrument(skip(state, msg), fields(worktree_id = %msg.worktree_id, config_id = %msg.config_id))]
+#[instrument(skip(state, msg), fields(agent_tab_id = %msg.agent_tab_id, config_id = %msg.config_id))]
 pub async fn handle_agent_set_config_option(
     state: Arc<AppState>,
     msg: crate::protocol::AgentSetConfigOption,
@@ -319,7 +328,7 @@ pub async fn handle_agent_set_config_option(
     };
 
     if let Err(e) = handle
-        .set_session_config_option(msg.worktree_id, &msg.config_id, &msg.value)
+        .set_session_config_option(msg.agent_tab_id, &msg.config_id, &msg.value)
         .await
     {
         return ServerMessage::new(ServerMessagePayload::Error(Error {
@@ -331,7 +340,7 @@ pub async fn handle_agent_set_config_option(
     }
 
     ServerMessage::new(ServerMessagePayload::Ack(crate::protocol::Ack {
-        message_id: msg.worktree_id,
+        message_id: msg.agent_tab_id,
         status: AckStatus::Success,
     }))
 }
@@ -343,13 +352,7 @@ pub async fn handle_agent_cancel(
 ) -> ServerMessage {
     let session_data_opt = {
         let agents = state.agents.read().await;
-        agents.iter().find_map(|(id, agent_state)| {
-            if agent_state.worktree_id == msg.worktree_id {
-                Some(*id)
-            } else {
-                None
-            }
-        })
+        agents.get(&msg.agent_tab_id).map(|agent| agent.id)
     };
 
     let session_id = match session_data_opt {
@@ -357,7 +360,7 @@ pub async fn handle_agent_cancel(
         None => {
             return ServerMessage::new(ServerMessagePayload::Error(Error {
                 code: "AGENT_NOT_FOUND".to_string(),
-                message: format!("No agent session for worktree {}", msg.worktree_id),
+                message: format!("No agent for tab {}", msg.agent_tab_id),
                 details: None,
                 request_id: None,
             }));
@@ -365,12 +368,12 @@ pub async fn handle_agent_cancel(
     };
 
     if let Some(handle) = &state.acp_handle {
-        let _ = handle.kill(msg.worktree_id).await;
+        let _ = handle.kill(msg.agent_tab_id).await;
     }
 
     {
         let mut agents = state.agents.write().await;
-        agents.remove(&session_id);
+        agents.remove(&msg.agent_tab_id);
     }
 
     if let Err(e) = state.db.delete_agent_session(&session_id.to_string()).await {
@@ -387,7 +390,7 @@ pub async fn handle_agent_cancel(
     state.broadcast(broadcast_msg).await;
 
     ServerMessage::new(ServerMessagePayload::Ack(crate::protocol::Ack {
-        message_id: msg.worktree_id,
+        message_id: msg.agent_tab_id,
         status: AckStatus::Success,
     }))
 }
@@ -448,6 +451,7 @@ mod tests {
             AgentState {
                 id: session_id,
                 worktree_id,
+                agent_tab_id: Uuid::new_v4(),
                 agent_type: "test".to_string(),
                 status: "idle".to_string(),
             },
@@ -481,6 +485,7 @@ mod tests {
             AgentState {
                 id: session_to_delete,
                 worktree_id: worktree_to_delete,
+                agent_tab_id: Uuid::new_v4(),
                 agent_type: "test".to_string(),
                 status: "idle".to_string(),
             },
@@ -491,6 +496,7 @@ mod tests {
             AgentState {
                 id: session_to_keep,
                 worktree_id: worktree_to_keep,
+                agent_tab_id: Uuid::new_v4(),
                 agent_type: "test".to_string(),
                 status: "idle".to_string(),
             },
@@ -513,6 +519,7 @@ mod tests {
             AgentState {
                 id: session_id,
                 worktree_id,
+                agent_tab_id: Uuid::new_v4(),
                 agent_type: "test".to_string(),
                 status: "idle".to_string(),
             },
@@ -531,6 +538,7 @@ mod tests {
         let msg = crate::protocol::AgentSpawn {
             worktree_id: Uuid::new_v4(),
             agent_type: "test".to_string(),
+            agent_tab_id: None,
         };
 
         let result = handle_agent_spawn(state, msg).await;
@@ -549,6 +557,7 @@ mod tests {
  let msg = crate::protocol::AgentCancel {
  worktree_id: Uuid::new_v4(),
  session_id: Uuid::new_v4(),
+ agent_tab_id: Uuid::new_v4(),
  };
 
         let result = handle_agent_cancel(state, msg).await;
@@ -579,6 +588,7 @@ mod tests {
             AgentState {
                 id: session_id,
                 worktree_id,
+                agent_tab_id: Uuid::new_v4(),
                 agent_type: "test".to_string(),
                 status: "idle".to_string(),
             },
@@ -661,6 +671,7 @@ mod tests {
         let msg = crate::protocol::AgentSpawn {
             worktree_id,
             agent_type: "test".to_string(),
+            agent_tab_id: None,
         };
 
         let result = handle_agent_spawn(state.clone(), msg).await;
@@ -683,6 +694,7 @@ mod tests {
         let worktree_id = Uuid::new_v4();
         let session_id = Uuid::new_v4();
         let client_id = Uuid::new_v4();
+        let agent_tab_id = Uuid::new_v4();
 
         // Set up in-memory agent session
         state.agents.write().await.insert(
@@ -690,6 +702,7 @@ mod tests {
             AgentState {
                 id: session_id,
                 worktree_id,
+                agent_tab_id,
                 agent_type: "test-agent".to_string(),
                 status: "working".to_string(),
             },
@@ -701,6 +714,7 @@ mod tests {
  let msg = crate::protocol::AgentCancel {
  worktree_id,
  session_id,
+ agent_tab_id,
  };
 
  let result = handle_agent_cancel(state.clone(), msg).await;
@@ -745,6 +759,7 @@ mod tests {
         let missing_worktree_msg = crate::protocol::AgentSpawn {
             worktree_id: Uuid::new_v4(),
             agent_type: "test".to_string(),
+            agent_tab_id: None,
         };
 
         let result = handle_agent_spawn(state.clone(), missing_worktree_msg).await;
@@ -766,6 +781,7 @@ mod tests {
         let msg = crate::protocol::AgentSend {
             worktree_id: Uuid::new_v4(),
             message: "test message".to_string(),
+            agent_tab_id: Uuid::new_v4(),
         };
 
         let result = handle_agent_send(state, msg).await;

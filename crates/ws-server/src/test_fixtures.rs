@@ -172,6 +172,7 @@ mod tests {
         let msg = ClientMessage::new(ClientMessagePayload::AgentSpawn(AgentSpawn {
             worktree_id: Uuid::new_v4(),
             agent_type: "coder".to_string(),
+            agent_tab_id: None,
         }));
 
         let path = write_fixture("AgentSpawn", &msg)?;
@@ -193,6 +194,7 @@ mod tests {
         let msg = ClientMessage::new(ClientMessagePayload::AgentSend(AgentSend {
             worktree_id: Uuid::new_v4(),
             message: "Hello, agent!".to_string(),
+            agent_tab_id: Uuid::new_v4(),
         }));
 
         let path = write_fixture("AgentSend", &msg)?;
@@ -214,6 +216,7 @@ mod tests {
         let msg = ClientMessage::new(ClientMessagePayload::AgentCancel(AgentCancel {
             worktree_id: Uuid::new_v4(),
             session_id: Uuid::new_v4(),
+            agent_tab_id: Uuid::new_v4(),
         }));
 
         let path = write_fixture("AgentCancel", &msg)?;
@@ -473,6 +476,7 @@ mod tests {
             agent_type: "test-agent".to_string(),
             status: AgentStatus::Working,
             started_at: 1234567890,
+            agent_tab_id: Uuid::new_v4(),
         }));
 
         let path = write_fixture("AgentStatusUpdate", &msg)?;

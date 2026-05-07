@@ -5,6 +5,7 @@ use ts_rs::TS;
 use uuid::Uuid;
 
 use super::uuid_serde;
+use super::optional_uuid_serde;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(rename_all = "camelCase")]
@@ -14,6 +15,9 @@ pub struct AgentSpawn {
     #[ts(type = "string")]
     pub worktree_id: Uuid,
     pub agent_type: String,
+    #[serde(with = "optional_uuid_serde", default, skip_serializing_if = "Option::is_none")]
+    #[ts(type = "string | null")]
+    pub agent_tab_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
@@ -24,6 +28,9 @@ pub struct AgentSend {
     #[ts(type = "string")]
     pub worktree_id: Uuid,
     pub message: String,
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub agent_tab_id: Uuid,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
@@ -36,6 +43,9 @@ pub struct AgentCancel {
     #[serde(with = "uuid_serde")]
     #[ts(type = "string")]
     pub session_id: Uuid,
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub agent_tab_id: Uuid,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
@@ -45,6 +55,9 @@ pub struct AgentSetConfigOption {
     #[serde(with = "uuid_serde")]
     #[ts(type = "string")]
     pub worktree_id: Uuid,
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub agent_tab_id: Uuid,
     pub config_id: String,
     pub value: String,
 }
@@ -88,6 +101,9 @@ pub struct AgentStatusUpdate {
     pub status: AgentStatus,
     #[ts(type = "number")]
     pub started_at: u64,
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub agent_tab_id: Uuid,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]

@@ -137,6 +137,7 @@ fn test_agent_spawn_roundtrip() {
     let msg = ClientMessage::new(ClientMessagePayload::AgentSpawn(AgentSpawn {
         worktree_id: Uuid::new_v4(),
         agent_type: "test-agent".to_string(),
+        agent_tab_id: None,
     }));
     test_json_roundtrip(msg);
 }
@@ -146,6 +147,7 @@ fn test_agent_send_roundtrip() {
     let msg = ClientMessage::new(ClientMessagePayload::AgentSend(AgentSend {
         worktree_id: Uuid::new_v4(),
         message: "Hello agent".to_string(),
+        agent_tab_id: Uuid::new_v4(),
     }));
     test_json_roundtrip(msg);
 }
@@ -155,6 +157,7 @@ fn test_agent_cancel_roundtrip() {
     let msg = ClientMessage::new(ClientMessagePayload::AgentCancel(AgentCancel {
         worktree_id: Uuid::new_v4(),
         session_id: Uuid::new_v4(),
+        agent_tab_id: Uuid::new_v4(),
     }));
     test_json_roundtrip(msg);
 }
@@ -303,6 +306,7 @@ fn test_client_message_sizes_are_reasonable() {
             ClientMessage::new(ClientMessagePayload::AgentSpawn(AgentSpawn {
                 worktree_id: Uuid::new_v4(),
                 agent_type: "test".to_string(),
+                agent_tab_id: None,
             })),
         ),
     ];
@@ -432,6 +436,7 @@ fn test_agent_status_update_roundtrip() {
         agent_type: "test-agent".to_string(),
         status: AgentStatus::Working,
         started_at: 12345,
+        agent_tab_id: Uuid::new_v4(),
     }));
     test_json_roundtrip(msg);
 }

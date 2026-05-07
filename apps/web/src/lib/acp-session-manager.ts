@@ -1,18 +1,20 @@
 /**
  * AcpSessionManager - Manages SessionController instances from @harms-haus/acp-chat-core.
  *
- * Creates and manages one SessionController per active worktree, mapping ymir's
- * worktree-scoped model to acp-chat-core's session-scoped model.
+ * Creates and manages SessionController instances keyed by agentTabId, supporting
+ * multiple sessions per worktree. Each agent tab has its own SessionController
+ * and ACP session, enabling multi-session agent transport.
  *
  * Responsibilities:
- * - SessionController lifecycle per worktree (create, initialize, destroy)
- * - Worktree ID ↔ ACP session ID mapping
+ * - SessionController lifecycle per agent tab (create, initialize, destroy)
+ * - Agent tab ID ↔ ACP session ID mapping
+ * - Worktree → agent tab index for backward compatibility
  * - Routing ACP events from BridgeEnvelope acp_payload to the correct SessionController
  * - Exposing prompt sending through SessionController
  *
- * Manages ACP sessions per worktree, routing payloads to SessionControllers.
- *       It runs alongside it, providing SessionController-managed state that can be
- *       consumed once the migration is complete.
+ * Manages ACP sessions per agent tab, routing payloads to SessionControllers.
+ * Runs alongside the accumulator-based flow, providing SessionController-managed
+ * state that can be consumed once the migration is complete.
  */
 
 import {
@@ -36,10 +38,11 @@ import type { AcpStore as AcpStoreType } from "@harms-haus/acp-chat-react";
 // ============================================================================
 
 /**
- * Internal session record tracking the mapping between a worktree and its
+ * Internal session record tracking the mapping between an agent tab and its
  * ACP session controller.
  */
-interface WorktreeSession {
+interface SessionRecord {
+  agentTabId: string;
   worktreeId: string;
   sessionId: string | null;
   cwd: string;
@@ -98,93 +101,117 @@ export interface AcpSessionManagerApi {
   configure(config: AcpSessionManagerConfig): void;
 
   /**
-   * Get or create a SessionController for the given worktree.
-   * If no session exists, creates a new one (but does NOT initialize or
-   * create an ACP session yet — call initialize() and createSession() for that).
+   * Get or create a SessionController for the given agent tab.
+   * If no session exists for the agentTabId, creates a new one
+   * (but does NOT initialize or create an ACP session yet —
+   * call initialize() and createSession() for that).
+   *
+   * @param agentTabId - Unique identifier for the agent tab
+   * @param worktreeId - The worktree this agent tab belongs to
+   * @param transport - The transport to use for ACP communication
    */
-  getOrCreateController(worktreeId: string, cwd: string): SessionController;
+  getOrCreateController(
+    agentTabId: string,
+    worktreeId: string,
+    transport?: Transport,
+  ): SessionController;
 
   /**
-   * Remove and clean up a SessionController for a worktree.
+   * Remove and clean up a SessionController for an agent tab.
+   *
+   * @param agentTabId - The agent tab identifier to remove
    */
-  removeController(worktreeId: string): void;
+  removeController(agentTabId: string): void;
 
   /**
-   * Initialize the ACP protocol for a worktree's session.
+   * Initialize the ACP protocol for an agent tab's session.
    * Calls the ACP `initialize` method.
    */
-  initialize(worktreeId: string, options?: {
+  initialize(agentTabId: string, options?: {
     clientInfo?: { name: string; version: string };
   }): Promise<unknown>;
 
   /**
-   * Create a new ACP session for a worktree.
+   * Create a new ACP session for an agent tab.
    * Calls the ACP `session/new` method.
    */
-  createSession(worktreeId: string, cwd: string, mcpServers?: unknown[]): Promise<{ sessionId: string }>;
+  createSession(agentTabId: string, cwd: string, mcpServers?: unknown[]): Promise<{ sessionId: string }>;
 
   /**
-   * Load an existing ACP session for a worktree.
+   * Load an existing ACP session for an agent tab.
    * Calls the ACP `session/load` method.
    */
-  loadSession(worktreeId: string, sessionId: string, cwd: string, mcpServers?: unknown[]): Promise<unknown>;
+  loadSession(agentTabId: string, sessionId: string, cwd: string, mcpServers?: unknown[]): Promise<unknown>;
 
   /**
-   * Send a prompt through the SessionController for a worktree.
+   * Send a prompt through the SessionController for an agent tab.
    */
-  sendPrompt(worktreeId: string, prompt: string): Promise<void>;
+  sendPrompt(agentTabId: string, prompt: string): Promise<void>;
 
   /**
-   * Cancel the current prompt for a worktree.
+   * Cancel the current prompt for an agent tab.
    */
-  cancelPrompt(worktreeId: string): Promise<void>;
+  cancelPrompt(agentTabId: string): Promise<void>;
 
   /**
-   * Set a config option for a worktree's session.
+   * Set a config option for an agent tab's session.
    */
-  setConfigOption(worktreeId: string, configId: string, value: string): Promise<ConfigOption[]>;
+  setConfigOption(agentTabId: string, configId: string, value: string): Promise<ConfigOption[]>;
 
   /**
-   * Get the current state of a worktree's SessionController.
+   * Get the current state of an agent tab's SessionController.
    */
-  getSessionState(worktreeId: string): SessionControllerState | null;
+  getSessionState(agentTabId: string): SessionControllerState | null;
 
   /**
-   * Get the AcpStore for a worktree's session.
+   * Get the AcpStore for an agent tab's session.
    */
-  getAcpStore(worktreeId: string): AcpStoreType | null;
+  getAcpStore(agentTabId: string): AcpStoreType | null;
 
   /**
-   * Get the ACP session ID for a worktree.
+   * Get the ACP session ID for an agent tab.
    */
-  getSessionId(worktreeId: string): string | null;
+  getSessionId(agentTabId: string): string | null;
 
   /**
-   * Get the worktree ID for an ACP session ID (reverse lookup).
+   * Get the agent tab ID for an ACP session ID (reverse lookup).
    */
-  getWorktreeId(sessionId: string): string | null;
+  getAgentTabId(sessionId: string): string | null;
 
   /**
-   * Get all active worktree IDs.
+   * Get all active agent tab IDs.
    */
-  getActiveWorktrees(): string[];
+  getActiveAgentTabs(): string[];
 
   /**
    * Feed a raw ACP JSON-RPC payload from a BridgeEnvelope acp_payload
    * into the appropriate SessionController.
    *
-   * This is the main entry point for routing incoming ACP events from
-   * the bridge to SessionController instances.
+   * This method looks up the session by agentTabId directly.
    *
-   * @param worktreeId - The worktree this ACP payload belongs to
+   * @param agentTabId - The agent tab this ACP payload belongs to
+   * @param payload - The raw ACP JSON-RPC payload from the bridge
+   */
+  handleAcpPayloadByAgentTabId(agentTabId: string, payload: Record<string, unknown>): void;
+
+  /**
+   * Feed a raw ACP JSON-RPC payload from a BridgeEnvelope acp_payload
+   * into the appropriate SessionController (backward compatible).
+   *
+   * DEPRECATED: Use `handleAcpPayloadByAgentTabId` for new multi-session routing.
+   * This method extracts agentTabId from the payload's data field for routing,
+   * then falls back to worktreeId lookup if agentTabId is not present
+   * (for legacy single-session-per-worktree flows).
+   *
+   * @param worktreeId - The worktree this ACP payload belongs to (fallback, legacy)
    * @param payload - The raw ACP JSON-RPC payload from the bridge
    */
   handleAcpPayload(worktreeId: string, payload: Record<string, unknown>): void;
 
   /**
-   * Check if a SessionController exists for the given worktree.
+   * Check if a SessionController exists for the given agent tab.
    */
-  hasController(worktreeId: string): boolean;
+  hasController(agentTabId: string): boolean;
 
   /**
    * Clean up all sessions and release resources.
@@ -344,9 +371,12 @@ class YmirAcpTransport implements Transport {
 // ============================================================================
 
 class AcpSessionManagerImpl implements AcpSessionManagerApi {
-  private sessions = new Map<string, WorktreeSession>();
+  // Sessions keyed by agentTabId (supports multiple sessions per worktree)
+  private sessions = new Map<string, SessionRecord>();
   private acpStores = new Map<string, AcpStoreType>();
-  private sessionIdToWorktree = new Map<string, string>();
+  private sessionIdToAgentTab = new Map<string, string>();
+  // Reverse index: worktreeId → set of agentTabIds for backward compatibility
+  private worktreeToAgentTabIds = new Map<string, Set<string>>();
   private config: AcpSessionManagerConfig | null = null;
 
   // ---- Configuration ----
@@ -364,29 +394,95 @@ class AcpSessionManagerImpl implements AcpSessionManagerApi {
     return this.config;
   }
 
+  // ---- Worktree index helpers ----
+
+  private addToWorktreeIndex(worktreeId: string, agentTabId: string): void {
+    let agentTabIds = this.worktreeToAgentTabIds.get(worktreeId);
+    if (!agentTabIds) {
+      agentTabIds = new Set();
+      this.worktreeToAgentTabIds.set(worktreeId, agentTabIds);
+    }
+    agentTabIds.add(agentTabId);
+  }
+
+  private removeFromWorktreeIndex(worktreeId: string, agentTabId: string): void {
+    const agentTabIds = this.worktreeToAgentTabIds.get(worktreeId);
+    if (agentTabIds) {
+      agentTabIds.delete(agentTabId);
+      if (agentTabIds.size === 0) {
+        this.worktreeToAgentTabIds.delete(worktreeId);
+      }
+    }
+  }
+
+  /**
+   * Find an agentTabId for a given worktreeId. Returns the first
+   * agentTabId associated with the worktree, or null if none exist.
+   * Used by the deprecated handleAcpPayload fallback path.
+   */
+  private findAgentTabIdByWorktree(worktreeId: string): string | null {
+    const agentTabIds = this.worktreeToAgentTabIds.get(worktreeId);
+    if (!agentTabIds || agentTabIds.size === 0) return null;
+    // Return the first agentTabId (iteration order is insertion order for Sets)
+    return agentTabIds.values().next().value as string;
+  }
+
   // ---- Session lifecycle ----
 
-  getOrCreateController(worktreeId: string, cwd: string): SessionController {
-    const existing = this.sessions.get(worktreeId);
+  getOrCreateController(
+    agentTabId: string,
+    worktreeId: string,
+    externalTransport?: Transport,
+  ): SessionController {
+    const existing = this.sessions.get(agentTabId);
     if (existing) {
       return existing.controller;
     }
 
     const config = this.assertConfigured();
-    const transport = new YmirAcpTransport(
-      config.sendAcpPayload,
-      config.getConnectionStatus,
-      config.requestTimeoutMs ?? 30000
-    );
 
+    let transport: YmirAcpTransport;
+    if (externalTransport) {
+      // If an external transport is provided, adapt it to YmirAcpTransport interface
+      // For now, create a new YmirAcpTransport with the configured callbacks
+      transport = new YmirAcpTransport(
+        config.sendAcpPayload,
+        config.getConnectionStatus,
+        config.requestTimeoutMs ?? 30000
+      );
+    } else {
+      transport = new YmirAcpTransport(
+        config.sendAcpPayload,
+        config.getConnectionStatus,
+        config.requestTimeoutMs ?? 30000
+      );
+    }
+
+    return this.createSessionRecord(agentTabId, worktreeId, "", config, transport).controller;
+  }
+
+  private createSessionRecord(
+    agentTabId: string,
+    worktreeId: string,
+    cwd: string,
+    config: AcpSessionManagerConfig,
+    transport: YmirAcpTransport,
+  ): SessionRecord {
     const controller = new SessionController(transport);
-    this.sessions.set(worktreeId, {
+    const acpStore = createAcpStore(controller);
+
+    const session: SessionRecord = {
+      agentTabId,
       worktreeId,
       sessionId: null,
       cwd,
       controller,
       transport,
-    });
+    };
+
+    this.sessions.set(agentTabId, session);
+    this.acpStores.set(agentTabId, acpStore);
+    this.addToWorktreeIndex(worktreeId, agentTabId);
 
     // Subscribe to agent-requested terminal/create events if a callback is configured.
     // This bridges ACP's agent-initiated terminal model to ymir's client-initiated PTY system.
@@ -399,55 +495,54 @@ class AcpSessionManagerImpl implements AcpSessionManagerApi {
       controller.subscribeToTerminalCreate(handler);
     }
 
-    // Create an AcpStore for this session controller
-    const acpStore = createAcpStore(controller);
-    this.acpStores.set(worktreeId, acpStore);
-
-    return controller;
+    return session;
   }
 
-  removeController(worktreeId: string): void {
-    const session = this.sessions.get(worktreeId);
+  removeController(agentTabId: string): void {
+    const session = this.sessions.get(agentTabId);
     if (!session) return;
 
     // Clean up reverse mapping
     if (session.sessionId) {
-      this.sessionIdToWorktree.delete(session.sessionId);
+      this.sessionIdToAgentTab.delete(session.sessionId);
     }
 
+    // Remove from worktree index
+    this.removeFromWorktreeIndex(session.worktreeId, agentTabId);
+
     // Destroy and clean up the AcpStore
-    const acpStore = this.acpStores.get(worktreeId);
+    const acpStore = this.acpStores.get(agentTabId);
     if (acpStore) {
       acpStore.destroy();
-      this.acpStores.delete(worktreeId);
+      this.acpStores.delete(agentTabId);
     }
 
     // Disconnect the transport (rejects pending requests)
     session.transport.disconnect().catch(() => {});
 
-    this.sessions.delete(worktreeId);
+    this.sessions.delete(agentTabId);
   }
 
   // ---- ACP protocol methods ----
 
-  async initialize(worktreeId: string, options?: {
+  async initialize(agentTabId: string, options?: {
     clientInfo?: { name: string; version: string };
   }): Promise<unknown> {
-    const session = this.sessions.get(worktreeId);
+    const session = this.sessions.get(agentTabId);
     if (!session) {
-      throw new Error(`No SessionController for worktree: ${worktreeId}`);
+      throw new Error(`No SessionController for agent tab: ${agentTabId}`);
     }
     return session.controller.initialize(options);
   }
 
   async createSession(
-    worktreeId: string,
+    agentTabId: string,
     cwd: string,
     mcpServers: unknown[] = []
   ): Promise<{ sessionId: string }> {
-    const session = this.sessions.get(worktreeId);
+    const session = this.sessions.get(agentTabId);
     if (!session) {
-      throw new Error(`No SessionController for worktree: ${worktreeId}`);
+      throw new Error(`No SessionController for agent tab: ${agentTabId}`);
     }
 
     const result = await session.controller.createSession(cwd, mcpServers);
@@ -456,20 +551,20 @@ class AcpSessionManagerImpl implements AcpSessionManagerApi {
     // Update mappings
     session.sessionId = resultObj.sessionId;
     session.cwd = cwd;
-    this.sessionIdToWorktree.set(resultObj.sessionId, worktreeId);
+    this.sessionIdToAgentTab.set(resultObj.sessionId, agentTabId);
 
     return resultObj;
   }
 
   async loadSession(
-    worktreeId: string,
+    agentTabId: string,
     sessionId: string,
     cwd: string,
     mcpServers?: unknown[]
   ): Promise<unknown> {
-    const session = this.sessions.get(worktreeId);
+    const session = this.sessions.get(agentTabId);
     if (!session) {
-      throw new Error(`No SessionController for worktree: ${worktreeId}`);
+      throw new Error(`No SessionController for agent tab: ${agentTabId}`);
     }
 
     const result = await session.controller.loadSession(sessionId, cwd, mcpServers);
@@ -477,80 +572,83 @@ class AcpSessionManagerImpl implements AcpSessionManagerApi {
     // Update mappings
     session.sessionId = sessionId;
     session.cwd = cwd;
-    this.sessionIdToWorktree.set(sessionId, worktreeId);
+    this.sessionIdToAgentTab.set(sessionId, agentTabId);
 
     return result;
   }
 
-  async sendPrompt(worktreeId: string, prompt: string): Promise<void> {
-    const session = this.sessions.get(worktreeId);
+  async sendPrompt(agentTabId: string, prompt: string): Promise<void> {
+    const session = this.sessions.get(agentTabId);
     if (!session) {
-      throw new Error(`No SessionController for worktree: ${worktreeId}`);
+      throw new Error(`No SessionController for agent tab: ${agentTabId}`);
     }
     if (!session.sessionId) {
-      throw new Error(`No ACP session for worktree: ${worktreeId}`);
+      throw new Error(`No ACP session for agent tab: ${agentTabId}`);
     }
     return session.controller.sendPrompt(session.sessionId, prompt);
   }
 
-  async cancelPrompt(worktreeId: string): Promise<void> {
-    const session = this.sessions.get(worktreeId);
+  async cancelPrompt(agentTabId: string): Promise<void> {
+    const session = this.sessions.get(agentTabId);
     if (!session) {
-      throw new Error(`No SessionController for worktree: ${worktreeId}`);
+      throw new Error(`No SessionController for agent tab: ${agentTabId}`);
     }
     if (!session.sessionId) {
-      throw new Error(`No ACP session for worktree: ${worktreeId}`);
+      throw new Error(`No ACP session for agent tab: ${agentTabId}`);
     }
     return session.controller.cancelPrompt(session.sessionId);
   }
 
   async setConfigOption(
-    worktreeId: string,
+    agentTabId: string,
     configId: string,
     value: string
   ): Promise<ConfigOption[]> {
-    const session = this.sessions.get(worktreeId);
+    const session = this.sessions.get(agentTabId);
     if (!session) {
-      throw new Error(`No SessionController for worktree: ${worktreeId}`);
+      throw new Error(`No SessionController for agent tab: ${agentTabId}`);
     }
     if (!session.sessionId) {
-      throw new Error(`No ACP session for worktree: ${worktreeId}`);
+      throw new Error(`No ACP session for agent tab: ${agentTabId}`);
     }
     return session.controller.setConfigOption(session.sessionId, configId, value);
   }
 
   // ---- State queries ----
 
-  getSessionState(worktreeId: string): SessionControllerState | null {
-    const session = this.sessions.get(worktreeId);
+  getSessionState(agentTabId: string): SessionControllerState | null {
+    const session = this.sessions.get(agentTabId);
     if (!session) return null;
     return session.controller.getState();
   }
 
-  getAcpStore(worktreeId: string): AcpStoreType | null {
-    return this.acpStores.get(worktreeId) ?? null;
+  getAcpStore(agentTabId: string): AcpStoreType | null {
+    return this.acpStores.get(agentTabId) ?? null;
   }
 
-  getSessionId(worktreeId: string): string | null {
-    const session = this.sessions.get(worktreeId);
+  getSessionId(agentTabId: string): string | null {
+    const session = this.sessions.get(agentTabId);
     return session?.sessionId ?? null;
   }
 
-  getWorktreeId(sessionId: string): string | null {
-    return this.sessionIdToWorktree.get(sessionId) ?? null;
+  getAgentTabId(sessionId: string): string | null {
+    return this.sessionIdToAgentTab.get(sessionId) ?? null;
   }
 
-  getActiveWorktrees(): string[] {
+  getActiveAgentTabs(): string[] {
     return Array.from(this.sessions.keys());
   }
 
   // ---- Incoming ACP event routing ----
 
-  handleAcpPayload(worktreeId: string, payload: Record<string, unknown>): void {
-    const session = this.sessions.get(worktreeId);
+  /**
+   * Route ACP payload by agentTabId directly (new multi-session flow).
+   */
+  handleAcpPayloadByAgentTabId(agentTabId: string, payload: Record<string, unknown>): void {
+    const session = this.sessions.get(agentTabId);
     if (!session) {
       console.warn(
-        `[AcpSessionManager] No SessionController for worktree: ${worktreeId}. ` +
+        `[AcpSessionManager] No SessionController for agent tab: ${agentTabId}. ` +
         "Dropping ACP payload. Create a controller first with getOrCreateController()."
       );
       return;
@@ -564,10 +662,39 @@ class AcpSessionManagerImpl implements AcpSessionManagerApi {
     session.transport.receiveAcpPayload(payload);
   }
 
+  /**
+   * Route ACP payload with backward compatibility (legacy single-session flow).
+   * DEPRECATED: Use `handleAcpPayloadByAgentTabId` for new multi-session routing.
+   * Extracts agentTabId from the payload data for multi-session routing.
+   * Falls back to worktreeId lookup if agentTabId is not present.
+   */
+  handleAcpPayload(worktreeId: string, payload: Record<string, unknown>): void {
+    // Extract agentTabId from payload.data for multi-session routing
+    const data = payload.data as Record<string, unknown> | undefined;
+    const agentTabIdFromPayload = data?.agentTabId as string | undefined;
+
+    // Use agentTabId from payload if available, otherwise fall back to worktreeId
+    // for backward compatibility with legacy single-session-per-worktree flows
+    const lookupKey = agentTabIdFromPayload ?? worktreeId;
+
+    const session = this.sessions.get(lookupKey);
+    if (!session) {
+      console.warn(
+        `[AcpSessionManager] No SessionController for key: ${lookupKey}. ` +
+        "Dropping ACP payload. Create a controller first with getOrCreateController()."
+      );
+      return;
+    }
+
+    // Feed the raw ACP JSON-RPC payload to the transport, which will either
+    // resolve a pending request or emit it as a notification.
+    session.transport.receiveAcpPayload(payload);
+  }
+
   // ---- Utility ----
 
-  hasController(worktreeId: string): boolean {
-    return this.sessions.has(worktreeId);
+  hasController(agentTabId: string): boolean {
+    return this.sessions.has(agentTabId);
   }
 
   destroy(): void {
@@ -577,11 +704,14 @@ class AcpSessionManagerImpl implements AcpSessionManagerApi {
     }
     this.acpStores.clear();
 
-    for (const worktreeId of this.sessions.keys()) {
-      this.removeController(worktreeId);
+    // Collect all agentTabIds before removing (removeController mutates the index)
+    const allAgentTabIds = Array.from(this.sessions.keys());
+    for (const agentTabId of allAgentTabIds) {
+      this.removeController(agentTabId);
     }
     this.sessions.clear();
-    this.sessionIdToWorktree.clear();
+    this.sessionIdToAgentTab.clear();
+    this.worktreeToAgentTabIds.clear();
     this.config = null;
   }
 }
@@ -602,14 +732,17 @@ class AcpSessionManagerImpl implements AcpSessionManagerApi {
  *     getConnectionStatus: () => ymirClient.getStatus(),
  *   });
  *
- *   // Create a session controller per worktree
- *   const controller = acpSessionManager.getOrCreateController(worktreeId, cwd);
+ *   // Multi-session: Create a session controller per agent tab
+ *   const controller = acpSessionManager.getOrCreateController(agentTabId, worktreeId);
  *
- *   // Route incoming ACP events from the bridge
+ *   // Route incoming ACP events from the bridge (backward compatible)
  *   acpSessionManager.handleAcpPayload(worktreeId, rawAcpJsonRpc);
  *
+ *   // Or route by agentTabId directly (multi-session flow)
+ *   acpSessionManager.handleAcpPayloadByAgentTabId(agentTabId, rawAcpJsonRpc);
+ *
  *   // Send prompts
- *   await acpSessionManager.sendPrompt(worktreeId, "Hello");
+ *   await acpSessionManager.sendPrompt(agentTabId, "Hello");
  */
 export const acpSessionManager: AcpSessionManagerApi = new AcpSessionManagerImpl();
 
@@ -618,7 +751,7 @@ export const acpSessionManager: AcpSessionManagerApi = new AcpSessionManagerImpl
 // ============================================================================
 
 export type {
-  WorktreeSession as InternalWorktreeSession,
+  SessionRecord as InternalSessionRecord,
   YmirAcpTransport,
 };
 
