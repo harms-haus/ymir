@@ -30,6 +30,11 @@ fn payload_to_bridge_message(payload: ServerMessagePayload) -> BridgeMessage {
             payload: serde_json::to_value(&envelope).unwrap_or_default(),
         },
 
+        // ACP JSON-RPC responses pass through as raw AcpPayload
+        ServerMessagePayload::AcpJsonRpcResponse(value) => BridgeMessage::AcpPayload {
+            payload: value,
+        },
+
         // Workspace lifecycle events
         ServerMessagePayload::WorkspaceCreated(_) => BridgeMessage::WorkspaceEvent {
             payload: serde_json::to_value(&payload).unwrap_or_default(),

@@ -139,6 +139,8 @@ pub enum ServerMessagePayload {
     Notification(Notification),
     Ack(Ack),
     AcpWireEvent(AcpEventEnvelope),
+    /// Raw JSON-RPC response for ACP relay (sent as BridgeMessage::AcpPayload).
+    AcpJsonRpcResponse(serde_json::Value),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]

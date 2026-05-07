@@ -5,6 +5,7 @@
 //! and communication channels.
 
 use crate::agent::AcpHandle;
+use crate::agent::AcpJsonRpcRelay;
 use crate::db::Db;
 use crate::git::GitOps;
 use crate::protocol::ServerMessage;
@@ -91,6 +92,9 @@ pub struct AppState {
     /// Handle to ACP runtime (manages all agent clients internally)
     pub acp_handle: Option<AcpHandle>,
 
+    /// JSON-RPC relay for dispatching inbound ACP payloads
+    acp_relay: Option<AcpJsonRpcRelay>,
+
     /// Active PTY sessions
     pub terminals: RwLock<HashMap<Uuid, TerminalState>>,
 
@@ -116,6 +120,7 @@ impl std::fmt::Debug for AppState {
             .field("worktrees", &self.worktrees.try_read().map(|g| g.len()))
             .field("agents", &self.agents.try_read().map(|g| g.len()))
             .field("acp_handle", &self.acp_handle.is_some())
+            .field("acp_relay", &self.acp_relay.is_some())
             .field("terminals", &self.terminals.try_read().map(|g| g.len()))
             .field("clients", &self.clients.try_read().map(|g| g.len()))
             .field("pty_manager", &self.pty_manager.is_some())
@@ -135,6 +140,7 @@ impl AppState {
             worktrees: RwLock::new(HashMap::new()),
             agents: RwLock::new(HashMap::new()),
             acp_handle: None,
+            acp_relay: None,
             terminals: RwLock::new(HashMap::new()),
             clients: RwLock::new(HashMap::new()),
             broadcast_tx,
@@ -159,7 +165,8 @@ impl AppState {
         let broadcast_tx = state.broadcast_tx.clone();
         let (handle, _join) = start_acp_runtime(broadcast_tx.clone());
 
-        state.acp_handle = Some(handle);
+        state.acp_handle = Some(handle.clone());
+        state.acp_relay = Some(AcpJsonRpcRelay::new(handle));
         state.pty_manager = Some(PtyManager::new());
 
         // Wire up broadcast channel so TTL expiry can broadcast TerminalSessionEnded
@@ -273,6 +280,11 @@ agent_type: wt.agent_type,
     /// Kept for backward compatibility during the transition to multi-session.
     pub async fn find_agent_session_for_worktree(&self, worktree_id: Uuid) -> Option<Uuid> {
         self.find_agent_sessions_for_worktree(worktree_id).await.into_iter().next()
+    }
+
+    /// Returns a reference to the ACP JSON-RPC relay, if available.
+    pub fn acp_relay(&self) -> Option<&AcpJsonRpcRelay> {
+        self.acp_relay.as_ref()
     }
 }
 

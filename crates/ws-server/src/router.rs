@@ -62,12 +62,37 @@ pub async fn route_json_message(
             None
         }
         DecodedMessage::NonClient(msg) => {
-            tracing::debug!(
-                %client_id,
-                message_type = ?std::mem::discriminant(&msg),
-                "Received non-client BridgeMessage via JSON entry point"
-            );
-            None
+            match msg {
+                harms_haus_acp_ws_bridge::contract::BridgeMessage::AcpPayload { payload } => {
+                    match state.acp_relay() {
+                        Some(relay) => {
+                            match relay.handle_payload(client_id, payload).await {
+                                Some(rpc_response) => {
+                                    Some(ServerMessage::new(
+                                        ServerMessagePayload::AcpJsonRpcResponse(rpc_response),
+                                    ))
+                                }
+                                None => None,
+                            }
+                        }
+                        None => {
+                            tracing::warn!(
+                                %client_id,
+                                "Received AcpPayload but no ACP relay is available"
+                            );
+                            None
+                        }
+                    }
+                }
+                _ => {
+                    tracing::debug!(
+                        %client_id,
+                        message_type = ?std::mem::discriminant(&msg),
+                        "Received non-client BridgeMessage via JSON entry point"
+                    );
+                    None
+                }
+            }
         }
     }
 }

@@ -59,6 +59,21 @@ enum AcpCommand {
         agent_tab_id: Uuid,
         respond: oneshot::Sender<AgentStatus>,
     },
+    /// List all active agent sessions with their sessionId mappings
+    ListSessions {
+        respond: oneshot::Sender<Vec<AcpSessionInfo>>,
+    },
+    FindSessionByAcpId {
+        acp_session_id: String,
+        respond: oneshot::Sender<Option<Uuid>>,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct AcpSessionInfo {
+    pub agent_tab_id: Uuid,
+    pub worktree_id: Uuid,
+    pub acp_session_id: Option<String>,
 }
 
 /// Event sender that broadcasts ACP events to all WebSocket clients.
@@ -358,6 +373,21 @@ impl AcpHandle {
         });
         respond_rx.await.unwrap_or(AgentStatus::Idle)
     }
+
+    pub async fn list_sessions(&self) -> Vec<AcpSessionInfo> {
+        let (respond_tx, respond_rx) = oneshot::channel();
+        let _ = self.tx.send(AcpCommand::ListSessions { respond: respond_tx });
+        respond_rx.await.unwrap_or_default()
+    }
+
+    pub async fn find_session_by_acp_id(&self, acp_session_id: &str) -> Option<Uuid> {
+        let (respond_tx, respond_rx) = oneshot::channel();
+        let _ = self.tx.send(AcpCommand::FindSessionByAcpId {
+            acp_session_id: acp_session_id.to_string(),
+            respond: respond_tx,
+        });
+        respond_rx.await.unwrap_or(None)
+    }
 }
 
 pub fn start_acp_runtime(broadcast_tx: broadcast::Sender<ServerMessage>) -> (AcpHandle, JoinHandle<()>) {
@@ -428,6 +458,24 @@ pub fn start_acp_runtime(broadcast_tx: broadcast::Sender<ServerMessage>) -> (Acp
                             AgentStatus::Idle
                         };
                         let _ = respond.send(status);
+                    }
+                    AcpCommand::ListSessions { respond } => {
+                        let sessions: Vec<AcpSessionInfo> = clients.iter().map(|(id, client)| {
+                            AcpSessionInfo {
+                                agent_tab_id: *id,
+                                worktree_id: client.worktree_id,
+                                acp_session_id: client.session_id.as_ref().map(|s| s.to_string()),
+                            }
+                        }).collect();
+                        let _ = respond.send(sessions);
+                    }
+                    AcpCommand::FindSessionByAcpId { acp_session_id, respond } => {
+                        let found = clients.iter()
+                            .find(|(_, client)| {
+                                client.session_id.as_ref().map(|s| s.to_string()) == Some(acp_session_id.clone())
+                            })
+                            .map(|(id, _)| *id);
+                        let _ = respond.send(found);
                     }
                 }
             }
