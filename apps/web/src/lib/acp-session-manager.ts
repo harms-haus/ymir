@@ -673,9 +673,17 @@ class AcpSessionManagerImpl implements AcpSessionManagerApi {
     const data = payload.data as Record<string, unknown> | undefined;
     const agentTabIdFromPayload = data?.agentTabId as string | undefined;
 
-    // Use agentTabId from payload if available, otherwise fall back to worktreeId
-    // for backward compatibility with legacy single-session-per-worktree flows
-    const lookupKey = agentTabIdFromPayload ?? worktreeId;
+    // Use agentTabId from payload if available; otherwise resolve via the
+    // worktree→agentTabId reverse index so we always look up by the correct key.
+    const lookupKey = agentTabIdFromPayload ?? this.findAgentTabIdByWorktree(worktreeId);
+
+    if (!lookupKey) {
+      console.warn(
+        `[AcpSessionManager] Cannot route ACP payload: no agentTabId in payload ` +
+        `and no controller found for worktreeId ${worktreeId}. Dropping.`
+      );
+      return;
+    }
 
     const session = this.sessions.get(lookupKey);
     if (!session) {

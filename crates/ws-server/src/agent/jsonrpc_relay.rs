@@ -160,7 +160,7 @@ impl AcpJsonRpcRelay {
         match method {
             "initialize" => Ok(self.handle_initialize()),
 
-            "session/list" => Ok(self.handle_session_list()),
+            "session/list" => Ok(self.handle_session_list().await),
 
             "session/new" => Err(DispatchError::new(
                 CODE_METHOD_NOT_FOUND,
@@ -205,9 +205,20 @@ impl AcpJsonRpcRelay {
         })
     }
 
-    fn handle_session_list(&self) -> Value {
-        // Agents are managed server-side; the client has no direct visibility.
-        serde_json::json!({ "sessions": [] })
+    async fn handle_session_list(&self) -> Value {
+        let sessions = self.acp_handle.list_sessions().await;
+        let session_values: Vec<Value> = sessions
+            .iter()
+            .filter_map(|s| {
+                s.acp_session_id.as_ref().map(|sid| {
+                    serde_json::json!({
+                        "sessionId": sid,
+                        "worktreeId": s.worktree_id.to_string(),
+                    })
+                })
+            })
+            .collect();
+        serde_json::json!({ "sessions": session_values })
     }
 
     async fn handle_session_prompt(
@@ -219,25 +230,36 @@ impl AcpJsonRpcRelay {
             DispatchError::new(CODE_INVALID_PARAMS, "Missing params for session/prompt")
         })?;
 
-        let content = params.get("content")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| {
-                DispatchError::new(CODE_INVALID_PARAMS, "Missing 'content' in params")
-            })?
-            .to_string();
+        // Extract content: prefer `params.prompt` (array of content blocks),
+        // fall back to `params.content` (plain string).
+        let content = if let Some(prompt_arr) = params.get("prompt").and_then(|v| v.as_array()) {
+            // Concatenate all text blocks from the prompt array.
+            let mut parts = Vec::new();
+            for block in prompt_arr {
+                if block.get("type").and_then(|t| t.as_str()) == Some("text") {
+                    if let Some(text) = block.get("text").and_then(|t| t.as_str()) {
+                        parts.push(text.to_string());
+                    }
+                }
+            }
+            if parts.is_empty() {
+                return Err(DispatchError::new(
+                    CODE_INVALID_PARAMS,
+                    "No text content found in 'prompt' array",
+                ));
+            }
+            parts.join("\n")
+        } else if let Some(content_str) = params.get("content").and_then(|v| v.as_str()) {
+            content_str.to_string()
+        } else {
+            return Err(DispatchError::new(
+                CODE_INVALID_PARAMS,
+                "Missing 'prompt' or 'content' in params",
+            ));
+        };
 
-        // TODO(R3): We need a mapping from sessionId (acp_session_id string)
-        // to agent_tab_id (Uuid). Once R3 adds `AcpHandle::lookup_agent_tab_id`,
-        // use it here. For now, try to extract sessionId from params and leave
-        // a placeholder that will need to be resolved.
-        //
-        // The client may provide a `sessionId` in params. We attempt to use it
-        // for routing but fall back to a placeholder approach.
         let _session_id_str = params.get("sessionId").and_then(|v| v.as_str());
 
-        // TODO: Placeholder — we need to resolve sessionId → agent_tab_id.
-        // For now we attempt to find an active agent. This stub returns an
-        // error indicating the routing is not yet wired up.
         let agent_tab_id = self.resolve_agent_tab_id(_session_id_str).await?;
 
         self.acp_handle

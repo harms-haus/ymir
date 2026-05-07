@@ -100,6 +100,10 @@ export function AgentPane({ worktreeId }: AgentPaneProps) {
         const agentTabId = session.agentTabId ?? session.id;
         if (!acpSessionManager.hasController(agentTabId)) {
           acpSessionManager.getOrCreateController(agentTabId, worktreeId);
+          // Initialize the ACP protocol handshake
+          acpSessionManager.initialize(agentTabId).catch(err => {
+            console.error('[AgentPane] Failed to initialize ACP controller:', err);
+          });
         }
       }
     });
