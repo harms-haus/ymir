@@ -1,7 +1,7 @@
 //! ACP-WS Adapter: Stateless translation between ACP SDK and WS-ACP wire types.
 
 use crate::protocol::{
-    AcpAgentCapabilities, AcpChunkContent, AcpConfigOptionsUpdate, AcpContextUpdate,
+    AcpAgentCapabilities, AcpChunkContent, AcpChunkRole, AcpConfigOptionsUpdate, AcpContextUpdate,
     AcpContextUpdateType, AcpEvent, AcpEventEnvelope, AcpInitializeResponse, AcpPromptChunk,
     AcpSessionConfigOption, AcpSessionConfigOptionCategory, AcpSessionConfigSelectOption,
     AcpSessionInit, AcpToolUseEvent, AcpToolUseStatus,
@@ -176,6 +176,22 @@ pub struct YmirClientHandler {
     config_options: Arc<Mutex<Vec<AcpSessionConfigOption>>>,
 }
 
+fn content_from_block(block: ContentBlock) -> AcpChunkContent {
+    match block {
+        ContentBlock::Text(text) => AcpChunkContent::Text(text.text),
+        ContentBlock::Image(img) => {
+            AcpChunkContent::Structured(serde_json::to_string(&img).unwrap_or_default())
+        }
+        ContentBlock::Resource(res) => {
+            AcpChunkContent::Structured(serde_json::to_string(&res).unwrap_or_default())
+        }
+        ContentBlock::Audio(audio) => {
+            AcpChunkContent::Structured(serde_json::to_string(&audio).unwrap_or_default())
+        }
+        _ => AcpChunkContent::Structured(String::new()),
+    }
+}
+
 impl YmirClientHandler {
     pub fn new(worktree_id: Uuid, agent_tab_id: Uuid, event_sender: Arc<dyn AcpEventSender>, sequence: Arc<SequenceCounter>) -> Self {
         Self {
@@ -258,57 +274,33 @@ impl YmirClientHandler {
 
     match notif.update {
             SessionUpdate::AgentMessageChunk(chunk) => {
-                let content = match chunk.content {
-                    ContentBlock::Text(text) => AcpChunkContent::Text(text.text),
-                    ContentBlock::Image(img) => AcpChunkContent::Structured(
-                        serde_json::to_string(&img).unwrap_or_default()),
-                    ContentBlock::Resource(res) => AcpChunkContent::Structured(
-                        serde_json::to_string(&res).unwrap_or_default()),
-                    ContentBlock::Audio(audio) => AcpChunkContent::Structured(
-                        serde_json::to_string(&audio).unwrap_or_default()),
-                    _ => AcpChunkContent::Structured(String::new()),
-                };
+                let content = content_from_block(chunk.content);
                 self.send_event(AcpEvent::PromptChunk(AcpPromptChunk {
                     worktree_id: self.worktree_id,
-                    acp_session_id: session_id_str,
+                    acp_session_id: session_id_str.clone(),
                     content,
                     is_final: false,
+                    role: Some(AcpChunkRole::Agent),
                 }));
             }
             SessionUpdate::AgentThoughtChunk(chunk) => {
-                let content = match chunk.content {
-                    ContentBlock::Text(text) => AcpChunkContent::Text(text.text),
-                    ContentBlock::Image(img) => AcpChunkContent::Structured(
-                        serde_json::to_string(&img).unwrap_or_default()),
-                    ContentBlock::Resource(res) => AcpChunkContent::Structured(
-                        serde_json::to_string(&res).unwrap_or_default()),
-                    ContentBlock::Audio(audio) => AcpChunkContent::Structured(
-                        serde_json::to_string(&audio).unwrap_or_default()),
-                    _ => AcpChunkContent::Structured(String::new()),
-                };
+                let content = content_from_block(chunk.content);
                 self.send_event(AcpEvent::PromptChunk(AcpPromptChunk {
                     worktree_id: self.worktree_id,
-                    acp_session_id: session_id_str,
+                    acp_session_id: session_id_str.clone(),
                     content,
                     is_final: false,
+                    role: Some(AcpChunkRole::Thought),
                 }));
             }
             SessionUpdate::UserMessageChunk(chunk) => {
-                let content = match chunk.content {
-                    ContentBlock::Text(text) => AcpChunkContent::Text(text.text),
-                    ContentBlock::Image(img) => AcpChunkContent::Structured(
-                        serde_json::to_string(&img).unwrap_or_default()),
-                    ContentBlock::Resource(res) => AcpChunkContent::Structured(
-                        serde_json::to_string(&res).unwrap_or_default()),
-                    ContentBlock::Audio(audio) => AcpChunkContent::Structured(
-                        serde_json::to_string(&audio).unwrap_or_default()),
-                    _ => AcpChunkContent::Structured(String::new()),
-                };
+                let content = content_from_block(chunk.content);
                 self.send_event(AcpEvent::PromptChunk(AcpPromptChunk {
                     worktree_id: self.worktree_id,
-                    acp_session_id: session_id_str,
+                    acp_session_id: session_id_str.clone(),
                     content,
                     is_final: false,
+                    role: Some(AcpChunkRole::User),
                 }));
             }
             SessionUpdate::ToolCall(tool_call) => {

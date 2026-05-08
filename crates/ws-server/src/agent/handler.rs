@@ -545,20 +545,38 @@ pub async fn handle_agent_cancel(
     state: Arc<AppState>,
     msg: crate::protocol::AgentCancel,
 ) -> ServerMessage {
-    let session_data_opt = {
+    // First try in-memory lookup
+    let (session_id, worktree_id) = {
         let agents = state.agents.read().await;
-        agents.get(&msg.agent_tab_id).map(|agent| agent.id)
-    };
-
-    let session_id = match session_data_opt {
-        Some(id) => id,
-        None => {
-            return ServerMessage::new(ServerMessagePayload::Error(Error {
-                code: "AGENT_NOT_FOUND".to_string(),
-                message: format!("No agent for tab {}", msg.agent_tab_id),
-                details: None,
-                request_id: None,
-            }));
+        if let Some(agent) = agents.get(&msg.agent_tab_id) {
+            (agent.id, msg.worktree_id)
+        } else {
+            // Fallback to DB lookup for closed/restarted agents
+            match state.db.get_agent_session_by_tab_id(&msg.agent_tab_id.to_string()).await {
+                Ok(Some(session)) => {
+                    let sid = Uuid::parse_str(&session.id)
+                        .unwrap_or(msg.session_id);
+                    let wid = Uuid::parse_str(&session.worktree_id)
+                        .unwrap_or(msg.worktree_id);
+                    (sid, wid)
+                }
+                Ok(None) => {
+                    return ServerMessage::new(ServerMessagePayload::Error(Error {
+                        code: "AGENT_NOT_FOUND".to_string(),
+                        message: format!("No agent for tab {}", msg.agent_tab_id),
+                        details: None,
+                        request_id: None,
+                    }));
+                }
+                Err(e) => {
+                    return ServerMessage::new(ServerMessagePayload::Error(Error {
+                        code: "DB_ERROR".to_string(),
+                        message: format!("Failed to lookup agent session: {}", e),
+                        details: None,
+                        request_id: None,
+                    }));
+                }
+            }
         }
     };
 
@@ -578,7 +596,7 @@ pub async fn handle_agent_cancel(
     let broadcast_msg = ServerMessage::new(ServerMessagePayload::AgentRemoved(
         crate::protocol::AgentRemoved {
             id: session_id,
-            worktree_id: msg.worktree_id,
+            worktree_id,
         },
     ));
 

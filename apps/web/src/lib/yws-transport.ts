@@ -348,9 +348,11 @@ export class YmirWsTransport {
     try {
       const decoded = decodeBridgeJson(JSON.stringify(envelope));
 
-      // Route acp_payload directly through acpSessionManager
+      // Route acp_payload directly through acpSessionManager.
+      // Process asynchronously so bursts of ACP events (e.g., PromptChunk)
+      // don't starve the event loop and block heartbeat pongs.
       if (decoded.type === "acp_payload") {
-        this.handleAcpPayload(decoded.message);
+        this.enqueueAcpPayload((decoded.message as any).payload as Record<string, unknown>);
         return;
       }
 
@@ -396,12 +398,39 @@ export class YmirWsTransport {
     }
   }
 
+  // --- ACP payload queue (processed asynchronously to avoid blocking heartbeats) ---
+  private acpPayloadQueue: Record<string, unknown>[] = [];
+  private acpPayloadProcessing = false;
+
   /**
-   * Handle incoming acp_payload BridgeMessage by routing it through
-   * acpSessionManager to the appropriate SessionController.
+   * Enqueue an ACP payload for async processing.
+   * This prevents bursts of ACP events from starving the event loop
+   * and blocking heartbeat pong handling.
    */
-  private handleAcpPayload(message: BridgeMessage): void {
-    const payload = (message as any).payload as Record<string, unknown> | null;
+  private enqueueAcpPayload(payload: Record<string, unknown>): void {
+    this.acpPayloadQueue.push(payload);
+    if (!this.acpPayloadProcessing) {
+      this.acpPayloadProcessing = true;
+      this.processAcpPayloadQueue();
+    }
+  }
+
+  /** Process enqueued ACP payloads one at a time, yielding between each. */
+  private processAcpPayloadQueue(): void {
+    if (this.acpPayloadQueue.length === 0) {
+      this.acpPayloadProcessing = false;
+      return;
+    }
+
+    const payload = this.acpPayloadQueue.shift()!;
+    this._processAcpPayload(payload);
+
+    // Yield to the macrotask queue (allows heartbeats/pongs to interleave)
+    setTimeout(() => this.processAcpPayloadQueue(), 0);
+  }
+
+  /** Actually process a single ACP payload (extracted from handleAcpPayload). */
+  private _processAcpPayload(payload: Record<string, unknown>): void {
     if (!payload) return;
 
     // JSON-RPC responses (from the server relay) have "jsonrpc" and "id" fields
@@ -420,6 +449,27 @@ export class YmirWsTransport {
     const envelopeWorktreeId = (payload as any)?.worktreeId as string | undefined;
     const data = (payload.data as Record<string, unknown>) ?? {};
     const worktreeId = envelopeWorktreeId ?? (data as any)?.worktreeId ?? activeWorktreeId;
+    const eventType = payload.eventType as string | undefined;
+
+    // Convert AcpEventEnvelope to standard ACP session/update JSON-RPC notification
+    // for acp-chat-core. The library now handles missing turnId via active streaming
+    // message tracking, so we just need to map the envelope to the ACP update format.
+    if (eventType && envelopeAgentTabId) {
+      const acpSessionId = (data as any)?.acpSessionId;
+      if (acpSessionId) {
+        const sessionUpdate = _ymirEventToAcpSessionUpdate(eventType, data);
+        if (sessionUpdate) {
+          const rpcNotification = {
+            method: 'session/update',
+            params: {
+              sessionId: acpSessionId,
+              update: sessionUpdate,
+            },
+          };
+          acpSessionManager.handleAcpPayloadByAgentTabId(envelopeAgentTabId, rpcNotification);
+        }
+      }
+    }
 
     if (worktreeId) {
       // Dispatch to Zustand accumulator (Accumulator-First approach)
@@ -474,15 +524,8 @@ export class YmirWsTransport {
         }
       }
 
-      // Keep existing routing for backward compatibility
-      // DEPRECATED: acpSessionManager.handleAcpPayload routes by worktreeId as fallback.
-      // New multi-session flow should use handleAcpPayloadByAgentTabId(agentTabId, payload)
-      // instead. This backward-compat path is retained for legacy single-session flows.
-      if (envelopeAgentTabId) {
-        acpSessionManager.handleAcpPayloadByAgentTabId(envelopeAgentTabId, payload);
-      } else {
-        acpSessionManager.handleAcpPayload(worktreeId, payload);
-      }
+      // AcpEventEnvelope events are now routed via JSON-RPC session/update above.
+      // The old handleAcpPayloadByAgentTabId path expected raw JSON-RPC, not envelopes.
     }
   }
 
@@ -781,6 +824,73 @@ export function resetYmirWsTransport(): void {
   if (transport) {
     transport.disconnect();
     transport = null;
+  }
+}
+
+/**
+ * Convert a Ymir AcpEventEnvelope event type + data to a standard ACP SessionUpdate.
+ * Uses the ACP sessionUpdate discriminator format expected by acp-chat-core.
+ */
+function _ymirEventToAcpSessionUpdate(
+  eventType: string,
+  data: Record<string, unknown>,
+): Record<string, unknown> | null {
+  const rawContent = data.content as Record<string, unknown> | undefined;
+  const contentText = (rawContent as any)?.data ?? (rawContent as any)?.text ?? '';
+  const isFinal = data.isFinal === true;
+  const role = (data as any)?.role as string | undefined;
+
+  switch (eventType) {
+    case 'PromptChunk': {
+      // Map role from Ymir envelope to standard ACP sessionUpdate type
+      let sessionUpdateType: string;
+      switch (role) {
+        case 'user':
+          sessionUpdateType = 'user_message_chunk';
+          break;
+        case 'thought':
+          sessionUpdateType = 'agent_thought_chunk';
+          break;
+        case 'agent':
+        default:
+          sessionUpdateType = 'agent_message_chunk';
+          break;
+      }
+      return {
+        sessionUpdate: sessionUpdateType,
+        content: [{ type: 'text', text: contentText }],
+        status: isFinal ? 'done' : 'in_progress',
+      };
+    }
+    case 'PromptComplete':
+      return {
+        sessionUpdate: 'agent_message_chunk',
+        content: [],
+        status: 'done',
+      };
+    case 'SessionStatus': {
+      const status = (data as any)?.status;
+      if (status === 'working') {
+        return { sessionUpdate: 'agent_message_chunk', content: [], status: 'in_progress' };
+      }
+      return { sessionUpdate: 'agent_message_chunk', content: [], status: 'done' };
+    }
+    case 'ToolUse':
+      return {
+        sessionUpdate: 'tool_call',
+        toolCallId: (data as any)?.toolUseId ?? String((data as any)?.id ?? ''),
+        title: (data as any)?.toolName ?? '',
+        kind: 'unknown',
+        status: 'in_progress',
+      };
+    case 'InitializeResponse':
+    case 'SessionInit':
+    case 'AvailableCommandsUpdate':
+    case 'ConfigOptionsUpdate':
+      // These are handled by Ymir-specific logic in _processAcpPayload
+      return null;
+    default:
+      return null;
   }
 }
 

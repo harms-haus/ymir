@@ -135,7 +135,8 @@ export function acpAccumulatorReducer(
     }
 
     case 'EVENT_RECEIVED': {
-      const { envelope, threadId } = action;
+      const { envelope, threadId: actionThreadId } = action;
+      let threadId = actionThreadId;
       const eventType = envelope.eventType;
       const data = envelope.data;
       const sequence = envelope.sequence;
@@ -209,6 +210,21 @@ export function acpAccumulatorReducer(
       }
 
       let thread = state.threads.get(threadId);
+
+      // If no thread found at threadId, check if any existing thread has this as its agentTabId
+      // (happens after SessionInit re-keying from agentTabId -> acpSessionId)
+      if (!thread) {
+        for (const [key, t] of state.threads) {
+          if ((t as any).agentTabId === threadId) {
+            console.debug(
+              `[acpAccumulator] Event for agentTabId=${threadId} redirecting to acpSessionId=${key}`
+            );
+            thread = t;
+            threadId = key;
+            break;
+          }
+        }
+      }
 
       if (!thread) {
         const acpSessionId = (data as any)?.acpSessionId ?? 'unknown';

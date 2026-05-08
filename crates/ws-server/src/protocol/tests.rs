@@ -615,6 +615,7 @@ fn test_acp_prompt_chunk_text_roundtrip() {
         acp_session_id: "session-123".to_string(),
         content: AcpChunkContent::Text("Hello, world!".to_string()),
         is_final: false,
+        role: None,
     };
     test_json_roundtrip(event);
 }
@@ -626,6 +627,7 @@ fn test_acp_prompt_chunk_structured_roundtrip() {
         acp_session_id: "session-123".to_string(),
         content: AcpChunkContent::Structured(r#"{"key":"value"}"#.to_string()),
         is_final: true,
+        role: None,
     };
     test_json_roundtrip(event);
 }
@@ -732,6 +734,7 @@ fn test_acp_event_variants_roundtrip() {
             acp_session_id: "s1".to_string(),
             content: AcpChunkContent::Text("test".to_string()),
             is_final: true,
+            role: None,
         }),
         AcpEvent::PromptComplete(AcpPromptComplete {
             worktree_id: Uuid::new_v4(),

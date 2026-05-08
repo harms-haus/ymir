@@ -197,6 +197,19 @@ pub struct AcpPromptChunk {
     pub content: AcpChunkContent,
     /// True if this is the final chunk for this content item
     pub is_final: bool,
+    /// Source role: which ACP SessionUpdate variant produced this chunk
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<AcpChunkRole>,
+}
+
+/// Source role for a prompt chunk, preserving the ACP SessionUpdate discriminator.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum AcpChunkRole {
+    Agent,
+    User,
+    Thought,
 }
 
 /// Content types for prompt chunks.
