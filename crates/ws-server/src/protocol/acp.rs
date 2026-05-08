@@ -9,6 +9,19 @@
 //! Resumability: client can request replay from last known sequence
 //! Error Envelopes: all failures captured in structured AcpError
 
+// BridgeStatus re-definition for ts-rs export from ws-server tests.
+// Must match harms_haus_acp_ws_bridge::contract::BridgeStatus exactly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum BridgeStatus {
+    Starting,
+    Connected,
+    Reconnecting,
+    Disconnected,
+    Error,
+}
+
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
@@ -72,6 +85,8 @@ pub enum AcpEvent {
     Error(AcpError),
     /// Resume marker for checkpoint/resume
     ResumeMarker(AcpResumeMarker),
+    /// Agent capabilities response from initialize
+    InitializeResponse(AcpInitializeResponse),
 }
 
 /// Session initialization result from ACP bridge.
@@ -380,4 +395,14 @@ pub struct AcpAck {
     /// The last sequence number successfully processed
     #[ts(type = "number")]
     pub last_sequence: AcpSequence,
+}
+
+/// Agent capabilities response forwarded from the agent's initialize handshake.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AcpInitializeResponse {
+    /// Raw capabilities object from the agent
+    #[ts(type = "Record<string, any>")]
+    pub capabilities: serde_json::Value,
 }

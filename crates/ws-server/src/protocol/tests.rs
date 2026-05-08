@@ -437,6 +437,8 @@ fn test_agent_status_update_roundtrip() {
         status: AgentStatus::Working,
         started_at: 12345,
         agent_tab_id: Uuid::new_v4(),
+        acp_session_id: None,
+        process_id: None,
     }));
     test_json_roundtrip(msg);
 }

@@ -3,7 +3,7 @@ import { useStore } from '../store';
 import { getWebSocketClient } from '../lib/ws';
 import type { AgentStatus } from '../types/protocol';
 
-export type StatusDotStatus = 'working' | 'waiting' | 'idle';
+export type StatusDotStatus = 'spawning' | 'working' | 'waiting' | 'idle';
 
 export interface AgentStatusInfo {
   status: StatusDotStatus;
@@ -75,6 +75,8 @@ export function useAgentStatus(worktreeId: string | null): AgentStatusInfo | nul
 
 function mapAgentStatusToStatusDot(agentStatus: AgentStatus): StatusDotStatus {
   switch (agentStatus) {
+    case 'spawning':
+      return 'spawning';
     case 'working':
       return 'working';
     case 'waiting':
@@ -98,7 +100,7 @@ export function useAgentList(worktreeId: string | null): import('../types/protoc
 export function useWorkspaceAgentStatusSummary(
   workspaceId: string,
   worktrees: import('../types/protocol').Worktree[]
-): { working: number; waiting: number; idle: number } {
+): { working: number; waiting: number; idle: number; spawning: number } {
   const allSessions = useStore((state) => state.agentSessions);
 
   return useMemo(() => {
@@ -112,7 +114,7 @@ export function useWorkspaceAgentStatusSummary(
         acc[status]++;
         return acc;
       },
-      { working: 0, waiting: 0, idle: 0 }
+      { working: 0, waiting: 0, idle: 0, spawning: 0 }
     );
   }, [workspaceId, worktrees, allSessions]);
 }

@@ -7,8 +7,9 @@ use uuid::Uuid;
 use super::{
     acp::AcpEventEnvelope,
     agent::{
-        AgentCancel, AgentOutput, AgentPrompt, AgentRemoved, AgentRename, AgentReorder, AgentSend,
-        AgentSessionData, AgentSetConfigOption, AgentSpawn, AgentStatusUpdate, AgentUpdated,
+        AgentCancel, AgentOutput, AgentPrompt, AgentRemoved, AgentRename, AgentReorder, AgentResume,
+        AgentSend, AgentSessionData, AgentSetConfigOption, AgentSpawn, AgentStatusUpdate,
+        AgentUpdated,
     },
     file::{FileContent, FileList, FileListResult, FileRead, FileWrite},
     git::{
@@ -71,6 +72,7 @@ pub enum ClientMessagePayload {
     AgentSend(AgentSend),
     AgentCancel(AgentCancel),
     AgentSetConfigOption(AgentSetConfigOption),
+    AgentResume(AgentResume),
     TerminalInput(TerminalInput),
     TerminalResize(TerminalResize),
     TerminalCreate(TerminalCreate),

@@ -1,46 +1,70 @@
-# Agent Tab Lifecycle Fix
+# Fix Agent Tab Lifecycle to Match Spec
 
-## Problem Statement
+## Original Request
 
-Agent tabs in Ymir appear to never spawn or are never attached to the agent tab UI. The agents seem to not initialize correctly through the lifecycle. We need to identify the likely interrupt in the lifecycle of an agent tab and fix it.
+Review the implemented agent tab lifecycle (vertical slices) and fix it so that it works exactly like the lifecycle described in `docs/agent-tab-lifecycle.md`.
 
-## Context
+## Key Constraints
 
-- The terminal tab lifecycle is a working reference implementation — review it as the example of correct behavior.
-- The agent system uses ACP (agent-client-protocol) through the `acp-chat-core` library.
-- `acp-chat-core` and related libraries are at `~/acp-chat-ui-react/` and are intended to be publishable, independent packages.
-- Do NOT contaminate `acp-chat-ui-react` with changes specifically for Ymir. Both libraries must remain independently publishable.
-- The Ymir project is at the current working directory.
+1. **Library boundaries must be respected**: The `acp-chat-core` (NPM package, used on client) and `acp-ws-bridge` (Rust crate at `crates/acp-ws-bridge/`) libraries are NOT set in stone. They may be modified, but:
+   - NO ymir-only features should leak into these libraries
+   - Systematic changes ARE allowed so they follow the lifecycle described
+   - Existing features may be enhanced, private features may be exposed if needed for the lifecycle
+   - Ymir should employ these libraries as best it can
+   - Generic features should NOT be implemented in Ymir if they belong within the library boundaries
+   - DO NOT wrap the libraries' classes if the functionality belongs within the libraries' boundaries anyway
 
-## Requirements
+2. **Two lifecycle flows to implement**:
+   - **New agent tab**: Create tab → spawn agent process → initialize → session/new → session/list
+   - **Resume agent tab**: Mount tab → spawn agent process → initialize → session/load → receive session history updates → session/list
 
-1. Research the agent tab lifecycle end-to-end, comparing it against the terminal tab lifecycle (the working reference).
-2. Identify where the lifecycle breaks — why agents never spawn or attach.
-3. Plan various fixes for the identified issues.
-4. Implement those fixes, with a review subagent between each implementer.
-5. Fix any issues found during review before moving on.
-6. Any changes to `acp-chat-core` or related libs must be generic improvements, not Ymir-specific.
+## Files to Research
 
-## Key Files to Investigate
+- Server: `crates/ws-server/src/agent/`, `crates/ws-server/src/bridge/`, `crates/ws-server/src/protocol/`, `crates/acp-ws-bridge/src/`
+- Client: `apps/web/src/lib/acp-session-manager.ts`, `apps/web/src/lib/bridge-transport.ts`, `apps/web/src/lib/ws.ts`, `apps/web/src/components/agent/`
+- Spec: `docs/agent-tab-lifecycle.md`
 
-### Rust Server (Agent Domain)
-- `crates/ws-server/src/agent/` — Agent handlers
-- `crates/ws-server/src/protocol/agent.rs` — Agent protocol types
-- `crates/ws-server/src/protocol/acp.rs` — ACP wire types
-- `crates/ws-server/src/router.rs` — Message routing
+## Lifecycle Spec Summary
 
-### TypeScript Client
-- `apps/web/src/store.ts` — Zustand store + handleBridgeMessage
-- `apps/web/src/lib/bridge-transport.ts` — Client encoder/decoder
-- `apps/web/src/lib/yws-transport.ts` — WebSocket transport
-- `apps/web/src/types/protocol.ts` — Client protocol types + type guards
-- `apps/web/src/components/agent/` — Agent UI components
+### New Agent Tab Flow:
+1. UI creates agent tab
+2. Client sends envelope to server (contains worktree ID)
+3. Server decodes envelope, creates tab in DB (no session_id or process_id yet)
+4. Server spawns ACP agent process, waits to connect
+5. Server sends agent tab info (process ID, status: waiting for agent)
+6. Client receives and updates status, UI shows "Agent is spawning"
+7. ACP agent connects
+8. Server sends ACP `initialize` → agent replies with capabilities
+9. Server forwards initialize response over ACP proxy
+10. Client receives initialize response
+11. Server sends ACP `session/new` → agent replies with session ID (may include modes, slash commands)
+12. Server forwards session/new response over ACP proxy
+13. Server sends agent tab status in bridge envelope (agent_tab_id, process_id, session_id)
+14. Client receives session/new response and agent tab status with all 3 IDs
+15. Server sends ACP `session/list` → agent replies
+16. Server forwards session/list response
+17. Client receives session list response
 
-### ACP Libraries (~/acp-chat-ui-react/)
-- `acp-chat-core/` — Core ACP chat library
-- Related packages in the monorepo
+### Resume Agent Tab Flow:
+1. UI mounts agent tab content
+2. Client sends envelope indicating tab loaded, awaiting connection
+3. Server decodes envelope, loads tab from DB, sets process_id to null
+4. Server spawns ACP agent process, waits to connect
+5. Server sends agent tab info (process ID, status: waiting for agent)
+6. Client receives and updates status, UI shows "Agent is spawning"
+7. ACP agent connects
+8. Server sends ACP `initialize` → agent replies with capabilities
+9. Server forwards initialize response over ACP proxy
+10. Client receives initialize response
+11. Server sends ACP `session/load` with session ID from DB → agent begins sending session/update events
+12. Server forwards session/load response (may include modes, slash commands)
+13. Server receives session/update events from agent loading history
+14. Server forwards each session/update event over ACP proxy
+15. Client receives each session/update event
+16. Client updates renderable state through acp-chat-core
+17. UI renders each item in thread
+18. Server sends ACP `session/list` → agent replies
+19. Server forwards session/list response
+20. Client receives session list response
 
-### Reference Implementation (Terminal)
-- `crates/ws-server/src/pty/handler.rs` — Terminal handlers (working reference)
-- `crates/ws-server/src/protocol/terminal.rs` — Terminal protocol types (working reference)
-- `apps/web/src/components/terminal/TerminalView.tsx` — Terminal UI (working reference)
+End state for both: server and client have session ID, modes, slash commands, models?, sessions list (plus session history for resume).

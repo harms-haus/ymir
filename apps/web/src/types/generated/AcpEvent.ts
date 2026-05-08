@@ -2,6 +2,7 @@
 import type { AcpConfigOptionsUpdate } from "./AcpConfigOptionsUpdate";
 import type { AcpContextUpdate } from "./AcpContextUpdate";
 import type { AcpError } from "./AcpError";
+import type { AcpInitializeResponse } from "./AcpInitializeResponse";
 import type { AcpPromptChunk } from "./AcpPromptChunk";
 import type { AcpPromptComplete } from "./AcpPromptComplete";
 import type { AcpResumeMarker } from "./AcpResumeMarker";
@@ -12,4 +13,4 @@ import type { AcpToolUseEvent } from "./AcpToolUseEvent";
 /**
  * WS-ACP event types - stateless vocabulary for ACP bridge communication.
  */
-export type AcpEvent = { "eventType": "SessionInit", "data": AcpSessionInit } | { "eventType": "ConfigOptionsUpdate", "data": AcpConfigOptionsUpdate } | { "eventType": "SessionStatus", "data": AcpSessionStatusEvent } | { "eventType": "PromptChunk", "data": AcpPromptChunk } | { "eventType": "PromptComplete", "data": AcpPromptComplete } | { "eventType": "ToolUse", "data": AcpToolUseEvent } | { "eventType": "ContextUpdate", "data": AcpContextUpdate } | { "eventType": "Error", "data": AcpError } | { "eventType": "ResumeMarker", "data": AcpResumeMarker };
+export type AcpEvent = { "eventType": "SessionInit", "data": AcpSessionInit } | { "eventType": "ConfigOptionsUpdate", "data": AcpConfigOptionsUpdate } | { "eventType": "SessionStatus", "data": AcpSessionStatusEvent } | { "eventType": "PromptChunk", "data": AcpPromptChunk } | { "eventType": "PromptComplete", "data": AcpPromptComplete } | { "eventType": "ToolUse", "data": AcpToolUseEvent } | { "eventType": "ContextUpdate", "data": AcpContextUpdate } | { "eventType": "Error", "data": AcpError } | { "eventType": "ResumeMarker", "data": AcpResumeMarker } | { "eventType": "InitializeResponse", "data": AcpInitializeResponse };

@@ -461,6 +461,19 @@ export class YmirWsTransport {
         }
       }
 
+      // Phase 6: On InitializeResponse, store agent capabilities on the SessionController.
+      // The server proxies the real initialize response from the agent after spawning.
+      // This replaces the old client-side initialize() call that returned hardcoded capabilities.
+      if (payload.eventType === 'InitializeResponse') {
+        const agentTabId = envelopeAgentTabId ?? (data as any)?.agentTabId;
+        if (agentTabId && acpSessionManager.hasController(agentTabId)) {
+          const capabilities = (data as any)?.capabilities;
+          console.log(`[YWS] InitializeResponse received for agentTabId=${agentTabId}, capabilities:`, capabilities);
+          // Mark the session as initialized on the SessionController
+          acpSessionManager.handleInitializeResponse(agentTabId, capabilities);
+        }
+      }
+
       // Keep existing routing for backward compatibility
       // DEPRECATED: acpSessionManager.handleAcpPayload routes by worktreeId as fallback.
       // New multi-session flow should use handleAcpPayloadByAgentTabId(agentTabId, payload)

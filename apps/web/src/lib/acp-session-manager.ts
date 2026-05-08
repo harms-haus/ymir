@@ -48,6 +48,7 @@ interface SessionRecord {
   cwd: string;
   controller: SessionController;
   transport: YmirAcpTransport;
+  capabilities: Record<string, unknown> | null;
 }
 
 /**
@@ -227,6 +228,17 @@ export interface AcpSessionManagerApi {
    * Sets the sessionId on the SessionController so the Composer enables.
    */
   handleSessionInit(agentTabId: string, acpSessionId: string, configOptions?: unknown[]): void;
+
+  /**
+   * Handle a server-pushed InitializeResponse event.
+   * Stores the agent's real capabilities on the SessionController.
+   */
+  handleInitializeResponse(agentTabId: string, capabilities: unknown): void;
+
+  /**
+   * Get the stored agent capabilities for an agent tab.
+   */
+  getCapabilities(agentTabId: string): Record<string, unknown> | null;
 
   /**
    * Check if a SessionController exists for the given agent tab.
@@ -514,6 +526,7 @@ class AcpSessionManagerImpl implements AcpSessionManagerApi {
       cwd,
       controller,
       transport,
+      capabilities: null,
     };
 
     this.sessions.set(agentTabId, session);
@@ -620,6 +633,31 @@ class AcpSessionManagerImpl implements AcpSessionManagerApi {
     // Update internal mapping
     session.sessionId = acpSessionId;
     this.sessionIdToAgentTab.set(acpSessionId, agentTabId);
+  }
+
+  /**
+   * Handle a server-pushed InitializeResponse event.
+   * Stores the agent's real capabilities on the SessionController.
+   */
+  handleInitializeResponse(agentTabId: string, capabilities: unknown): void {
+    const session = this.sessions.get(agentTabId);
+    if (!session) {
+      console.warn(`[AcpSessionManager] handleInitializeResponse: no session for ${agentTabId}`);
+      return;
+    }
+
+    console.log(`[AcpSessionManager] handleInitializeResponse: setting capabilities for agentTabId=${agentTabId}`);
+
+    // Store capabilities on the session record for later reference
+    session.capabilities = capabilities as Record<string, unknown> | null;
+  }
+
+  /**
+   * Get the stored agent capabilities for an agent tab.
+   */
+  getCapabilities(agentTabId: string): Record<string, unknown> | null {
+    const session = this.sessions.get(agentTabId);
+    return session?.capabilities ?? null;
   }
 
   async loadSession(

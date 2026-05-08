@@ -137,6 +137,11 @@ const SCHEMA_MIGRATIONS: &[&str] = &[
     ALTER TABLE worktrees ADD COLUMN agent_type TEXT;
     ALTER TABLE worktrees ADD COLUMN updated_at TEXT DEFAULT (datetime('now'));
     "#,
+    // Task 1.1: Add agent_tab_id to agent_sessions table
+    r#"
+    ALTER TABLE agent_sessions ADD COLUMN agent_tab_id TEXT;
+    CREATE INDEX IF NOT EXISTS idx_agent_sessions_tab ON agent_sessions(agent_tab_id);
+    "#,
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -173,6 +178,7 @@ pub struct AgentSession {
     pub worktree_id: String,
     pub agent_type: String,
     pub acp_session_id: Option<String>,
+    pub agent_tab_id: Option<String>,
     pub status: String,
     pub started_at: String,
 }
@@ -746,8 +752,8 @@ impl Db {
         let conn = self.conn()?;
         let mut stmt = conn.prepare(
             r#"
-            INSERT INTO agent_sessions (id, worktree_id, agent_type, acp_session_id, status, started_at)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            INSERT INTO agent_sessions (id, worktree_id, agent_type, acp_session_id, agent_tab_id, status, started_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
             "#,
         ).await?;
 
@@ -756,6 +762,7 @@ impl Db {
             session.worktree_id.as_str(),
             session.agent_type.as_str(),
             session.acp_session_id.as_deref(),
+            session.agent_tab_id.as_deref(),
             session.status.as_str(),
             session.started_at.as_str(),
         ))
@@ -770,7 +777,7 @@ impl Db {
 
     pub async fn get_agent_session(&self, id: &str) -> Result<Option<AgentSession>> {
         let conn = self.conn()?;
-        let mut stmt = conn.prepare("SELECT id, worktree_id, agent_type, acp_session_id, status, started_at FROM agent_sessions WHERE id = ?1").await?;
+        let mut stmt = conn.prepare("SELECT id, worktree_id, agent_type, acp_session_id, agent_tab_id, status, started_at FROM agent_sessions WHERE id = ?1").await?;
         let mut rows = stmt.query([id]).await?;
 
         if let Some(row) = rows.next().await? {
@@ -779,8 +786,29 @@ impl Db {
                 worktree_id: row.get(1)?,
                 agent_type: row.get(2)?,
                 acp_session_id: row.get(3)?,
-                status: row.get(4)?,
-                started_at: row.get(5)?,
+                agent_tab_id: row.get(4)?,
+                status: row.get(5)?,
+                started_at: row.get(6)?,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub async fn get_agent_session_by_tab_id(&self, agent_tab_id: &str) -> Result<Option<AgentSession>> {
+        let conn = self.conn()?;
+        let mut stmt = conn.prepare("SELECT id, worktree_id, agent_type, acp_session_id, agent_tab_id, status, started_at FROM agent_sessions WHERE agent_tab_id = ?1").await?;
+        let mut rows = stmt.query([agent_tab_id]).await?;
+
+        if let Some(row) = rows.next().await? {
+            Ok(Some(AgentSession {
+                id: row.get(0)?,
+                worktree_id: row.get(1)?,
+                agent_type: row.get(2)?,
+                acp_session_id: row.get(3)?,
+                agent_tab_id: row.get(4)?,
+                status: row.get(5)?,
+                started_at: row.get(6)?,
             }))
         } else {
             Ok(None)
@@ -790,7 +818,7 @@ impl Db {
     pub async fn list_agent_sessions(&self, worktree_id: &str) -> Result<Vec<AgentSession>> {
         let conn = self.conn()?;
         let mut stmt = conn.prepare(
-            "SELECT id, worktree_id, agent_type, acp_session_id, status, started_at FROM agent_sessions WHERE worktree_id = ?1 ORDER BY started_at DESC"
+            "SELECT id, worktree_id, agent_type, acp_session_id, agent_tab_id, status, started_at FROM agent_sessions WHERE worktree_id = ?1 ORDER BY started_at DESC"
         ).await?;
         let mut rows = stmt.query([worktree_id]).await?;
         let mut sessions = Vec::new();
@@ -801,8 +829,9 @@ impl Db {
                 worktree_id: row.get(1)?,
                 agent_type: row.get(2)?,
                 acp_session_id: row.get(3)?,
-                status: row.get(4)?,
-                started_at: row.get(5)?,
+                agent_tab_id: row.get(4)?,
+                status: row.get(5)?,
+                started_at: row.get(6)?,
             });
         }
 
@@ -820,6 +849,45 @@ impl Db {
         debug!(
             "Updated agent session {} (status: {}, rows affected: {})",
             id, status, rows_affected
+        );
+        Ok(rows_affected > 0)
+    }
+
+    /// Update the ACP session ID and optionally the agent_tab_id for a session.
+    /// Only non-None fields are updated.
+    pub async fn update_agent_session_acp_id(
+        &self,
+        id: &str,
+        acp_session_id: Option<&str>,
+        agent_tab_id: Option<&str>,
+    ) -> Result<bool> {
+        let conn = self.conn()?;
+        let mut set_clauses: Vec<&str> = Vec::new();
+        let mut params: Vec<libsql::Value> = Vec::new();
+
+        if let Some(v) = acp_session_id {
+            set_clauses.push("acp_session_id = ?");
+            params.push(v.into());
+        }
+        if let Some(v) = agent_tab_id {
+            set_clauses.push("agent_tab_id = ?");
+            params.push(v.into());
+        }
+
+        if set_clauses.is_empty() {
+            return Ok(false);
+        }
+
+        params.push(id.into());
+        let query = format!(
+            "UPDATE agent_sessions SET {} WHERE id = ?",
+            set_clauses.join(", ")
+        );
+
+        let rows_affected = conn.execute(&query, params).await?;
+        debug!(
+            "Updated agent session {} acp/tab info (rows affected: {})",
+            id, rows_affected
         );
         Ok(rows_affected > 0)
     }
@@ -842,7 +910,7 @@ impl Db {
     pub async fn list_all_agent_sessions(&self) -> Result<Vec<AgentSession>> {
         let conn = self.conn()?;
         let mut stmt = conn.prepare(
-            "SELECT id, worktree_id, agent_type, acp_session_id, status, started_at FROM agent_sessions ORDER BY started_at DESC"
+            "SELECT id, worktree_id, agent_type, acp_session_id, agent_tab_id, status, started_at FROM agent_sessions ORDER BY started_at DESC"
         ).await?;
         let mut rows = stmt.query(()).await?;
         let mut sessions = Vec::new();
@@ -853,8 +921,9 @@ impl Db {
                 worktree_id: row.get(1)?,
                 agent_type: row.get(2)?,
                 acp_session_id: row.get(3)?,
-                status: row.get(4)?,
-                started_at: row.get(5)?,
+                agent_tab_id: row.get(4)?,
+                status: row.get(5)?,
+                started_at: row.get(6)?,
             });
         }
 
@@ -1840,6 +1909,7 @@ mod tests {
             worktree_id: worktree_id.clone(),
             agent_type: "explore".to_string(),
             acp_session_id: Some("acp-123".to_string()),
+            agent_tab_id: None,
             status: "active".to_string(),
             started_at: chrono::Utc::now().to_rfc3339(),
         };

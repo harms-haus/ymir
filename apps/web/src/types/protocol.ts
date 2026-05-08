@@ -118,7 +118,7 @@ export interface Worktree {
 }
 
 // Agent types
-export type AgentStatus = 'idle' | 'working' | 'waiting' | 'error';
+export type AgentStatus = 'spawning' | 'idle' | 'working' | 'waiting' | 'error';
 
 export interface AgentSession {
   id: string;
@@ -363,6 +363,13 @@ export interface AgentReorder {
     type: 'AgentReorder';
     worktreeId: string;
     sessionIds: string[];
+    requestId?: string;
+}
+
+export interface AgentResume {
+    type: 'AgentResume';
+    worktreeId: string;
+    agentTabId: string;
     requestId?: string;
 }
 
@@ -924,6 +931,7 @@ export type ClientMessage =
     | AgentSetConfigOption
     | AgentRename
     | AgentReorder
+    | AgentResume
     | TerminalInput
     | TerminalResize
     | TerminalCreate

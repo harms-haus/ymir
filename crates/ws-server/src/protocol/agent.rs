@@ -48,6 +48,18 @@ pub struct AgentCancel {
     pub agent_tab_id: Uuid,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AgentResume {
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub worktree_id: Uuid,
+    #[serde(with = "uuid_serde")]
+    #[ts(type = "string")]
+    pub agent_tab_id: Uuid,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -74,6 +86,7 @@ pub struct AgentSessionData {
     pub worktree_id: Uuid,
     pub agent_type: String,
     pub acp_session_id: Option<String>,
+    pub process_id: Option<u32>,
     pub status: AgentStatus,
     pub started_at: u64,
 }
@@ -82,6 +95,7 @@ pub struct AgentSessionData {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub enum AgentStatus {
+    Spawning,
     Working,
     Waiting,
     Idle,
@@ -104,6 +118,8 @@ pub struct AgentStatusUpdate {
     #[serde(with = "uuid_serde")]
     #[ts(type = "string")]
     pub agent_tab_id: Uuid,
+    pub acp_session_id: Option<String>,
+    pub process_id: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]

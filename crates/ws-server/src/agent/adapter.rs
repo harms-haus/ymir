@@ -2,7 +2,7 @@
 
 use crate::protocol::{
     AcpAgentCapabilities, AcpChunkContent, AcpConfigOptionsUpdate, AcpContextUpdate,
-    AcpContextUpdateType, AcpEvent, AcpEventEnvelope, AcpPromptChunk,
+    AcpContextUpdateType, AcpEvent, AcpEventEnvelope, AcpInitializeResponse, AcpPromptChunk,
     AcpSessionConfigOption, AcpSessionConfigOptionCategory, AcpSessionConfigSelectOption,
     AcpSessionInit, AcpToolUseEvent, AcpToolUseStatus,
 };
@@ -200,6 +200,12 @@ impl YmirClientHandler {
                 supports_cancellation: true,
             },
             config_options,
+        }));
+    }
+
+    pub fn emit_initialize_response(&self, capabilities: serde_json::Value) {
+        self.send_event(AcpEvent::InitializeResponse(AcpInitializeResponse {
+            capabilities,
         }));
     }
 

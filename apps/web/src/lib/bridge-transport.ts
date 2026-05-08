@@ -70,12 +70,13 @@ WorktreeList,
 WorktreeChangeBranch,
 GetWorktreeDetails,
 WorktreeUpdate,
-AgentSpawn,
+  AgentSpawn,
   AgentSend,
   AgentCancel,
   AgentSetConfigOption,
   AgentRename,
   AgentReorder,
+  AgentResume,
   TerminalInput,
   TerminalResize,
   TerminalCreate,
@@ -363,6 +364,18 @@ export function encodeAgentReorder(
   return makeEnvelope('agent_event', {
     payload: {
       type: 'AgentReorder',
+      data,
+    } as BridgePayload,
+  });
+}
+
+/** Encode AgentResume into a BridgeEnvelope. */
+export function encodeAgentResume(
+  data: Omit<AgentResume, 'type'>
+): FullBridgeEnvelope {
+  return makeEnvelope('agent_event', {
+    payload: {
+      type: 'AgentResume',
       data,
     } as BridgePayload,
   });
@@ -680,6 +693,7 @@ export function encodeClientMessage(
     | AgentSetConfigOption
     | AgentRename
     | AgentReorder
+    | AgentResume
     | TerminalInput
     | TerminalResize
     | TerminalCreate
@@ -747,6 +761,8 @@ case 'WorktreeUpdate':
       return encodeAgentRename(payload as unknown as Omit<AgentRename, 'type'>);
     case 'AgentReorder':
       return encodeAgentReorder(payload as unknown as Omit<AgentReorder, 'type'>);
+    case 'AgentResume':
+      return encodeAgentResume(payload as unknown as Omit<AgentResume, 'type'>);
 
     // Terminal
     case 'TerminalInput':

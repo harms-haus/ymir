@@ -1,7 +1,7 @@
 //! Message routing and dispatch for WebSocket server
 
 use crate::agent::{
-    handle_agent_cancel, handle_agent_send, handle_agent_set_config_option, handle_agent_spawn,
+    handle_agent_cancel, handle_agent_resume, handle_agent_send, handle_agent_set_config_option, handle_agent_spawn,
 };
 use crate::bridge::{decode_bridge_message, DecodedMessage};
 use crate::protocol::{
@@ -284,6 +284,10 @@ pub async fn route_message(
             Some(handle_agent_set_config_option(state.clone(), msg).await)
         }
 
+        ClientMessagePayload::AgentResume(msg) => {
+            Some(handle_agent_resume(state.clone(), msg).await)
+        }
+
         ClientMessagePayload::AgentRename(msg) => {
             Some(handle_agent_rename(state.clone(), msg).await)
         }
@@ -398,6 +402,7 @@ fn not_implemented(payload: ClientMessagePayload) -> ServerMessage {
         ClientMessagePayload::TerminalMount(_) => "TerminalMount",
         ClientMessagePayload::TerminalUnmount(_) => "TerminalUnmount",
         ClientMessagePayload::TerminalTabClose(_) => "TerminalTabClose",
+        ClientMessagePayload::AgentResume(_) => "AgentResume",
     };
 
     ServerMessage::new(ServerMessagePayload::Error(Error {
@@ -512,6 +517,7 @@ async fn handle_get_state(state: Arc<AppState>, request_id: Uuid) -> ServerMessa
                     worktree_id: Uuid::parse_str(&session.worktree_id).unwrap_or(worktree.id),
                     agent_type: session.agent_type,
                     acp_session_id: session.acp_session_id,
+                    process_id: None,
                     status: parse_agent_status(&session.status),
                     started_at: parse_timestamp(&session.started_at),
                 }),
@@ -626,6 +632,7 @@ async fn handle_get_worktree_details(
           worktree_id: Uuid::parse_str(&session.worktree_id).unwrap_or(worktree.id),
           agent_type: session.agent_type,
           acp_session_id: session.acp_session_id,
+          process_id: None,
           status: parse_agent_status(&session.status),
           started_at: parse_timestamp(&session.started_at),
         }),

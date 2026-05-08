@@ -4,10 +4,10 @@ use crate::agent::adapter::{
     create_client_capabilities, create_implementation, merge_session_setup_options,
     AcpEventSender, SequenceCounter, YmirClientHandler,
 };
-use crate::protocol::{AcpEventEnvelope, ServerMessage, ServerMessagePayload};
+use crate::protocol::{AcpEventEnvelope, AcpSessionConfigOption, ServerMessage, ServerMessagePayload};
 use agent_client_protocol::{
     Agent, CancelNotification, ClientSideConnection, ContentBlock,
-    InitializeRequest, NewSessionRequest, PromptRequest, ProtocolVersion, SessionId,
+    InitializeRequest, LoadSessionRequest, NewSessionRequest, PromptRequest, ProtocolVersion, SessionId,
     SetSessionConfigOptionRequest, SetSessionModeRequest, SetSessionModelRequest,
 };
 use anyhow::{anyhow, Result};
@@ -34,7 +34,7 @@ enum AcpCommand {
         worktree_id: Uuid,
         agent_type: String,
         worktree_path: String,
-        respond: oneshot::Sender<Result<()>>,
+        respond: oneshot::Sender<Result<SpawnResult>>,
     },
     SendPrompt {
         agent_tab_id: Uuid,
@@ -67,6 +67,40 @@ enum AcpCommand {
         acp_session_id: String,
         respond: oneshot::Sender<Option<Uuid>>,
     },
+    Initialize {
+        agent_tab_id: Uuid,
+        respond: oneshot::Sender<Result<InitializeResult>>,
+    },
+    LoadSession {
+        agent_tab_id: Uuid,
+        acp_session_id: String,
+        respond: oneshot::Sender<Result<SessionLoadResult>>,
+    },
+    SpawnForResume {
+        agent_tab_id: Uuid,
+        worktree_id: Uuid,
+        agent_type: String,
+        worktree_path: String,
+        acp_session_id: String,
+        respond: oneshot::Sender<Result<SpawnResult>>,
+    },
+}
+
+/// Result of an ACP initialize call, containing agent capabilities.
+pub struct InitializeResult {
+    pub capabilities: serde_json::Value,
+}
+
+/// Result of loading an existing ACP session.
+pub struct SessionLoadResult {
+    pub session_id: String,
+    pub config_options: Vec<AcpSessionConfigOption>,
+}
+
+/// Result of spawning a new agent process.
+pub struct SpawnResult {
+    pub acp_session_id: Option<String>,
+    pub process_id: Option<u32>,
 }
 
 #[derive(Debug, Clone)]
@@ -102,6 +136,7 @@ struct AcpClient {
     session_id: Option<SessionId>,
     status: Arc<RwLock<AgentStatus>>,
     worktree_id: Uuid,
+    worktree_path: String,
     handler: YmirClientHandler,
 }
 
@@ -127,11 +162,44 @@ impl AcpClient {
             session_id: None,
             status,
             worktree_id,
+            worktree_path: worktree_path.to_string(),
             handler,
         };
 
         client.initialize().await?;
         client.create_session(worktree_path).await?;
+
+        Ok(client)
+    }
+
+    async fn resume(
+        agent_type: &str,
+        worktree_path: &str,
+        worktree_id: Uuid,
+        agent_tab_id: Uuid,
+        acp_session_id: &str,
+        broadcast_tx: broadcast::Sender<ServerMessage>,
+    ) -> Result<Self> {
+        let status = Arc::new(RwLock::new(AgentStatus::Idle));
+        let event_sender = Arc::new(BroadcastingEventSender::new(broadcast_tx));
+        let sequence = Arc::new(SequenceCounter::new());
+        let handler = YmirClientHandler::new(worktree_id, agent_tab_id, event_sender, sequence);
+
+        let (connection, _io_task, child) = Self::spawn_stdio(agent_type, worktree_path, handler.clone()).await?;
+
+        let mut client = Self {
+            process: child,
+            _connection: connection,
+            _io_task,
+            session_id: None,
+            status,
+            worktree_id,
+            worktree_path: worktree_path.to_string(),
+            handler,
+        };
+
+        client.initialize().await?;
+        client.load_session(acp_session_id).await?;
 
         Ok(client)
     }
@@ -191,17 +259,23 @@ impl AcpClient {
         Ok((connection, io_task, child))
     }
 
-    async fn initialize(&mut self) -> Result<()> {
+    async fn initialize(&mut self) -> Result<InitializeResult> {
         let request = InitializeRequest::new(ProtocolVersion::V1)
             .client_capabilities(create_client_capabilities())
             .client_info(create_implementation());
 
-        self._connection
+        let response = self._connection
             .initialize(request)
             .await
             .map_err(|e| anyhow!("Initialize failed: {}", e))?;
 
-        Ok(())
+        let capabilities = serde_json::to_value(&response.agent_capabilities)
+            .unwrap_or(serde_json::Value::Null);
+
+        // Emit the real capabilities to the client via ACP event
+        self.handler.emit_initialize_response(capabilities.clone());
+
+        Ok(InitializeResult { capabilities })
     }
 
     async fn create_session(&mut self, worktree_path: &str) -> Result<()> {
@@ -223,6 +297,32 @@ impl AcpClient {
             config_options,
         );
         Ok(())
+    }
+
+    async fn load_session(&mut self, acp_session_id: &str) -> Result<SessionLoadResult> {
+        let session_id = SessionId::new(acp_session_id.to_string());
+        let request = LoadSessionRequest::new(session_id.clone(), &self.worktree_path);
+
+        let response = self._connection
+            .load_session(request)
+            .await
+            .map_err(|e| anyhow!("Load session failed: {}", e))?;
+
+        self.session_id = Some(session_id);
+        let config_options = merge_session_setup_options(
+            response.config_options.as_deref(),
+            response.modes.as_ref(),
+            response.models.as_ref(),
+        );
+        self.handler.emit_session_init(
+            acp_session_id.to_string(),
+            config_options.clone(),
+        );
+
+        Ok(SessionLoadResult {
+            session_id: acp_session_id.to_string(),
+            config_options,
+        })
     }
 
     async fn set_config_option(&mut self, config_id: &str, value: &str) -> Result<()> {
@@ -314,7 +414,7 @@ impl AcpHandle {
         Self { tx }
     }
 
-    pub async fn spawn_agent(&self, agent_tab_id: Uuid, worktree_id: Uuid, agent_type: &str, worktree_path: &str) -> Result<()> {
+    pub async fn spawn_agent(&self, agent_tab_id: Uuid, worktree_id: Uuid, agent_type: &str, worktree_path: &str) -> Result<SpawnResult> {
         let (respond_tx, respond_rx) = oneshot::channel();
         self.tx.send(AcpCommand::Spawn {
             agent_tab_id,
@@ -388,6 +488,36 @@ impl AcpHandle {
         });
         respond_rx.await.unwrap_or(None)
     }
+
+    pub async fn initialize(&self, agent_tab_id: Uuid) -> Result<InitializeResult> {
+        let (tx, rx) = oneshot::channel();
+        self.tx.send(AcpCommand::Initialize { agent_tab_id, respond: tx })
+            .map_err(|e| anyhow!("Failed to send Initialize command: {}", e))?;
+        rx.await.map_err(|e| anyhow!("Initialize response channel closed: {}", e))?
+    }
+
+    pub async fn load_session(&self, agent_tab_id: Uuid, acp_session_id: &str) -> Result<SessionLoadResult> {
+        let (tx, rx) = oneshot::channel();
+        self.tx.send(AcpCommand::LoadSession {
+            agent_tab_id,
+            acp_session_id: acp_session_id.to_string(),
+            respond: tx,
+        }).map_err(|e| anyhow!("Failed to send LoadSession command: {}", e))?;
+        rx.await.map_err(|e| anyhow!("LoadSession response channel closed: {}", e))?
+    }
+
+    pub async fn spawn_agent_for_resume(&self, agent_tab_id: Uuid, worktree_id: Uuid, agent_type: &str, worktree_path: &str, acp_session_id: &str) -> Result<SpawnResult> {
+        let (respond_tx, respond_rx) = oneshot::channel();
+        self.tx.send(AcpCommand::SpawnForResume {
+            agent_tab_id,
+            worktree_id,
+            agent_type: agent_type.to_string(),
+            worktree_path: worktree_path.to_string(),
+            acp_session_id: acp_session_id.to_string(),
+            respond: respond_tx,
+        }).map_err(|e| anyhow!("Failed to send SpawnForResume command: {}", e))?;
+        respond_rx.await.map_err(|e| anyhow!("SpawnForResume response channel closed: {}", e))?
+    }
 }
 
 pub fn start_acp_runtime(broadcast_tx: broadcast::Sender<ServerMessage>) -> (AcpHandle, JoinHandle<()>) {
@@ -416,7 +546,10 @@ pub fn start_acp_runtime(broadcast_tx: broadcast::Sender<ServerMessage>) -> (Acp
                             broadcast_tx.clone(),
                         ).await;
                         let _ = respond.send(result.map(|client| {
+                            let acp_session_id = client.session_id.as_ref().map(|s| s.to_string());
+                            let process_id = client.process.id();
                             clients.insert(agent_tab_id, client);
+                            SpawnResult { acp_session_id, process_id }
                         }));
                     }
                     AcpCommand::SendPrompt { agent_tab_id, content, respond } => {
@@ -476,6 +609,38 @@ pub fn start_acp_runtime(broadcast_tx: broadcast::Sender<ServerMessage>) -> (Acp
                             })
                             .map(|(id, _)| *id);
                         let _ = respond.send(found);
+                    }
+                    AcpCommand::Initialize { agent_tab_id, respond } => {
+                        let result = if let Some(client) = clients.get_mut(&agent_tab_id) {
+                            client.initialize().await
+                        } else {
+                            Err(anyhow!("No client found for agent_tab_id {}", agent_tab_id))
+                        };
+                        let _ = respond.send(result);
+                    }
+                    AcpCommand::LoadSession { agent_tab_id, acp_session_id, respond } => {
+                        let result = if let Some(client) = clients.get_mut(&agent_tab_id) {
+                            client.load_session(&acp_session_id).await
+                        } else {
+                            Err(anyhow!("No client found for agent_tab_id {}", agent_tab_id))
+                        };
+                        let _ = respond.send(result);
+                    }
+                    AcpCommand::SpawnForResume { agent_tab_id, worktree_id, agent_type, worktree_path, acp_session_id, respond } => {
+                        let result = AcpClient::resume(
+                            &agent_type,
+                            &worktree_path,
+                            worktree_id,
+                            agent_tab_id,
+                            &acp_session_id,
+                            broadcast_tx.clone(),
+                        ).await;
+                        let _ = respond.send(result.map(|client| {
+                            let acp_session_id = client.session_id.as_ref().map(|s| s.to_string());
+                            let process_id = client.process.id();
+                            clients.insert(agent_tab_id, client);
+                            SpawnResult { acp_session_id, process_id }
+                        }));
                     }
                 }
             }

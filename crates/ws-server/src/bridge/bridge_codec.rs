@@ -761,6 +761,8 @@ mod tests {
                 status: AgentStatus::Working,
                 started_at: 0,
                 agent_tab_id: Uuid::new_v4(),
+                acp_session_id: None,
+                process_id: None,
             }),
             ServerMessagePayload::AgentOutput(AgentOutput {
                 worktree_id: Uuid::new_v4(),

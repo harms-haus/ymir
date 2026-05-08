@@ -477,6 +477,8 @@ mod tests {
             status: AgentStatus::Working,
             started_at: 1234567890,
             agent_tab_id: Uuid::new_v4(),
+            acp_session_id: None,
+            process_id: None,
         }));
 
         let path = write_fixture("AgentStatusUpdate", &msg)?;
@@ -739,6 +741,7 @@ mod tests {
                 worktree_id,
                 agent_type: "coder".to_string(),
                 acp_session_id: Some("acp-123".to_string()),
+                process_id: None,
                 status: AgentStatus::Working,
                 started_at: 1234567890,
             }],

@@ -7,7 +7,7 @@ import { AcpChat } from './AcpChat';
 import { AgentSkeleton } from './AgentSkeleton';
 import { DiffTab } from '../editor/DiffTab';
 import { EditorTab } from '../editor/EditorTab';
-import { AgentCancel, AgentSpawn } from '../../types/protocol';
+import { AgentCancel, AgentSpawn, AgentResume } from '../../types/protocol';
 import { useContextMenu } from '../../hooks/useContextMenu';
 import { TabContextMenu } from '../ui/TabContextMenu';
 import { useSortableTabs, SortableTab } from '../ui/SortableTabs';
@@ -48,6 +48,19 @@ function getTabLabel(tab: AgentTab): string {
   }
 }
 
+/**
+ * Determine if an agent session is in the spawning phase.
+ * A session is spawning if its status is 'spawning' or if it's
+ * tracked in the spawningSessionsRef (for resumed tabs that
+ * haven't yet received SessionInit).
+ */
+function isSessionSpawning(
+  session: { id: string; status?: string },
+  spawningRefs: React.MutableRefObject<Set<string>>
+): boolean {
+  return session.status === 'spawning' || spawningRefs.current.has(session.id);
+}
+
 export function AgentPane({ worktreeId }: AgentPaneProps) {
   const client = useWebSocketClient();
   const isWorkspacesLoading = useStore(selectIsWorkspacesLoading);
@@ -84,6 +97,21 @@ export function AgentPane({ worktreeId }: AgentPaneProps) {
     client.send(message);
   }, [worktreeId, client]);
 
+  /** Track which sessions are in the spawning phase (waiting for InitializeResponse + SessionInit). */
+  const spawningSessionsRef = useRef<Set<string>>(new Set());
+
+  // Listen for AgentStatusUpdate to clear spawning state when agent becomes idle/ready
+  useEffect(() => {
+    const unsubscribe = client.onMessage('AgentStatusUpdate', (message) => {
+      const status = (message as any)?.status;
+      const sessionId = (message as any)?.id;
+      if (sessionId && (status === 'idle' || status === 'working' || status === 'waiting')) {
+        spawningSessionsRef.current.delete(sessionId);
+      }
+    });
+    return unsubscribe;
+  }, [client]);
+
   useEffect(() => {
     agentSessions.forEach((session) => {
       if (!addedTabsRef.current.has(session.id) && !tabSessionIds.has(session.id)) {
@@ -100,14 +128,30 @@ export function AgentPane({ worktreeId }: AgentPaneProps) {
         const agentTabId = session.agentTabId ?? session.id;
         if (!acpSessionManager.hasController(agentTabId)) {
           acpSessionManager.getOrCreateController(agentTabId, worktreeId);
-          // Initialize the ACP protocol handshake
-          acpSessionManager.initialize(agentTabId).catch(err => {
-            console.error('[AgentPane] Failed to initialize ACP controller:', err);
-          });
         }
+
+        // Task 8.1: Do NOT call acpSessionManager.initialize() here.
+        // The server handles initialization and forwards the response via
+        // the InitializeResponse ACP event.
+
+          // Task 8.4: If this session has an acpSessionId, it's a resumed tab.
+          // Send AgentResume to trigger server-side spawn + session/load.
+          if (session.acpSessionId) {
+            console.log(`[AgentPane] Resuming agent tab ${agentTabId} with acpSessionId=${session.acpSessionId}`);
+            spawningSessionsRef.current.add(session.id);
+
+            const resumeMessage: AgentResume = {
+              type: 'AgentResume',
+              worktreeId,
+              agentTabId,
+            };
+
+            // Send the AgentResume message through the transport
+            client.send(resumeMessage);
+          }
       }
     });
-  }, [worktreeId, tabSessionIds, agentSessions, addAgentTab]);
+  }, [worktreeId, tabSessionIds, agentSessions, addAgentTab, client]);
 
   useEffect(() => {
     if (tabs.length === 0 && worktreeId && agentSessions.length === 0 && !creationInProgressRef.current) {
@@ -269,7 +313,13 @@ export function AgentPane({ worktreeId }: AgentPaneProps) {
                   value={tab.id}
                   className="agent-panel-content"
                 >
-                  {tab.type === 'agent' && sessionForTab && (
+                  {tab.type === 'agent' && sessionForTab && isSessionSpawning(sessionForTab, spawningSessionsRef) && (
+                    <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+                      <p className="text-sm">Agent is spawning...</p>
+                    </div>
+                  )}
+                  {tab.type === 'agent' && sessionForTab && !isSessionSpawning(sessionForTab, spawningSessionsRef) && (
                     <AcpChat
                       agentTabId={sessionForTab.agentTabId ?? sessionForTab.id}
                       agentType={sessionForTab.agentType}

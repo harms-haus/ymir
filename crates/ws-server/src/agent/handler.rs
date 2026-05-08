@@ -93,6 +93,7 @@ pub async fn handle_agent_spawn(
         worktree_id: msg.worktree_id.to_string(),
         agent_type: msg.agent_type.clone(),
         acp_session_id,
+        agent_tab_id: Some(agent_tab_id.to_string()),
         status: "idle".to_string(),
         started_at: now,
     };
@@ -140,8 +141,10 @@ pub async fn handle_agent_spawn(
       worktree_id: msg.worktree_id,
       agent_tab_id,
       agent_type: msg.agent_type.clone(),
-      status: AgentStatus::Working,
+      status: AgentStatus::Spawning,
       started_at,
+      acp_session_id: None,
+      process_id: None,
     },
   ));
   state.broadcast(spawning_msg).await;
@@ -156,7 +159,7 @@ pub async fn handle_agent_spawn(
 
   tokio::spawn(async move {
     match acp_handle.spawn_agent(agent_tab_id_ref, worktree_id_ref, &agent_type_ref, &worktree_path).await {
-      Ok(()) => {
+      Ok(spawn_result) => {
         tracing::info!("Agent spawned successfully for worktree {}", worktree_id_ref);
 
         // Update state to idle
@@ -167,7 +170,14 @@ pub async fn handle_agent_spawn(
           }
         }
 
-        // Broadcast success
+        // Persist acp_session_id to database so it survives server restarts
+        let _ = state_ref.db.update_agent_session_acp_id(
+          &session_id_ref.to_string(),
+          spawn_result.acp_session_id.as_deref(),
+          None,
+        ).await;
+
+        // Broadcast success with acp_session_id and process_id
         let success_msg = ServerMessage::new(ServerMessagePayload::AgentStatusUpdate(
           AgentStatusUpdate {
             id: session_id_ref,
@@ -176,6 +186,8 @@ pub async fn handle_agent_spawn(
             agent_type: agent_type_ref,
             status: AgentStatus::Idle,
             started_at: started_at_ref,
+            acp_session_id: spawn_result.acp_session_id,
+            process_id: spawn_result.process_id,
           },
         ));
         let _ = state_ref.broadcast(success_msg).await;
@@ -207,6 +219,169 @@ pub async fn handle_agent_spawn(
     message_id: session_id,
     status: AckStatus::Success,
   }))
+}
+
+pub async fn handle_agent_resume(
+    state: Arc<AppState>,
+    msg: crate::protocol::AgentResume,
+) -> ServerMessage {
+    let agent_tab_id = msg.agent_tab_id;
+
+    // 1. Look up existing agent_session in DB by agent_tab_id
+    let db_session = match state.db.get_agent_session_by_tab_id(&agent_tab_id.to_string()).await {
+        Ok(Some(session)) => session,
+        Ok(None) => {
+            return ServerMessage::new(ServerMessagePayload::Error(Error {
+                code: "AGENT_SESSION_NOT_FOUND".to_string(),
+                message: format!("No agent session found for tab {}", agent_tab_id),
+                details: None,
+                request_id: None,
+            }));
+        }
+        Err(e) => {
+            return ServerMessage::new(ServerMessagePayload::Error(Error {
+                code: "AGENT_DB_ERROR".to_string(),
+                message: format!("Failed to look up agent session: {}", e),
+                details: None,
+                request_id: None,
+            }));
+        }
+    };
+
+    // 2. Verify acp_session_id is present
+    let acp_session_id = match &db_session.acp_session_id {
+        Some(id) => id.clone(),
+        None => {
+            return ServerMessage::new(ServerMessagePayload::Error(Error {
+                code: "AGENT_NO_ACP_SESSION".to_string(),
+                message: "Agent session has no ACP session ID to resume".to_string(),
+                details: None,
+                request_id: None,
+            }));
+        }
+    };
+
+    // 3. Get worktree path
+    let worktree_path = match get_worktree_path(&state, msg.worktree_id).await {
+        Some(path) => path,
+        None => {
+            return ServerMessage::new(ServerMessagePayload::Error(Error {
+                code: "WORKTREE_NOT_FOUND".to_string(),
+                message: format!("Worktree {} not found", msg.worktree_id),
+                details: None,
+                request_id: None,
+            }));
+        }
+    };
+
+    let acp_handle = match &state.acp_handle {
+        Some(handle) => handle.clone(),
+        None => {
+            tracing::error!("ACP runtime not initialized");
+            return ServerMessage::new(ServerMessagePayload::Error(Error {
+                code: "ACP_NOT_INITIALIZED".to_string(),
+                message: "ACP runtime not initialized - cannot resume agent".to_string(),
+                details: None,
+                request_id: None,
+            }));
+        }
+    };
+
+    let session_id = Uuid::parse_str(&db_session.id).unwrap_or_else(|_| Uuid::new_v4());
+    let now = chrono::Utc::now().to_rfc3339();
+    let started_at = parse_timestamp(&now);
+    let worktree_id = msg.worktree_id;
+    let agent_type = db_session.agent_type.clone();
+
+    // 4. Add to in-memory state with status "spawning"
+    {
+        let mut agents = state.agents.write().await;
+        agents.insert(session_id, crate::state::AgentState {
+            id: session_id,
+            worktree_id,
+            agent_tab_id,
+            agent_type: agent_type.clone(),
+            status: "spawning".to_string(),
+        });
+    }
+
+    // 5. Broadcast AgentStatusUpdate with Spawning status
+    let spawning_msg = ServerMessage::new(ServerMessagePayload::AgentStatusUpdate(
+        AgentStatusUpdate {
+            id: session_id,
+            worktree_id,
+            agent_tab_id,
+            agent_type: agent_type.clone(),
+            status: AgentStatus::Spawning,
+            started_at,
+            acp_session_id: Some(acp_session_id.clone()),
+            process_id: None,
+        },
+    ));
+    state.broadcast(spawning_msg).await;
+
+    // 6. Spawn background task for connect + initialize + load_session
+    let session_id_ref = session_id;
+    let agent_tab_id_ref = agent_tab_id;
+    let worktree_id_ref = worktree_id;
+    let state_ref = state.clone();
+    let agent_type_ref = agent_type.clone();
+    let started_at_ref = started_at;
+
+    tokio::spawn(async move {
+        match acp_handle.spawn_agent_for_resume(agent_tab_id_ref, worktree_id_ref, &agent_type_ref, &worktree_path, &acp_session_id).await {
+            Ok(spawn_result) => {
+                tracing::info!("Agent resumed successfully for tab {}", agent_tab_id_ref);
+
+                // Update state to idle
+                {
+                    let mut agents = state_ref.agents.write().await;
+                    if let Some(agent) = agents.get_mut(&session_id_ref) {
+                        agent.status = "idle".to_string();
+                    }
+                }
+
+                // Broadcast success with acp_session_id and process_id
+                let success_msg = ServerMessage::new(ServerMessagePayload::AgentStatusUpdate(
+                    AgentStatusUpdate {
+                        id: session_id_ref,
+                        worktree_id: worktree_id_ref,
+                        agent_tab_id: agent_tab_id_ref,
+                        agent_type: agent_type_ref,
+                        status: AgentStatus::Idle,
+                        started_at: started_at_ref,
+                        acp_session_id: spawn_result.acp_session_id,
+                        process_id: spawn_result.process_id,
+                    },
+                ));
+                let _ = state_ref.broadcast(success_msg).await;
+            }
+            Err(e) => {
+                tracing::error!("Failed to resume agent process: {}", e);
+
+                // Remove from state
+                {
+                    let mut agents = state_ref.agents.write().await;
+                    agents.remove(&session_id_ref);
+                }
+
+                // Broadcast removal
+                let removed_msg = ServerMessage::new(ServerMessagePayload::AgentRemoved(
+                    crate::protocol::AgentRemoved {
+                        id: session_id_ref,
+                        worktree_id: worktree_id_ref,
+                    }
+                ));
+                let _ = state_ref.broadcast(removed_msg).await;
+            }
+        }
+    });
+
+    // Return immediate acknowledgement
+    ServerMessage::new(ServerMessagePayload::Ack(crate::protocol::Ack {
+        message_id: agent_tab_id,
+        status: AckStatus::Success,
+    }))
 }
 
 fn parse_timestamp(timestamp: &str) -> u64 {
