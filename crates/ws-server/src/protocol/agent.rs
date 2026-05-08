@@ -86,6 +86,9 @@ pub struct AgentSessionData {
     pub worktree_id: Uuid,
     pub agent_type: String,
     pub acp_session_id: Option<String>,
+    #[serde(with = "optional_uuid_serde", default)]
+    #[ts(type = "string | null")]
+    pub agent_tab_id: Option<Uuid>,
     pub process_id: Option<u32>,
     pub status: AgentStatus,
     pub started_at: u64,

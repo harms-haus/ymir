@@ -227,24 +227,44 @@ pub async fn handle_agent_resume(
 ) -> ServerMessage {
     let agent_tab_id = msg.agent_tab_id;
 
-    // 1. Look up existing agent_session in DB by agent_tab_id
+    // 1. Look up existing agent_session in DB.
+    // Try by agent_tab_id first (for new sessions), then fall back to session ID
+    // (for legacy sessions where agent_tab_id column is NULL).
     let db_session = match state.db.get_agent_session_by_tab_id(&agent_tab_id.to_string()).await {
-        Ok(Some(session)) => session,
-        Ok(None) => {
-            return ServerMessage::new(ServerMessagePayload::Error(Error {
-                code: "AGENT_SESSION_NOT_FOUND".to_string(),
-                message: format!("No agent session found for tab {}", agent_tab_id),
-                details: None,
-                request_id: None,
-            }));
+        Ok(Some(session)) => Some(session),
+        Ok(None) | Err(_) => None,
+    }
+    .or_else(|| {
+        // Fallback: try looking up by session ID (legacy compatibility)
+        match std::sync::Arc::clone(&state).db.get_agent_session(&agent_tab_id.to_string()) {
+            // We need a sync block for the async call
+            _ => None,
         }
-        Err(e) => {
-            return ServerMessage::new(ServerMessagePayload::Error(Error {
-                code: "AGENT_DB_ERROR".to_string(),
-                message: format!("Failed to look up agent session: {}", e),
-                details: None,
-                request_id: None,
-            }));
+    });
+
+    let db_session = match db_session {
+        Some(session) => session,
+        None => {
+            // Try async fallback: look up by session ID
+            match state.db.get_agent_session(&agent_tab_id.to_string()).await {
+                Ok(Some(session)) => session,
+                Ok(None) => {
+                    return ServerMessage::new(ServerMessagePayload::Error(Error {
+                        code: "AGENT_SESSION_NOT_FOUND".to_string(),
+                        message: format!("No agent session found for tab {}", agent_tab_id),
+                        details: None,
+                        request_id: None,
+                    }));
+                }
+                Err(e) => {
+                    return ServerMessage::new(ServerMessagePayload::Error(Error {
+                        code: "AGENT_DB_ERROR".to_string(),
+                        message: format!("Failed to look up agent session: {}", e),
+                        details: None,
+                        request_id: None,
+                    }));
+                }
+            }
         }
     };
 

@@ -637,7 +637,8 @@ class AcpSessionManagerImpl implements AcpSessionManagerApi {
 
   /**
    * Handle a server-pushed InitializeResponse event.
-   * Stores the agent's real capabilities on the SessionController.
+   * Stores the agent's real capabilities and marks the SessionController
+   * as initialized so the Composer enables.
    */
   handleInitializeResponse(agentTabId: string, capabilities: unknown): void {
     const session = this.sessions.get(agentTabId);
@@ -650,6 +651,9 @@ class AcpSessionManagerImpl implements AcpSessionManagerApi {
 
     // Store capabilities on the session record for later reference
     session.capabilities = capabilities as Record<string, unknown> | null;
+
+    // Mark the SessionController as initialized so the Composer enables
+    session.controller.setInitialized(capabilities);
   }
 
   /**

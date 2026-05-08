@@ -741,6 +741,7 @@ mod tests {
                 worktree_id,
                 agent_type: "coder".to_string(),
                 acp_session_id: Some("acp-123".to_string()),
+                agent_tab_id: None,
                 process_id: None,
                 status: AgentStatus::Working,
                 started_at: 1234567890,
