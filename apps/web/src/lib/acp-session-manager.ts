@@ -209,6 +209,14 @@ export interface AcpSessionManagerApi {
   handleAcpPayload(worktreeId: string, payload: Record<string, unknown>): void;
 
   /**
+   * Fan-out a JSON-RPC response to ALL session transports.
+   * Used when the server relay returns a response without routing metadata
+   * (no agentTabId/worktreeId). The transport with the matching pending
+   * request ID resolves the promise; others ignore it harmlessly.
+   */
+  broadcastJsonRpcResponse(payload: Record<string, unknown>): void;
+
+  /**
    * Check if a SessionController exists for the given agent tab.
    */
   hasController(agentTabId: string): boolean;
@@ -703,6 +711,12 @@ class AcpSessionManagerImpl implements AcpSessionManagerApi {
 
   hasController(agentTabId: string): boolean {
     return this.sessions.has(agentTabId);
+  }
+
+  broadcastJsonRpcResponse(payload: Record<string, unknown>): void {
+    for (const session of this.sessions.values()) {
+      session.transport.receiveAcpPayload(payload);
+    }
   }
 
   destroy(): void {

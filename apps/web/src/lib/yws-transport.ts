@@ -389,6 +389,14 @@ export class YmirWsTransport {
     const payload = (message as any).payload as Record<string, unknown> | null;
     if (!payload) return;
 
+    // JSON-RPC responses (from the server relay) have "jsonrpc" and "id" fields
+    // but no "eventType" or routing metadata. Fan-out to ALL session transports
+    // so the one with the matching pending request ID can resolve it.
+    if ("jsonrpc" in payload && "id" in payload && !("eventType" in payload)) {
+      acpSessionManager.broadcastJsonRpcResponse(payload);
+      return;
+    }
+
     // Extract routing metadata from the AcpEventEnvelope top level.
     // agentTabId and worktreeId are routing fields added by the server adapter.
     const { activeWorktreeId } = useStore.getState();
