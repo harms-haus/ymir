@@ -189,9 +189,12 @@ export class YmirWsTransport {
           handler(coreStatus);
         };
         this.statusHandlers.add(wrappedHandler);
-        // Immediately emit current status so late subscribers get the right state
+        // Defer initial status emission so the SessionController has time to
+        // register its handler in YmirAcpTransport.statusHandlers before the
+        // initial status is broadcast. Without deferral, the handler fires in
+        // the YmirAcpTransport constructor before SessionController is created.
         const currentCoreStatus: CoreConnectionStatus = this.status === "open" ? "connected" : "disconnected";
-        handler(currentCoreStatus);
+        queueMicrotask(() => handler(currentCoreStatus));
         return () => { this.statusHandlers.delete(wrappedHandler); };
       },
       createTerminal: async (worktreeId, request) => {
