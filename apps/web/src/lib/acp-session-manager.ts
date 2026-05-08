@@ -84,6 +84,12 @@ export interface AcpSessionManagerConfig {
   sendAcpPayload: SendAcpPayloadFn;
   /** Function to get the current WebSocket connection status. */
   getConnectionStatus: GetConnectionStatusFn;
+  /**
+   * Callback to subscribe to connection status changes.
+   * The session manager uses this to propagate WS status to
+   * all YmirAcpTransport instances so SessionController updates.
+   */
+  onStatusChange?: (handler: (status: CoreConnectionStatus) => void) => () => void;
   /** Function to create a terminal session when an agent requests terminal/create. */
   createTerminal?: CreateTerminalCallback;
   /** Request timeout in milliseconds (default: 30000). */
@@ -245,6 +251,7 @@ class YmirAcpTransport implements Transport {
   private readonly sendAcpPayload: SendAcpPayloadFn;
   private readonly getConnectionStatus: GetConnectionStatusFn;
   private readonly requestTimeoutMs: number;
+  private readonly unsubscribeStatus?: () => void;
 
   private nextRequestId = 1;
   private pendingRequests = new Map<
@@ -259,11 +266,21 @@ class YmirAcpTransport implements Transport {
   constructor(
     sendAcpPayload: SendAcpPayloadFn,
     getConnectionStatus: GetConnectionStatusFn,
-    requestTimeoutMs: number
+    requestTimeoutMs: number,
+    onStatusChange?: (handler: (status: CoreConnectionStatus) => void) => () => void
   ) {
     this.sendAcpPayload = sendAcpPayload;
     this.getConnectionStatus = getConnectionStatus;
     this.requestTimeoutMs = requestTimeoutMs;
+
+    // Subscribe to WS status changes and propagate to all registered
+    // SessionController status handlers (sets connectionStatus in state).
+    if (onStatusChange) {
+      this.unsubscribeStatus = onStatusChange((status) => {
+        console.log(`[YmirAcpTransport] status change: ${status}, notifying ${this.statusHandlers.size} handlers`);
+        this.statusHandlers.forEach((handler) => handler(status));
+      });
+    }
   }
 
   // ---- Transport interface ----
@@ -277,6 +294,7 @@ class YmirAcpTransport implements Transport {
     // Disconnect is managed by ymir's WebSocket client.
     // Reject all pending requests on disconnect.
     this.rejectAllPending(new Error("Disconnected"));
+    this.unsubscribeStatus?.();
   }
 
   getStatus(): CoreConnectionStatus {
@@ -286,6 +304,7 @@ class YmirAcpTransport implements Transport {
   async sendRequest<T = unknown>(request: ACPRequest): Promise<ACPResponse<T>> {
     const id = this.nextRequestId++;
     const fullRequest = { ...request, id } as ACPRequest;
+    console.log(`[YmirAcpTransport] sendRequest: id=${id}, method=${request.method}`);
 
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -342,6 +361,7 @@ class YmirAcpTransport implements Transport {
     if ("id" in payload && typeof payload.id === "number") {
       const id = payload.id as number;
       const pending = this.pendingRequests.get(id);
+      console.log(`[YmirAcpTransport] receiveAcpPayload: id=${id}, pending=${!!pending}, pendingKeys=${JSON.stringify([...this.pendingRequests.keys()])}`);
       if (pending) {
         clearTimeout(pending.timeout);
         this.pendingRequests.delete(id);
@@ -456,13 +476,15 @@ class AcpSessionManagerImpl implements AcpSessionManagerApi {
       transport = new YmirAcpTransport(
         config.sendAcpPayload,
         config.getConnectionStatus,
-        config.requestTimeoutMs ?? 30000
+        config.requestTimeoutMs ?? 30000,
+        config.onStatusChange
       );
     } else {
       transport = new YmirAcpTransport(
         config.sendAcpPayload,
         config.getConnectionStatus,
-        config.requestTimeoutMs ?? 30000
+        config.requestTimeoutMs ?? 30000,
+        config.onStatusChange
       );
     }
 
@@ -714,7 +736,10 @@ class AcpSessionManagerImpl implements AcpSessionManagerApi {
   }
 
   broadcastJsonRpcResponse(payload: Record<string, unknown>): void {
-    for (const session of this.sessions.values()) {
+    const sessionCount = this.sessions.size;
+    console.log(`[AcpSessionManager] broadcastJsonRpcResponse: id=${payload.id}, sessions=${sessionCount}`);
+    for (const [key, session] of this.sessions.entries()) {
+      console.log(`[AcpSessionManager] broadcasting to transport key=${key}`);
       session.transport.receiveAcpPayload(payload);
     }
   }

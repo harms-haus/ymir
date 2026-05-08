@@ -182,6 +182,18 @@ export class YmirWsTransport {
       getConnectionStatus: (): CoreConnectionStatus => {
         return this.status === "open" ? "connected" : "disconnected";
       },
+      onStatusChange: (handler): (() => void) => {
+        // Subscribe to YWS status changes and translate to CoreConnectionStatus
+        const wrappedHandler = (status: ConnectionStatus) => {
+          const coreStatus: CoreConnectionStatus = status === "open" ? "connected" : "disconnected";
+          handler(coreStatus);
+        };
+        this.statusHandlers.add(wrappedHandler);
+        // Immediately emit current status so late subscribers get the right state
+        const currentCoreStatus: CoreConnectionStatus = this.status === "open" ? "connected" : "disconnected";
+        handler(currentCoreStatus);
+        return () => { this.statusHandlers.delete(wrappedHandler); };
+      },
       createTerminal: async (worktreeId, request) => {
         return this.handleAcpTerminalCreate(worktreeId, request);
       },
@@ -393,6 +405,7 @@ export class YmirWsTransport {
     // but no "eventType" or routing metadata. Fan-out to ALL session transports
     // so the one with the matching pending request ID can resolve it.
     if ("jsonrpc" in payload && "id" in payload && !("eventType" in payload)) {
+      console.log(`[YWS] handleAcpPayload: JSON-RPC response id=${payload.id}, broadcasting to all transports`);
       acpSessionManager.broadcastJsonRpcResponse(payload);
       return;
     }
