@@ -451,6 +451,13 @@ export class YmirWsTransport {
           if (session && !session.acpSessionId) {
             useStore.getState().updateAgentSession(session.id, { acpSessionId });
           }
+
+          // Phase 5: Set sessionId on the ACP SessionController so the Composer enables.
+          // The server auto-creates sessions; the client doesn't call session/new.
+          if (agentTabId) {
+            const configOptions = (data as any)?.configOptions;
+            acpSessionManager.handleSessionInit(agentTabId, acpSessionId, configOptions);
+          }
         }
       }
 

@@ -223,6 +223,12 @@ export interface AcpSessionManagerApi {
   broadcastJsonRpcResponse(payload: Record<string, unknown>): void;
 
   /**
+   * Handle a server-pushed SessionInit event.
+   * Sets the sessionId on the SessionController so the Composer enables.
+   */
+  handleSessionInit(agentTabId: string, acpSessionId: string, configOptions?: unknown[]): void;
+
+  /**
    * Check if a SessionController exists for the given agent tab.
    */
   hasController(agentTabId: string): boolean;
@@ -562,7 +568,15 @@ class AcpSessionManagerImpl implements AcpSessionManagerApi {
     if (!session) {
       throw new Error(`No SessionController for agent tab: ${agentTabId}`);
     }
-    return session.controller.initialize(options);
+    console.log(`[AcpSessionManager] initialize() starting for ${agentTabId}`);
+    try {
+      const result = await session.controller.initialize(options);
+      console.log(`[AcpSessionManager] initialize() completed for ${agentTabId}, state:`, session.controller.getState());
+      return result;
+    } catch (err) {
+      console.error(`[AcpSessionManager] initialize() FAILED for ${agentTabId}:`, err);
+      throw err;
+    }
   }
 
   async createSession(
@@ -584,6 +598,28 @@ class AcpSessionManagerImpl implements AcpSessionManagerApi {
     this.sessionIdToAgentTab.set(resultObj.sessionId, agentTabId);
 
     return resultObj;
+  }
+
+  /**
+   * Handle a server-pushed SessionInit event.
+   * Sets the sessionId on the SessionController so the Composer enables.
+   * Also updates the internal session mapping and configOptions.
+   */
+  handleSessionInit(agentTabId: string, acpSessionId: string, configOptions?: unknown[]): void {
+    const session = this.sessions.get(agentTabId);
+    if (!session) {
+      console.warn(`[AcpSessionManager] handleSessionInit: no session for ${agentTabId}`);
+      return;
+    }
+
+    console.log(`[AcpSessionManager] handleSessionInit: setting sessionId=${acpSessionId} for agentTabId=${agentTabId}`);
+
+    // Update the controller state (triggers statusChange → React re-render)
+    session.controller.setSessionId(acpSessionId, configOptions);
+
+    // Update internal mapping
+    session.sessionId = acpSessionId;
+    this.sessionIdToAgentTab.set(acpSessionId, agentTabId);
   }
 
   async loadSession(
