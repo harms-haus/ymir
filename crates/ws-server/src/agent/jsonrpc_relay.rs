@@ -160,7 +160,7 @@ impl AcpJsonRpcRelay {
         match method {
             "initialize" => Ok(self.handle_initialize()),
 
-            "session/list" => Ok(self.handle_session_list().await),
+            "session/list" => Ok(self.handle_session_list()),
 
             "session/new" => Err(DispatchError::new(
                 CODE_METHOD_NOT_FOUND,
@@ -205,20 +205,20 @@ impl AcpJsonRpcRelay {
         })
     }
 
-    async fn handle_session_list(&self) -> Value {
-        let sessions = self.acp_handle.list_sessions().await;
-        let session_values: Vec<Value> = sessions
-            .iter()
-            .filter_map(|s| {
-                s.acp_session_id.as_ref().map(|sid| {
-                    serde_json::json!({
-                        "sessionId": sid,
-                        "worktreeId": s.worktree_id.to_string(),
-                    })
-                })
-            })
-            .collect();
-        serde_json::json!({ "sessions": session_values })
+    /// Return an empty sessions list immediately (non-blocking).
+    ///
+    /// Previously this called `self.acp_handle.list_sessions().await` which
+    /// sent a command through the single-threaded ACP runtime channel and
+    /// waited for a response.  When the runtime was busy spawning an agent
+    /// (~38 s), the response never arrived, blocking the per-connection
+    /// message loop and causing heartbeat pings to queue up until the client
+    /// disconnected.
+    ///
+    /// Returning an empty array is safe because the client discovers sessions
+    /// through SessionInit broadcast events that arrive on the event stream
+    /// once the agent finishes initialising.
+    fn handle_session_list(&self) -> Value {
+        serde_json::json!({ "sessions": [] })
     }
 
     async fn handle_session_prompt(
