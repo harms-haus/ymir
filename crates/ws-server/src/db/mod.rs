@@ -1671,6 +1671,18 @@ impl Db {
         );
         Ok(rows_affected)
     }
+
+    pub async fn clear_terminal_output_for_tab(&self, tab_id: &str) -> Result<()> {
+        let conn = self.conn().context("Failed to get connection for clearing terminal output")?;
+        let rows_affected = conn
+            .execute(
+                "DELETE FROM terminal_output WHERE session_id IN (SELECT id FROM terminal_sessions WHERE tab_id = ?1)",
+                libsql::params![tab_id],
+            )
+            .await?;
+        debug!("Cleared {} terminal output rows for tab {}", rows_affected, tab_id);
+        Ok(())
+    }
 }
 
 #[cfg(test)]

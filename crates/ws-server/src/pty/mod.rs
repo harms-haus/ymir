@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{broadcast, mpsc, Mutex as TokioMutex};
 use tokio::task::JoinHandle;
 use tokio::time::interval;
 use tracing::instrument;
@@ -49,6 +49,8 @@ pub struct PtySession {
     writer: Option<Box<dyn Write + Send>>,
     _process: Option<Box<dyn portable_pty::Child + Send + Sync>>,
     tx: mpsc::UnboundedSender<Vec<u8>>,
+    user_input_received: Arc<TokioMutex<bool>>,
+    input_line_buffer: std::sync::Mutex<String>,
 }
 
 impl PtySession {
@@ -78,6 +80,8 @@ impl PtySession {
             writer: Some(writer),
             _process: Some(process),
             tx,
+            user_input_received: Arc::new(TokioMutex::new(false)),
+            input_line_buffer: std::sync::Mutex::new(String::new()),
         }
     }
 
@@ -87,6 +91,10 @@ impl PtySession {
         writer.flush()?;
 
         *self.last_activity.lock().unwrap() = Instant::now();
+
+        if let Ok(mut flag) = self.user_input_received.try_lock() {
+            *flag = true;
+        }
 
         Ok(())
     }
@@ -158,6 +166,10 @@ impl PtySession {
         self.tx.clone()
     }
 
+    pub fn user_input_received(&self) -> Arc<TokioMutex<bool>> {
+        self.user_input_received.clone()
+    }
+
     pub fn take_reader(&mut self) -> Result<Box<dyn Read + Send>> {
         let master = self.master.as_ref().ok_or_else(|| anyhow!("Session is ended"))?;
         master.try_clone_reader()
@@ -169,6 +181,25 @@ impl PtySession {
     #[cfg(unix)]
     pub fn master_raw_fd(&self) -> Option<std::os::unix::io::RawFd> {
         self.master.as_ref().and_then(|m| m.as_raw_fd())
+    }
+
+    /// Accumulate input characters into a line buffer. Returns the completed
+    /// line (trimmed) when a newline/carriage-return is encountered, or None
+    /// if the line is still being built.
+    pub fn append_to_line_buffer(&self, data: &str) -> Option<String> {
+        let mut buffer = self.input_line_buffer.lock().unwrap();
+        for ch in data.chars() {
+            if ch == '\n' || ch == '\r' {
+                let line = buffer.trim().to_string();
+                buffer.clear();
+                if !line.is_empty() {
+                    return Some(line);
+                }
+            } else {
+                buffer.push(ch);
+            }
+        }
+        None
     }
 }
 

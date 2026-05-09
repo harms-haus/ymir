@@ -6,6 +6,7 @@ use std::time::Duration;
 #[cfg(unix)]
 use std::os::unix::io::RawFd;
 
+use tokio::sync::Mutex as TokioMutex;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, instrument};
 use uuid::Uuid;
@@ -27,6 +28,7 @@ pub fn spawn_output_reader(
     session_id: Uuid,
     master_fd: RawFd,
     state: Arc<AppState>,
+    user_input_received: Arc<TokioMutex<bool>>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         info!("PTY output reader started");
@@ -64,7 +66,7 @@ pub fn spawn_output_reader(
                 // Flush any accumulated tail bytes on EOF
                 if !utf8_tail.is_empty() {
                     let output_data = String::from_utf8_lossy(&utf8_tail).to_string();
-                    broadcast_output(&state, session_id, &output_data).await;
+                    broadcast_output(&state, session_id, &output_data, &user_input_received).await;
                 }
                 info!("PTY output reader reached EOF, session exiting");
                 break;
@@ -89,7 +91,7 @@ pub fn spawn_output_reader(
 
                 if !valid_prefix.is_empty() {
                     let output_data = valid_prefix.to_string();
-                    broadcast_output(&state, session_id, &output_data).await;
+                    broadcast_output(&state, session_id, &output_data, &user_input_received).await;
                 }
             } else {
                 let errno = std::io::Error::last_os_error();
@@ -117,6 +119,7 @@ pub fn spawn_output_reader(
     session_id: Uuid,
     mut reader: Box<dyn std::io::Read + Send>,
     state: Arc<AppState>,
+    user_input_received: Arc<TokioMutex<bool>>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         info!("PTY output reader started");
@@ -131,7 +134,7 @@ pub fn spawn_output_reader(
                 Ok(0) => {
                     if !utf8_tail.is_empty() {
                         let output_data = String::from_utf8_lossy(&utf8_tail).to_string();
-                        broadcast_output(&state, session_id, &output_data).await;
+                        broadcast_output(&state, session_id, &output_data, &user_input_received).await;
                     }
                     info!("PTY output reader reached EOF, session exiting");
                     break;
@@ -152,7 +155,7 @@ pub fn spawn_output_reader(
 
                     if !valid_prefix.is_empty() {
                         let output_data = valid_prefix.to_string();
-                        broadcast_output(&state, session_id, &output_data).await;
+                        broadcast_output(&state, session_id, &output_data, &user_input_received).await;
                     }
                 }
                 Err(e) => {
@@ -172,7 +175,14 @@ pub fn spawn_output_reader(
 }
 
 /// Helper to broadcast terminal output and persist to DB.
-async fn broadcast_output(state: &AppState, session_id: Uuid, output_data: &str) {
+/// WebSocket broadcast always happens; DB persistence only happens if
+/// user_input_received is true (i.e., the user has typed something).
+async fn broadcast_output(
+    state: &AppState,
+    session_id: Uuid,
+    output_data: &str,
+    user_input_received: &Arc<TokioMutex<bool>>,
+) {
     let output_msg = ServerMessage::new(ServerMessagePayload::TerminalOutput(
         TerminalOutput {
             session_id,
@@ -180,17 +190,22 @@ async fn broadcast_output(state: &AppState, session_id: Uuid, output_data: &str)
         },
     ));
 
+    // Always broadcast to WebSocket so the user sees output including prompts
     state.broadcast(output_msg).await;
     info!(bytes = output_data.len(), "Broadcast terminal output");
 
-    let db = state.db.clone();
-    let session_id_str = session_id.to_string();
-    let output_data_clone = output_data.to_string();
-    tokio::spawn(async move {
-        if let Err(e) = db.append_terminal_output(&session_id_str, &output_data_clone).await {
-            tracing::error!("Failed to store terminal output: {}", e);
-        }
-    });
+    // Only persist to DB if user has sent input (avoids storing duplicate prompts)
+    let should_persist = *user_input_received.lock().await;
+    if should_persist {
+        let db = state.db.clone();
+        let session_id_str = session_id.to_string();
+        let output_data_clone = output_data.to_string();
+        tokio::spawn(async move {
+            if let Err(e) = db.append_terminal_output(&session_id_str, &output_data_clone).await {
+                tracing::error!("Failed to store terminal output: {}", e);
+            }
+        });
+    }
 }
 
 /// Finds the longest valid UTF-8 prefix of the byte slice.
